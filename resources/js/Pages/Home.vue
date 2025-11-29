@@ -5,7 +5,7 @@
         <h3 class="mb-0 h4 font-weight-bolder">Server Dashboard</h3>
         <p class="mb-4">Real-time server monitoring and statistics</p>
       </div>
-      
+
       <!-- Server Stats Cards -->
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
         <div class="card">
@@ -13,8 +13,8 @@
             <div class="d-flex justify-content-between">
               <div>
                 <p class="text-sm mb-0 text-capitalize">CPU Usage</p>
-                <h4 class="mb-0">{{ serverStats.cpu.usage }}%</h4>
-                <p class="text-xs mb-0 mt-1">{{ serverStats.cpu.cores }} Cores</p>
+                <h4 class="mb-0">{{ liveStats.cpu.usage }}%</h4>
+                <p class="text-xs mb-0 mt-1">{{ liveStats.cpu.cores }} Cores</p>
               </div>
               <div class="icon icon-md icon-shape bg-gradient-primary shadow-primary shadow text-center border-radius-lg">
                 <i class="material-symbols-rounded opacity-10">memory</i>
@@ -24,20 +24,22 @@
           <hr class="dark horizontal my-0">
           <div class="card-footer p-2 ps-3">
             <p class="mb-0 text-sm">
-              <span class="text-muted">Load: {{ serverStats.cpu.load_1min }}</span>
+              <span class="text-muted">Load: {{ liveStats.cpu.load_1min }}</span>
             </p>
           </div>
         </div>
       </div>
-      
+
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
         <div class="card">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
                 <p class="text-sm mb-0 text-capitalize">RAM Usage</p>
-                <h4 class="mb-0">{{ serverStats.memory.usage_percent }}%</h4>
-                <p class="text-xs mb-0 mt-1">{{ serverStats.memory.used }} / {{ serverStats.memory.total }}</p>
+                <h4 class="mb-0">{{ liveStats.memory.usage_percent }}%</h4>
+                <p class="text-xs mb-0 mt-1">
+                  {{ liveStats.memory.used }} / {{ liveStats.memory.total }}
+                </p>
               </div>
               <div class="icon icon-md icon-shape bg-gradient-success shadow-success shadow text-center border-radius-lg">
                 <i class="material-symbols-rounded opacity-10">storage</i>
@@ -47,20 +49,22 @@
           <hr class="dark horizontal my-0">
           <div class="card-footer p-2 ps-3">
             <p class="mb-0 text-sm">
-              <span class="text-muted">Free: {{ serverStats.memory.free }}</span>
+              <span class="text-muted">Free: {{ liveStats.memory.free }}</span>
             </p>
           </div>
         </div>
       </div>
-      
+
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
         <div class="card">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
                 <p class="text-sm mb-0 text-capitalize">Disk Usage</p>
-                <h4 class="mb-0">{{ serverStats.disk.usage_percent }}%</h4>
-                <p class="text-xs mb-0 mt-1">{{ serverStats.disk.used }} / {{ serverStats.disk.total }}</p>
+                <h4 class="mb-0">{{ liveStats.disk.usage_percent }}%</h4>
+                <p class="text-xs mb-0 mt-1">
+                  {{ liveStats.disk.used }} / {{ liveStats.disk.total }}
+                </p>
               </div>
               <div class="icon icon-md icon-shape bg-gradient-info shadow-info shadow text-center border-radius-lg">
                 <i class="material-symbols-rounded opacity-10">hard_drive</i>
@@ -70,20 +74,20 @@
           <hr class="dark horizontal my-0">
           <div class="card-footer p-2 ps-3">
             <p class="mb-0 text-sm">
-              <span class="text-muted">Free: {{ serverStats.disk.free }}</span>
+              <span class="text-muted">Free: {{ liveStats.disk.free }}</span>
             </p>
           </div>
         </div>
       </div>
-      
+
       <div class="col-xl-3 col-sm-6">
         <div class="card">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
                 <p class="text-sm mb-0 text-capitalize">Server Uptime</p>
-                <h4 class="mb-0 text-xs">{{ serverStats.uptime.formatted }}</h4>
-                <p class="text-xs mb-0 mt-1">{{ serverStats.processes }} processes</p>
+                <h4 class="mb-0 text-xs">{{ liveStats.uptime.formatted }}</h4>
+                <p class="text-xs mb-0 mt-1">{{ liveStats.processes }} processes</p>
               </div>
               <div class="icon icon-md icon-shape bg-gradient-warning shadow-warning shadow text-center border-radius-lg">
                 <i class="material-symbols-rounded opacity-10">schedule</i>
@@ -101,7 +105,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Charts Row -->
     <div class="row">
       <div class="col-lg-4 col-md-6 mt-4 mb-4">
@@ -122,7 +126,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-lg-4 col-md-6 mt-4 mb-4">
         <div class="card">
           <div class="card-body">
@@ -141,7 +145,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-lg-4 mt-4 mb-3">
         <div class="card">
           <div class="card-body">
@@ -155,13 +159,13 @@
             <hr class="dark horizontal">
             <div class="d-flex">
               <i class="material-symbols-rounded text-sm my-auto me-1">schedule</i>
-              <p class="mb-0 text-sm">{{ serverStats.cpu.cores }} CPU cores</p>
+              <p class="mb-0 text-sm">{{ liveStats.cpu.cores }} CPU cores</p>
             </div>
           </div>
         </div>
       </div>
     </div>
-    
+
     <!-- Resource Overview Row -->
     <div class="row mb-4">
       <div class="col-lg-8 col-md-6 mb-md-0 mb-4">
@@ -176,8 +180,8 @@
                 </p>
               </div>
               <div class="col-lg-6 col-5 my-auto text-end">
-                <button 
-                  @click="refreshStats" 
+                <button
+                  @click="refreshStats"
                   class="btn btn-sm btn-outline-primary mb-0"
                   :disabled="isRefreshing"
                 >
@@ -207,38 +211,38 @@
                         </div>
                         <div class="d-flex flex-column justify-content-center">
                           <h6 class="mb-0 text-sm">CPU</h6>
-                          <p class="text-xs text-secondary mb-0">{{ serverStats.cpu.cores }} cores</p>
+                          <p class="text-xs text-secondary mb-0">{{ liveStats.cpu.cores }} cores</p>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <p class="text-xs font-weight-bold mb-0">{{ serverStats.cpu.usage }}%</p>
-                      <p class="text-xs text-secondary mb-0">Load: {{ serverStats.cpu.load_1min }}</p>
+                      <p class="text-xs font-weight-bold mb-0">{{ liveStats.cpu.usage }}%</p>
+                      <p class="text-xs text-secondary mb-0">Load: {{ liveStats.cpu.load_1min }}</p>
                     </td>
                     <td class="align-middle">
                       <div class="progress-wrapper w-75 mx-auto">
                         <div class="progress-info">
                           <div class="progress-percentage">
-                            <span class="text-xs font-weight-bold">{{ serverStats.cpu.usage }}%</span>
+                            <span class="text-xs font-weight-bold">{{ liveStats.cpu.usage }}%</span>
                           </div>
                         </div>
                         <div class="progress">
-                          <div 
+                          <div
                             class="progress-bar"
-                            :class="getProgressClass(serverStats.cpu.usage)"
-                            :style="`width: ${Math.min(serverStats.cpu.usage, 100)}%`"
+                            :class="getProgressClass(liveStats.cpu.usage)"
+                            :style="`width: ${Math.min(liveStats.cpu.usage, 100)}%`"
                             role="progressbar"
                           ></div>
                         </div>
                       </div>
                     </td>
                     <td class="align-middle text-center">
-                      <span class="badge badge-sm" :class="getStatusBadge(serverStats.cpu.usage)">
-                        {{ getStatusText(serverStats.cpu.usage) }}
+                      <span class="badge badge-sm" :class="getStatusBadge(liveStats.cpu.usage)">
+                        {{ getStatusText(liveStats.cpu.usage) }}
                       </span>
                     </td>
                   </tr>
-                  
+
                   <tr>
                     <td>
                       <div class="d-flex px-2 py-1">
@@ -247,38 +251,38 @@
                         </div>
                         <div class="d-flex flex-column justify-content-center">
                           <h6 class="mb-0 text-sm">RAM</h6>
-                          <p class="text-xs text-secondary mb-0">{{ serverStats.memory.total }}</p>
+                          <p class="text-xs text-secondary mb-0">{{ liveStats.memory.total }}</p>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <p class="text-xs font-weight-bold mb-0">{{ serverStats.memory.used }}</p>
-                      <p class="text-xs text-secondary mb-0">Free: {{ serverStats.memory.free }}</p>
+                      <p class="text-xs font-weight-bold mb-0">{{ liveStats.memory.used }}</p>
+                      <p class="text-xs text-secondary mb-0">Free: {{ liveStats.memory.free }}</p>
                     </td>
                     <td class="align-middle">
                       <div class="progress-wrapper w-75 mx-auto">
                         <div class="progress-info">
                           <div class="progress-percentage">
-                            <span class="text-xs font-weight-bold">{{ serverStats.memory.usage_percent }}%</span>
+                            <span class="text-xs font-weight-bold">{{ liveStats.memory.usage_percent }}%</span>
                           </div>
                         </div>
                         <div class="progress">
-                          <div 
+                          <div
                             class="progress-bar"
-                            :class="getProgressClass(serverStats.memory.usage_percent)"
-                            :style="`width: ${serverStats.memory.usage_percent}%`"
+                            :class="getProgressClass(liveStats.memory.usage_percent)"
+                            :style="`width: ${liveStats.memory.usage_percent}%`"
                             role="progressbar"
                           ></div>
                         </div>
                       </div>
                     </td>
                     <td class="align-middle text-center">
-                      <span class="badge badge-sm" :class="getStatusBadge(serverStats.memory.usage_percent)">
-                        {{ getStatusText(serverStats.memory.usage_percent) }}
+                      <span class="badge badge-sm" :class="getStatusBadge(liveStats.memory.usage_percent)">
+                        {{ getStatusText(liveStats.memory.usage_percent) }}
                       </span>
                     </td>
                   </tr>
-                  
+
                   <tr>
                     <td>
                       <div class="d-flex px-2 py-1">
@@ -287,34 +291,34 @@
                         </div>
                         <div class="d-flex flex-column justify-content-center">
                           <h6 class="mb-0 text-sm">Disk</h6>
-                          <p class="text-xs text-secondary mb-0">{{ serverStats.disk.total }}</p>
+                          <p class="text-xs text-secondary mb-0">{{ liveStats.disk.total }}</p>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <p class="text-xs font-weight-bold mb-0">{{ serverStats.disk.used }}</p>
-                      <p class="text-xs text-secondary mb-0">Free: {{ serverStats.disk.free }}</p>
+                      <p class="text-xs font-weight-bold mb-0">{{ liveStats.disk.used }}</p>
+                      <p class="text-xs text-secondary mb-0">Free: {{ liveStats.disk.free }}</p>
                     </td>
                     <td class="align-middle">
                       <div class="progress-wrapper w-75 mx-auto">
                         <div class="progress-info">
                           <div class="progress-percentage">
-                            <span class="text-xs font-weight-bold">{{ serverStats.disk.usage_percent }}%</span>
+                            <span class="text-xs font-weight-bold">{{ liveStats.disk.usage_percent }}%</span>
                           </div>
                         </div>
                         <div class="progress">
-                          <div 
+                          <div
                             class="progress-bar"
-                            :class="getProgressClass(serverStats.disk.usage_percent)"
-                            :style="`width: ${serverStats.disk.usage_percent}%`"
+                            :class="getProgressClass(liveStats.disk.usage_percent)"
+                            :style="`width: ${liveStats.disk.usage_percent}%`"
                             role="progressbar"
                           ></div>
                         </div>
                       </div>
                     </td>
                     <td class="align-middle text-center">
-                      <span class="badge badge-sm" :class="getStatusBadge(serverStats.disk.usage_percent)">
-                        {{ getStatusText(serverStats.disk.usage_percent) }}
+                      <span class="badge badge-sm" :class="getStatusBadge(liveStats.disk.usage_percent)">
+                        {{ getStatusText(liveStats.disk.usage_percent) }}
                       </span>
                     </td>
                   </tr>
@@ -324,7 +328,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-lg-4 col-md-6">
         <div class="card h-100">
           <div class="card-header pb-0">
@@ -342,20 +346,24 @@
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">Uptime</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">{{ serverStats.uptime.formatted }}</p>
+                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                    {{ liveStats.uptime.formatted }}
+                  </p>
                 </div>
               </div>
-              
+
               <div class="timeline-block mb-3">
                 <span class="timeline-step">
                   <i class="material-symbols-rounded text-info text-gradient">apps</i>
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">Active Processes</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">{{ serverStats.processes }} running</p>
+                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                    {{ liveStats.processes }} running
+                  </p>
                 </div>
               </div>
-              
+
               <div class="timeline-block mb-3">
                 <span class="timeline-step">
                   <i class="material-symbols-rounded text-warning text-gradient">speed</i>
@@ -363,20 +371,22 @@
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">Load Average</h6>
                   <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
-                    1m: {{ serverStats.load['1min'] }} | 
-                    5m: {{ serverStats.load['5min'] }} | 
-                    15m: {{ serverStats.load['15min'] }}
+                    1m: {{ liveStats.load['1min'] }} |
+                    5m: {{ liveStats.load['5min'] }} |
+                    15m: {{ liveStats.load['15min'] }}
                   </p>
                 </div>
               </div>
-              
+
               <div class="timeline-block">
                 <span class="timeline-step">
                   <i class="material-symbols-rounded text-primary text-gradient">memory</i>
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">CPU Cores</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">{{ serverStats.cpu.cores }} cores available</p>
+                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                    {{ liveStats.cpu.cores }} cores available
+                  </p>
                 </div>
               </div>
             </div>
@@ -388,177 +398,180 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import MainLayout from '@/Layouts/MainLayout.vue';
-import axios from 'axios';
+import { ref, onMounted, onUnmounted } from 'vue'
+import MainLayout from '@/Layouts/MainLayout.vue'
+import axios from 'axios'
 
 const props = defineProps({
   serverStats: {
     type: Object,
     required: true
   }
-});
+})
 
-const serverStats = ref(props.serverStats);
-const isRefreshing = ref(false);
-const chartsReady = ref(false);
-let cpuChart = null;
-let memoryChart = null;
-let loadChart = null;
-let refreshInterval = null;
+const liveStats = ref({ ...props.serverStats })
+const isRefreshing = ref(false)
+const chartsReady = ref(false)
 
-// History data for charts
-const cpuHistory = ref([]);
-const memoryHistory = ref([]);
-const loadHistory = ref([]);
-const timeLabels = ref([]);
+let cpuChart = null
+let memoryChart = null
+let loadChart = null
+let refreshInterval = null
+
+const cpuHistory = ref([])
+const memoryHistory = ref([])
+const loadHistory = ref([])
+const timeLabels = ref([])
 
 onMounted(() => {
-  loadChartJs();
-});
+  console.log('Component mounted, loading Chart.js...')
+  loadChartJs()
+})
 
 onUnmounted(() => {
+  console.log('Component unmounting, cleaning up...')
   if (refreshInterval) {
-    clearInterval(refreshInterval);
+    clearInterval(refreshInterval)
+    refreshInterval = null
   }
-  destroyCharts();
-});
+  destroyCharts()
+})
 
 const destroyCharts = () => {
   if (cpuChart) {
-    cpuChart.destroy();
-    cpuChart = null;
+    cpuChart.destroy()
+    cpuChart = null
   }
   if (memoryChart) {
-    memoryChart.destroy();
-    memoryChart = null;
+    memoryChart.destroy()
+    memoryChart = null
   }
   if (loadChart) {
-    loadChart.destroy();
-    loadChart = null;
+    loadChart.destroy()
+    loadChart = null
   }
-};
+}
 
 const loadChartJs = () => {
-  // Try local file first
-  const localScript = document.createElement('script');
-  localScript.src = '/assets/js/plugins/chartjs.min.js';
+  if (typeof Chart !== 'undefined') {
+    console.log('Chart.js already loaded')
+    initializeApp()
+    return
+  }
+
+  const script = document.createElement('script')
+  script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
+  script.async = true
   
-  localScript.onload = () => {
-    console.log('Chart.js loaded from local');
-    initializeApp();
-  };
+  script.onload = () => {
+    console.log('Chart.js loaded successfully')
+    initializeApp()
+  }
   
-  localScript.onerror = () => {
-    console.log('Local Chart.js failed, loading from CDN');
-    // Fallback to CDN
-    const cdnScript = document.createElement('script');
-    cdnScript.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-    cdnScript.onload = () => {
-      console.log('Chart.js loaded from CDN');
-      initializeApp();
-    };
-    cdnScript.onerror = () => {
-      console.error('Failed to load Chart.js from both local and CDN');
-    };
-    document.head.appendChild(cdnScript);
-  };
+  script.onerror = () => {
+    console.error('Failed to load Chart.js')
+  }
   
-  document.head.appendChild(localScript);
-};
+  document.head.appendChild(script)
+}
 
 const initializeApp = () => {
   setTimeout(() => {
     if (typeof Chart !== 'undefined') {
-      initializeHistoryData();
-      initializeCharts();
-      startAutoRefresh();
-      chartsReady.value = true;
+      console.log('Initializing charts and auto-refresh...')
+      initializeHistoryData()
+      initializeCharts()
+      startAutoRefresh()
+      chartsReady.value = true
     } else {
-      console.error('Chart is still undefined after loading script');
+      console.error('Chart.js is still not available')
     }
-  }, 100);
-};
+  }, 300)
+}
 
 const initializeHistoryData = () => {
-  const now = new Date();
+  const now = new Date()
   for (let i = 11; i >= 0; i--) {
-    const time = new Date(now - i * 5000);
-    timeLabels.value.push(formatTime(time));
-    cpuHistory.value.push(serverStats.value.cpu.usage);
-    memoryHistory.value.push(serverStats.value.memory.usage_percent);
-    loadHistory.value.push(serverStats.value.cpu.load_1min);
+    const time = new Date(now - i * 5000)
+    timeLabels.value.push(formatTime(time))
+    cpuHistory.value.push(liveStats.value.cpu.usage)
+    memoryHistory.value.push(liveStats.value.memory.usage_percent)
+    loadHistory.value.push(parseFloat(liveStats.value.cpu.load_1min))
   }
-};
+  console.log('History data initialized:', {
+    cpu: cpuHistory.value,
+    memory: memoryHistory.value,
+    load: loadHistory.value
+  })
+}
 
 const initializeCharts = () => {
   if (typeof Chart === 'undefined') {
-    console.error('Chart.js is not loaded');
-    return;
+    console.error('Cannot initialize charts: Chart.js not loaded')
+    return
   }
 
-  // CPU Chart
-  const ctxCpu = document.getElementById("chart-cpu");
+  const ctxCpu = document.getElementById('chart-cpu')
   if (ctxCpu) {
     cpuChart = new Chart(ctxCpu, {
-      type: "line",
+      type: 'line',
       data: {
-        labels: timeLabels.value,
+        labels: [...timeLabels.value],
         datasets: [{
-          label: "CPU %",
+          label: 'CPU %',
           tension: 0.4,
           borderWidth: 2,
           pointRadius: 3,
-          pointBackgroundColor: "#5e72e4",
-          pointBorderColor: "transparent",
-          borderColor: "#5e72e4",
-          backgroundColor: "rgba(94, 114, 228, 0.1)",
+          pointBackgroundColor: '#5e72e4',
+          pointBorderColor: 'transparent',
+          borderColor: '#5e72e4',
+          backgroundColor: 'rgba(94, 114, 228, 0.1)',
           fill: true,
-          data: cpuHistory.value
+          data: [...cpuHistory.value]
         }]
       },
       options: getChartOptions(100)
-    });
+    })
+    console.log('CPU chart initialized')
   }
 
-  // Memory Chart
-  const ctxMemory = document.getElementById("chart-memory");
+  const ctxMemory = document.getElementById('chart-memory')
   if (ctxMemory) {
     memoryChart = new Chart(ctxMemory, {
-      type: "line",
+      type: 'line',
       data: {
-        labels: timeLabels.value,
+        labels: [...timeLabels.value],
         datasets: [{
-          label: "Memory %",
+          label: 'Memory %',
           tension: 0.4,
           borderWidth: 2,
           pointRadius: 3,
-          pointBackgroundColor: "#2dce89",
-          pointBorderColor: "transparent",
-          borderColor: "#2dce89",
-          backgroundColor: "rgba(45, 206, 137, 0.1)",
+          pointBackgroundColor: '#2dce89',
+          pointBorderColor: 'transparent',
+          borderColor: '#2dce89',
+          backgroundColor: 'rgba(45, 206, 137, 0.1)',
           fill: true,
-          data: memoryHistory.value
+          data: [...memoryHistory.value]
         }]
       },
       options: getChartOptions(100)
-    });
+    })
+    console.log('Memory chart initialized')
   }
 
-  // Load Average Chart
-  const ctxLoad = document.getElementById("chart-load");
+  const ctxLoad = document.getElementById('chart-load')
   if (ctxLoad) {
     loadChart = new Chart(ctxLoad, {
-      type: "bar",
+      type: 'bar',
       data: {
         labels: ['1 min', '5 min', '15 min'],
         datasets: [{
-          label: "Load",
-          backgroundColor: ["#5e72e4", "#11cdef", "#2dce89"],
+          label: 'Load',
+          backgroundColor: ['#5e72e4', '#11cdef', '#2dce89'],
           data: [
-            serverStats.value.cpu.load_1min,
-            serverStats.value.cpu.load_5min,
-            serverStats.value.cpu.load_15min
+            parseFloat(liveStats.value.cpu.load_1min),
+            parseFloat(liveStats.value.cpu.load_5min),
+            parseFloat(liveStats.value.cpu.load_15min)
           ],
           barThickness: 40
         }]
@@ -566,7 +579,7 @@ const initializeCharts = () => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { 
+        plugins: {
           legend: { display: false },
           tooltip: { enabled: true }
         },
@@ -591,20 +604,21 @@ const initializeCharts = () => {
           }
         }
       }
-    });
+    })
+    console.log('Load chart initialized')
   }
-};
+}
 
 const getChartOptions = (maxValue) => ({
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { 
+  plugins: {
     legend: { display: false },
     tooltip: { enabled: true }
   },
-  interaction: { 
-    intersect: false, 
-    mode: 'index' 
+  interaction: {
+    intersect: false,
+    mode: 'index'
   },
   scales: {
     y: {
@@ -627,96 +641,112 @@ const getChartOptions = (maxValue) => ({
         font: { size: 10 },
         maxRotation: 0
       },
-      grid: { 
+      grid: {
         display: false,
         drawBorder: false
       }
     }
   }
-});
+})
 
 const updateCharts = () => {
-  if (!chartsReady.value) return;
+  if (!chartsReady.value) {
+    console.warn('Charts not ready yet')
+    return
+  }
 
   if (cpuChart && cpuChart.data) {
-    cpuChart.data.labels = timeLabels.value;
-    cpuChart.data.datasets[0].data = cpuHistory.value;
-    cpuChart.update('none');
+    cpuChart.data.labels = [...timeLabels.value]
+    cpuChart.data.datasets[0].data = [...cpuHistory.value]
+    cpuChart.update('none')
   }
-  
+
   if (memoryChart && memoryChart.data) {
-    memoryChart.data.labels = timeLabels.value;
-    memoryChart.data.datasets[0].data = memoryHistory.value;
-    memoryChart.update('none');
+    memoryChart.data.labels = [...timeLabels.value]
+    memoryChart.data.datasets[0].data = [...memoryHistory.value]
+    memoryChart.update('none')
   }
-  
+
   if (loadChart && loadChart.data) {
     loadChart.data.datasets[0].data = [
-      serverStats.value.cpu.load_1min,
-      serverStats.value.cpu.load_5min,
-      serverStats.value.cpu.load_15min
-    ];
-    loadChart.update('none');
+      parseFloat(liveStats.value.cpu.load_1min),
+      parseFloat(liveStats.value.cpu.load_5min),
+      parseFloat(liveStats.value.cpu.load_15min)
+    ]
+    loadChart.update('none')
   }
-};
+}
 
 const startAutoRefresh = () => {
+  console.log('Starting auto-refresh every 5 seconds')
   refreshInterval = setInterval(() => {
-    refreshStats();
-  }, 5000);
-};
+    refreshStats()
+  }, 5000)
+}
 
 const refreshStats = async () => {
-  isRefreshing.value = true;
-  try {
-    const response = await axios.get(route('stats'));
-    serverStats.value = response.data;
-    
-    // Update history
-    timeLabels.value.shift();
-    timeLabels.value.push(formatTime(new Date()));
-    
-    cpuHistory.value.shift();
-    cpuHistory.value.push(serverStats.value.cpu.usage);
-    
-    memoryHistory.value.shift();
-    memoryHistory.value.push(serverStats.value.memory.usage_percent);
-    
-    loadHistory.value.shift();
-    loadHistory.value.push(serverStats.value.cpu.load_1min);
-    
-    updateCharts();
-  } catch (error) {
-    console.error('Failed to refresh stats:', error);
-  } finally {
-    isRefreshing.value = false;
+  if (isRefreshing.value) {
+    console.log('Already refreshing, skipping...')
+    return
   }
-};
+  
+  isRefreshing.value = true
+  console.log('Refreshing stats...')
+  
+  try {
+    const response = await axios.get('/dashboard/stats')
+    console.log('Stats received:', response.data)
+
+    liveStats.value = response.data
+
+    timeLabels.value.shift()
+    timeLabels.value.push(formatTime(new Date()))
+
+    cpuHistory.value.shift()
+    cpuHistory.value.push(response.data.cpu.usage)
+
+    memoryHistory.value.shift()
+    memoryHistory.value.push(response.data.memory.usage_percent)
+
+    loadHistory.value.shift()
+    loadHistory.value.push(parseFloat(response.data.cpu.load_1min))
+
+    updateCharts()
+    console.log('Charts updated successfully')
+  } catch (error) {
+    console.error('Failed to refresh stats:', error)
+    if (error.response) {
+      console.error('Response error:', error.response.status, error.response.data)
+    }
+  } finally {
+    isRefreshing.value = false
+  }
+}
 
 const formatTime = (date) => {
-  return date.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false 
-  });
-};
+    hour12: false
+  })
+}
 
 const getProgressClass = (percentage) => {
-  if (percentage < 60) return 'bg-gradient-success';
-  if (percentage < 80) return 'bg-gradient-warning';
-  return 'bg-gradient-danger';
-};
+  if (percentage < 60) return 'bg-gradient-success'
+  if (percentage < 80) return 'bg-gradient-warning'
+  return 'bg-gradient-danger'
+}
 
 const getStatusBadge = (percentage) => {
-  if (percentage < 60) return 'bg-gradient-success';
-  if (percentage < 80) return 'bg-gradient-warning';
-  return 'bg-gradient-danger';
-};
+  if (percentage < 60) return 'bg-gradient-success'
+  if (percentage < 80) return 'bg-gradient-warning'
+  return 'bg-gradient-danger'
+}
 
 const getStatusText = (percentage) => {
-  if (percentage < 60) return 'Good';
-  if (percentage < 80) return 'Warning';
-  return 'Critical';
-};
+  if (percentage < 60) return 'Good'
+  if (percentage < 80) return 'Warning'
+  return 'Critical'
+}
 </script>
