@@ -51,6 +51,11 @@ class DomainController extends Controller
      */
     public function store(Request $request)
     {
+        $domain = null;
+        $path = null;
+        $createdDirs = false;
+        $createdNginx = false;
+        
         try {
             // Validate domain format
             $request->validate([
@@ -93,6 +98,7 @@ class DomainController extends Controller
             $this->executeSudoCommand("mkdir -p {$path}/public {$path}/logs");
             $this->executeSudoCommand("chown -R www-data:www-data {$path}");
             $this->executeSudoCommand("chmod -R 755 {$path}");
+            $createdDirs = true;
 
             // Create basic index file
             $indexContent = $this->getDefaultIndexContent($domain);
@@ -103,9 +109,13 @@ class DomainController extends Controller
 
             // Create Nginx configuration
             $this->createNginxConfig($domain);
+            $createdNginx = true;
 
+            // Test Nginx configuration before reloading
+            $this->executeSudoCommand("nginx -t");
+            
             // Reload Nginx
-            $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+            $this->executeSudoCommand("systemctl reload nginx");
 
             // Log the creation
             \Log::info("Domain created: $domain by user " . auth()->id());
@@ -121,6 +131,12 @@ class DomainController extends Controller
             ], 422);
         } catch (\Exception $e) {
             \Log::error("Failed to create domain: " . $e->getMessage());
+            
+            // Rollback on error
+            if ($domain && $path) {
+                $this->rollbackDomainCreation($domain, $path, $createdDirs, $createdNginx);
+            }
+            
             return response()->json([
                 'error' => 'Failed to create domain: ' . $e->getMessage()
             ], 500);
@@ -132,6 +148,10 @@ class DomainController extends Controller
      */
     public function update(Request $request, $oldDomain)
     {
+        $renamed = false;
+        $oldConfigDeleted = false;
+        $newConfigCreated = false;
+        
         try {
             // Validate domain format
             $request->validate([
@@ -173,16 +193,22 @@ class DomainController extends Controller
                 ], 409);
             }
 
+            // Delete old Nginx config
+            $this->deleteNginxConfig($oldDomain);
+            $oldConfigDeleted = true;
+
             // Rename the directory
             $this->executeSudoCommand("mv {$oldPath} {$newPath}");
             $this->executeSudoCommand("chown -R www-data:www-data {$newPath}");
+            $renamed = true;
 
-            // Delete old Nginx config and create new one
-            $this->deleteNginxConfig($oldDomain);
+            // Create new Nginx config
             $this->createNginxConfig($newDomain);
+            $newConfigCreated = true;
 
-            // Reload Nginx
-            $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+            // Test and reload Nginx
+            $this->executeSudoCommand("nginx -t");
+            $this->executeSudoCommand("systemctl reload nginx");
 
             // Log the update
             \Log::info("Domain updated: $oldDomain -> $newDomain by user " . auth()->id());
@@ -198,6 +224,10 @@ class DomainController extends Controller
             ], 422);
         } catch (\Exception $e) {
             \Log::error("Failed to update domain: " . $e->getMessage());
+            
+            // Rollback on error
+            $this->rollbackDomainUpdate($oldDomain, $newDomain, $oldPath, $newPath, $renamed, $oldConfigDeleted, $newConfigCreated);
+            
             return response()->json([
                 'error' => 'Failed to update domain: ' . $e->getMessage()
             ], 500);
@@ -298,11 +328,20 @@ HTML;
         $output = [];
         $returnCode = 0;
         
+        // Log the command being executed (for debugging)
+        \Log::debug("Executing sudo command: $command");
+        
         // Execute command with proper escaping
         exec("sudo $command 2>&1", $output, $returnCode);
         
+        // Log the output
+        \Log::debug("Command output: " . implode("\n", $output));
+        \Log::debug("Return code: $returnCode");
+        
         if ($returnCode !== 0) {
-            throw new \Exception("Command failed: " . implode("\n", $output));
+            $errorMsg = "Command failed (exit code: $returnCode): " . implode("\n", $output);
+            \Log::error($errorMsg);
+            throw new \Exception($errorMsg);
         }
         
         return $output;
@@ -316,6 +355,7 @@ HTML;
         $configPath = "/etc/nginx/sites-available/{$domain}";
         $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
         $domainPath = $this->basePath . $domain;
+        $tempPath = "/tmp/nginx_{$domain}.conf";
 
         $config = <<<NGINX
 server {
@@ -364,11 +404,14 @@ server {
 }
 NGINX;
 
-        // Write config file
-        file_put_contents($configPath, $config);
+        // Write to temp file first (www-data has permission here)
+        file_put_contents($tempPath, $config);
+        
+        // Move to nginx directory using sudo
+        $this->executeSudoCommand("mv {$tempPath} {$configPath}");
         $this->executeSudoCommand("chmod 644 {$configPath}");
 
-        // Create symlink
+        // Create symlink if it doesn't exist
         if (!file_exists($symlinkPath)) {
             $this->executeSudoCommand("ln -s {$configPath} {$symlinkPath}");
         }
@@ -390,6 +433,78 @@ NGINX;
         // Remove config file
         if (file_exists($configPath)) {
             $this->executeSudoCommand("rm -f {$configPath}");
+        }
+    }
+
+    /**
+     * Rollback domain creation on error
+     */
+    private function rollbackDomainCreation($domain, $path, $createdDirs, $createdNginx)
+    {
+        try {
+            \Log::warning("Rolling back domain creation for: $domain");
+            
+            // Remove Nginx config if it was created
+            if ($createdNginx) {
+                \Log::info("Removing Nginx configuration for: $domain");
+                $this->deleteNginxConfig($domain);
+                // Try to reload nginx, but don't fail if it errors
+                try {
+                    $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+                } catch (\Exception $e) {
+                    \Log::warning("Failed to reload nginx during rollback: " . $e->getMessage());
+                }
+            }
+            
+            // Remove directory if it was created
+            if ($createdDirs && File::exists($path)) {
+                \Log::info("Removing directory: $path");
+                $this->executeSudoCommand("rm -rf {$path}");
+            }
+            
+            \Log::info("Rollback completed for: $domain");
+        } catch (\Exception $e) {
+            // Log rollback failures but don't throw - we're already in error handling
+            \Log::error("Rollback failed for domain $domain: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Rollback domain update on error
+     */
+    private function rollbackDomainUpdate($oldDomain, $newDomain, $oldPath, $newPath, $renamed, $oldConfigDeleted, $newConfigCreated)
+    {
+        try {
+            \Log::warning("Rolling back domain update: $oldDomain -> $newDomain");
+            
+            // Remove new Nginx config if created
+            if ($newConfigCreated) {
+                \Log::info("Removing new Nginx config for: $newDomain");
+                $this->deleteNginxConfig($newDomain);
+            }
+            
+            // Rename directory back if it was renamed
+            if ($renamed && File::exists($newPath)) {
+                \Log::info("Renaming directory back: $newPath -> $oldPath");
+                $this->executeSudoCommand("mv {$newPath} {$oldPath}");
+            }
+            
+            // Recreate old Nginx config if it was deleted
+            if ($oldConfigDeleted && File::exists($oldPath)) {
+                \Log::info("Recreating old Nginx config for: $oldDomain");
+                $this->createNginxConfig($oldDomain);
+            }
+            
+            // Try to reload nginx
+            try {
+                $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+            } catch (\Exception $e) {
+                \Log::warning("Failed to reload nginx during rollback: " . $e->getMessage());
+            }
+            
+            \Log::info("Rollback completed for domain update");
+        } catch (\Exception $e) {
+            \Log::error("Rollback failed for domain update: " . $e->getMessage());
         }
     }
 }
