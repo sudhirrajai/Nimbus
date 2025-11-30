@@ -27,8 +27,14 @@ class DomainController extends Controller
                     return basename($path);
                 })
                 ->filter(function ($name) {
-                    // Ignore system directories
-                    return !in_array($name, ['html', 'default', 'public', 'cgi-bin']);
+                    // Ignore system directories and the Nimbus control panel itself
+                    return !in_array(strtolower($name), [
+                        'html', 
+                        'default', 
+                        'public', 
+                        'cgi-bin',
+                        'nimbus'  // Exclude Nimbus control panel
+                    ]);
                 })
                 ->values();
 
@@ -66,6 +72,13 @@ class DomainController extends Controller
                 ], 500);
             }
 
+            // Check if we have write permissions
+            if (!is_writable($this->basePath)) {
+                return response()->json([
+                    'error' => "Permission denied. Please run: sudo chown -R www-data:www-data {$this->basePath} && sudo chmod -R 755 {$this->basePath}"
+                ], 500);
+            }
+
             $domain = strtolower(trim($request->domain));
             $path = $this->basePath . $domain;
 
@@ -76,16 +89,23 @@ class DomainController extends Controller
                 ], 409);
             }
 
-            // Create folder structure
-            File::makeDirectory($path, 0755, true);
-            File::makeDirectory("$path/public", 0755, true);
-            File::makeDirectory("$path/logs", 0755, true);
+            // Create folder structure using sudo for proper permissions
+            $this->executeSudoCommand("mkdir -p {$path}/public {$path}/logs");
+            $this->executeSudoCommand("chown -R www-data:www-data {$path}");
+            $this->executeSudoCommand("chmod -R 755 {$path}");
 
             // Create basic index file
-            File::put("$path/public/index.php", $this->getDefaultIndexContent($domain));
+            $indexContent = $this->getDefaultIndexContent($domain);
+            file_put_contents("$path/public/index.php", $indexContent);
 
             // Create .env file placeholder
-            File::put("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n");
+            file_put_contents("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n");
+
+            // Create Nginx configuration
+            $this->createNginxConfig($domain);
+
+            // Reload Nginx
+            $this->executeSudoCommand("nginx -t && systemctl reload nginx");
 
             // Log the creation
             \Log::info("Domain created: $domain by user " . auth()->id());
@@ -154,7 +174,15 @@ class DomainController extends Controller
             }
 
             // Rename the directory
-            File::move($oldPath, $newPath);
+            $this->executeSudoCommand("mv {$oldPath} {$newPath}");
+            $this->executeSudoCommand("chown -R www-data:www-data {$newPath}");
+
+            // Delete old Nginx config and create new one
+            $this->deleteNginxConfig($oldDomain);
+            $this->createNginxConfig($newDomain);
+
+            // Reload Nginx
+            $this->executeSudoCommand("nginx -t && systemctl reload nginx");
 
             // Log the update
             \Log::info("Domain updated: $oldDomain -> $newDomain by user " . auth()->id());
@@ -190,8 +218,14 @@ class DomainController extends Controller
                 ], 404);
             }
 
+            // Delete Nginx configuration first
+            $this->deleteNginxConfig($domain);
+
+            // Reload Nginx to apply changes
+            $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+
             // Delete the directory and all its contents
-            File::deleteDirectory($path);
+            $this->executeSudoCommand("rm -rf {$path}");
 
             // Log the deletion
             \Log::info("Domain deleted: $domain by user " . auth()->id());
@@ -254,5 +288,108 @@ class DomainController extends Controller
 </body>
 </html>
 HTML;
+    }
+
+    /**
+     * Execute sudo command safely
+     */
+    private function executeSudoCommand($command)
+    {
+        $output = [];
+        $returnCode = 0;
+        
+        // Execute command with proper escaping
+        exec("sudo $command 2>&1", $output, $returnCode);
+        
+        if ($returnCode !== 0) {
+            throw new \Exception("Command failed: " . implode("\n", $output));
+        }
+        
+        return $output;
+    }
+
+    /**
+     * Create Nginx configuration for domain
+     */
+    private function createNginxConfig($domain)
+    {
+        $configPath = "/etc/nginx/sites-available/{$domain}";
+        $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
+        $domainPath = $this->basePath . $domain;
+
+        $config = <<<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    
+    server_name {$domain} www.{$domain};
+    root {$domainPath}/public;
+    
+    index index.php index.html index.htm;
+    
+    # Logs
+    access_log {$domainPath}/logs/access.log;
+    error_log {$domainPath}/logs/error.log;
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
+    # PHP handling
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param PATH_INFO \$fastcgi_path_info;
+    }
+    
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+    }
+    
+    # Static files caching
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    # Try files
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+}
+NGINX;
+
+        // Write config file
+        file_put_contents($configPath, $config);
+        $this->executeSudoCommand("chmod 644 {$configPath}");
+
+        // Create symlink
+        if (!file_exists($symlinkPath)) {
+            $this->executeSudoCommand("ln -s {$configPath} {$symlinkPath}");
+        }
+    }
+
+    /**
+     * Delete Nginx configuration for domain
+     */
+    private function deleteNginxConfig($domain)
+    {
+        $configPath = "/etc/nginx/sites-available/{$domain}";
+        $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
+
+        // Remove symlink
+        if (file_exists($symlinkPath)) {
+            $this->executeSudoCommand("rm -f {$symlinkPath}");
+        }
+
+        // Remove config file
+        if (file_exists($configPath)) {
+            $this->executeSudoCommand("rm -f {$configPath}");
+        }
     }
 }
