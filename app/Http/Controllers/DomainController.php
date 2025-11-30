@@ -240,32 +240,88 @@ class DomainController extends Controller
     public function destroy($domain)
     {
         try {
+            \Log::info("Starting deletion process for domain: $domain");
+            
+            // Sanitize domain name to prevent command injection
+            $domain = strtolower(trim($domain));
+            if (!preg_match('/^[a-z0-9.-]+$/', $domain)) {
+                return response()->json([
+                    'error' => 'Invalid domain name format'
+                ], 400);
+            }
+            
             $path = $this->basePath . $domain;
+            \Log::info("Domain path: $path");
 
+            // Check if domain exists
             if (!File::exists($path)) {
+                \Log::warning("Domain not found: $domain at path $path");
                 return response()->json([
                     'error' => 'Domain not found'
                 ], 404);
             }
 
-            // Delete Nginx configuration first
-            $this->deleteNginxConfig($domain);
+            // Check if this is a protected directory
+            $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
+            if (in_array(strtolower($domain), $protectedDirs)) {
+                \Log::error("Attempted to delete protected directory: $domain");
+                return response()->json([
+                    'error' => 'Cannot delete protected system directory'
+                ], 403);
+            }
 
-            // Reload Nginx to apply changes
-            $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+            // Step 1: Delete Nginx symlink first (if it exists)
+            $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
+            if (file_exists($symlinkPath)) {
+                \Log::info("Removing Nginx symlink: $symlinkPath");
+                $this->executeSudoCommand("rm -f {$symlinkPath}");
+            }
 
-            // Delete the directory and all its contents
-            $this->executeSudoCommand("rm -rf {$path}");
+            // Step 2: Delete Nginx config file
+            $configPath = "/etc/nginx/sites-available/{$domain}";
+            if (file_exists($configPath)) {
+                \Log::info("Removing Nginx config: $configPath");
+                $this->executeSudoCommand("rm -f {$configPath}");
+            }
 
-            // Log the deletion
-            \Log::info("Domain deleted: $domain by user " . auth()->id());
+            // Step 3: Test and reload Nginx configuration
+            \Log::info("Testing Nginx configuration...");
+            try {
+                $this->executeSudoCommand("nginx -t");
+                \Log::info("Nginx config test passed");
+            } catch (\Exception $e) {
+                \Log::error("Nginx config test failed: " . $e->getMessage());
+                throw new \Exception("Nginx configuration test failed. Please check your Nginx configuration.");
+            }
+
+            \Log::info("Reloading Nginx...");
+            $this->executeSudoCommand("systemctl reload nginx");
+            \Log::info("Nginx reloaded successfully");
+
+            // Step 4: Delete the domain directory
+            \Log::info("Removing domain directory: $path");
+            
+            // Use force removal with proper escaping
+            $escapedPath = escapeshellarg($path);
+            $this->executeSudoCommand("rm -rf {$escapedPath}");
+            
+            // Verify deletion
+            if (File::exists($path)) {
+                \Log::error("Directory still exists after deletion attempt: $path");
+                throw new \Exception("Failed to remove directory - it may be in use or have permission issues");
+            }
+
+            \Log::info("Domain deleted successfully: $domain by user " . auth()->id());
 
             return response()->json([
-                'message' => 'Domain deleted successfully'
-            ]);
+                'message' => 'Domain deleted successfully',
+                'domain' => $domain
+            ], 200);
 
         } catch (\Exception $e) {
-            \Log::error("Failed to delete domain: " . $e->getMessage());
+            \Log::error("Failed to delete domain $domain: " . $e->getMessage());
+            \Log::error("Stack trace: " . $e->getTraceAsString());
+            
             return response()->json([
                 'error' => 'Failed to delete domain: ' . $e->getMessage()
             ], 500);
@@ -329,19 +385,20 @@ HTML;
         $returnCode = 0;
         
         // Log the command being executed (for debugging)
-        \Log::debug("Executing sudo command: $command");
+        \Log::debug("Executing sudo command: sudo $command");
         
-        // Execute command with proper escaping
+        // Execute command with proper error handling
         exec("sudo $command 2>&1", $output, $returnCode);
         
         // Log the output
-        \Log::debug("Command output: " . implode("\n", $output));
+        $outputStr = implode("\n", $output);
+        \Log::debug("Command output: " . $outputStr);
         \Log::debug("Return code: $returnCode");
         
         if ($returnCode !== 0) {
-            $errorMsg = "Command failed (exit code: $returnCode): " . implode("\n", $output);
+            $errorMsg = "Command failed with exit code $returnCode: $command\nOutput: $outputStr";
             \Log::error($errorMsg);
-            throw new \Exception($errorMsg);
+            throw new \Exception("Command execution failed: " . $outputStr);
         }
         
         return $output;
@@ -355,7 +412,7 @@ HTML;
         $configPath = "/etc/nginx/sites-available/{$domain}";
         $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
         $domainPath = $this->basePath . $domain;
-        $tempPath = "/tmp/nginx_{$domain}.conf";
+        $tempPath = "/tmp/nginx_{$domain}_" . time() . ".conf";
 
         $config = <<<NGINX
 server {
@@ -425,13 +482,15 @@ NGINX;
         $configPath = "/etc/nginx/sites-available/{$domain}";
         $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
 
-        // Remove symlink
+        // Remove symlink first
         if (file_exists($symlinkPath)) {
+            \Log::info("Deleting Nginx symlink: $symlinkPath");
             $this->executeSudoCommand("rm -f {$symlinkPath}");
         }
 
         // Remove config file
         if (file_exists($configPath)) {
+            \Log::info("Deleting Nginx config: $configPath");
             $this->executeSudoCommand("rm -f {$configPath}");
         }
     }
@@ -459,7 +518,8 @@ NGINX;
             // Remove directory if it was created
             if ($createdDirs && File::exists($path)) {
                 \Log::info("Removing directory: $path");
-                $this->executeSudoCommand("rm -rf {$path}");
+                $escapedPath = escapeshellarg($path);
+                $this->executeSudoCommand("rm -rf {$escapedPath}");
             }
             
             \Log::info("Rollback completed for: $domain");
