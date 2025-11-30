@@ -8,7 +8,7 @@
           <div
             class="copyright text-center text-sm text-muted text-lg-start"
           >
-            © {{ new Date().getFullYear() }}, made with ❤️ by Creative Tim
+            © {{ new Date().getFullYear() }}, made with ❤️ by Sudhir Rajai
           </div>
         </div>
 
@@ -17,10 +17,10 @@
             class="nav nav-footer justify-content-center justify-content-lg-end"
           >
             <li class="nav-item">
-              <a href="#" class="nav-link text-muted">Creative Tim</a>
+              <a href="https://sudhirrajai.com/" class="nav-link text-muted">Sudhir Rajai</a>
             </li>
             <li class="nav-item">
-              <a href="#" class="nav-link text-muted">Blog</a>
+              <a href="https://sudhirinsights.com/" class="nav-link text-muted">Blog</a>
             </li>
           </ul>
         </div>
