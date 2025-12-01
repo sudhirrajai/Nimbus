@@ -27,7 +27,7 @@ class FileManagerController extends Controller
             abort(404, 'Domain not found');
         }
 
-        return Inertia::render('FileManager', [
+        return Inertia::render('Files/FileManager', [
             'domain' => $domain,
             'initialPath' => ''
         ]);
