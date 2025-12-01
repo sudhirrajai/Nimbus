@@ -24,7 +24,7 @@ class FileManagerController extends Controller
         }
 
         if (!File::exists($domainPath)) {
-            abort(404, 'Domain not found');
+            return redirect()->route('domains.list');
         }
 
         return Inertia::render('Files/FileManager', [
