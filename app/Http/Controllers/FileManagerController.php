@@ -24,10 +24,10 @@ class FileManagerController extends Controller
         }
 
         if (!File::exists($domainPath)) {
-            abort(404, 'Domain not found');
+            return redirect()->route('domains.list');
         }
 
-        return Inertia::render('FileManager', [
+        return Inertia::render('Files/FileManager', [
             'domain' => $domain,
             'initialPath' => ''
         ]);
@@ -88,6 +88,54 @@ class FileManagerController extends Controller
         } catch (\Exception $e) {
             \Log::error("File list error: " . $e->getMessage());
             return response()->json(['error' => 'Failed to list files'], 500);
+        }
+    }
+
+    /**
+     * Change file or directory permissions
+     */
+    public function chmod(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'path' => 'required|string',
+                'name' => 'required|string',
+                'permissions' => 'required|string|regex:/^[0-7]{3,4}$/',
+                'recursive' => 'boolean'
+            ]);
+
+            $path = $request->input('path');
+            $name = $request->input('name');
+            $permissions = $request->input('permissions');
+            $recursive = $request->input('recursive', false);
+            
+            $dirPath = $this->getFullPath($domain, $path);
+            $targetPath = $dirPath . '/' . $name;
+
+            if (!$this->isValidPath($targetPath)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            if (!File::exists($targetPath)) {
+                return response()->json(['error' => 'File or directory not found'], 404);
+            }
+
+            // Escape paths for security
+            $escapedPath = escapeshellarg($targetPath);
+            
+            if ($recursive && File::isDirectory($targetPath)) {
+                // Change permissions recursively
+                $this->executeSudoCommand("chmod -R {$permissions} {$escapedPath}");
+            } else {
+                // Change permissions for single file/directory
+                $this->executeSudoCommand("chmod {$permissions} {$escapedPath}");
+            }
+
+            return response()->json(['message' => 'Permissions changed successfully']);
+
+        } catch (\Exception $e) {
+            \Log::error("Chmod error: " . $e->getMessage());
+            return response()->json(['error' => 'Failed to change permissions'], 500);
         }
     }
 
@@ -169,11 +217,11 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'name' => 'required|string|max:255'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $name = $request->input('name');
             $dirPath = $this->getFullPath($domain, $path);
             $filePath = $dirPath . '/' . $name;
@@ -186,15 +234,25 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'File already exists'], 409);
             }
 
+            // Ensure directory exists and has proper permissions
+            if (!File::exists($dirPath)) {
+                File::makeDirectory($dirPath, 0755, true);
+                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
+            }
+
+            // Create the file
             File::put($filePath, '');
-            $this->executeSudoCommand("chown www-data:www-data {$filePath}");
-            $this->executeSudoCommand("chmod 644 {$filePath}");
+            
+            // Set proper ownership and permissions
+            $escapedFilePath = escapeshellarg($filePath);
+            $this->executeSudoCommand("chown www-data:www-data {$escapedFilePath}");
+            $this->executeSudoCommand("chmod 644 {$escapedFilePath}");
 
             return response()->json(['message' => 'File created successfully']);
 
         } catch (\Exception $e) {
             \Log::error("File create error: " . $e->getMessage());
-            return response()->json(['error' => 'Failed to create file'], 500);
+            return response()->json(['error' => 'Failed to create file: ' . $e->getMessage()], 500);
         }
     }
 
@@ -205,11 +263,11 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'name' => 'required|string|max:255'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $name = $request->input('name');
             $dirPath = $this->getFullPath($domain, $path);
             $newDirPath = $dirPath . '/' . $name;
@@ -222,14 +280,24 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'Directory already exists'], 409);
             }
 
+            // Ensure parent directory exists
+            if (!File::exists($dirPath)) {
+                File::makeDirectory($dirPath, 0755, true);
+                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
+            }
+
+            // Create directory
             File::makeDirectory($newDirPath, 0755, true);
-            $this->executeSudoCommand("chown www-data:www-data {$newDirPath}");
+            
+            // Set proper ownership
+            $escapedNewDirPath = escapeshellarg($newDirPath);
+            $this->executeSudoCommand("chown -R www-data:www-data {$escapedNewDirPath}");
 
             return response()->json(['message' => 'Directory created successfully']);
 
         } catch (\Exception $e) {
             \Log::error("Directory create error: " . $e->getMessage());
-            return response()->json(['error' => 'Failed to create directory'], 500);
+            return response()->json(['error' => 'Failed to create directory: ' . $e->getMessage()], 500);
         }
     }
 
@@ -305,7 +373,9 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'Target name already exists'], 409);
             }
 
-            $this->executeSudoCommand("mv {$oldPath} {$newPath}");
+            $escapedOldPath = escapeshellarg($oldPath);
+            $escapedNewPath = escapeshellarg($newPath);
+            $this->executeSudoCommand("mv {$escapedOldPath} {$escapedNewPath}");
 
             return response()->json(['message' => 'Renamed successfully']);
 
@@ -322,11 +392,11 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
-                'file' => 'required|file|max:10240' // 10MB max
+                'path' => 'nullable|string',
+                'file' => 'required|file|max:102400' // 100MB max
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $file = $request->file('file');
             $dirPath = $this->getFullPath($domain, $path);
             $targetPath = $dirPath . '/' . $file->getClientOriginalName();
@@ -335,15 +405,25 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
+            // Ensure directory exists
+            if (!File::exists($dirPath)) {
+                File::makeDirectory($dirPath, 0755, true);
+                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
+            }
+
+            // Move uploaded file
             $file->move($dirPath, $file->getClientOriginalName());
-            $this->executeSudoCommand("chown www-data:www-data {$targetPath}");
-            $this->executeSudoCommand("chmod 644 {$targetPath}");
+            
+            // Set proper ownership and permissions
+            $escapedTargetPath = escapeshellarg($targetPath);
+            $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
+            $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
 
             return response()->json(['message' => 'File uploaded successfully']);
 
         } catch (\Exception $e) {
             \Log::error("Upload error: " . $e->getMessage());
-            return response()->json(['error' => 'Failed to upload file'], 500);
+            return response()->json(['error' => 'Failed to upload file: ' . $e->getMessage()], 500);
         }
     }
 

@@ -11,30 +11,32 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
 });
 
-Route::get('/domains-list', function () {
+// Changed from /domains-list to /domains to match the navigation
+Route::get('/domains', function () {
     return Inertia::render('Domains/Index');
 })->name('domains.list');
 
 Route::prefix('domains')->group(function () {
-    Route::get('/', [DomainController::class, 'index'])->name('domain.index');
+    Route::get('/api', [DomainController::class, 'index'])->name('domain.index');
     Route::post('/', [DomainController::class, 'store'])->name('domain.store');
     Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
     Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
 });
 
 // File Manager routes
-Route::prefix('file-manager/{domain}')->group(function () {
+Route::prefix('file-manager')->name('file-manager.')->group(function () {
     // Main file manager view
-    Route::get('/', [FileManagerController::class, 'index'])->name('file-manager.index');
+    Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
     
     // File operations
-    Route::post('/list', [FileManagerController::class, 'list'])->name('file-manager.list');
-    Route::post('/read', [FileManagerController::class, 'read'])->name('file-manager.read');
-    Route::post('/save', [FileManagerController::class, 'save'])->name('file-manager.save');
-    Route::post('/create-file', [FileManagerController::class, 'createFile'])->name('file-manager.create-file');
-    Route::post('/create-directory', [FileManagerController::class, 'createDirectory'])->name('file-manager.create-directory');
-    Route::post('/delete', [FileManagerController::class, 'delete'])->name('file-manager.delete');
-    Route::post('/rename', [FileManagerController::class, 'rename'])->name('file-manager.rename');
-    Route::post('/upload', [FileManagerController::class, 'upload'])->name('file-manager.upload');
-    Route::get('/download', [FileManagerController::class, 'download'])->name('file-manager.download');
+    Route::post('/{domain}/list', [FileManagerController::class, 'list'])->name('list');
+    Route::post('/{domain}/read', [FileManagerController::class, 'read'])->name('read');
+    Route::post('/{domain}/save', [FileManagerController::class, 'save'])->name('save');
+    Route::post('/{domain}/create-file', [FileManagerController::class, 'createFile'])->name('create-file');
+    Route::post('/{domain}/create-directory', [FileManagerController::class, 'createDirectory'])->name('create-directory');
+    Route::post('/{domain}/delete', [FileManagerController::class, 'delete'])->name('delete');
+    Route::post('/{domain}/rename', [FileManagerController::class, 'rename'])->name('rename');
+    Route::post('/{domain}/chmod', [FileManagerController::class, 'chmod'])->name('chmod');
+    Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
+    Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
 });
