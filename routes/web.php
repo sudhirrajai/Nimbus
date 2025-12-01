@@ -36,6 +36,7 @@ Route::prefix('file-manager')->name('file-manager.')->group(function () {
     Route::post('/{domain}/create-directory', [FileManagerController::class, 'createDirectory'])->name('create-directory');
     Route::post('/{domain}/delete', [FileManagerController::class, 'delete'])->name('delete');
     Route::post('/{domain}/rename', [FileManagerController::class, 'rename'])->name('rename');
+    Route::post('/{domain}/chmod', [FileManagerController::class, 'chmod'])->name('chmod');
     Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
     Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
 });

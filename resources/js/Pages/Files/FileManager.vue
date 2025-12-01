@@ -1,6 +1,6 @@
 <template>
   <MainLayout>
-    <div class="container-fluid py-4">
+    <div class="container-fluid py-4" @click="closeContextMenu">
       
       <!-- Header -->
       <div class="row mb-4">
@@ -55,6 +55,14 @@
                   style="display:none" 
                   @change="handleFileUpload"
                 />
+                <button 
+                  v-if="currentPath" 
+                  class="btn btn-sm bg-gradient-warning mb-0" 
+                  @click="goUpOneLevel"
+                >
+                  <i class="material-symbols-rounded text-sm me-1">arrow_upward</i>
+                  Up One Level
+                </button>
                 <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadFiles" :disabled="loading">
                   <i class="material-symbols-rounded text-sm me-1">refresh</i>
                   Refresh
@@ -108,7 +116,12 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="item in items" :key="item.name">
+                    <tr 
+                      v-for="item in items" 
+                      :key="item.name"
+                      @contextmenu.prevent="openContextMenu($event, item)"
+                      class="file-row"
+                    >
                       <td>
                         <div class="d-flex px-2 py-1 align-items-center">
                           <div class="me-3">
@@ -144,7 +157,13 @@
                         <span class="text-xs">{{ item.modified }}</span>
                       </td>
                       <td>
-                        <span class="badge badge-sm bg-gradient-secondary">{{ item.permissions }}</span>
+                        <span 
+                          class="badge badge-sm bg-gradient-secondary cursor-pointer"
+                          @click="openPermissionsModal(item)"
+                          title="Click to change permissions"
+                        >
+                          {{ item.permissions }}
+                        </span>
                       </td>
                       <td class="align-middle text-center">
                         <button 
@@ -153,7 +172,7 @@
                           @click="editFile(item.name)"
                           title="Edit"
                         >
-                          <i class="material-symbols-rounded text-sm">edit</i>
+                          <i class="material-symbols-rounded text-sm">edit_note</i>
                         </button>
                         <button 
                           v-if="item.type === 'file'"
@@ -164,11 +183,11 @@
                           <i class="material-symbols-rounded text-sm">download</i>
                         </button>
                         <button 
-                          class="btn btn-link text-secondary mb-0 px-2"
+                          class="btn btn-link text-warning mb-0 px-2"
                           @click="openRenameModal(item)"
                           title="Rename"
                         >
-                          <i class="material-symbols-rounded text-sm">drive_file_rename_outline</i>
+                          <i class="material-symbols-rounded text-sm">label</i>
                         </button>
                         <button 
                           class="btn btn-link text-danger mb-0 px-2"
@@ -197,6 +216,96 @@
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context Menu -->
+      <div 
+        v-if="contextMenu.show" 
+        class="context-menu"
+        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+        @click.stop
+      >
+        <div 
+          v-if="contextMenu.item.type === 'file' && contextMenu.item.editable"
+          class="context-menu-item"
+          @click="editFile(contextMenu.item.name); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">edit_note</i>
+          Edit
+        </div>
+        <div 
+          v-if="contextMenu.item.type === 'file'"
+          class="context-menu-item"
+          @click="downloadFile(contextMenu.item.name); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">download</i>
+          Download
+        </div>
+        <div 
+          class="context-menu-item"
+          @click="openRenameModal(contextMenu.item); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">label</i>
+          Rename
+        </div>
+        <div 
+          class="context-menu-item"
+          @click="openPermissionsModal(contextMenu.item); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">shield</i>
+          Permissions
+        </div>
+        <div class="context-menu-divider"></div>
+        <div 
+          class="context-menu-item text-danger"
+          @click="confirmDelete(contextMenu.item); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">delete</i>
+          Delete
+        </div>
+      </div>
+
+      <!-- Permissions Modal -->
+      <div class="modal fade show" style="display:block" v-if="showPermissionsModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Change Permissions: {{ selectedItem?.name }}</h5>
+              <button type="button" class="btn-close" @click="showPermissionsModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <div class="form-group">
+                <label class="form-label">Permission Mode</label>
+                <input 
+                  v-model="newPermissions" 
+                  type="text" 
+                  class="form-control" 
+                  placeholder="0755"
+                  maxlength="4"
+                  pattern="[0-7]{3,4}"
+                />
+                <small class="text-muted d-block mt-1">
+                  Common: 644 (files), 755 (folders), 777 (full access)
+                </small>
+              </div>
+              <div class="form-check mt-3" v-if="selectedItem?.type === 'directory'">
+                <input 
+                  class="form-check-input" 
+                  type="checkbox" 
+                  v-model="recursivePermissions"
+                  id="recursiveCheck"
+                >
+                <label class="form-check-label" for="recursiveCheck">
+                  Apply recursively to all files and folders inside
+                </label>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary" @click="showPermissionsModal = false">Cancel</button>
+              <button class="btn bg-gradient-primary" @click="changePermissions">Apply</button>
             </div>
           </div>
         </div>
@@ -358,6 +467,7 @@ const showCreateDirModal = ref(false)
 const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
 const showEditorModal = ref(false)
+const showPermissionsModal = ref(false)
 
 const newFileName = ref('')
 const newDirName = ref('')
@@ -366,6 +476,15 @@ const selectedItem = ref(null)
 const editingFile = ref('')
 const fileContent = ref('')
 const fileInput = ref(null)
+const newPermissions = ref('')
+const recursivePermissions = ref(false)
+
+const contextMenu = ref({
+  show: false,
+  x: 0,
+  y: 0,
+  item: null
+})
 
 const alert = ref({
   show: false,
@@ -380,6 +499,42 @@ onMounted(() => {
 const showAlert = (type, message) => {
   alert.value = { show: true, type, message }
   setTimeout(() => alert.value.show = false, 5000)
+}
+
+const openContextMenu = (event, item) => {
+  contextMenu.value = {
+    show: true,
+    x: event.pageX,
+    y: event.pageY,
+    item: item
+  }
+}
+
+const closeContextMenu = () => {
+  contextMenu.value.show = false
+}
+
+const openPermissionsModal = (item) => {
+  selectedItem.value = item
+  newPermissions.value = item.permissions
+  recursivePermissions.value = false
+  showPermissionsModal.value = true
+}
+
+const changePermissions = async () => {
+  try {
+    await axios.post(`/file-manager/${props.domain}/chmod`, {
+      path: currentPath.value,
+      name: selectedItem.value.name,
+      permissions: newPermissions.value,
+      recursive: recursivePermissions.value
+    })
+    showAlert('success', 'Permissions changed successfully')
+    showPermissionsModal.value = false
+    loadFiles()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to change permissions')
+  }
 }
 
 const loadFiles = async () => {
@@ -405,6 +560,14 @@ const navigateTo = (path) => {
 
 const openDirectory = (name) => {
   currentPath.value = currentPath.value ? `${currentPath.value}/${name}` : name
+  loadFiles()
+}
+
+const goUpOneLevel = () => {
+  if (!currentPath.value) return
+  const pathParts = currentPath.value.split('/').filter(Boolean)
+  pathParts.pop()
+  currentPath.value = pathParts.join('/')
   loadFiles()
 }
 
@@ -594,5 +757,46 @@ const downloadFile = async (name) => {
 textarea.font-monospace {
   font-family: 'Courier New', monospace;
   line-height: 1.5;
+}
+
+.file-row {
+  cursor: pointer;
+}
+
+.file-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.context-menu {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 9999;
+  min-width: 180px;
+  padding: 4px 0;
+}
+
+.context-menu-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+  margin: 4px 0;
 }
 </style>
