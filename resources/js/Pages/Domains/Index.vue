@@ -67,6 +67,20 @@
                       </td>
                       <td class="align-middle text-center">
                         <button 
+                          class="btn btn-link text-info mb-0 px-2" 
+                          @click="viewWebsite(domain)"
+                          title="View website"
+                        >
+                          <i class="material-symbols-rounded text-sm">visibility</i>
+                        </button>
+                        <button 
+                          class="btn btn-link text-primary mb-0 px-2" 
+                          @click="openFileManager(domain)"
+                          title="File Manager"
+                        >
+                          <i class="material-symbols-rounded text-sm">folder</i>
+                        </button>
+                        <button 
                           class="btn btn-link text-secondary mb-0 px-2" 
                           @click="openEditModal(domain)"
                           title="Edit domain"
@@ -217,6 +231,7 @@
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { router } from '@inertiajs/vue3'
 
 const domains = ref([])
 const showModal = ref(false)
@@ -297,6 +312,17 @@ const openEditModal = (domain) => {
   domainInput.value = domain
   validationError.value = ""
   showModal.value = true
+}
+
+const viewWebsite = (domain) => {
+  // Open domain in new tab
+  const url = `http://${domain}`
+  window.open(url, '_blank')
+}
+
+const openFileManager = (domain) => {
+  // Navigate to file manager with domain parameter
+  router.visit(`/file-manager/${domain}`)
 }
 
 const saveDomain = async () => {
