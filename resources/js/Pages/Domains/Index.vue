@@ -289,7 +289,7 @@ const clearValidationError = () => {
 const loadDomains = async () => {
   try {
     loading.value = true
-    const res = await axios.get('/domains')
+    const res = await axios.get('/domains/api')
     domains.value = res.data
   } catch (error) {
     showAlert('danger', 'Failed to load domains')
