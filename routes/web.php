@@ -11,7 +11,6 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/stats', [DashboardController::class, 'getStats'])->name('stats');
 });
 
-// Changed from /domains-list to /domains to match the navigation
 Route::get('/domains', function () {
     return Inertia::render('Domains/Index');
 })->name('domains.list');
@@ -35,8 +34,12 @@ Route::prefix('file-manager')->name('file-manager.')->group(function () {
     Route::post('/{domain}/create-file', [FileManagerController::class, 'createFile'])->name('create-file');
     Route::post('/{domain}/create-directory', [FileManagerController::class, 'createDirectory'])->name('create-directory');
     Route::post('/{domain}/delete', [FileManagerController::class, 'delete'])->name('delete');
+    Route::post('/{domain}/delete-multiple', [FileManagerController::class, 'deleteMultiple'])->name('delete-multiple');
     Route::post('/{domain}/rename', [FileManagerController::class, 'rename'])->name('rename');
+    Route::post('/{domain}/copy', [FileManagerController::class, 'copy'])->name('copy');
+    Route::post('/{domain}/move', [FileManagerController::class, 'move'])->name('move');
     Route::post('/{domain}/chmod', [FileManagerController::class, 'chmod'])->name('chmod');
+    Route::post('/{domain}/zip', [FileManagerController::class, 'zip'])->name('zip');
     Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
     Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
 });

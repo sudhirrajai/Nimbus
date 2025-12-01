@@ -253,10 +253,31 @@
         </div>
         <div 
           class="context-menu-item"
+          @click="openCopyMoveModal(contextMenu.item, 'copy'); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">content_copy</i>
+          Copy
+        </div>
+        <div 
+          class="context-menu-item"
+          @click="openCopyMoveModal(contextMenu.item, 'move'); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">drive_file_move</i>
+          Move
+        </div>
+        <div 
+          class="context-menu-item"
           @click="openPermissionsModal(contextMenu.item); closeContextMenu()"
         >
           <i class="material-symbols-rounded text-sm me-2">shield</i>
           Permissions
+        </div>
+        <div 
+          class="context-menu-item"
+          @click="zipItem(contextMenu.item); closeContextMenu()"
+        >
+          <i class="material-symbols-rounded text-sm me-2">folder_zip</i>
+          Create ZIP
         </div>
         <div class="context-menu-divider"></div>
         <div 
