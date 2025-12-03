@@ -40,6 +40,7 @@ class FileManagerController extends Controller
     {
         try {
             $path = $request->input('path', '');
+            $showHidden = $request->input('showHidden', false);
             $fullPath = $this->getFullPath($domain, $path);
 
             if (!$this->isValidPath($fullPath)) {
@@ -56,26 +57,42 @@ class FileManagerController extends Controller
 
             // Add directories first
             foreach ($directories as $dir) {
+                $name = basename($dir);
+                
+                // Skip hidden files if not requested
+                if (!$showHidden && str_starts_with($name, '.')) {
+                    continue;
+                }
+                
                 $items[] = [
-                    'name' => basename($dir),
+                    'name' => $name,
                     'type' => 'directory',
                     'size' => $this->getDirectorySize($dir),
                     'modified' => date('Y-m-d H:i:s', File::lastModified($dir)),
-                    'permissions' => substr(sprintf('%o', fileperms($dir)), -4)
+                    'permissions' => substr(sprintf('%o', fileperms($dir)), -4),
+                    'hidden' => str_starts_with($name, '.')
                 ];
             }
 
             // Add files
             foreach ($files as $file) {
+                $name = basename($file);
+                
+                // Skip hidden files if not requested
+                if (!$showHidden && str_starts_with($name, '.')) {
+                    continue;
+                }
+                
                 $items[] = [
-                    'name' => basename($file),
+                    'name' => $name,
                     'type' => 'file',
                     'extension' => File::extension($file),
                     'size' => File::size($file),
                     'sizeFormatted' => $this->formatBytes(File::size($file)),
                     'modified' => date('Y-m-d H:i:s', File::lastModified($file)),
                     'permissions' => substr(sprintf('%o', fileperms($file)), -4),
-                    'editable' => $this->isTextFile($file)
+                    'editable' => $this->isTextFile($file),
+                    'hidden' => str_starts_with($name, '.')
                 ];
             }
 
@@ -98,13 +115,13 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'name' => 'required|string',
                 'permissions' => 'required|string|regex:/^[0-7]{3,4}$/',
                 'recursive' => 'boolean'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $name = $request->input('name');
             $permissions = $request->input('permissions');
             $recursive = $request->input('recursive', false);
@@ -143,11 +160,11 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'name' => 'required|string'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $name = $request->input('name');
             $dirPath = $this->getFullPath($domain, $path);
             $targetPath = $dirPath . '/' . $name;
@@ -178,12 +195,12 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'items' => 'required|array',
                 'items.*' => 'string'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $items = $request->input('items');
             $dirPath = $this->getFullPath($domain, $path);
 
@@ -215,12 +232,12 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'oldName' => 'required|string',
                 'newName' => 'required|string|max:255'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $oldName = $request->input('oldName');
             $newName = $request->input('newName');
             
@@ -259,14 +276,14 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'sourcePath' => 'required|string',
+                'sourcePath' => 'nullable|string',
                 'name' => 'required|string',
-                'destinationPath' => 'required|string'
+                'destinationPath' => 'nullable|string'
             ]);
 
-            $sourcePath = $request->input('sourcePath');
+            $sourcePath = $request->input('sourcePath', '');
             $name = $request->input('name');
-            $destPath = $request->input('destinationPath');
+            $destPath = $request->input('destinationPath', '');
 
             $sourceDir = $this->getFullPath($domain, $sourcePath);
             $destDir = $this->getFullPath($domain, $destPath);
@@ -306,14 +323,14 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'sourcePath' => 'required|string',
+                'sourcePath' => 'nullable|string',
                 'name' => 'required|string',
-                'destinationPath' => 'required|string'
+                'destinationPath' => 'nullable|string'
             ]);
 
-            $sourcePath = $request->input('sourcePath');
+            $sourcePath = $request->input('sourcePath', '');
             $name = $request->input('name');
-            $destPath = $request->input('destinationPath');
+            $destPath = $request->input('destinationPath', '');
 
             $sourceDir = $this->getFullPath($domain, $sourcePath);
             $destDir = $this->getFullPath($domain, $destPath);
@@ -352,13 +369,13 @@ class FileManagerController extends Controller
     {
         try {
             $request->validate([
-                'path' => 'required|string',
+                'path' => 'nullable|string',
                 'items' => 'required|array',
                 'items.*' => 'string',
                 'zipName' => 'required|string|max:255'
             ]);
 
-            $path = $request->input('path');
+            $path = $request->input('path', '');
             $items = $request->input('items');
             $zipName = $request->input('zipName');
 
@@ -377,9 +394,10 @@ class FileManagerController extends Controller
             $fileList = array_map('escapeshellarg', $items);
             $filesString = implode(' ', $fileList);
             $escapedZipPath = escapeshellarg($zipPath);
+            $escapedDirPath = escapeshellarg($dirPath);
 
             // Create zip using system command
-            $this->executeSudoCommand("cd {$dirPath} && zip -r {$escapedZipPath} {$filesString}");
+            $this->executeSudoCommand("cd {$escapedDirPath} && zip -r {$escapedZipPath} {$filesString}");
             $this->executeSudoCommand("chown www-data:www-data {$escapedZipPath}");
             $this->executeSudoCommand("chmod 644 {$escapedZipPath}");
 
@@ -633,10 +651,22 @@ class FileManagerController extends Controller
         $textExtensions = [
             'txt', 'php', 'html', 'htm', 'css', 'js', 'json', 'xml', 
             'md', 'yml', 'yaml', 'ini', 'conf', 'sh', 'env', 'log',
-            'sql', 'py', 'java', 'c', 'cpp', 'h', 'vue', 'jsx', 'ts'
+            'sql', 'py', 'java', 'c', 'cpp', 'h', 'vue', 'jsx', 'ts',
+            'htaccess', 'gitignore', 'editorconfig', 'eslintrc', 'prettierrc'
         ];
 
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $basename = basename($file);
+        
+        // Check if it's a dotfile that's text-editable
+        if (str_starts_with($basename, '.')) {
+            $textDotFiles = ['.htaccess', '.env', '.gitignore', '.editorconfig', 
+                            '.eslintrc', '.prettierrc', '.babelrc'];
+            if (in_array($basename, $textDotFiles)) {
+                return true;
+            }
+        }
+        
         return in_array($extension, $textExtensions);
     }
 
@@ -654,12 +684,16 @@ class FileManagerController extends Controller
     private function getDirectorySize($path)
     {
         $size = 0;
-        $files = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS)
-        );
+        try {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
 
-        foreach ($files as $file) {
-            $size += $file->getSize();
+            foreach ($files as $file) {
+                $size += $file->getSize();
+            }
+        } catch (\Exception $e) {
+            \Log::warning("Failed to calculate directory size: " . $e->getMessage());
         }
 
         return $this->formatBytes($size);

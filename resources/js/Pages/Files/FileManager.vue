@@ -36,7 +36,7 @@
         <div class="col-12">
           <div class="card">
             <div class="card-body p-3">
-              <div class="d-flex flex-wrap gap-2">
+              <div class="d-flex flex-wrap gap-2 align-items-center">
                 <button class="btn btn-sm bg-gradient-primary mb-0" @click="showCreateFileModal = true">
                   <i class="material-symbols-rounded text-sm me-1">note_add</i>
                   New File
@@ -67,6 +67,19 @@
                   <i class="material-symbols-rounded text-sm me-1">refresh</i>
                   Refresh
                 </button>
+                
+                <div class="ms-auto form-check form-switch">
+                  <input 
+                    class="form-check-input" 
+                    type="checkbox" 
+                    id="showHiddenToggle"
+                    v-model="showHidden"
+                    @change="loadFiles"
+                  >
+                  <label class="form-check-label text-sm" for="showHiddenToggle">
+                    Show Hidden Files
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -121,6 +134,7 @@
                       :key="item.name"
                       @contextmenu.prevent="openContextMenu($event, item)"
                       class="file-row"
+                      :class="{ 'text-muted': item.hidden }"
                     >
                       <td>
                         <div class="d-flex px-2 py-1 align-items-center">
@@ -225,7 +239,7 @@
       <div 
         v-if="contextMenu.show" 
         class="context-menu"
-        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+        :style="contextMenuStyle"
         @click.stop
       >
         <div 
@@ -290,6 +304,7 @@
       </div>
 
       <!-- Permissions Modal -->
+      <div class="modal-backdrop fade show" v-if="showPermissionsModal" @click="showPermissionsModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showPermissionsModal">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -333,6 +348,7 @@
       </div>
 
       <!-- Create File Modal -->
+      <div class="modal-backdrop fade show" v-if="showCreateFileModal" @click="showCreateFileModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showCreateFileModal">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -361,6 +377,7 @@
       </div>
 
       <!-- Create Directory Modal -->
+      <div class="modal-backdrop fade show" v-if="showCreateDirModal" @click="showCreateDirModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showCreateDirModal">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -389,6 +406,7 @@
       </div>
 
       <!-- Rename Modal -->
+      <div class="modal-backdrop fade show" v-if="showRenameModal" @click="showRenameModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showRenameModal">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -416,6 +434,7 @@
       </div>
 
       <!-- Delete Confirmation Modal -->
+      <div class="modal-backdrop fade show" v-if="showDeleteModal" @click="showDeleteModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showDeleteModal">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -436,8 +455,9 @@
       </div>
 
       <!-- File Editor Modal -->
-      <div class="modal fade show" style="display:block" v-if="showEditorModal">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
+      <div class="modal-backdrop fade show" v-if="showEditorModal" @click="closeEditor"></div>
+      <div class="modal fade show d-block" v-if="showEditorModal">
+        <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 90vw;">
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title">Editing: {{ editingFile }}</h5>
@@ -447,7 +467,7 @@
               <textarea 
                 v-model="fileContent" 
                 class="form-control font-monospace" 
-                rows="20"
+                rows="25"
                 style="font-size: 13px;"
               ></textarea>
             </div>
@@ -468,7 +488,7 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { router } from '@inertiajs/vue3'
 
@@ -482,6 +502,7 @@ const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
 const saving = ref(false)
+const showHidden = ref(false)
 
 const showCreateFileModal = ref(false)
 const showCreateDirModal = ref(false)
@@ -511,6 +532,34 @@ const alert = ref({
   show: false,
   type: 'success',
   message: ''
+})
+
+// Computed property to handle context menu positioning
+const contextMenuStyle = computed(() => {
+  if (!contextMenu.value.show) return {}
+  
+  const menuWidth = 200
+  const menuHeight = 350
+  const windowWidth = window.innerWidth
+  const windowHeight = window.innerHeight
+  
+  let x = contextMenu.value.x
+  let y = contextMenu.value.y
+  
+  // Adjust if menu would go off screen to the right
+  if (x + menuWidth > windowWidth) {
+    x = windowWidth - menuWidth - 10
+  }
+  
+  // Adjust if menu would go off screen to the bottom
+  if (y + menuHeight > windowHeight) {
+    y = windowHeight - menuHeight - 10
+  }
+  
+  return {
+    top: `${y}px`,
+    left: `${x}px`
+  }
 })
 
 onMounted(() => {
@@ -545,7 +594,7 @@ const openPermissionsModal = (item) => {
 const changePermissions = async () => {
   try {
     await axios.post(`/file-manager/${props.domain}/chmod`, {
-      path: currentPath.value,
+      path: currentPath.value || '',
       name: selectedItem.value.name,
       permissions: newPermissions.value,
       recursive: recursivePermissions.value
@@ -562,7 +611,8 @@ const loadFiles = async () => {
   try {
     loading.value = true
     const response = await axios.post(`/file-manager/${props.domain}/list`, {
-      path: currentPath.value
+      path: currentPath.value || '',
+      showHidden: showHidden.value
     })
     items.value = response.data.items
     breadcrumbs.value = response.data.breadcrumbs
@@ -599,7 +649,7 @@ const goBack = () => {
 const createFile = async () => {
   try {
     await axios.post(`/file-manager/${props.domain}/create-file`, {
-      path: currentPath.value,
+      path: currentPath.value || '',
       name: newFileName.value
     })
     showAlert('success', 'File created successfully')
@@ -614,7 +664,7 @@ const createFile = async () => {
 const createDirectory = async () => {
   try {
     await axios.post(`/file-manager/${props.domain}/create-directory`, {
-      path: currentPath.value,
+      path: currentPath.value || '',
       name: newDirName.value
     })
     showAlert('success', 'Folder created successfully')
@@ -635,7 +685,7 @@ const openRenameModal = (item) => {
 const renameItem = async () => {
   try {
     await axios.post(`/file-manager/${props.domain}/rename`, {
-      path: currentPath.value,
+      path: currentPath.value || '',
       oldName: selectedItem.value.name,
       newName: renameName.value
     })
@@ -655,7 +705,7 @@ const confirmDelete = (item) => {
 const deleteItem = async () => {
   try {
     await axios.post(`/file-manager/${props.domain}/delete`, {
-      path: currentPath.value,
+      path: currentPath.value || '',
       name: selectedItem.value.name
     })
     showAlert('success', 'Deleted successfully')
@@ -715,7 +765,7 @@ const handleFileUpload = async (event) => {
   try {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('path', currentPath.value)
+    formData.append('path', currentPath.value || '')
 
     await axios.post(`/file-manager/${props.domain}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
