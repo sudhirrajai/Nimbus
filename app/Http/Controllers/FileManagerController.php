@@ -40,56 +40,68 @@ class FileManagerController extends Controller
     {
         try {
             $path = $request->input('path', '');
-            $showHidden = $request->input('showHidden', false);
+            $showHidden = filter_var($request->input('showHidden', false), FILTER_VALIDATE_BOOLEAN);
             $fullPath = $this->getFullPath($domain, $path);
 
             if (!$this->isValidPath($fullPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
-            if (!File::exists($fullPath)) {
+            if (!File::exists($fullPath) || !is_dir($fullPath)) {
                 return response()->json(['error' => 'Path not found'], 404);
             }
 
             $items = [];
-            $files = File::files($fullPath);
-            $directories = File::directories($fullPath);
 
-            // Add directories first
-            foreach ($directories as $dir) {
-                $name = basename($dir);
-                
-                // Skip hidden files if not requested
-                if (!$showHidden && str_starts_with($name, '.')) {
+            // Use scandir so we can control whether hidden files are included
+            $entries = @scandir($fullPath);
+            if ($entries === false) {
+                return response()->json(['error' => 'Failed to read directory'], 500);
+            }
+
+            // Separate directories and files so directories come first
+            $dirs = [];
+            $files = [];
+
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') continue;
+                // Skip hidden if not requested
+                if (!$showHidden && str_starts_with($entry, '.')) {
                     continue;
                 }
-                
+
+                $entryPath = $fullPath . DIRECTORY_SEPARATOR . $entry;
+                if (is_dir($entryPath)) {
+                    $dirs[] = $entry;
+                } elseif (is_file($entryPath)) {
+                    $files[] = $entry;
+                }
+            }
+
+            // Directories
+            foreach ($dirs as $name) {
+                $dir = $fullPath . DIRECTORY_SEPARATOR . $name;
                 $items[] = [
                     'name' => $name,
                     'type' => 'directory',
                     'size' => $this->getDirectorySize($dir),
-                    'modified' => date('Y-m-d H:i:s', File::lastModified($dir)),
+                    'modified' => date('Y-m-d H:i:s', filemtime($dir)),
                     'permissions' => substr(sprintf('%o', fileperms($dir)), -4),
                     'hidden' => str_starts_with($name, '.')
                 ];
             }
 
-            // Add files
-            foreach ($files as $file) {
-                $name = basename($file);
-                
-                // Skip hidden files if not requested
-                if (!$showHidden && str_starts_with($name, '.')) {
-                    continue;
-                }
-                
+            // Files
+            foreach ($files as $name) {
+                $file = $fullPath . DIRECTORY_SEPARATOR . $name;
+                $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
                 $items[] = [
                     'name' => $name,
                     'type' => 'file',
-                    'extension' => File::extension($file),
-                    'size' => File::size($file),
-                    'sizeFormatted' => $this->formatBytes(File::size($file)),
-                    'modified' => date('Y-m-d H:i:s', File::lastModified($file)),
+                    'extension' => $extension,
+                    'size' => filesize($file),
+                    'sizeFormatted' => $this->formatBytes(filesize($file)),
+                    'modified' => date('Y-m-d H:i:s', filemtime($file)),
                     'permissions' => substr(sprintf('%o', fileperms($file)), -4),
                     'editable' => $this->isTextFile($file),
                     'hidden' => str_starts_with($name, '.')
@@ -101,7 +113,6 @@ class FileManagerController extends Controller
                 'currentPath' => $path,
                 'breadcrumbs' => $this->getBreadcrumbs($path)
             ]);
-
         } catch (\Exception $e) {
             \Log::error("File list error: " . $e->getMessage());
             return response()->json(['error' => 'Failed to list files'], 500);
@@ -125,7 +136,7 @@ class FileManagerController extends Controller
             $name = $request->input('name');
             $permissions = $request->input('permissions');
             $recursive = $request->input('recursive', false);
-            
+
             $dirPath = $this->getFullPath($domain, $path);
             $targetPath = $dirPath . '/' . $name;
 
@@ -138,7 +149,7 @@ class FileManagerController extends Controller
             }
 
             $escapedPath = escapeshellarg($targetPath);
-            
+
             if ($recursive && File::isDirectory($targetPath)) {
                 $this->executeSudoCommand("chmod -R {$permissions} {$escapedPath}");
             } else {
@@ -146,7 +157,6 @@ class FileManagerController extends Controller
             }
 
             return response()->json(['message' => 'Permissions changed successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Chmod error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -181,7 +191,6 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("rm -rf {$escapedPath}");
 
             return response()->json(['message' => 'Deleted successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Delete error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -206,7 +215,7 @@ class FileManagerController extends Controller
 
             foreach ($items as $item) {
                 $targetPath = $dirPath . '/' . $item;
-                
+
                 if (!$this->isValidPath($targetPath)) {
                     continue;
                 }
@@ -218,7 +227,6 @@ class FileManagerController extends Controller
             }
 
             return response()->json(['message' => 'Items deleted successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Multiple delete error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -240,7 +248,7 @@ class FileManagerController extends Controller
             $path = $request->input('path', '');
             $oldName = $request->input('oldName');
             $newName = $request->input('newName');
-            
+
             $dirPath = $this->getFullPath($domain, $path);
             $oldPath = $dirPath . '/' . $oldName;
             $newPath = $dirPath . '/' . $newName;
@@ -262,7 +270,6 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("mv {$escapedOldPath} {$escapedNewPath}");
 
             return response()->json(['message' => 'Renamed successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Rename error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -287,7 +294,7 @@ class FileManagerController extends Controller
 
             $sourceDir = $this->getFullPath($domain, $sourcePath);
             $destDir = $this->getFullPath($domain, $destPath);
-            
+
             $sourceFull = $sourceDir . '/' . $name;
             $destFull = $destDir . '/' . $name;
 
@@ -309,7 +316,6 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("chown -R www-data:www-data {$escapedDest}");
 
             return response()->json(['message' => 'Copied successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Copy error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -334,7 +340,7 @@ class FileManagerController extends Controller
 
             $sourceDir = $this->getFullPath($domain, $sourcePath);
             $destDir = $this->getFullPath($domain, $destPath);
-            
+
             $sourceFull = $sourceDir . '/' . $name;
             $destFull = $destDir . '/' . $name;
 
@@ -355,7 +361,6 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("mv {$escapedSource} {$escapedDest}");
 
             return response()->json(['message' => 'Moved successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Move error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -402,7 +407,6 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("chmod 644 {$escapedZipPath}");
 
             return response()->json(['message' => 'ZIP archive created successfully']);
-
         } catch (\Exception $e) {
             \Log::error("ZIP error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -437,7 +441,6 @@ class FileManagerController extends Controller
                 'name' => basename($fullPath),
                 'size' => File::size($fullPath)
             ]);
-
         } catch (\Exception $e) {
             \Log::error("File read error: " . $e->getMessage());
             return response()->json(['error' => 'Failed to read file'], 500);
@@ -473,7 +476,6 @@ class FileManagerController extends Controller
                 'message' => 'File saved successfully',
                 'size' => File::size($fullPath)
             ]);
-
         } catch (\Exception $e) {
             \Log::error("File save error: " . $e->getMessage());
             return response()->json(['error' => 'Failed to save file'], 500);
@@ -510,13 +512,12 @@ class FileManagerController extends Controller
             }
 
             File::put($filePath, '');
-            
+
             $escapedFilePath = escapeshellarg($filePath);
             $this->executeSudoCommand("chown www-data:www-data {$escapedFilePath}");
             $this->executeSudoCommand("chmod 644 {$escapedFilePath}");
 
             return response()->json(['message' => 'File created successfully']);
-
         } catch (\Exception $e) {
             \Log::error("File create error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -556,7 +557,6 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($newDirPath));
 
             return response()->json(['message' => 'Directory created successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Directory create error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -589,13 +589,12 @@ class FileManagerController extends Controller
             }
 
             $file->move($dirPath, $file->getClientOriginalName());
-            
+
             $escapedTargetPath = escapeshellarg($targetPath);
             $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
             $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
 
             return response()->json(['message' => 'File uploaded successfully']);
-
         } catch (\Exception $e) {
             \Log::error("Upload error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -620,7 +619,6 @@ class FileManagerController extends Controller
             }
 
             return response()->download($fullPath);
-
         } catch (\Exception $e) {
             \Log::error("Download error: " . $e->getMessage());
             abort(500, 'Failed to download file');
@@ -642,42 +640,75 @@ class FileManagerController extends Controller
     {
         $realPath = realpath($path) ?: $path;
         $baseRealPath = realpath($this->basePath);
-        
+
         return strpos($realPath, $baseRealPath) === 0;
     }
 
     private function isTextFile($file)
     {
         $textExtensions = [
-            'txt', 'php', 'html', 'htm', 'css', 'js', 'json', 'xml', 
-            'md', 'yml', 'yaml', 'ini', 'conf', 'sh', 'env', 'log',
-            'sql', 'py', 'java', 'c', 'cpp', 'h', 'vue', 'jsx', 'ts',
-            'htaccess', 'gitignore', 'editorconfig', 'eslintrc', 'prettierrc'
+            'txt',
+            'php',
+            'html',
+            'htm',
+            'css',
+            'js',
+            'json',
+            'xml',
+            'md',
+            'yml',
+            'yaml',
+            'ini',
+            'conf',
+            'sh',
+            'env',
+            'log',
+            'sql',
+            'py',
+            'java',
+            'c',
+            'cpp',
+            'h',
+            'vue',
+            'jsx',
+            'ts',
+            'htaccess',
+            'gitignore',
+            'editorconfig',
+            'eslintrc',
+            'prettierrc'
         ];
 
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $basename = basename($file);
-        
+
         // Check if it's a dotfile that's text-editable
         if (str_starts_with($basename, '.')) {
-            $textDotFiles = ['.htaccess', '.env', '.gitignore', '.editorconfig', 
-                            '.eslintrc', '.prettierrc', '.babelrc'];
+            $textDotFiles = [
+                '.htaccess',
+                '.env',
+                '.gitignore',
+                '.editorconfig',
+                '.eslintrc',
+                '.prettierrc',
+                '.babelrc'
+            ];
             if (in_array($basename, $textDotFiles)) {
                 return true;
             }
         }
-        
+
         return in_array($extension, $textExtensions);
     }
 
     private function formatBytes($bytes, $precision = 2)
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
+
         return round($bytes, $precision) . ' ' . $units[$i];
     }
 
@@ -724,16 +755,16 @@ class FileManagerController extends Controller
     {
         $output = [];
         $returnCode = 0;
-        
+
         \Log::debug("Executing sudo command: sudo $command");
         exec("sudo $command 2>&1", $output, $returnCode);
-        
+
         if ($returnCode !== 0) {
             $errorMsg = "Command execution failed: " . implode("\n", $output);
             \Log::error($errorMsg);
             throw new \Exception($errorMsg);
         }
-        
+
         return $output;
     }
 }

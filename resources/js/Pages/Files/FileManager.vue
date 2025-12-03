@@ -1,7 +1,7 @@
 <template>
   <MainLayout>
     <div class="container-fluid py-4" @click="closeContextMenu">
-      
+
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
@@ -67,7 +67,31 @@
                   <i class="material-symbols-rounded text-sm me-1">refresh</i>
                   Refresh
                 </button>
-                
+
+                <!-- Bulk actions -->
+                <div class="btn-group ms-2" role="group">
+                  <button class="btn btn-sm btn-outline-primary" @click="toggleSelectAll">
+                    <i class="material-symbols-rounded text-sm me-1">select_all</i>
+                    {{ allSelected ? 'Unselect All' : 'Select All' }}
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" :disabled="!hasSelected" @click="bulkDelete">
+                    <i class="material-symbols-rounded text-sm me-1">delete</i>
+                    Delete Selected
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary" :disabled="!hasSelected" @click="bulkZip">
+                    <i class="material-symbols-rounded text-sm me-1">folder_zip</i>
+                    Zip Selected
+                  </button>
+                  <button class="btn btn-sm btn-outline-info" :disabled="!hasSelected" @click="bulkCopyMove('copy')">
+                    <i class="material-symbols-rounded text-sm me-1">content_copy</i>
+                    Copy Selected
+                  </button>
+                  <button class="btn btn-sm btn-outline-warning" :disabled="!hasSelected" @click="bulkCopyMove('move')">
+                    <i class="material-symbols-rounded text-sm me-1">drive_file_move</i>
+                    Move Selected
+                  </button>
+                </div>
+
                 <div class="ms-auto form-check form-switch">
                   <input 
                     class="form-check-input" 
@@ -121,6 +145,9 @@
                 <table class="table align-items-center mb-0">
                   <thead>
                     <tr>
+                      <th style="width:40px" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
+                        <!-- placeholder for checkbox column -->
+                      </th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Name</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Modified</th>
@@ -131,11 +158,15 @@
                   <tbody>
                     <tr 
                       v-for="item in items" 
-                      :key="item.name"
+                      :key="item.name + item.type"
                       @contextmenu.prevent="openContextMenu($event, item)"
                       class="file-row"
                       :class="{ 'text-muted': item.hidden }"
                     >
+                      <td>
+                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @change="toggleSelectItem(item, $event)">
+                      </td>
+
                       <td>
                         <div class="d-flex px-2 py-1 align-items-center">
                           <div class="me-3">
@@ -214,14 +245,14 @@
                     </tr>
 
                     <tr v-if="items.length === 0 && !loading">
-                      <td colspan="5" class="text-center py-5">
+                      <td colspan="6" class="text-center py-5">
                         <i class="material-symbols-rounded text-secondary" style="font-size: 48px;">folder_open</i>
                         <p class="text-secondary mb-0">This folder is empty</p>
                       </td>
                     </tr>
 
                     <tr v-if="loading">
-                      <td colspan="5" class="text-center py-5">
+                      <td colspan="6" class="text-center py-5">
                         <div class="spinner-border text-primary" role="status">
                           <span class="visually-hidden">Loading...</span>
                         </div>
@@ -504,6 +535,10 @@ const loading = ref(false)
 const saving = ref(false)
 const showHidden = ref(false)
 
+// selection management
+const selectedItems = ref([]) // array of { name, type }
+const allSelected = ref(false)
+
 const showCreateFileModal = ref(false)
 const showCreateDirModal = ref(false)
 const showRenameModal = ref(false)
@@ -534,7 +569,9 @@ const alert = ref({
   message: ''
 })
 
-// Computed property to handle context menu positioning
+// Computed
+const hasSelected = computed(() => selectedItems.value.length > 0)
+
 const contextMenuStyle = computed(() => {
   if (!contextMenu.value.show) return {}
   
@@ -546,12 +583,9 @@ const contextMenuStyle = computed(() => {
   let x = contextMenu.value.x
   let y = contextMenu.value.y
   
-  // Adjust if menu would go off screen to the right
   if (x + menuWidth > windowWidth) {
     x = windowWidth - menuWidth - 10
   }
-  
-  // Adjust if menu would go off screen to the bottom
   if (y + menuHeight > windowHeight) {
     y = windowHeight - menuHeight - 10
   }
@@ -616,6 +650,9 @@ const loadFiles = async () => {
     })
     items.value = response.data.items
     breadcrumbs.value = response.data.breadcrumbs
+    // reset selection because list changed
+    selectedItems.value = []
+    allSelected.value = false
   } catch (error) {
     showAlert('danger', 'Failed to load files')
     console.error(error)
@@ -788,18 +825,155 @@ const downloadFile = async (name) => {
     showAlert('danger', 'Failed to download file')
   }
 }
+
+/* =========================
+   Selection / Bulk actions
+   ========================= */
+
+const isSelected = (item) => {
+  return selectedItems.value.some(si => si.name === item.name && si.type === item.type)
+}
+
+const toggleSelectItem = (item, event) => {
+  const already = isSelected(item)
+  if (already) {
+    selectedItems.value = selectedItems.value.filter(si => !(si.name === item.name && si.type === item.type))
+  } else {
+    selectedItems.value.push({ name: item.name, type: item.type })
+  }
+  allSelected.value = selectedItems.value.length === items.value.length && items.value.length > 0
+}
+
+const toggleSelectAll = () => {
+  if (allSelected.value) {
+    selectedItems.value = []
+    allSelected.value = false
+  } else {
+    selectedItems.value = items.value.map(i => ({ name: i.name, type: i.type }))
+    allSelected.value = true
+  }
+}
+
+const getSelectedItems = () => selectedItems.value.map(i => i.name)
+
+// Bulk delete using existing delete-multiple endpoint
+const bulkDelete = async () => {
+  if (!hasSelected.value) return
+  if (!confirm(`Delete ${selectedItems.value.length} items? This cannot be undone.`)) return
+
+  try {
+    await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
+      path: currentPath.value || '',
+      items: getSelectedItems()
+    })
+    showAlert('success', 'Selected items deleted')
+    selectedItems.value = []
+    loadFiles()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to delete selected items')
+  }
+}
+
+// Bulk ZIP
+const bulkZip = async () => {
+  if (!hasSelected.value) return
+  const zipName = prompt('Enter zip file name (without .zip):', 'archive')
+  if (!zipName) return
+
+  try {
+    await axios.post(`/file-manager/${props.domain}/zip`, {
+      path: currentPath.value || '',
+      items: getSelectedItems(),
+      zipName: zipName.endsWith('.zip') ? zipName : zipName + '.zip'
+    })
+    showAlert('success', 'ZIP archive created')
+    selectedItems.value = []
+    loadFiles()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to create ZIP')
+  }
+}
+
+// Bulk Copy/Move: we will loop selected items and call your existing copy/move endpoint per item.
+// destinationPath is relative path string (can be empty for root)
+const bulkCopyMove = async (action) => {
+  if (!hasSelected.value) return
+  const destination = prompt(`${action === 'copy' ? 'Copy' : 'Move'} selected items to (relative path inside current domain). Leave empty for root:`, currentPath.value || '')
+  if (destination === null) return // user cancelled
+
+  try {
+    for (const it of selectedItems.value) {
+      // call appropriate endpoint for each item
+      await axios.post(`/file-manager/${props.domain}/${action}`, {
+        sourcePath: currentPath.value || '',
+        name: it.name,
+        destinationPath: destination || ''
+      })
+    }
+    showAlert('success', `${action === 'copy' ? 'Copied' : 'Moved'} ${selectedItems.value.length} items`)
+    selectedItems.value = []
+    loadFiles()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || `Failed to ${action} selected items`)
+  }
+}
+
+/* =========================
+   Helper modal for copy/move single item from context menu
+   ========================= */
+const openCopyMoveModal = (item, action) => {
+  // Simple prompt for now (consistent with bulk). Can replace with modal UI later.
+  const destination = prompt(`${action === 'copy' ? 'Copy' : 'Move'} "${item.name}" to (relative path inside current domain). Leave empty for root:`, currentPath.value || '')
+  if (destination === null) return
+  axios.post(`/file-manager/${props.domain}/${action}`, {
+    sourcePath: currentPath.value || '',
+    name: item.name,
+    destinationPath: destination || ''
+  }).then(() => {
+    showAlert('success', `${action === 'copy' ? 'Copied' : 'Moved'} ${item.name}`)
+    loadFiles()
+  }).catch(err => {
+    showAlert('danger', err.response?.data?.error || `Failed to ${action}`)
+  })
+}
+
 </script>
 
 <style scoped>
 .modal {
   background: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  z-index: 20050; /* ensure above sidebar */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 
+.modal-backdrop {
+  position: fixed;
+  z-index: 20040; /* slightly below modal but above everything else */
+}
+
+/* Keep the modal-content style */
 .modal-content {
   border: none;
   border-radius: 1rem;
+  z-index: 20060;
 }
 
+/* make sure context menu still appears on top of everything */
+.context-menu {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 30000;
+  min-width: 180px;
+  padding: 4px 0;
+}
+
+/* rest of CSS mostly unchanged */
 .gap-2 {
   gap: 0.5rem;
 }
@@ -840,16 +1014,6 @@ textarea.font-monospace {
 
 .cursor-pointer {
   cursor: pointer;
-}
-
-.context-menu {
-  position: fixed;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 9999;
-  min-width: 180px;
-  padding: 4px 0;
 }
 
 .context-menu-item {
