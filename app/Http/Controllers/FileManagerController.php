@@ -571,7 +571,7 @@ class FileManagerController extends Controller
         try {
             $request->validate([
                 'path' => 'nullable|string',
-                'file' => 'required|file|max:102400'
+                'file' => 'required|file|max:512000' // 500MB max
             ]);
 
             $path = $request->input('path', '');

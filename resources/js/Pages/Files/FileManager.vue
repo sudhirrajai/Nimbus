@@ -979,6 +979,14 @@ const handleFileUpload = async (event) => {
   const file = event.target.files[0]
   if (!file) return
 
+  // Check file size client-side (500MB limit)
+  const maxSize = 500 * 1024 * 1024 // 500MB in bytes
+  if (file.size > maxSize) {
+    showAlert('danger', `File too large. Maximum size is 500MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB`)
+    event.target.value = ''
+    return
+  }
+
   // Initialize upload progress state
   uploading.value = true
   uploadProgress.value = 0
@@ -991,6 +999,7 @@ const handleFileUpload = async (event) => {
 
     await axios.post(`/file-manager/${props.domain}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000, // 10 minute timeout for large files
       onUploadProgress: (progressEvent) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
         uploadProgress.value = percentCompleted
@@ -1000,7 +1009,24 @@ const handleFileUpload = async (event) => {
     showAlert('success', 'File uploaded successfully')
     loadFiles()
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to upload file')
+    let errorMessage = 'Failed to upload file'
+    
+    if (error.response) {
+      // Server responded with an error
+      if (error.response.status === 413) {
+        errorMessage = 'File too large. Please check server upload limits (php.ini: upload_max_filesize, post_max_size)'
+      } else if (error.response.status === 422) {
+        errorMessage = error.response.data?.message || 'Validation failed - file may be too large'
+      } else {
+        errorMessage = error.response.data?.error || errorMessage
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      errorMessage = 'Upload timed out. The file may be too large or the connection is slow.'
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    showAlert('danger', errorMessage)
   } finally {
     uploading.value = false
     uploadProgress.value = 0
