@@ -382,26 +382,50 @@
       <div class="modal-backdrop fade show" v-if="showCreateFileModal" @click="showCreateFileModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showCreateFileModal">
         <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Create New File</h5>
+          <div class="modal-content create-modal">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div class="modal-icon bg-gradient-primary">
+                  <i class="material-symbols-rounded">note_add</i>
+                </div>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">Create New File</h5>
+                  <p class="text-sm text-secondary mb-0">Add a new file to current directory</p>
+                </div>
+              </div>
               <button type="button" class="btn-close" @click="showCreateFileModal = false"></button>
             </div>
-            <div class="modal-body">
-              <div class="form-group">
-                <label>File Name</label>
-                <input 
-                  v-model="newFileName" 
-                  type="text" 
-                  class="form-control" 
-                  placeholder="example.php"
-                  @keyup.enter="createFile"
-                />
+            <div class="modal-body pt-4">
+              <div class="form-group mb-0">
+                <label class="form-label fw-bold text-dark">File Name <span class="text-danger">*</span></label>
+                <div class="input-group input-group-lg">
+                  <span class="input-group-text bg-light border-end-0">
+                    <i class="material-symbols-rounded text-primary">description</i>
+                  </span>
+                  <input 
+                    ref="createFileInput"
+                    v-model="newFileName" 
+                    type="text" 
+                    class="form-control form-control-lg ps-0 border-start-0" 
+                    placeholder="Enter file name with extension (e.g., index.html)"
+                    @keyup.enter="createFile"
+                  />
+                </div>
+                <small class="text-muted mt-2 d-block">
+                  <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
+                  Include the file extension like .php, .html, .css, .js, etc.
+                </small>
               </div>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="showCreateFileModal = false">Cancel</button>
-              <button class="btn bg-gradient-primary" @click="createFile" :disabled="!newFileName">Create</button>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary" @click="showCreateFileModal = false">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Cancel
+              </button>
+              <button class="btn bg-gradient-primary" @click="createFile" :disabled="!newFileName">
+                <i class="material-symbols-rounded text-sm me-1">add</i>
+                Create File
+              </button>
             </div>
           </div>
         </div>
@@ -411,26 +435,166 @@
       <div class="modal-backdrop fade show" v-if="showCreateDirModal" @click="showCreateDirModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showCreateDirModal">
         <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Create New Folder</h5>
+          <div class="modal-content create-modal">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div class="modal-icon bg-gradient-info">
+                  <i class="material-symbols-rounded">create_new_folder</i>
+                </div>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">Create New Folder</h5>
+                  <p class="text-sm text-secondary mb-0">Add a new folder to current directory</p>
+                </div>
+              </div>
               <button type="button" class="btn-close" @click="showCreateDirModal = false"></button>
             </div>
-            <div class="modal-body">
-              <div class="form-group">
-                <label>Folder Name</label>
-                <input 
-                  v-model="newDirName" 
-                  type="text" 
-                  class="form-control" 
-                  placeholder="folder-name"
-                  @keyup.enter="createDirectory"
-                />
+            <div class="modal-body pt-4">
+              <div class="form-group mb-0">
+                <label class="form-label fw-bold text-dark">Folder Name <span class="text-danger">*</span></label>
+                <div class="input-group input-group-lg">
+                  <span class="input-group-text bg-light border-end-0">
+                    <i class="material-symbols-rounded text-info">folder</i>
+                  </span>
+                  <input 
+                    ref="createFolderInput"
+                    v-model="newDirName" 
+                    type="text" 
+                    class="form-control form-control-lg ps-0 border-start-0" 
+                    placeholder="Enter folder name (e.g., images, assets)"
+                    @keyup.enter="createDirectory"
+                  />
+                </div>
+                <small class="text-muted mt-2 d-block">
+                  <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
+                  Use lowercase letters, numbers, and hyphens for best compatibility.
+                </small>
               </div>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="showCreateDirModal = false">Cancel</button>
-              <button class="btn bg-gradient-info" @click="createDirectory" :disabled="!newDirName">Create</button>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary" @click="showCreateDirModal = false">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Cancel
+              </button>
+              <button class="btn bg-gradient-info" @click="createDirectory" :disabled="!newDirName">
+                <i class="material-symbols-rounded text-sm me-1">add</i>
+                Create Folder
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Progress Modal -->
+      <div class="modal-backdrop fade show" v-if="uploading"></div>
+      <div class="modal fade show" style="display:block" v-if="uploading">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content upload-modal">
+            <div class="modal-body text-center py-5">
+              <div class="upload-icon-wrapper mb-4">
+                <div class="upload-icon-circle">
+                  <i class="material-symbols-rounded upload-icon-animate">cloud_upload</i>
+                </div>
+                <svg class="progress-ring" width="120" height="120">
+                  <circle class="progress-ring-bg" cx="60" cy="60" r="54" />
+                  <circle 
+                    class="progress-ring-progress" 
+                    cx="60" cy="60" r="54"
+                    :style="{ strokeDashoffset: progressOffset }"
+                  />
+                </svg>
+              </div>
+              <h5 class="mb-2">Uploading File</h5>
+              <p class="text-secondary text-sm mb-3 text-truncate px-4">{{ uploadFileName }}</p>
+              <div class="progress-container mx-auto">
+                <div class="progress">
+                  <div 
+                    class="progress-bar bg-gradient-primary progress-bar-striped progress-bar-animated" 
+                    :style="{ width: uploadProgress + '%' }"
+                  ></div>
+                </div>
+                <div class="d-flex justify-content-between mt-2">
+                  <span class="text-sm text-secondary">Progress</span>
+                  <span class="text-sm fw-bold text-primary">{{ uploadProgress }}%</span>
+                </div>
+              </div>
+              <p class="text-xs text-muted mt-3 mb-0">
+                <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
+                Please don't close this window while uploading
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Copy/Move Modal -->
+      <div class="modal-backdrop fade show" v-if="showCopyMoveModal" @click="closeCopyMoveModal"></div>
+      <div class="modal fade show" style="display:block" v-if="showCopyMoveModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content copy-move-modal">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div :class="['modal-icon', copyMoveAction === 'copy' ? 'bg-gradient-info' : 'bg-gradient-warning']">
+                  <i class="material-symbols-rounded">{{ copyMoveAction === 'copy' ? 'content_copy' : 'drive_file_move' }}</i>
+                </div>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">{{ copyMoveAction === 'copy' ? 'Copy' : 'Move' }} Item</h5>
+                  <p class="text-sm text-secondary mb-0">Select destination for {{ copyMoveItem?.name }}</p>
+                </div>
+              </div>
+              <button type="button" class="btn-close" @click="closeCopyMoveModal"></button>
+            </div>
+            <div class="modal-body pt-4">
+              <!-- Source Info -->
+              <div class="source-info-card mb-4">
+                <div class="d-flex align-items-center">
+                  <i class="material-symbols-rounded text-lg" :class="copyMoveItem?.type === 'directory' ? 'text-warning' : 'text-info'">
+                    {{ copyMoveItem?.type === 'directory' ? 'folder' : 'description' }}
+                  </i>
+                  <div class="ms-3">
+                    <p class="mb-0 fw-bold">{{ copyMoveItem?.name }}</p>
+                    <p class="mb-0 text-xs text-secondary">From: {{ currentPath || 'Root' }}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Destination Input -->
+              <div class="form-group mb-0">
+                <label class="form-label fw-bold text-dark">
+                  Destination Path <span class="text-danger">*</span>
+                </label>
+                <div class="input-group input-group-lg">
+                  <span class="input-group-text bg-light border-end-0">
+                    <i class="material-symbols-rounded" :class="copyMoveAction === 'copy' ? 'text-info' : 'text-warning'">folder_open</i>
+                  </span>
+                  <input 
+                    ref="copyMoveInput"
+                    v-model="copyMoveDestination" 
+                    type="text" 
+                    class="form-control form-control-lg ps-0 border-start-0" 
+                    placeholder="Leave empty for root, or enter path like 'images/icons'"
+                    @keyup.enter="executeCopyMove"
+                  />
+                </div>
+                <small class="text-muted mt-2 d-block">
+                  <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
+                  Enter relative path within the domain. Leave empty to {{ copyMoveAction }} to root.
+                </small>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary" @click="closeCopyMoveModal">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Cancel
+              </button>
+              <button 
+                :class="['btn', copyMoveAction === 'copy' ? 'bg-gradient-info' : 'bg-gradient-warning']"
+                @click="executeCopyMove"
+                :disabled="copyMoveProcessing"
+              >
+                <span v-if="copyMoveProcessing" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">{{ copyMoveAction === 'copy' ? 'content_copy' : 'drive_file_move' }}</i>
+                {{ copyMoveAction === 'copy' ? 'Copy Here' : 'Move Here' }}
+              </button>
             </div>
           </div>
         </div>
@@ -545,6 +709,7 @@ const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
 const showEditorModal = ref(false)
 const showPermissionsModal = ref(false)
+const showCopyMoveModal = ref(false)
 
 const newFileName = ref('')
 const newDirName = ref('')
@@ -555,6 +720,24 @@ const fileContent = ref('')
 const fileInput = ref(null)
 const newPermissions = ref('')
 const recursivePermissions = ref(false)
+
+// Upload progress state
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const uploadFileName = ref('')
+
+// Copy/Move modal state
+const copyMoveItem = ref(null)
+const copyMoveAction = ref('copy')
+const copyMoveDestination = ref('')
+const copyMoveProcessing = ref(false)
+const copyMoveInput = ref(null)
+const isBulkCopyMove = ref(false)
+const bulkCopyMoveItems = ref([])
+
+// Template refs for autofocus
+const createFileInput = ref(null)
+const createFolderInput = ref(null)
 
 const contextMenu = ref({
   show: false,
@@ -571,6 +754,12 @@ const alert = ref({
 
 // Computed
 const hasSelected = computed(() => selectedItems.value.length > 0)
+
+// Circular progress offset calculation
+const progressOffset = computed(() => {
+  const circumference = 2 * Math.PI * 54 // r=54
+  return circumference - (uploadProgress.value / 100) * circumference
+})
 
 const contextMenuStyle = computed(() => {
   if (!contextMenu.value.show) return {}
@@ -799,13 +988,22 @@ const handleFileUpload = async (event) => {
   const file = event.target.files[0]
   if (!file) return
 
+  // Initialize upload progress state
+  uploading.value = true
+  uploadProgress.value = 0
+  uploadFileName.value = file.name
+
   try {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('path', currentPath.value || '')
 
     await axios.post(`/file-manager/${props.domain}/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        uploadProgress.value = percentCompleted
+      }
     })
     
     showAlert('success', 'File uploaded successfully')
@@ -813,6 +1011,9 @@ const handleFileUpload = async (event) => {
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to upload file')
   } finally {
+    uploading.value = false
+    uploadProgress.value = 0
+    uploadFileName.value = ''
     event.target.value = ''
   }
 }
@@ -922,19 +1123,43 @@ const bulkCopyMove = async (action) => {
    Helper modal for copy/move single item from context menu
    ========================= */
 const openCopyMoveModal = (item, action) => {
-  // Simple prompt for now (consistent with bulk). Can replace with modal UI later.
-  const destination = prompt(`${action === 'copy' ? 'Copy' : 'Move'} "${item.name}" to (relative path inside current domain). Leave empty for root:`, currentPath.value || '')
-  if (destination === null) return
-  axios.post(`/file-manager/${props.domain}/${action}`, {
-    sourcePath: currentPath.value || '',
-    name: item.name,
-    destinationPath: destination || ''
-  }).then(() => {
-    showAlert('success', `${action === 'copy' ? 'Copied' : 'Moved'} ${item.name}`)
+  copyMoveItem.value = item
+  copyMoveAction.value = action
+  copyMoveDestination.value = currentPath.value || ''
+  copyMoveProcessing.value = false
+  showCopyMoveModal.value = true
+  // Focus input after modal opens
+  setTimeout(() => {
+    copyMoveInput.value?.focus()
+    copyMoveInput.value?.select()
+  }, 100)
+}
+
+const closeCopyMoveModal = () => {
+  showCopyMoveModal.value = false
+  copyMoveItem.value = null
+  copyMoveDestination.value = ''
+  copyMoveProcessing.value = false
+}
+
+const executeCopyMove = async () => {
+  if (!copyMoveItem.value) return
+  
+  copyMoveProcessing.value = true
+  try {
+    await axios.post(`/file-manager/${props.domain}/${copyMoveAction.value}`, {
+      sourcePath: currentPath.value || '',
+      name: copyMoveItem.value.name,
+      destinationPath: copyMoveDestination.value || ''
+    })
+    showAlert('success', `${copyMoveAction.value === 'copy' ? 'Copied' : 'Moved'} ${copyMoveItem.value.name}`)
+    closeCopyMoveModal()
     loadFiles()
-  }).catch(err => {
-    showAlert('danger', err.response?.data?.error || `Failed to ${action}`)
-  })
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || `Failed to ${copyMoveAction.value}`)
+  } finally {
+    copyMoveProcessing.value = false
+  }
 }
 
 </script>
@@ -1033,5 +1258,225 @@ textarea.font-monospace {
   height: 1px;
   background-color: rgba(0, 0, 0, 0.1);
   margin: 4px 0;
+}
+
+/* Modal Icon Styles */
+.modal-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.modal-icon i {
+  font-size: 24px;
+}
+
+/* Create Modal Styles */
+.create-modal .modal-header {
+  padding: 24px 24px 0 24px;
+}
+
+.create-modal .modal-body {
+  padding: 24px;
+}
+
+.create-modal .modal-footer {
+  padding: 0 24px 24px 24px;
+}
+
+.create-modal .input-group-text {
+  border-radius: 12px 0 0 12px;
+}
+
+.create-modal .form-control {
+  border-radius: 0 12px 12px 0;
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.create-modal .form-control:focus {
+  background-color: #fff;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
+}
+
+/* Upload Progress Modal */
+.upload-modal {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  overflow: hidden;
+}
+
+.upload-modal::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+  animation: shimmer 3s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.upload-icon-wrapper {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+}
+
+.upload-icon-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+}
+
+.upload-icon-animate {
+  font-size: 36px;
+  animation: uploadBounce 1.5s infinite ease-in-out;
+}
+
+@keyframes uploadBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.progress-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: rotate(-90deg);
+}
+
+.progress-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 8;
+}
+
+.progress-ring-progress {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 339.292; /* 2 * PI * 54 */
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.progress-container {
+  width: 80%;
+  max-width: 300px;
+}
+
+.upload-modal .progress {
+  height: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.upload-modal .progress-bar {
+  background: linear-gradient(90deg, rgba(255,255,255,0.8), rgba(255,255,255,1));
+  border-radius: 10px;
+}
+
+.upload-modal h5 {
+  position: relative;
+  z-index: 1;
+}
+
+.upload-modal p {
+  position: relative;
+  z-index: 1;
+}
+
+/* Copy/Move Modal */
+.copy-move-modal .modal-header {
+  padding: 24px 24px 0 24px;
+}
+
+.copy-move-modal .modal-body {
+  padding: 24px;
+}
+
+.copy-move-modal .modal-footer {
+  padding: 0 24px 24px 24px;
+}
+
+.source-info-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px dashed #dee2e6;
+}
+
+.copy-move-modal .input-group-text {
+  border-radius: 12px 0 0 12px;
+}
+
+.copy-move-modal .form-control {
+  border-radius: 0 12px 12px 0;
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.copy-move-modal .form-control:focus {
+  background-color: #fff;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
+}
+
+/* Text utilities */
+.text-lg {
+  font-size: 32px !important;
+}
+
+/* Animation for modal appearance */
+.modal.fade.show {
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-dialog-centered {
+  animation: modalSlideIn 0.25s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    transform: translate(0, -20px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
 }
 </style>
