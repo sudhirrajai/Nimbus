@@ -240,22 +240,19 @@ class PhpController extends Controller
                 return response()->json(['error' => 'Invalid PHP version format'], 400);
             }
 
-            // Try restarting PHP-FPM
-            $fpmService = "php{$version}-fpm";
+            // Find the actual PHP-FPM service name
+            $fpmService = $this->findPhpFpmService($version);
             
-            // Check if service exists
-            $output = [];
-            $returnCode = 0;
-            exec("sudo systemctl status {$fpmService} 2>&1", $output, $returnCode);
-            
-            if ($returnCode !== 0 && $returnCode !== 3) { // 3 = service stopped
-                return response()->json(['error' => "Service {$fpmService} not found"], 404);
+            if (!$fpmService) {
+                return response()->json(['error' => "PHP-FPM service for version {$version} not found"], 404);
             }
 
             // Restart the service
             $this->executeSudoCommand("systemctl restart {$fpmService}");
 
             // Also reload nginx if it exists
+            $output = [];
+            $returnCode = 0;
             exec("sudo systemctl reload nginx 2>&1", $output, $returnCode);
 
             return response()->json([
