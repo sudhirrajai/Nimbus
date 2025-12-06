@@ -77,6 +77,13 @@
           </Link>
         </li>
 
+        <li class="nav-item">
+          <Link href="/php" class="nav-link" :class="isActive('/php')">
+            <i class="material-symbols-rounded opacity-5">code</i>
+            <span class="nav-link-text ms-1">PHP Configuration</span>
+          </Link>
+        </li>
+
         <!-- Files & Resources Section -->
         <li class="nav-item mt-3">
           <h6
