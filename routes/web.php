@@ -5,6 +5,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\FileManagerController;
+use App\Http\Controllers\PhpController;
 
 Route::prefix('dashboard')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -42,4 +43,14 @@ Route::prefix('file-manager')->name('file-manager.')->group(function () {
     Route::post('/{domain}/zip', [FileManagerController::class, 'zip'])->name('zip');
     Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
     Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
+});
+
+// PHP Configuration routes
+Route::prefix('php')->name('php.')->group(function () {
+    Route::get('/', [PhpController::class, 'index'])->name('index');
+    Route::get('/info', [PhpController::class, 'getInfo'])->name('info');
+    Route::post('/read', [PhpController::class, 'readIni'])->name('read');
+    Route::post('/save', [PhpController::class, 'saveIni'])->name('save');
+    Route::post('/update-setting', [PhpController::class, 'updateSetting'])->name('update-setting');
+    Route::post('/restart', [PhpController::class, 'restartPhp'])->name('restart');
 });
