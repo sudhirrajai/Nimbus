@@ -359,4 +359,54 @@ class PhpController extends Controller
 
         return $output;
     }
+
+    /**
+     * Find the PHP-FPM service name for a given version
+     */
+    private function findPhpFpmService($version)
+    {
+        // Common service name patterns
+        $possibleNames = [
+            "php{$version}-fpm",           // Ubuntu/Debian standard
+            "php-fpm-{$version}",          // Alternative naming
+            "php-fpm",                      // Generic PHP-FPM
+        ];
+
+        foreach ($possibleNames as $serviceName) {
+            $output = [];
+            $returnCode = 0;
+            
+            // Check if service exists using systemctl list-units
+            exec("systemctl list-units --type=service --all | grep -i '{$serviceName}' 2>&1", $output, $returnCode);
+            
+            if (!empty($output)) {
+                // Extract the actual service name from the output
+                foreach ($output as $line) {
+                    if (preg_match('/^\s*(php[0-9.]+-fpm\.service|php-fpm.*\.service)/', trim($line), $matches)) {
+                        return str_replace('.service', '', $matches[1]);
+                    }
+                }
+            }
+            
+            // Try checking directly
+            exec("systemctl status {$serviceName} 2>&1", $output, $returnCode);
+            if ($returnCode === 0 || $returnCode === 3) { // 0 = running, 3 = stopped but exists
+                return $serviceName;
+            }
+        }
+
+        // Last resort: try to find any PHP-FPM service
+        $output = [];
+        exec("systemctl list-units --type=service --all | grep -i 'php.*fpm' 2>&1", $output);
+        
+        if (!empty($output)) {
+            foreach ($output as $line) {
+                if (preg_match('/^\s*(php[0-9.]+-fpm)/', trim($line), $matches)) {
+                    return $matches[1];
+                }
+            }
+        }
+
+        return null;
+    }
 }
