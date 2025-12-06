@@ -752,12 +752,6 @@ const alert = ref({
 // Computed
 const hasSelected = computed(() => selectedItems.value.length > 0)
 
-// Circular progress offset calculation
-const progressOffset = computed(() => {
-  const circumference = 2 * Math.PI * 54 // r=54
-  return circumference - (uploadProgress.value / 100) * circumference
-})
-
 const contextMenuStyle = computed(() => {
   if (!contextMenu.value.show) return {}
   
@@ -1316,110 +1310,6 @@ textarea.font-monospace {
   background-color: #fff;
   border-color: #7c3aed;
   box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
-}
-
-/* Upload Progress Modal */
-.upload-modal {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  overflow: hidden;
-}
-
-.upload-modal::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
-  animation: shimmer 3s infinite linear;
-}
-
-@keyframes shimmer {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.upload-icon-wrapper {
-  position: relative;
-  width: 120px;
-  height: 120px;
-  margin: 0 auto;
-}
-
-.upload-icon-circle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
-}
-
-.upload-icon-animate {
-  font-size: 36px;
-  animation: uploadBounce 1.5s infinite ease-in-out;
-}
-
-@keyframes uploadBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.progress-ring {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: rotate(-90deg);
-}
-
-.progress-ring-bg {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.2);
-  stroke-width: 8;
-}
-
-.progress-ring-progress {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.9);
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 339.292; /* 2 * PI * 54 */
-  transition: stroke-dashoffset 0.3s ease;
-}
-
-.progress-container {
-  width: 80%;
-  max-width: 300px;
-}
-
-.upload-modal .progress {
-  height: 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.2);
-  overflow: hidden;
-}
-
-.upload-modal .progress-bar {
-  background: linear-gradient(90deg, rgba(255,255,255,0.8), rgba(255,255,255,1));
-  border-radius: 10px;
-}
-
-.upload-modal h5 {
-  position: relative;
-  z-index: 1;
-}
-
-.upload-modal p {
-  position: relative;
-  z-index: 1;
 }
 
 /* Copy/Move Modal */
