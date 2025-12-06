@@ -487,40 +487,37 @@
       <!-- Upload Progress Modal -->
       <div class="modal-backdrop fade show" v-if="uploading"></div>
       <div class="modal fade show" style="display:block" v-if="uploading">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content upload-modal">
-            <div class="modal-body text-center py-5">
-              <div class="upload-icon-wrapper mb-4">
-                <div class="upload-icon-circle">
-                  <i class="material-symbols-rounded upload-icon-animate">cloud_upload</i>
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+          <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div class="modal-icon bg-gradient-success">
+                  <i class="material-symbols-rounded">cloud_upload</i>
                 </div>
-                <svg class="progress-ring" width="120" height="120">
-                  <circle class="progress-ring-bg" cx="60" cy="60" r="54" />
-                  <circle 
-                    class="progress-ring-progress" 
-                    cx="60" cy="60" r="54"
-                    :style="{ strokeDashoffset: progressOffset }"
-                  />
-                </svg>
-              </div>
-              <h5 class="mb-2">Uploading File</h5>
-              <p class="text-secondary text-sm mb-3 text-truncate px-4">{{ uploadFileName }}</p>
-              <div class="progress-container mx-auto">
-                <div class="progress">
-                  <div 
-                    class="progress-bar bg-gradient-primary progress-bar-striped progress-bar-animated" 
-                    :style="{ width: uploadProgress + '%' }"
-                  ></div>
-                </div>
-                <div class="d-flex justify-content-between mt-2">
-                  <span class="text-sm text-secondary">Progress</span>
-                  <span class="text-sm fw-bold text-primary">{{ uploadProgress }}%</span>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">Uploading</h5>
+                  <p class="text-sm text-secondary mb-0">Please wait...</p>
                 </div>
               </div>
-              <p class="text-xs text-muted mt-3 mb-0">
-                <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
-                Please don't close this window while uploading
+            </div>
+            <div class="modal-body pt-3 pb-4">
+              <p class="text-sm text-dark mb-3 text-truncate fw-medium">
+                <i class="material-symbols-rounded text-sm align-middle me-1 text-secondary">description</i>
+                {{ uploadFileName }}
               </p>
+              <div class="progress mb-2" style="height: 8px;">
+                <div 
+                  class="progress-bar bg-gradient-success" 
+                  role="progressbar"
+                  :style="{ width: uploadProgress + '%' }"
+                ></div>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-xs text-secondary">{{ uploadProgress }}% complete</span>
+                <span class="text-xs text-success fw-bold" v-if="uploadProgress === 100">
+                  <i class="material-symbols-rounded text-xs align-middle">check_circle</i> Done
+                </span>
+              </div>
             </div>
           </div>
         </div>
