@@ -547,8 +547,8 @@
               <!-- Source Info -->
               <div class="source-info-card mb-4">
                 <div class="d-flex align-items-center">
-                  <i class="material-symbols-rounded text-lg" :class="copyMoveItem?.type === 'directory' ? 'text-warning' : 'text-info'">
-                    {{ copyMoveItem?.type === 'directory' ? 'folder' : 'description' }}
+                  <i class="material-symbols-rounded text-lg" :class="isBulkCopyMove ? 'text-primary' : (copyMoveItem?.type === 'directory' ? 'text-warning' : 'text-info')">
+                    {{ isBulkCopyMove ? 'folder_copy' : (copyMoveItem?.type === 'directory' ? 'folder' : 'description') }}
                   </i>
                   <div class="ms-3">
                     <p class="mb-0 fw-bold">{{ copyMoveItem?.name }}</p>
@@ -1095,34 +1095,34 @@ const bulkZip = async () => {
   }
 }
 
-// Bulk Copy/Move: we will loop selected items and call your existing copy/move endpoint per item.
-// destinationPath is relative path string (can be empty for root)
-const bulkCopyMove = async (action) => {
+// Bulk Copy/Move: opens the modal for bulk operations
+const bulkCopyMove = (action) => {
   if (!hasSelected.value) return
-  const destination = prompt(`${action === 'copy' ? 'Copy' : 'Move'} selected items to (relative path inside current domain). Leave empty for root:`, currentPath.value || '')
-  if (destination === null) return // user cancelled
-
-  try {
-    for (const it of selectedItems.value) {
-      // call appropriate endpoint for each item
-      await axios.post(`/file-manager/${props.domain}/${action}`, {
-        sourcePath: currentPath.value || '',
-        name: it.name,
-        destinationPath: destination || ''
-      })
-    }
-    showAlert('success', `${action === 'copy' ? 'Copied' : 'Moved'} ${selectedItems.value.length} items`)
-    selectedItems.value = []
-    loadFiles()
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || `Failed to ${action} selected items`)
+  
+  // Set bulk mode
+  isBulkCopyMove.value = true
+  bulkCopyMoveItems.value = [...selectedItems.value]
+  copyMoveItem.value = { 
+    name: `${selectedItems.value.length} items`,
+    type: 'multiple'
   }
+  copyMoveAction.value = action
+  copyMoveDestination.value = currentPath.value || ''
+  copyMoveProcessing.value = false
+  showCopyMoveModal.value = true
+  
+  setTimeout(() => {
+    copyMoveInput.value?.focus()
+    copyMoveInput.value?.select()
+  }, 100)
 }
 
 /* =========================
    Helper modal for copy/move single item from context menu
    ========================= */
 const openCopyMoveModal = (item, action) => {
+  isBulkCopyMove.value = false
+  bulkCopyMoveItems.value = []
   copyMoveItem.value = item
   copyMoveAction.value = action
   copyMoveDestination.value = currentPath.value || ''
@@ -1140,19 +1140,35 @@ const closeCopyMoveModal = () => {
   copyMoveItem.value = null
   copyMoveDestination.value = ''
   copyMoveProcessing.value = false
+  isBulkCopyMove.value = false
+  bulkCopyMoveItems.value = []
 }
 
 const executeCopyMove = async () => {
-  if (!copyMoveItem.value) return
-  
   copyMoveProcessing.value = true
+  
   try {
-    await axios.post(`/file-manager/${props.domain}/${copyMoveAction.value}`, {
-      sourcePath: currentPath.value || '',
-      name: copyMoveItem.value.name,
-      destinationPath: copyMoveDestination.value || ''
-    })
-    showAlert('success', `${copyMoveAction.value === 'copy' ? 'Copied' : 'Moved'} ${copyMoveItem.value.name}`)
+    if (isBulkCopyMove.value) {
+      // Bulk operation
+      for (const it of bulkCopyMoveItems.value) {
+        await axios.post(`/file-manager/${props.domain}/${copyMoveAction.value}`, {
+          sourcePath: currentPath.value || '',
+          name: it.name,
+          destinationPath: copyMoveDestination.value || ''
+        })
+      }
+      showAlert('success', `${copyMoveAction.value === 'copy' ? 'Copied' : 'Moved'} ${bulkCopyMoveItems.value.length} items`)
+      selectedItems.value = []
+    } else {
+      // Single item operation
+      if (!copyMoveItem.value) return
+      await axios.post(`/file-manager/${props.domain}/${copyMoveAction.value}`, {
+        sourcePath: currentPath.value || '',
+        name: copyMoveItem.value.name,
+        destinationPath: copyMoveDestination.value || ''
+      })
+      showAlert('success', `${copyMoveAction.value === 'copy' ? 'Copied' : 'Moved'} ${copyMoveItem.value.name}`)
+    }
     closeCopyMoveModal()
     loadFiles()
   } catch (err) {
