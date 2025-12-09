@@ -102,12 +102,12 @@ class PhpController extends Controller
     }
 
     /**
-     * Get current PHP settings
+     * Get current PHP settings from both runtime and FPM ini file
      */
     private function getCurrentSettings()
     {
-        // Important settings to monitor
-        $settings = [
+        // Get runtime settings (what PHP is currently using)
+        $runtimeSettings = [
             'upload_max_filesize' => ini_get('upload_max_filesize'),
             'post_max_size' => ini_get('post_max_size'),
             'max_execution_time' => ini_get('max_execution_time'),
@@ -121,6 +121,76 @@ class PhpController extends Controller
             'session.gc_maxlifetime' => ini_get('session.gc_maxlifetime'),
             'opcache.enable' => ini_get('opcache.enable'),
         ];
+
+        // Also try to read from FPM php.ini file to show pending changes
+        try {
+            $iniFiles = $this->getIniFiles();
+            $fpmIni = collect($iniFiles)->first(function($ini) {
+                return strpos($ini['label'], 'FPM') !== false;
+            });
+
+            if ($fpmIni && isset($fpmIni['path'])) {
+                $fileSettings = $this->parseIniFile($fpmIni['path']);
+                
+                // Merge with runtime settings, preferring file settings for display
+                foreach ($runtimeSettings as $key => $value) {
+                    if (isset($fileSettings[$key])) {
+                        $runtimeSettings[$key] = $fileSettings[$key];
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning("Could not read FPM ini file: " . $e->getMessage());
+        }
+
+        return $runtimeSettings;
+    }
+
+    /**
+     * Parse specific settings from php.ini file
+     */
+    private function parseIniFile($path)
+    {
+        $settings = [];
+        
+        try {
+            $content = $this->readFileWithSudo($path);
+            $lines = explode("\n", $content);
+            
+            $settingsToFind = [
+                'upload_max_filesize',
+                'post_max_size',
+                'max_execution_time',
+                'max_input_time',
+                'memory_limit',
+                'max_input_vars',
+                'file_uploads',
+                'display_errors',
+                'error_reporting',
+                'date.timezone',
+                'session.gc_maxlifetime',
+                'opcache.enable',
+            ];
+
+            foreach ($lines as $line) {
+                $trimmedLine = trim($line);
+                
+                // Skip comments and empty lines
+                if (empty($trimmedLine) || $trimmedLine[0] === ';') {
+                    continue;
+                }
+                
+                // Parse setting = value
+                foreach ($settingsToFind as $setting) {
+                    if (preg_match('/^' . preg_quote($setting, '/') . '\s*=\s*(.+)$/i', $trimmedLine, $matches)) {
+                        $settings[$setting] = trim($matches[1]);
+                        break;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("Error parsing ini file: " . $e->getMessage());
+        }
 
         return $settings;
     }

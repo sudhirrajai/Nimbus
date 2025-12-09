@@ -389,19 +389,24 @@ const updateQuickSetting = async (setting, value) => {
       value: value.trim()
     })
     
-    showAlert('success', `Setting '${setting}' updated. Restarting PHP-FPM to apply changes...`)
+    // Update local display immediately (optimistic update)
+    currentSettings.value[setting] = value.trim()
+    
+    showAlert('info', `Setting '${setting}' updated. Restarting PHP-FPM...`)
     
     // Auto-restart PHP-FPM
     await autoRestartPhp()
     
-    // Wait a moment for PHP-FPM to fully restart, then reload settings
+    // Wait longer for PHP-FPM to fully restart, then reload settings
     setTimeout(async () => {
       await loadInfo()
-      showAlert('success', `Setting '${setting}' updated and applied successfully!`)
-    }, 3000)
+      showAlert('success', `PHP-FPM restarted! Setting '${setting}' is now active.`)
+    }, 5000) // Increased to 5 seconds
     
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to update setting')
+    // Reload to show actual values if update failed
+    await loadInfo()
   } finally {
     updatingSettings[setting] = false
   }
@@ -426,14 +431,14 @@ const restartPhp = async () => {
     restarting.value = true
     const version = phpInfo.value?.version?.split('.').slice(0, 2).join('.') || '8.2'
     await axios.post('/php/restart', { version })
-    showAlert('success', 'PHP-FPM restart scheduled. Reloading settings in 3 seconds...')
+    showAlert('info', 'PHP-FPM restart scheduled. Reloading settings in 5 seconds...')
     showRestartModal.value = false
     
-    // Wait for PHP-FPM to restart, then reload info
+    // Wait longer for PHP-FPM to restart, then reload info
     setTimeout(async () => {
       await loadInfo()
       showAlert('success', 'PHP-FPM restarted and settings reloaded successfully!')
-    }, 3000)
+    }, 5000) // Increased to 5 seconds
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to restart PHP-FPM')
   } finally {
