@@ -118,15 +118,17 @@
                           type="text" 
                           class="form-control" 
                           :value="value"
-                          @blur="updateQuickSetting(key, $event.target.value)"
+                          :ref="`input-${key}`"
                           @keyup.enter="updateQuickSetting(key, $event.target.value)"
                         />
                         <button 
                           class="btn btn-sm bg-gradient-primary mb-0" 
-                          @click="updateQuickSetting(key, $event.target.previousElementSibling.value)"
+                          @click="updateQuickSetting(key, $refs[`input-${key}`][0].value)"
                           title="Save"
+                          :disabled="updatingSettings[key]"
                         >
-                          <i class="material-symbols-rounded text-xs">save</i>
+                          <span v-if="updatingSettings[key]" class="spinner-border spinner-border-sm"></span>
+                          <i v-else class="material-symbols-rounded text-xs">save</i>
                         </button>
                       </div>
                     </div>
@@ -274,12 +276,13 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import axios from 'axios'
 
 const loading = ref(false)
 const saving = ref(false)
 const restarting = ref(false)
+const updatingSettings = reactive({})
 
 const phpInfo = ref(null)
 const iniFiles = ref([])
@@ -367,7 +370,7 @@ const saveIniFile = async () => {
 }
 
 const updateQuickSetting = async (setting, value) => {
-  if (!value.trim()) return
+  if (!value || !value.trim()) return
   
   // Find the FPM ini file (primary)
   const fpmIni = iniFiles.value.find(ini => ini.label.includes('FPM'))
@@ -377,18 +380,40 @@ const updateQuickSetting = async (setting, value) => {
   }
 
   try {
-    loading.value = true
+    updatingSettings[setting] = true
+    
+    // Update the setting
     await axios.post('/php/update-setting', {
       path: fpmIni.path,
       setting: setting,
       value: value.trim()
     })
-    showAlert('success', `Setting '${setting}' updated. Restart PHP-FPM to apply.`)
-    // Reload current settings
-    loadInfo()
+    
+    showAlert('success', `Setting '${setting}' updated. Restarting PHP-FPM to apply changes...`)
+    
+    // Auto-restart PHP-FPM
+    await autoRestartPhp()
+    
+    // Wait a moment for PHP-FPM to fully restart, then reload settings
+    setTimeout(async () => {
+      await loadInfo()
+      showAlert('success', `Setting '${setting}' updated and applied successfully!`)
+    }, 3000)
+    
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to update setting')
-    loading.value = false
+  } finally {
+    updatingSettings[setting] = false
+  }
+}
+
+const autoRestartPhp = async () => {
+  try {
+    const version = phpInfo.value?.version?.split('.').slice(0, 2).join('.') || '8.2'
+    await axios.post('/php/restart', { version })
+  } catch (error) {
+    console.error('Auto-restart failed:', error)
+    throw error
   }
 }
 
@@ -401,10 +426,14 @@ const restartPhp = async () => {
     restarting.value = true
     const version = phpInfo.value?.version?.split('.').slice(0, 2).join('.') || '8.2'
     await axios.post('/php/restart', { version })
-    showAlert('success', 'PHP-FPM restarted successfully')
+    showAlert('success', 'PHP-FPM restart scheduled. Reloading settings in 3 seconds...')
     showRestartModal.value = false
-    // Reload info to show updated settings
-    loadInfo()
+    
+    // Wait for PHP-FPM to restart, then reload info
+    setTimeout(async () => {
+      await loadInfo()
+      showAlert('success', 'PHP-FPM restarted and settings reloaded successfully!')
+    }, 3000)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to restart PHP-FPM')
   } finally {
