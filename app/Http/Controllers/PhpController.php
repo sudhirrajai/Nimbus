@@ -225,6 +225,7 @@ class PhpController extends Controller
 
     /**
      * Restart PHP-FPM service (nginx + PHP-FPM setup)
+     * FIXED: Use at command to schedule restart after response is sent
      */
     public function restartPhp(Request $request)
     {
@@ -249,17 +250,36 @@ class PhpController extends Controller
                 ], 404);
             }
 
-            // Restart PHP-FPM
-            $this->executeSudoCommand("systemctl restart {$fpmService}");
+            // Create a restart script
+            $scriptPath = storage_path('app/restart_php_fpm.sh');
+            $scriptContent = <<<BASH
+#!/bin/bash
+sleep 2
+sudo systemctl restart {$fpmService}
+sudo systemctl reload nginx
+BASH;
 
-            // Also reload nginx
+            File::put($scriptPath, $scriptContent);
+            chmod($scriptPath, 0755);
+
+            // Schedule the restart to happen 2 seconds from now using 'at' command
+            // This allows the HTTP response to be sent first
             $output = [];
             $returnCode = 0;
-            exec("sudo systemctl reload nginx 2>&1", $output, $returnCode);
+            
+            // Try using 'at' command (most reliable)
+            exec("echo 'bash " . escapeshellarg($scriptPath) . "' | at now + 2 seconds 2>&1", $output, $returnCode);
+            
+            if ($returnCode !== 0) {
+                // Fallback: Use background process with nohup
+                exec("nohup bash " . escapeshellarg($scriptPath) . " > /dev/null 2>&1 &");
+            }
 
+            // Return success immediately
             return response()->json([
-                'message' => "PHP {$version} FPM restarted successfully"
+                'message' => "PHP {$version} FPM restart scheduled. Service will restart in 2 seconds."
             ]);
+            
         } catch (\Exception $e) {
             \Log::error("Restart PHP error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
