@@ -6,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\FileManagerController;
 use App\Http\Controllers\PhpController;
+use App\Http\Controllers\NginxController;
 
 Route::prefix('dashboard')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -53,4 +54,15 @@ Route::prefix('php')->name('php.')->group(function () {
     Route::post('/save', [PhpController::class, 'saveIni'])->name('save');
     Route::post('/update-setting', [PhpController::class, 'updateSetting'])->name('update-setting');
     Route::post('/restart', [PhpController::class, 'restartPhp'])->name('restart');
+});
+
+// Nginx Configuration routes
+Route::prefix('nginx')->name('nginx.')->group(function () {
+    Route::get('/', [NginxController::class, 'index'])->name('index');
+    Route::get('/domains', [NginxController::class, 'getDomains'])->name('domains');
+    Route::post('/config/read', [NginxController::class, 'getConfig'])->name('config.read');
+    Route::post('/config/save', [NginxController::class, 'saveConfig'])->name('config.save');
+    Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
+    Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
+    Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
 });
