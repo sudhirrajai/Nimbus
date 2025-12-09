@@ -224,7 +224,7 @@ class PhpController extends Controller
     }
 
     /**
-     * Restart PHP-FPM service
+     * Restart PHP-FPM service (nginx + PHP-FPM setup)
      */
     public function restartPhp(Request $request)
     {
@@ -244,13 +244,15 @@ class PhpController extends Controller
             $fpmService = $this->findPhpFpmService($version);
             
             if (!$fpmService) {
-                return response()->json(['error' => "PHP-FPM service for version {$version} not found"], 404);
+                return response()->json([
+                    'error' => "PHP-FPM service for version {$version} not found. Please ensure php{$version}-fpm is installed."
+                ], 404);
             }
 
-            // Restart the service
+            // Restart PHP-FPM
             $this->executeSudoCommand("systemctl restart {$fpmService}");
 
-            // Also reload nginx if it exists
+            // Also reload nginx
             $output = [];
             $returnCode = 0;
             exec("sudo systemctl reload nginx 2>&1", $output, $returnCode);
