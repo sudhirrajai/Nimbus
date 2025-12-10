@@ -92,4 +92,5 @@ Route::prefix('database')->name('database.')->group(function () {
     Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
     Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
     Route::post('/phpmyadmin/access', [DatabaseController::class, 'getPhpMyAdminUrl'])->name('phpmyadmin.access');
+    Route::get('/phpmyadmin/signon/{token}', [DatabaseController::class, 'phpMyAdminSignon'])->name('phpmyadmin.signon');
 });

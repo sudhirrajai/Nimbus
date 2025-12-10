@@ -677,12 +677,13 @@ const openPhpMyAdmin = async (db) => {
   }
   
   try {
+    showAlert('info', 'Opening phpMyAdmin...')
     const response = await axios.post('/database/phpmyadmin/access', {
       database: db.name,
       username: db.users[0].username
     })
-    pmaAccess.value = response.data
-    showPmaModal.value = true
+    // Open directly in new tab
+    window.open(response.data.url, '_blank')
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to get phpMyAdmin access')
   }

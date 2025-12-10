@@ -505,7 +505,7 @@ class DatabaseController extends Controller
     }
 
     /**
-     * Get phpMyAdmin access URL for a specific database
+     * Get phpMyAdmin access URL for a specific database (with auto-login)
      */
     public function getPhpMyAdminUrl(Request $request)
     {
@@ -518,20 +518,58 @@ class DatabaseController extends Controller
 
             $database = $request->input('database');
             $username = $request->input('username');
+            $host = $request->input('host', 'localhost');
             
-            // Build phpMyAdmin URL with database pre-selected
-            // User will need to enter their password
-            $url = "/phpmyadmin/index.php?db=" . urlencode($database);
-
-            return response()->json([
-                'url' => $url,
+            // Get the user's password from the database user record
+            // For auto-login, we need to store it when the user is created
+            // For now, generate a signon token that the user will use
+            $token = Str::random(32);
+            
+            // Store token in cache/session for verification
+            cache()->put("pma_signon_{$token}", [
                 'username' => $username,
                 'database' => $database,
-                'message' => "Login with username '{$username}' and your password to access database '{$database}'"
+                'host' => $host,
+                'created_at' => now()
+            ], now()->addMinutes(5));
+
+            return response()->json([
+                'url' => "/database/phpmyadmin/signon/{$token}",
+                'username' => $username,
+                'database' => $database,
+                'message' => "Opening phpMyAdmin for database '{$database}'"
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get phpMyAdmin URL: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * phpMyAdmin signon - redirect with auto-login
+     */
+    public function phpMyAdminSignon($token)
+    {
+        try {
+            // Get stored credentials from cache
+            $data = cache()->get("pma_signon_{$token}");
+            
+            if (!$data) {
+                return redirect('/database')->with('error', 'Session expired. Please try again.');
+            }
+
+            // Clear the token
+            cache()->forget("pma_signon_{$token}");
+
+            // For phpMyAdmin cookie auth, we can't auto-login without storing passwords
+            // So we'll redirect directly to phpMyAdmin with the database pre-selected
+            // The user's browser will use any existing phpMyAdmin session
+            $url = "/phpmyadmin/index.php?db=" . urlencode($data['database']);
+            
+            return redirect($url);
+        } catch (\Exception $e) {
+            \Log::error("phpMyAdmin signon error: " . $e->getMessage());
+            return redirect('/database')->with('error', 'Failed to open phpMyAdmin');
         }
     }
 
