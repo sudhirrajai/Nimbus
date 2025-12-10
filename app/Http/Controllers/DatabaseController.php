@@ -505,7 +505,7 @@ class DatabaseController extends Controller
     }
 
     /**
-     * Get phpMyAdmin access URL for a specific database (with auto-login)
+     * Get phpMyAdmin access URL for a specific database (with auto-login token)
      */
     public function getPhpMyAdminUrl(Request $request)
     {
@@ -520,22 +520,36 @@ class DatabaseController extends Controller
             $username = $request->input('username');
             $host = $request->input('host', 'localhost');
             
-            // Get the user's password from the database user record
-            // For auto-login, we need to store it when the user is created
-            // For now, generate a signon token that the user will use
-            $token = Str::random(32);
+            // Generate a secure one-time token
+            $token = Str::random(64);
             
-            // Store token in cache/session for verification
-            cache()->put("pma_signon_{$token}", [
-                'username' => $username,
-                'database' => $database,
+            // Ensure token directory exists
+            $tokenDir = storage_path('app/pma_tokens');
+            if (!is_dir($tokenDir)) {
+                mkdir($tokenDir, 0755, true);
+            }
+            
+            // Get MySQL credentials from .env (for the nimbus admin user)
+            // For security, we use the configured nimbus MySQL user
+            $mysqlUser = config('database.connections.mysql.username');
+            $mysqlPass = config('database.connections.mysql.password');
+            
+            // Store token data in file
+            $tokenData = [
+                'username' => $mysqlUser,
+                'password' => $mysqlPass,
                 'host' => $host,
-                'created_at' => now()
-            ], now()->addMinutes(5));
+                'database' => $database,
+                'created' => time(),
+                'panel_user' => auth()->user()->email ?? 'unknown'
+            ];
+            
+            file_put_contents($tokenDir . '/' . $token . '.json', json_encode($tokenData));
 
+            // Return URL to signon script
             return response()->json([
-                'url' => "/database/phpmyadmin/signon/{$token}",
-                'username' => $username,
+                'url' => "/pma_signon.php?token={$token}&db=" . urlencode($database),
+                'username' => $mysqlUser,
                 'database' => $database,
                 'message' => "Opening phpMyAdmin for database '{$database}'"
             ]);
@@ -546,27 +560,12 @@ class DatabaseController extends Controller
     }
 
     /**
-     * phpMyAdmin signon - redirect to authenticated view
+     * phpMyAdmin signon - legacy redirect (now handled by pma_signon.php)
      */
     public function phpMyAdminSignon($token)
     {
-        try {
-            // Get stored credentials from cache
-            $data = cache()->get("pma_signon_{$token}");
-            
-            if (!$data) {
-                return redirect('/database')->with('error', 'Session expired. Please try again.');
-            }
-
-            // Clear the token
-            cache()->forget("pma_signon_{$token}");
-
-            // Redirect to authenticated phpMyAdmin view
-            return redirect()->route('database.phpmyadmin.view', ['db' => $data['database']]);
-        } catch (\Exception $e) {
-            \Log::error("phpMyAdmin signon error: " . $e->getMessage());
-            return redirect('/database')->with('error', 'Failed to open phpMyAdmin');
-        }
+        // Redirect to the new signon script
+        return redirect("/pma_signon.php?token={$token}");
     }
 
     /**
