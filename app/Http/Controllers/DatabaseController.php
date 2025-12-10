@@ -546,7 +546,7 @@ class DatabaseController extends Controller
     }
 
     /**
-     * phpMyAdmin signon - redirect with auto-login
+     * phpMyAdmin signon - redirect to authenticated view
      */
     public function phpMyAdminSignon($token)
     {
@@ -561,16 +561,22 @@ class DatabaseController extends Controller
             // Clear the token
             cache()->forget("pma_signon_{$token}");
 
-            // For phpMyAdmin cookie auth, we can't auto-login without storing passwords
-            // So we'll redirect directly to phpMyAdmin with the database pre-selected
-            // The user's browser will use any existing phpMyAdmin session
-            $url = "/phpmyadmin/index.php?db=" . urlencode($data['database']);
-            
-            return redirect($url);
+            // Redirect to authenticated phpMyAdmin view
+            return redirect()->route('database.phpmyadmin.view', ['db' => $data['database']]);
         } catch (\Exception $e) {
             \Log::error("phpMyAdmin signon error: " . $e->getMessage());
             return redirect('/database')->with('error', 'Failed to open phpMyAdmin');
         }
+    }
+
+    /**
+     * phpMyAdmin view page (authenticated)
+     */
+    public function phpMyAdminView(Request $request)
+    {
+        return Inertia::render('Database/PhpMyAdmin', [
+            'database' => $request->query('db', '')
+        ]);
     }
 
     /**
