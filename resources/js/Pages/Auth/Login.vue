@@ -3,7 +3,7 @@
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <img src="/assets/img/logo.png" alt="Nimbus" class="logo" onerror="this.style.display='none'">
+          <!-- <img src="/assets/img/logo.png" alt="Nimbus" class="logo" onerror="this.style.display='none'"> -->
           <h1 class="brand-name">Nimbus</h1>
           <p class="subtitle">Server Control Panel</p>
         </div>
