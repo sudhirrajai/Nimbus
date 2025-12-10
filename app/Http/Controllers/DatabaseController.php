@@ -336,8 +336,11 @@ class DatabaseController extends Controller
                 return response()->json(['error' => 'User already exists'], 400);
             }
 
-            // Create user
-            DB::statement("CREATE USER ?@? IDENTIFIED BY ?", [$username, $host, $password]);
+            // Create user - use raw SQL with proper escaping (DDL doesn't support prepared statements)
+            $escapedUser = $this->escapeIdentifier($username);
+            $escapedHost = $this->escapeString($host);
+            $escapedPass = $this->escapeString($password);
+            DB::statement("CREATE USER {$escapedUser}@{$escapedHost} IDENTIFIED BY {$escapedPass}");
 
             return response()->json([
                 'message' => "User '{$username}'@'{$host}' created successfully",
@@ -369,7 +372,9 @@ class DatabaseController extends Controller
                 return response()->json(['error' => 'Cannot delete root user'], 403);
             }
 
-            DB::statement("DROP USER IF EXISTS ?@?", [$username, $host]);
+            $escapedUser = $this->escapeIdentifier($username);
+            $escapedHost = $this->escapeString($host);
+            DB::statement("DROP USER IF EXISTS {$escapedUser}@{$escapedHost}");
 
             return response()->json([
                 'message' => "User '{$username}'@'{$host}' deleted successfully"
@@ -409,7 +414,9 @@ class DatabaseController extends Controller
             $privilegeStr = implode(', ', $privileges);
             
             // Grant privileges
-            DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO ?@?", [$username, $host]);
+            $escapedUser = $this->escapeIdentifier($username);
+            $escapedHost = $this->escapeString($host);
+            DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO {$escapedUser}@{$escapedHost}");
             DB::statement("FLUSH PRIVILEGES");
 
             return response()->json([
@@ -440,7 +447,9 @@ class DatabaseController extends Controller
             $privileges = $request->input('privileges');
 
             // Revoke all existing privileges on this database
-            DB::statement("REVOKE ALL PRIVILEGES ON `{$database}`.* FROM ?@?", [$username, $host]);
+            $escapedUser = $this->escapeIdentifier($username);
+            $escapedHost = $this->escapeString($host);
+            DB::statement("REVOKE ALL PRIVILEGES ON `{$database}`.* FROM {$escapedUser}@{$escapedHost}");
 
             // Grant new privileges
             if (!empty($privileges)) {
@@ -449,7 +458,7 @@ class DatabaseController extends Controller
                 
                 if (!empty($privileges)) {
                     $privilegeStr = implode(', ', $privileges);
-                    DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO ?@?", [$username, $host]);
+                    DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO {$escapedUser}@{$escapedHost}");
                 }
             }
 
@@ -480,7 +489,10 @@ class DatabaseController extends Controller
             $host = $request->input('host', 'localhost');
             $password = $request->input('password');
 
-            DB::statement("ALTER USER ?@? IDENTIFIED BY ?", [$username, $host, $password]);
+            $escapedUser = $this->escapeIdentifier($username);
+            $escapedHost = $this->escapeString($host);
+            $escapedPass = $this->escapeString($password);
+            DB::statement("ALTER USER {$escapedUser}@{$escapedHost} IDENTIFIED BY {$escapedPass}");
             DB::statement("FLUSH PRIVILEGES");
 
             return response()->json([
@@ -599,16 +611,35 @@ NGINX;
     private function createMySQLUser($username, $password, $isAdmin = false)
     {
         try {
-            DB::statement("CREATE USER IF NOT EXISTS ?@'localhost' IDENTIFIED BY ?", [$username, $password]);
+            $escapedUser = $this->escapeIdentifier($username);
+            $escapedPass = $this->escapeString($password);
+            
+            DB::statement("CREATE USER IF NOT EXISTS {$escapedUser}@'localhost' IDENTIFIED BY {$escapedPass}");
             
             if ($isAdmin) {
-                DB::statement("GRANT ALL PRIVILEGES ON *.* TO ?@'localhost' WITH GRANT OPTION", [$username]);
+                DB::statement("GRANT ALL PRIVILEGES ON *.* TO {$escapedUser}@'localhost' WITH GRANT OPTION");
             }
             
             DB::statement("FLUSH PRIVILEGES");
         } catch (\Exception $e) {
             throw new \Exception("Failed to create MySQL user: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Escape identifier for MySQL (backticks)
+     */
+    private function escapeIdentifier($value)
+    {
+        return '`' . str_replace('`', '``', $value) . '`';
+    }
+
+    /**
+     * Escape string value for MySQL (quotes)
+     */
+    private function escapeString($value)
+    {
+        return "'" . addslashes($value) . "'";  
     }
 
     /**
