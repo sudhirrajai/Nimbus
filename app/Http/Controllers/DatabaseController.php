@@ -52,18 +52,18 @@ class DatabaseController extends Controller
                 return response()->json(['error' => 'phpMyAdmin is already installed'], 400);
             }
 
-            // Install phpMyAdmin
             $output = [];
             $returnCode = 0;
             
             // Set debconf selections to avoid interactive prompts
-            $this->executeSudoCommand("debconf-set-selections <<< 'phpmyadmin phpmyadmin/dbconfig-install boolean true'");
-            $this->executeSudoCommand("debconf-set-selections <<< 'phpmyadmin phpmyadmin/app-password-confirm password '");
-            $this->executeSudoCommand("debconf-set-selections <<< 'phpmyadmin phpmyadmin/mysql/admin-pass password '");
-            $this->executeSudoCommand("debconf-set-selections <<< 'phpmyadmin phpmyadmin/mysql/app-pass password '");
-            $this->executeSudoCommand("debconf-set-selections <<< 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none'");
+            exec("echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections 2>&1", $output, $returnCode);
+            exec("echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
+            exec("echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
+            exec("echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
+            exec("echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections 2>&1", $output, $returnCode);
             
-            // Install
+            // Install phpMyAdmin
+            $output = [];
             exec("sudo DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1", $output, $returnCode);
             
             if ($returnCode !== 0) {
@@ -72,6 +72,7 @@ class DatabaseController extends Controller
                     'details' => implode("\n", $output)
                 ], 500);
             }
+
 
             // Generate admin credentials
             $adminUser = 'nimbus_admin';
