@@ -535,7 +535,10 @@ const installPhpMyAdmin = async () => {
     
     showAlert('success', response.data.message)
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to install phpMyAdmin')
+    const errMsg = error.response?.data?.error || 'Failed to install phpMyAdmin'
+    const details = error.response?.data?.details || ''
+    showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
+    console.error('phpMyAdmin install error:', error.response?.data)
   } finally {
     installing.value = false
   }
