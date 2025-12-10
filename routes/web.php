@@ -7,6 +7,7 @@ use App\Http\Controllers\DomainController;
 use App\Http\Controllers\FileManagerController;
 use App\Http\Controllers\PhpController;
 use App\Http\Controllers\NginxController;
+use App\Http\Controllers\SslController;
 
 Route::prefix('dashboard')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -65,4 +66,14 @@ Route::prefix('nginx')->name('nginx.')->group(function () {
     Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
     Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
     Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
+});
+
+// SSL Certificate routes
+Route::prefix('ssl')->name('ssl.')->group(function () {
+    Route::get('/', [SslController::class, 'index'])->name('index');
+    Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
+    Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
+    Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
+    Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
+    Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');
 });
