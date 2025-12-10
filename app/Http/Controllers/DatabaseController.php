@@ -62,9 +62,9 @@ class DatabaseController extends Controller
             exec("echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
             exec("echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections 2>&1", $output, $returnCode);
             
-            // Install phpMyAdmin
+            // Install phpMyAdmin - use env inside sudo to set DEBIAN_FRONTEND
             $output = [];
-            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1", $output, $returnCode);
+            exec("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1", $output, $returnCode);
             
             if ($returnCode !== 0) {
                 return response()->json([
