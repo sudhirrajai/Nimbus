@@ -8,6 +8,7 @@ use App\Http\Controllers\FileManagerController;
 use App\Http\Controllers\PhpController;
 use App\Http\Controllers\NginxController;
 use App\Http\Controllers\SslController;
+use App\Http\Controllers\DatabaseController;
 
 Route::prefix('dashboard')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -27,10 +28,7 @@ Route::prefix('domains')->group(function () {
 
 // File Manager routes
 Route::prefix('file-manager')->name('file-manager.')->group(function () {
-    // Main file manager view
     Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
-    
-    // File operations
     Route::post('/{domain}/list', [FileManagerController::class, 'list'])->name('list');
     Route::post('/{domain}/read', [FileManagerController::class, 'read'])->name('read');
     Route::post('/{domain}/save', [FileManagerController::class, 'save'])->name('save');
@@ -76,4 +74,22 @@ Route::prefix('ssl')->name('ssl.')->group(function () {
     Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
     Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
     Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');
+});
+
+// Database Management routes
+Route::prefix('database')->name('database.')->group(function () {
+    Route::get('/', [DatabaseController::class, 'index'])->name('index');
+    Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
+    Route::post('/install-phpmyadmin', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-phpmyadmin');
+    Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');
+    Route::get('/list', [DatabaseController::class, 'getDatabases'])->name('list');
+    Route::get('/users', [DatabaseController::class, 'getUsers'])->name('users');
+    Route::post('/create', [DatabaseController::class, 'createDatabase'])->name('create');
+    Route::post('/delete', [DatabaseController::class, 'deleteDatabase'])->name('delete');
+    Route::post('/user/create', [DatabaseController::class, 'createUser'])->name('user.create');
+    Route::post('/user/delete', [DatabaseController::class, 'deleteUser'])->name('user.delete');
+    Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
+    Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
+    Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
+    Route::post('/phpmyadmin/access', [DatabaseController::class, 'getPhpMyAdminUrl'])->name('phpmyadmin.access');
 });
