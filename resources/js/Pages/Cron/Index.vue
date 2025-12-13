@@ -124,7 +124,8 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <p class="text-sm mb-2"><strong>Format:</strong>
-                                            <code>minute hour day month weekday</code></p>
+                                            <code>minute hour day month weekday</code>
+                                        </p>
                                         <ul class="text-sm">
                                             <li><code>*</code> - every value</li>
                                             <li><code>*/5</code> - every 5 units</li>
@@ -448,5 +449,33 @@ const getScheduleDescription = (job) => {
     overflow-y: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+
+/* Form input styling */
+.form-control {
+    background-color: #fff !important;
+    border: 1px solid #d2d6da !important;
+    border-radius: 0.5rem !important;
+    padding: 0.625rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    color: #495057 !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+
+.form-control:focus {
+    border-color: #e91e63 !important;
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
+    outline: none !important;
+}
+
+.form-control::placeholder {
+    color: #adb5bd !important;
+    opacity: 1 !important;
+}
+
+.form-label {
+    color: #344767;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
 }
 </style>

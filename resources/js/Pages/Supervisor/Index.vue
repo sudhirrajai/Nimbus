@@ -165,7 +165,7 @@
                                                 </td>
                                                 <td>
                                                     <span :class="getStatusBadge(process.status)">{{ process.status
-                                                        }}</span>
+                                                    }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="text-sm">{{ process.pid || '-' }}</span>
@@ -584,5 +584,44 @@ const getStatusBadge = (status) => {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Form input styling */
+.form-control {
+    background-color: #fff !important;
+    border: 1px solid #d2d6da !important;
+    border-radius: 0.5rem !important;
+    padding: 0.625rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    color: #495057 !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+
+.form-control:focus {
+    border-color: #e91e63 !important;
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
+    outline: none !important;
+}
+
+.form-control::placeholder {
+    color: #adb5bd !important;
+    opacity: 1 !important;
+}
+
+.form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid #d2d6da;
+}
+
+.form-check-input:checked {
+    background-color: #e91e63;
+    border-color: #e91e63;
+}
+
+.form-label {
+    color: #344767;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
 }
 </style>
