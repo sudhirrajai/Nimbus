@@ -7,6 +7,8 @@
       <i
         class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
         id="iconSidenav"
+        @click="closeSidebar"
+        style="cursor: pointer; z-index: 10;"
       ></i>
 
       <a class="navbar-brand px-4 py-3 m-0" href="#">
@@ -205,6 +207,12 @@ const isActive = (path) => {
   }
   
   return 'text-dark'
+}
+
+const closeSidebar = () => {
+  document.body.classList.remove('g-sidenav-pinned')
+  const sidenav = document.getElementById('sidenav-main')
+  sidenav?.classList.remove('bg-white')
 }
 </script>
 
