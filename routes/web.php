@@ -189,4 +189,18 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/', [\App\Http\Controllers\ResourceController::class, 'index'])->name('index');
         Route::get('/usage', [\App\Http\Controllers\ResourceController::class, 'getUsage'])->name('usage');
     });
+
+    // Profile routes
+    Route::prefix('profile')->name('profile.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('index');
+        Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateProfile'])->name('update');
+        Route::post('/password', [\App\Http\Controllers\ProfileController::class, 'changePassword'])->name('password');
+    });
+
+    // Settings routes
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProfileController::class, 'settings'])->name('index');
+        Route::get('/data', [\App\Http\Controllers\ProfileController::class, 'getSettings'])->name('data');
+        Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateSettings'])->name('update');
+    });
 });
