@@ -52,42 +52,102 @@ class DatabaseController extends Controller
                 return response()->json(['error' => 'phpMyAdmin is already installed'], 400);
             }
 
-            $output = [];
-            $returnCode = 0;
+            $logFile = storage_path('logs/phpmyadmin_install.log');
+            $statusFile = storage_path('logs/phpmyadmin_status.txt');
             
-            // Set debconf selections to avoid interactive prompts
-            exec("echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections 2>&1", $output, $returnCode);
-            exec("echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
-            exec("echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
-            exec("echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections 2>&1", $output, $returnCode);
-            exec("echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections 2>&1", $output, $returnCode);
+            // Clear old logs
+            file_put_contents($logFile, "phpMyAdmin installation started at " . date('Y-m-d H:i:s') . "\n");
+            file_put_contents($statusFile, 'running');
             
-            // Update package cache first
-            exec("sudo apt-get update 2>&1", $output, $returnCode);
-            
-            // Install phpMyAdmin - use env inside sudo to set DEBIAN_FRONTEND
-            $output = [];
-            exec("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1", $output, $returnCode);
-            
-            if ($returnCode !== 0) {
-                return response()->json([
-                    'error' => 'Failed to install phpMyAdmin',
-                    'details' => implode("\n", $output)
-                ], 500);
-            }
-
-
-            // Generate admin credentials
+            // Generate credentials
             $adminUser = 'nimbus_admin';
             $adminPass = Str::random(16);
             
-            // Create MySQL admin user for phpMyAdmin
-            $this->createMySQLUser($adminUser, $adminPass, true);
+            // Detect PHP version
+            $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+            
+            // Install script
+            $script = <<<BASH
+#!/bin/bash
+cd /usr/local/nimbus
 
-            // Configure nginx for phpMyAdmin
-            $this->configurePhpMyAdminNginx();
+echo "Setting up debconf selections..."
+echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections
 
-            // Save credentials
+echo ""
+echo "Updating package cache..."
+sudo apt-get update 2>&1
+
+echo ""
+echo "Installing phpMyAdmin..."
+sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1
+
+if [ ! -d "/usr/share/phpmyadmin" ]; then
+    echo "ERROR: phpMyAdmin installation failed!"
+    exit 1
+fi
+
+echo ""
+echo "Creating MySQL admin user..."
+sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
+sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
+sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
+sudo mysql -e "FLUSH PRIVILEGES" 2>&1
+
+echo ""
+echo "Configuring nginx..."
+sudo mkdir -p /etc/nginx/snippets
+
+sudo tee /etc/nginx/snippets/phpmyadmin.conf > /dev/null << 'NGINX'
+location /phpmyadmin {
+    alias /usr/share/phpmyadmin;
+    index index.php;
+
+    location ~ ^/phpmyadmin/(.+\.php)$ {
+        alias /usr/share/phpmyadmin/\$1;
+        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$request_filename;
+    }
+
+    location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
+        alias /usr/share/phpmyadmin/\$1;
+    }
+}
+NGINX
+
+# Add include to nimbus config if not present
+if ! grep -q 'phpmyadmin.conf' /etc/nginx/sites-available/nimbus; then
+    sudo sed -i '/^}/i\    include snippets/phpmyadmin.conf;' /etc/nginx/sites-available/nimbus
+fi
+
+echo ""
+echo "Testing nginx configuration..."
+sudo nginx -t 2>&1
+
+echo ""
+echo "Reloading nginx..."
+sudo systemctl reload nginx 2>&1
+
+echo ""
+echo "Installation completed successfully!"
+echo "Username: {$adminUser}"
+echo "Password: {$adminPass}"
+BASH;
+
+            $tempScript = "/tmp/phpmyadmin_install.sh";
+            file_put_contents($tempScript, $script);
+            chmod($tempScript, 0755);
+            
+            // Run install in background
+            exec("sudo bash {$tempScript} >> {$logFile} 2>&1 &");
+            
+            // Save credentials to file
             $credentials = [
                 'username' => $adminUser,
                 'password' => $adminPass,
@@ -101,18 +161,42 @@ class DatabaseController extends Controller
             }
             File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
 
-            // Reload nginx
-            $this->executeSudoCommand("systemctl reload nginx");
-
             return response()->json([
-                'message' => 'phpMyAdmin installed successfully',
+                'message' => 'phpMyAdmin installation started...',
                 'credentials' => $credentials,
-                'showCredentials' => true
+                'polling' => true
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to install phpMyAdmin: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Get phpMyAdmin install status/log
+     */
+    public function getInstallStatus()
+    {
+        $logFile = storage_path('logs/phpmyadmin_install.log');
+        $statusFile = storage_path('logs/phpmyadmin_status.txt');
+        
+        $log = file_exists($logFile) ? file_get_contents($logFile) : '';
+        $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
+        
+        // Check if install is complete
+        if (strpos($log, 'Installation completed successfully') !== false) {
+            file_put_contents($statusFile, 'done');
+            $status = 'done';
+        } elseif (strpos($log, 'ERROR:') !== false) {
+            file_put_contents($statusFile, 'error');
+            $status = 'error';
+        }
+        
+        return response()->json([
+            'status' => $status,
+            'log' => $log,
+            'installed' => file_exists($this->phpMyAdminPath)
+        ]);
     }
 
     /**
