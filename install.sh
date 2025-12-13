@@ -138,11 +138,12 @@ echo -e "${GREEN}[10/12]${NC} Setting up Nimbus..."
 cd $NIMBUS_DIR
 
 # Install PHP dependencies
-composer install --no-dev --optimize-autoloader
+COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
 
 # Install Node dependencies and build
-npm install
-npm run build
+npm install --unsafe-perm
+# Use direct path to vite to avoid PATH issues
+./node_modules/.bin/vite build
 
 # Setup environment
 cp .env.example .env
