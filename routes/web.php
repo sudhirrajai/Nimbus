@@ -10,6 +10,7 @@ use App\Http\Controllers\PhpController;
 use App\Http\Controllers\NginxController;
 use App\Http\Controllers\SslController;
 use App\Http\Controllers\DatabaseController;
+use App\Http\Controllers\EmailController;
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -113,5 +114,25 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/phpmyadmin/access', [DatabaseController::class, 'getPhpMyAdminUrl'])->name('phpmyadmin.access');
         Route::get('/phpmyadmin/signon/{token}', [DatabaseController::class, 'phpMyAdminSignon'])->name('phpmyadmin.signon');
         Route::get('/phpmyadmin-view', [DatabaseController::class, 'phpMyAdminView'])->name('phpmyadmin.view');
+    });
+
+    // Email Management routes
+    Route::prefix('email')->name('email.')->group(function () {
+        Route::get('/', [EmailController::class, 'index'])->name('index');
+        Route::get('/status', [EmailController::class, 'getStatus'])->name('status');
+        Route::post('/install', [EmailController::class, 'installMailServer'])->name('install');
+        Route::get('/domains', [EmailController::class, 'getDomains'])->name('domains');
+        Route::post('/domain/enable', [EmailController::class, 'enableDomain'])->name('domain.enable');
+        Route::post('/domain/disable', [EmailController::class, 'disableDomain'])->name('domain.disable');
+        Route::get('/accounts', [EmailController::class, 'getAccounts'])->name('accounts');
+        Route::post('/account/create', [EmailController::class, 'createAccount'])->name('account.create');
+        Route::post('/account/delete', [EmailController::class, 'deleteAccount'])->name('account.delete');
+        Route::post('/account/password', [EmailController::class, 'updatePassword'])->name('account.password');
+        Route::post('/account/quota', [EmailController::class, 'updateQuota'])->name('account.quota');
+        Route::get('/aliases', [EmailController::class, 'getAliases'])->name('aliases');
+        Route::post('/alias/create', [EmailController::class, 'createAlias'])->name('alias.create');
+        Route::post('/alias/delete', [EmailController::class, 'deleteAlias'])->name('alias.delete');
+        Route::get('/webmail', [EmailController::class, 'getWebmailUrl'])->name('webmail');
+        Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
     });
 });

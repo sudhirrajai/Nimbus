@@ -119,16 +119,9 @@
         </li>
 
         <li class="nav-item">
-          <Link href="/email-accounts" class="nav-link" :class="isActive('/email-accounts')">
+          <Link href="/email" class="nav-link" :class="isActive('/email')">
             <i class="material-symbols-rounded opacity-5">email</i>
             <span class="nav-link-text ms-1">Email Accounts</span>
-          </Link>
-        </li>
-
-        <li class="nav-item">
-          <Link href="/email-forwarders" class="nav-link" :class="isActive('/email-forwarders')">
-            <i class="material-symbols-rounded opacity-5">forward_to_inbox</i>
-            <span class="nav-link-text ms-1">Forwarders</span>
           </Link>
         </li>
 
