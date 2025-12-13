@@ -107,21 +107,33 @@ class EmailController extends Controller
 
 export DEBIAN_FRONTEND=noninteractive
 
+# Function to wait for apt locks
+wait_for_apt() {
+    while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+        echo "Waiting for other apt process to finish..."
+        sleep 2
+    done
+}
+
 echo "[1/8] Updating package list..."
+wait_for_apt
 sudo apt-get update 2>&1
 
 echo ""
 echo "[2/8] Installing Postfix..."
+wait_for_apt
 echo "postfix postfix/mailname string {$hostname}" | sudo debconf-set-selections
 echo "postfix postfix/main_mailer_type string 'Internet Site'" | sudo debconf-set-selections
 sudo apt-get install -y postfix postfix-mysql 2>&1
 
 echo ""
 echo "[3/8] Installing Dovecot..."
+wait_for_apt
 sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
 
 echo ""
 echo "[4/8] Installing Roundcube..."
+wait_for_apt
 sudo apt-get install -y roundcube roundcube-mysql 2>&1
 
 echo ""
