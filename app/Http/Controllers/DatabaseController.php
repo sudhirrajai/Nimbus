@@ -631,22 +631,25 @@ class DatabaseController extends Controller
      */
     private function configurePhpMyAdminNginx()
     {
-        $config = <<<'NGINX'
+        // Detect PHP version dynamically
+        $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+        
+        $config = <<<NGINX
 # phpMyAdmin configuration
 location /phpmyadmin {
     alias /usr/share/phpmyadmin;
     index index.php;
-    
+
     location ~ ^/phpmyadmin/(.+\.php)$ {
-        alias /usr/share/phpmyadmin/$1;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        alias /usr/share/phpmyadmin/\$1;
+        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
         fastcgi_index index.php;
         include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $request_filename;
+        fastcgi_param SCRIPT_FILENAME \$request_filename;
     }
-    
+
     location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
-        alias /usr/share/phpmyadmin/$1;
+        alias /usr/share/phpmyadmin/\$1;
     }
 }
 NGINX;
@@ -659,16 +662,21 @@ NGINX;
         $this->executeSudoCommand("mv {$tempPath} {$snippetPath}");
         $this->executeSudoCommand("chmod 644 {$snippetPath}");
 
+        // Create snippets directory if not exists
+        $this->executeSudoCommand("mkdir -p /etc/nginx/snippets");
+
         // Add include to Nimbus nginx config if not already present
         $nimbusConfig = '/etc/nginx/sites-available/nimbus';
         if (file_exists($nimbusConfig)) {
-            $output = [];
-            exec("sudo grep -l 'phpmyadmin.conf' {$nimbusConfig} 2>&1", $output);
-            if (empty($output)) {
+            $content = file_get_contents($nimbusConfig);
+            if (strpos($content, 'phpmyadmin.conf') === false) {
                 // Add include before the last closing brace
-                $this->executeSudoCommand("sudo sed -i '/^}/i\\    include snippets/phpmyadmin.conf;' {$nimbusConfig}");
+                $this->executeSudoCommand("sed -i '/^}/i\\    include snippets/phpmyadmin.conf;' {$nimbusConfig}");
             }
         }
+        
+        // Reload nginx
+        $this->executeSudoCommand("nginx -t && systemctl reload nginx");
     }
 
     /**

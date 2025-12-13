@@ -133,48 +133,65 @@ class UpdateController extends Controller
             file_put_contents($logFile, "Update started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
             
-            // Update script
+            // Update script - uses sudo and detects PHP version
             $script = <<<'BASH'
 #!/bin/bash
+set -e
 cd /usr/local/nimbus
 
+# Detect PHP version
+PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
+echo "Detected PHP version: $PHP_VERSION"
+
+echo ""
 echo "Backing up current version..."
-cp -r . /tmp/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+sudo cp -r /usr/local/nimbus /tmp/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+
+echo ""
+echo "Ensuring required PHP extensions are installed..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq php${PHP_VERSION}-xml php${PHP_VERSION}-dom php${PHP_VERSION}-mysql php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl 2>&1 || true
 
 echo ""
 echo "Stashing local changes..."
-git stash 2>&1 || true
+sudo git stash 2>&1 || true
 
 echo ""
 echo "Pulling latest changes from main branch..."
-git fetch origin main 2>&1
-git reset --hard origin/main 2>&1
+sudo git fetch origin main 2>&1
+sudo git reset --hard origin/main 2>&1
 
 echo ""
 echo "Installing composer dependencies..."
-composer install --no-dev --optimize-autoloader 2>&1
+sudo COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction 2>&1
 
 echo ""
 echo "Running database migrations..."
-php artisan migrate --force 2>&1
+sudo php artisan migrate --force 2>&1
 
 echo ""
 echo "Clearing caches..."
-php artisan config:clear 2>&1
-php artisan cache:clear 2>&1
-php artisan view:clear 2>&1
-php artisan route:clear 2>&1
+sudo php artisan config:clear 2>&1
+sudo php artisan cache:clear 2>&1 || true
+sudo php artisan view:clear 2>&1
+sudo php artisan route:clear 2>&1
 
 echo ""
 echo "Building frontend assets..."
-npm install 2>&1
-npm run build 2>&1
+sudo npm install 2>&1
+sudo npm run build 2>&1
 
 echo ""
 echo "Setting permissions..."
-chown -R www-data:www-data /usr/local/nimbus
-chmod -R 755 /usr/local/nimbus/storage
-chmod -R 755 /usr/local/nimbus/bootstrap/cache
+sudo chown -R www-data:www-data /usr/local/nimbus
+sudo chmod -R 775 /usr/local/nimbus/storage
+sudo chmod -R 775 /usr/local/nimbus/bootstrap/cache
+sudo touch /usr/local/nimbus/storage/logs/laravel.log
+sudo chown www-data:www-data /usr/local/nimbus/storage/logs/laravel.log
+
+echo ""
+echo "Restarting PHP-FPM..."
+sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
 
 echo ""
 echo "Update completed successfully!"
