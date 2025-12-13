@@ -193,8 +193,8 @@
 </template>
 
 <script setup>
-import { Link, usePage } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { Link, usePage, router } from '@inertiajs/vue3'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 const page = usePage()
 
@@ -217,8 +217,26 @@ const closeSidebar = () => {
     document.body.classList.remove('g-sidenav-pinned')
     const sidenav = document.getElementById('sidenav-main')
     sidenav?.classList.remove('show-mobile')
+    document.body.style.overflow = ''
   }
 }
+
+// Close sidebar on navigation (fixes scroll issue)
+let removeListener = null
+
+onMounted(() => {
+  removeListener = router.on('navigate', () => {
+    closeSidebar()
+    // Extra safety: ensure body overflow is reset
+    document.body.style.overflow = ''
+  })
+})
+
+onUnmounted(() => {
+  if (removeListener) {
+    removeListener()
+  }
+})
 </script>
 
 <style scoped>
