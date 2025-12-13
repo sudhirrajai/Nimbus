@@ -141,9 +141,13 @@ wait_for_apt
 # PHP version detected by Nimbus: {$phpVersion}
 echo "Using PHP version: {$phpVersion}"
 
+# Preseed roundcube to skip interactive prompts
+echo "roundcube-core roundcube/dbconfig-install boolean false" | sudo debconf-set-selections
+echo "roundcube-core roundcube/reconfigure-webserver multiselect none" | sudo debconf-set-selections
+
 # Install roundcube-core to avoid Apache dependency, use nginx instead
 # Use version-specific PHP packages to avoid changing PHP version
-sudo apt-get install -y roundcube-core roundcube-mysql 2>&1
+sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y roundcube-core roundcube-mysql 2>&1
 # Only install missing extensions for current PHP, don't install php-fpm (already have it)
 sudo apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip 2>&1 || true
 

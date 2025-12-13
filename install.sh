@@ -258,6 +258,11 @@ chown ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}/storage/logs/laravel.log
 # Make artisan executable
 chmod +x ${NIMBUS_DIR}/artisan
 
+# Setup /var/www/ directory for hosting websites
+mkdir -p /var/www
+chown -R ${NIMBUS_USER}:${NIMBUS_USER} /var/www
+chmod -R 755 /var/www
+
 # Setup sudoers for www-data (required for server management)
 # NOPASSWD: ALL - panel needs full system access to manage server
 tee /etc/sudoers.d/nimbus > /dev/null << 'EOF'
