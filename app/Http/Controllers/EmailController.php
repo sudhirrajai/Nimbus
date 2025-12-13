@@ -182,6 +182,29 @@ echo "[7/8] Configuring Dovecot..."
 sudo tee /etc/dovecot/conf.d/10-mail.conf > /dev/null << 'EOF'
 mail_location = maildir:/var/mail/vhosts/%d/%n
 mail_privileged_group = mail
+
+namespace inbox {
+  inbox = yes
+  location = 
+  mailbox Drafts {
+    special_use = \Drafts
+  }
+  mailbox Junk {
+    special_use = \Junk
+  }
+  mailbox Sent {
+    special_use = \Sent
+    auto = subscribe
+  }
+  mailbox "Sent Messages" {
+    special_use = \Sent
+  }
+  mailbox Trash {
+    special_use = \Trash
+    auto = subscribe
+  }
+  prefix = 
+}
 EOF
 
 sudo tee /etc/dovecot/conf.d/10-auth.conf > /dev/null << 'EOF'
