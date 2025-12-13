@@ -149,7 +149,7 @@
         </li>
 
         <li class="nav-item">
-          <Link href="/resource-usage" class="nav-link" :class="isActive('/resource-usage')">
+          <Link href="/resources" class="nav-link" :class="isActive('/resources')">
             <i class="material-symbols-rounded opacity-5">monitoring</i>
             <span class="nav-link-text ms-1">Resource Usage</span>
           </Link>

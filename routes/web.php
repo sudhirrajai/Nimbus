@@ -174,4 +174,19 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/run', [CronController::class, 'runNow'])->name('run');
         Route::post('/describe', [CronController::class, 'describeSchedule'])->name('describe');
     });
+
+    // Logs routes
+    Route::prefix('logs')->name('logs.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\LogsController::class, 'index'])->name('index');
+        Route::get('/files', [\App\Http\Controllers\LogsController::class, 'getLogFiles'])->name('files');
+        Route::get('/read', [\App\Http\Controllers\LogsController::class, 'readLog'])->name('read');
+        Route::post('/clear', [\App\Http\Controllers\LogsController::class, 'clearLog'])->name('clear');
+        Route::get('/download', [\App\Http\Controllers\LogsController::class, 'downloadLog'])->name('download');
+    });
+
+    // Resource usage routes
+    Route::prefix('resources')->name('resources.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ResourceController::class, 'index'])->name('index');
+        Route::get('/usage', [\App\Http\Controllers\ResourceController::class, 'getUsage'])->name('usage');
+    });
 });
