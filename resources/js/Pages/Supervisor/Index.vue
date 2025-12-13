@@ -180,7 +180,7 @@
                                                 </td>
                                                 <td>
                                                     <span :class="getStatusBadge(process.status)">{{ process.status
-                                                    }}</span>
+                                                        }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="text-sm">{{ process.pid || '-' }}</span>
@@ -242,52 +242,90 @@
                         <div class="modal-body">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Process Name</label>
+                                    <label class="form-label fw-bold">Worker Name</label>
                                     <input type="text" class="form-control" v-model="newProcess.name"
-                                        placeholder="my-worker" :readonly="isEditing">
+                                        placeholder="mysite-worker" :readonly="isEditing">
                                     <small v-if="isEditing" class="text-muted">Name cannot be changed</small>
-                                    <small v-else class="text-muted">Alphanumeric and dashes only</small>
+                                    <small v-else class="text-muted">Unique identifier for this worker</small>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">User</label>
-                                    <select class="form-control form-select" v-model="newProcess.user">
-                                        <option value="">Select user...</option>
-                                        <option v-for="user in systemUsers" :key="user.username" :value="user.username">
-                                            {{ user.username }} (UID: {{ user.uid }})
-                                        </option>
-                                    </select>
+                                    <label class="form-label fw-bold">Project Folder</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">/var/www/</span>
+                                        <input type="text" class="form-control" v-model="newProcess.project"
+                                            placeholder="mysite.com">
+                                    </div>
+                                    <small class="text-muted">Project directory name</small>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Command</label>
-                                <input type="text" class="form-control" v-model="newProcess.command"
-                                    placeholder="php /path/to/artisan queue:work">
+
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label fw-bold">Workers</label>
+                                    <input type="number" class="form-control" v-model="newProcess.numprocs" min="1"
+                                        max="10">
+                                    <small class="text-muted">Number of workers</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label fw-bold">Sleep (sec)</label>
+                                    <input type="number" class="form-control" v-model="newProcess.sleep" min="1"
+                                        max="60">
+                                    <small class="text-muted">Wait between jobs</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label fw-bold">Tries</label>
+                                    <input type="number" class="form-control" v-model="newProcess.tries" min="1"
+                                        max="10">
+                                    <small class="text-muted">Max retry attempts</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label fw-bold">Timeout (sec)</label>
+                                    <input type="number" class="form-control" v-model="newProcess.timeout" min="30"
+                                        max="3600">
+                                    <small class="text-muted">Job timeout</small>
+                                </div>
                             </div>
+
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Working Directory</label>
-                                <input type="text" class="form-control" v-model="newProcess.directory"
-                                    placeholder="/usr/local/nimbus">
+                                <label class="form-label fw-bold">Log File</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">/var/www/{{ newProcess.project || 'mysite.com'
+                                    }}/</span>
+                                    <input type="text" class="form-control" v-model="newProcess.logfile"
+                                        placeholder="worker.log">
+                                </div>
+                                <small class="text-muted">Where to save worker logs</small>
                             </div>
+
                             <div class="row">
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label fw-bold">Number of Processes</label>
-                                    <input type="number" class="form-control" v-model="newProcess.numprocs" min="1"
-                                        max="100">
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <div class="form-check mt-4">
+                                    <div class="form-check">
                                         <input class="form-check-input" type="checkbox" v-model="newProcess.autostart"
                                             id="autostart">
-                                        <label class="form-check-label" for="autostart">Auto Start</label>
+                                        <label class="form-check-label" for="autostart">
+                                            <strong>Auto Start</strong><br>
+                                            <small class="text-muted">Start on system boot</small>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <div class="form-check mt-4">
+                                    <div class="form-check">
                                         <input class="form-check-input" type="checkbox" v-model="newProcess.autorestart"
                                             id="autorestart">
-                                        <label class="form-check-label" for="autorestart">Auto Restart</label>
+                                        <label class="form-check-label" for="autorestart">
+                                            <strong>Auto Restart</strong><br>
+                                            <small class="text-muted">Restart on crash</small>
+                                        </label>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Command Preview -->
+                            <div class="alert alert-secondary py-2 mb-0">
+                                <small class="fw-bold">Command Preview:</small><br>
+                                <code class="text-xs">/usr/bin/php /var/www/{{ newProcess.project || 'mysite.com' }}/artisan
+                        queue:work --sleep={{ newProcess.sleep }} --tries={{ newProcess.tries }} --timeout={{
+                            newProcess.timeout }}</code>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -296,13 +334,31 @@
                             <button type="button" class="btn bg-gradient-primary" @click="saveProcess"
                                 :disabled="creating">
                                 <span v-if="creating" class="spinner-border spinner-border-sm me-2"></span>
-                                {{ creating ? 'Saving...' : (isEditing ? 'Update Process' : 'Create Process') }}
+                                {{ creating ? 'Saving...' : (isEditing ? 'Update Worker' : 'Create Worker') }}
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
             <div v-if="showCreateModal" class="modal-backdrop fade show"></div>
+
+            <!-- Toast Notification -->
+            <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+                <div class="toast align-items-center border-0"
+                    :class="toastType === 'success' ? 'bg-success' : 'bg-danger'"
+                    :style="showToast ? 'display: block;' : 'display: none;'" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body text-white">
+                            <i class="material-symbols-rounded me-2 text-sm">{{ toastType === 'success' ? 'check_circle'
+                                : 'error'
+                            }}</i>
+                            {{ toastMessage }}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                            @click="showToast = false"></button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Logs Modal -->
             <div class="modal fade" :class="{ show: showLogsModal }" :style="showLogsModal ? 'display: block;' : ''"
@@ -401,18 +457,26 @@ const selectedProcess = ref('')
 const logType = ref('stdout')
 const logContent = ref('')
 
+// Toast messages
+const toastMessage = ref('')
+const toastType = ref('success')
+const showToast = ref(false)
+
 // Form
 const newProcess = ref({
     name: '',
-    command: '',
-    directory: '/usr/local/nimbus',
-    user: 'www-data',
+    project: '',
     numprocs: 1,
     autostart: true,
-    autorestart: true
+    autorestart: true,
+    sleep: 3,
+    tries: 3,
+    timeout: 120,
+    stopwaitsecs: 3600,
+    logfile: ''
 })
 
-// System users for dropdown
+// System users for dropdown - not needed, always www-data
 const systemUsers = ref([])
 
 const runningCount = computed(() => processes.value.filter(p => p.status === 'RUNNING').length)
@@ -508,8 +572,9 @@ const startProcess = async (name) => {
     try {
         await axios.post('/supervisor/start', { name })
         await loadProcesses()
+        showNotification(`Started ${name}`, 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
@@ -517,8 +582,9 @@ const stopProcess = async (name) => {
     try {
         await axios.post('/supervisor/stop', { name })
         await loadProcesses()
+        showNotification(`Stopped ${name}`, 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
@@ -526,36 +592,20 @@ const restartProcess = async (name) => {
     try {
         await axios.post('/supervisor/restart', { name })
         await loadProcesses()
+        showNotification(`Restarted ${name}`, 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
-    }
-}
-
-const createProcess = async () => {
-    if (!newProcess.value.name || !newProcess.value.command) {
-        alert('Name and Command are required')
-        return
-    }
-    creating.value = true
-    try {
-        await axios.post('/supervisor/create', newProcess.value)
-        showCreateModal.value = false
-        newProcess.value = { name: '', command: '', directory: '/usr/local/nimbus', user: 'www-data', numprocs: 1, autostart: true, autorestart: true }
-        await loadProcesses()
-    } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
-    } finally {
-        creating.value = false
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
 const confirmDelete = async (name) => {
-    if (!confirm(`Delete process ${name}? This will remove the configuration.`)) return
+    if (!confirm(`Delete worker ${name}? This will remove the configuration.`)) return
     try {
         await axios.post('/supervisor/delete', { name })
         await loadProcesses()
+        showNotification(`Deleted ${name}`, 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
@@ -581,15 +631,15 @@ const reloadConfig = async () => {
     try {
         await axios.post('/supervisor/reload')
         await loadProcesses()
-        alert('Configuration reloaded')
+        showNotification('Configuration reloaded', 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
 const openCreateModal = () => {
     isEditing.value = false
-    newProcess.value = { name: '', command: '', directory: '/usr/local/nimbus', user: 'www-data', numprocs: 1, autostart: true, autorestart: true }
+    resetForm()
     showCreateModal.value = true
 }
 
@@ -602,30 +652,46 @@ const editProcess = async (name) => {
             showCreateModal.value = true
         }
     } catch (error) {
-        alert('Failed to load config: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed to load config: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
 const saveProcess = async () => {
-    if (!newProcess.value.name || !newProcess.value.command) {
-        alert('Name and Command are required')
+    if (!newProcess.value.name || !newProcess.value.project) {
+        showNotification('Worker Name and Project are required', 'error')
         return
     }
     creating.value = true
     try {
         if (isEditing.value) {
             await axios.post('/supervisor/update', newProcess.value)
+            showNotification('Worker updated successfully', 'success')
         } else {
             await axios.post('/supervisor/create', newProcess.value)
+            showNotification('Worker created successfully', 'success')
         }
         showCreateModal.value = false
-        newProcess.value = { name: '', command: '', directory: '/usr/local/nimbus', user: 'www-data', numprocs: 1, autostart: true, autorestart: true }
+        resetForm()
         isEditing.value = false
         await loadProcesses()
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     } finally {
         creating.value = false
+    }
+}
+
+const resetForm = () => {
+    newProcess.value = {
+        name: '',
+        project: '',
+        numprocs: 1,
+        autostart: true,
+        autorestart: true,
+        sleep: 3,
+        tries: 3,
+        timeout: 120,
+        logfile: 'worker.log'
     }
 }
 
@@ -633,18 +699,20 @@ const startAll = async () => {
     try {
         await axios.post('/supervisor/start-all')
         await loadProcesses()
+        showNotification('All workers started', 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
 const stopAll = async () => {
-    if (!confirm('Stop all processes?')) return
+    if (!confirm('Stop all workers?')) return
     try {
         await axios.post('/supervisor/stop-all')
         await loadProcesses()
+        showNotification('All workers stopped', 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
 }
 
@@ -652,9 +720,19 @@ const restartAll = async () => {
     try {
         await axios.post('/supervisor/restart-all')
         await loadProcesses()
+        showNotification('All workers restarted', 'success')
     } catch (error) {
-        alert('Failed: ' + (error.response?.data?.error || error.message))
+        showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
     }
+}
+
+const showNotification = (message, type = 'success') => {
+    toastMessage.value = message
+    toastType.value = type
+    showToast.value = true
+    setTimeout(() => {
+        showToast.value = false
+    }, 4000)
 }
 
 const getStatusBadge = (status) => {

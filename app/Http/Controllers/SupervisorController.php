@@ -282,38 +282,41 @@ BASH;
         try {
             $request->validate([
                 'name' => 'required|string|alpha_dash',
-                'command' => 'required|string',
-                'directory' => 'nullable|string',
-                'user' => 'nullable|string',
-                'numprocs' => 'nullable|integer|min:1|max:100',
+                'project' => 'required|string',
+                'numprocs' => 'nullable|integer|min:1|max:10',
                 'autostart' => 'nullable|boolean',
                 'autorestart' => 'nullable|boolean',
-                'stdout_logfile' => 'nullable|string',
-                'stderr_logfile' => 'nullable|string'
+                'sleep' => 'nullable|integer|min:1|max:60',
+                'tries' => 'nullable|integer|min:1|max:10',
+                'timeout' => 'nullable|integer|min:30|max:3600',
+                'logfile' => 'nullable|string'
             ]);
 
             $name = $request->input('name');
-            $command = $request->input('command');
-            $directory = $request->input('directory', '/tmp');
-            $user = $request->input('user', 'www-data');
+            $project = $request->input('project');
             $numprocs = $request->input('numprocs', 1);
             $autostart = $request->input('autostart', true) ? 'true' : 'false';
             $autorestart = $request->input('autorestart', true) ? 'true' : 'false';
-            $stdoutLog = $request->input('stdout_logfile', "/var/log/supervisor/{$name}.log");
-            $stderrLog = $request->input('stderr_logfile', "/var/log/supervisor/{$name}.error.log");
+            $sleep = $request->input('sleep', 3);
+            $tries = $request->input('tries', 3);
+            $timeout = $request->input('timeout', 120);
+            $logfile = $request->input('logfile', 'worker.log');
+            
+            $directory = "/var/www/{$project}";
+            $command = "/usr/bin/php {$directory}/artisan queue:work --sleep={$sleep} --tries={$tries} --timeout={$timeout}";
+            $stdout = "{$directory}/{$logfile}";
 
             $config = <<<CONFIG
 [program:{$name}]
+process_name=%(program_name)s_%(process_num)02d
 command={$command}
-directory={$directory}
-user={$user}
-numprocs={$numprocs}
 autostart={$autostart}
 autorestart={$autorestart}
-stdout_logfile={$stdoutLog}
-stderr_logfile={$stderrLog}
-stdout_logfile_maxbytes=10MB
-stderr_logfile_maxbytes=10MB
+user=www-data
+numprocs={$numprocs}
+redirect_stderr=true
+stdout_logfile={$stdout}
+stopwaitsecs=3600
 CONFIG;
 
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
@@ -325,7 +328,7 @@ CONFIG;
 
             return response()->json([
                 'success' => true,
-                'message' => "Process {$name} created successfully"
+                'message' => "Worker {$name} created successfully"
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -428,23 +431,35 @@ CONFIG;
             // Parse config file
             $config = [
                 'name' => $name,
-                'command' => '',
-                'directory' => '/tmp',
-                'user' => 'www-data',
+                'project' => '',
                 'numprocs' => 1,
                 'autostart' => true,
-                'autorestart' => true
+                'autorestart' => true,
+                'sleep' => 3,
+                'tries' => 3,
+                'timeout' => 120,
+                'logfile' => 'worker.log'
             ];
             
+            // Parse command to extract project and options
             if (preg_match('/command\s*=\s*(.+)$/m', $content, $m)) {
-                $config['command'] = trim($m[1]);
+                $command = trim($m[1]);
+                // Extract project from path like /var/www/project/artisan
+                if (preg_match('#/var/www/([^/]+)/#', $command, $pm)) {
+                    $config['project'] = $pm[1];
+                }
+                // Extract --sleep, --tries, --timeout
+                if (preg_match('/--sleep=(\d+)/', $command, $sm)) {
+                    $config['sleep'] = (int)$sm[1];
+                }
+                if (preg_match('/--tries=(\d+)/', $command, $tm)) {
+                    $config['tries'] = (int)$tm[1];
+                }
+                if (preg_match('/--timeout=(\d+)/', $command, $tom)) {
+                    $config['timeout'] = (int)$tom[1];
+                }
             }
-            if (preg_match('/directory\s*=\s*(.+)$/m', $content, $m)) {
-                $config['directory'] = trim($m[1]);
-            }
-            if (preg_match('/user\s*=\s*(.+)$/m', $content, $m)) {
-                $config['user'] = trim($m[1]);
-            }
+            
             if (preg_match('/numprocs\s*=\s*(\d+)/m', $content, $m)) {
                 $config['numprocs'] = (int)$m[1];
             }
@@ -453,6 +468,11 @@ CONFIG;
             }
             if (preg_match('/autorestart\s*=\s*(true|false)/m', $content, $m)) {
                 $config['autorestart'] = $m[1] === 'true';
+            }
+            if (preg_match('/stdout_logfile\s*=\s*(.+)$/m', $content, $m)) {
+                $logPath = trim($m[1]);
+                // Extract just the filename from path
+                $config['logfile'] = basename($logPath);
             }
             
             return response()->json([
@@ -472,27 +492,30 @@ CONFIG;
     {
         try {
             $name = $request->input('name');
-            $command = $request->input('command');
-            $directory = $request->input('directory', '/tmp');
-            $user = $request->input('user', 'www-data');
+            $project = $request->input('project');
             $numprocs = $request->input('numprocs', 1);
             $autostart = $request->input('autostart', true) ? 'true' : 'false';
             $autorestart = $request->input('autorestart', true) ? 'true' : 'false';
-            $stdoutLog = "/var/log/supervisor/{$name}.log";
-            $stderrLog = "/var/log/supervisor/{$name}.error.log";
+            $sleep = $request->input('sleep', 3);
+            $tries = $request->input('tries', 3);
+            $timeout = $request->input('timeout', 120);
+            $logfile = $request->input('logfile', 'worker.log');
+            
+            $directory = "/var/www/{$project}";
+            $command = "/usr/bin/php {$directory}/artisan queue:work --sleep={$sleep} --tries={$tries} --timeout={$timeout}";
+            $stdout = "{$directory}/{$logfile}";
 
             $config = <<<CONFIG
 [program:{$name}]
+process_name=%(program_name)s_%(process_num)02d
 command={$command}
-directory={$directory}
-user={$user}
-numprocs={$numprocs}
 autostart={$autostart}
 autorestart={$autorestart}
-stdout_logfile={$stdoutLog}
-stderr_logfile={$stderrLog}
-stdout_logfile_maxbytes=10MB
-stderr_logfile_maxbytes=10MB
+user=www-data
+numprocs={$numprocs}
+redirect_stderr=true
+stdout_logfile={$stdout}
+stopwaitsecs=3600
 CONFIG;
 
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
@@ -501,11 +524,11 @@ CONFIG;
             exec("sudo mv {$tempFile} {$configPath}");
             exec("sudo supervisorctl reread");
             exec("sudo supervisorctl update");
-            exec("sudo supervisorctl restart {$name} 2>/dev/null");
+            exec("sudo supervisorctl restart {$name}:* 2>/dev/null");
 
             return response()->json([
                 'success' => true,
-                'message' => "Process {$name} updated successfully"
+                'message' => "Worker {$name} updated successfully"
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
