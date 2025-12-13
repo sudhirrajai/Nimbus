@@ -82,6 +82,7 @@ apt-get install -y \
     php${PHP_VERSION}-zip \
     php${PHP_VERSION}-mbstring \
     php${PHP_VERSION}-xml \
+    php${PHP_VERSION}-dom \
     php${PHP_VERSION}-bcmath \
     php${PHP_VERSION}-intl \
     php${PHP_VERSION}-opcache \
@@ -222,18 +223,33 @@ nginx -t
 systemctl restart nginx
 
 echo -e "${GREEN}[12/12]${NC} Setting permissions..."
-# Set proper ownership
+
+# Create required directories if they don't exist
+mkdir -p ${NIMBUS_DIR}/storage/logs
+mkdir -p ${NIMBUS_DIR}/storage/framework/cache
+mkdir -p ${NIMBUS_DIR}/storage/framework/sessions
+mkdir -p ${NIMBUS_DIR}/storage/framework/views
+mkdir -p ${NIMBUS_DIR}/bootstrap/cache
+
+# Create log file with proper permissions
+touch ${NIMBUS_DIR}/storage/logs/laravel.log
+
+# Set proper ownership - www-data owns everything
 chown -R ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}
 
-# Set directory permissions
+# Set directory permissions (755 for directories)
 find ${NIMBUS_DIR} -type d -exec chmod 755 {} \;
 
-# Set file permissions
+# Set file permissions (644 for files)
 find ${NIMBUS_DIR} -type f -exec chmod 644 {} \;
 
-# Storage and cache need to be writable
+# Storage and cache need to be fully writable (775)
 chmod -R 775 ${NIMBUS_DIR}/storage
 chmod -R 775 ${NIMBUS_DIR}/bootstrap/cache
+
+# Ensure log file is writable
+chmod 664 ${NIMBUS_DIR}/storage/logs/laravel.log
+chown ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}/storage/logs/laravel.log
 
 # Make artisan executable
 chmod +x ${NIMBUS_DIR}/artisan
