@@ -512,10 +512,17 @@ BASH;
                 'updated_at' => now()
             ]);
 
-            // Create maildir
+            // Create maildir with all necessary folders
             $fullMaildir = "/var/mail/vhosts/{$domain}/{$username}";
             exec("sudo mkdir -p {$fullMaildir}/{cur,new,tmp}");
+            exec("sudo mkdir -p {$fullMaildir}/.Sent/{cur,new,tmp}");
+            exec("sudo mkdir -p {$fullMaildir}/.Drafts/{cur,new,tmp}");
+            exec("sudo mkdir -p {$fullMaildir}/.Trash/{cur,new,tmp}");
+            exec("sudo mkdir -p {$fullMaildir}/.Junk/{cur,new,tmp}");
             exec("sudo chown -R vmail:vmail {$fullMaildir}");
+
+            // Send welcome email with configuration
+            $this->sendWelcomeEmail($email, $domain);
 
             return response()->json([
                 'success' => true,
@@ -524,6 +531,87 @@ BASH;
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Send welcome email with mail client configuration
+     */
+    private function sendWelcomeEmail(string $email, string $domain): void
+    {
+        try {
+            $hostname = gethostname();
+            $date = date('r');
+            $messageId = uniqid() . "@{$domain}";
+            
+            $body = <<<EMAIL
+Welcome to your new email account!
+
+Your email address: {$email}
+
+=== Email Client Configuration ===
+
+INCOMING MAIL (IMAP)
+--------------------
+Server: {$hostname}
+Port: 993
+Security: SSL/TLS
+Username: {$email}
+
+INCOMING MAIL (POP3)
+--------------------
+Server: {$hostname}
+Port: 995
+Security: SSL/TLS
+Username: {$email}
+
+OUTGOING MAIL (SMTP)
+--------------------
+Server: {$hostname}
+Port: 587
+Security: STARTTLS
+Username: {$email}
+Authentication: Required
+
+=== Webmail Access ===
+You can also access your email via webmail at:
+https://{$hostname}/roundcube
+
+=== Tips ===
+- Use your full email address as username
+- Keep your password secure
+- Enable 2FA on your email clients if available
+
+If you have any questions, please contact your administrator.
+
+--
+This is an automated message from Nimbus Panel.
+EMAIL;
+
+            // Create the email file directly in the new folder
+            $parts = explode('@', $email);
+            $username = $parts[0];
+            $maildir = "/var/mail/vhosts/{$domain}/{$username}/new";
+            
+            $emailContent = "From: Nimbus Panel <noreply@{$domain}>\r\n";
+            $emailContent .= "To: {$email}\r\n";
+            $emailContent .= "Subject: Welcome to your new email account!\r\n";
+            $emailContent .= "Date: {$date}\r\n";
+            $emailContent .= "Message-ID: <{$messageId}>\r\n";
+            $emailContent .= "MIME-Version: 1.0\r\n";
+            $emailContent .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $emailContent .= "\r\n";
+            $emailContent .= $body;
+
+            // Write email to maildir
+            $filename = time() . '.' . uniqid() . '.' . $hostname;
+            $tempFile = "/tmp/{$filename}";
+            file_put_contents($tempFile, $emailContent);
+            exec("sudo mv {$tempFile} {$maildir}/{$filename}");
+            exec("sudo chown vmail:vmail {$maildir}/{$filename}");
+        } catch (\Exception $e) {
+            // Log but don't fail account creation
+            \Log::warning("Failed to send welcome email: " . $e->getMessage());
         }
     }
 
