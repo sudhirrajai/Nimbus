@@ -203,4 +203,23 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/data', [\App\Http\Controllers\ProfileController::class, 'getSettings'])->name('data');
         Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateSettings'])->name('update');
     });
+
+    // Backups (Coming Soon)
+    Route::get('/backups', function () {
+        return \Inertia\Inertia::render('Backups/Index');
+    })->name('backups.index');
+
+    // FTP Accounts (Coming Soon)
+    Route::get('/ftp', function () {
+        return \Inertia\Inertia::render('FTP/Index');
+    })->name('ftp.index');
+
+    // Updates routes
+    Route::prefix('updates')->name('updates.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\UpdateController::class, 'index'])->name('index');
+        Route::get('/check', [\App\Http\Controllers\UpdateController::class, 'checkForUpdates'])->name('check');
+        Route::post('/perform', [\App\Http\Controllers\UpdateController::class, 'performUpdate'])->name('perform');
+        Route::get('/status', [\App\Http\Controllers\UpdateController::class, 'getUpdateStatus'])->name('status');
+        Route::post('/force-check', [\App\Http\Controllers\UpdateController::class, 'forceCheck'])->name('force-check');
+    });
 });

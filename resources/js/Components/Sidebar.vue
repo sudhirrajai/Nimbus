@@ -176,6 +176,13 @@
           </Link>
         </li>
 
+        <li class="nav-item">
+          <Link href="/updates" class="nav-link" :class="isActive('/updates')">
+            <i class="material-symbols-rounded opacity-5">system_update</i>
+            <span class="nav-link-text ms-1">Updates</span>
+          </Link>
+        </li>
+
       </ul>
     </div>
 
