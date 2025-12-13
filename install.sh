@@ -97,14 +97,17 @@ apt-get install -y mariadb-server mariadb-client
 systemctl enable mariadb
 systemctl start mariadb
 
-# Secure MariaDB
+# Secure MariaDB - use unix_socket authentication for root (allows sudo mysql without password)
 MYSQL_ROOT_PASS=$(openssl rand -base64 24)
-mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='';"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "DROP DATABASE IF EXISTS test;"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
+
+# Configure root to use unix_socket auth (allows sudo mysql without password)
+# Also set a password for remote tools that need it
+mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket OR mysql_native_password USING PASSWORD('${MYSQL_ROOT_PASS}');"
+mysql -e "DELETE FROM mysql.user WHERE User='';"
+mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
+mysql -e "DROP DATABASE IF EXISTS test;"
+mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
+mysql -e "FLUSH PRIVILEGES;"
 
 echo -e "${GREEN}[6/12]${NC} Installing Composer..."
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
