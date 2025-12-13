@@ -161,6 +161,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/start-all', [SupervisorController::class, 'startAll'])->name('start-all');
         Route::post('/stop-all', [SupervisorController::class, 'stopAll'])->name('stop-all');
         Route::post('/restart-all', [SupervisorController::class, 'restartAll'])->name('restart-all');
+        Route::get('/projects', [SupervisorController::class, 'getProjects'])->name('projects');
     });
 
     // Cron Jobs routes

@@ -180,7 +180,7 @@
                                                 </td>
                                                 <td>
                                                     <span :class="getStatusBadge(process.status)">{{ process.status
-                                                        }}</span>
+                                                    }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="text-sm">{{ process.pid || '-' }}</span>
@@ -229,103 +229,165 @@
             <!-- Create Process Modal -->
             <div class="modal fade" :class="{ show: showCreateModal }" :style="showCreateModal ? 'display: block;' : ''"
                 tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-dialog modal-xl modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header bg-gradient-primary">
                             <h5 class="modal-title text-white">
                                 <i class="material-symbols-rounded me-2">{{ isEditing ? 'edit' : 'add_circle' }}</i>
-                                {{ isEditing ? 'Edit Process' : 'Create Supervisor Process' }}
+                                {{ isEditing ? 'Edit Queue Worker' : 'Create Queue Worker' }}
                             </h5>
                             <button type="button" class="btn-close btn-close-white"
                                 @click="showCreateModal = false"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
+                            <!-- Info Alert -->
+                            <div class="alert alert-info py-2 mb-3">
+                                <i class="material-symbols-rounded me-1 text-sm">info</i>
+                                <strong>Note:</strong> Projects are located in <code>/var/www/</code>. Select your
+                                project from the
+                                dropdown or enter a custom path.
+                            </div>
+
+                            <!-- Mode Tabs -->
+                            <ul class="nav nav-tabs mb-3">
+                                <li class="nav-item">
+                                    <a class="nav-link" :class="{ active: !manualMode }" href="#"
+                                        @click.prevent="manualMode = false">
+                                        <i class="material-symbols-rounded text-sm me-1">build</i> Builder
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" :class="{ active: manualMode }" href="#"
+                                        @click.prevent="manualMode = true">
+                                        <i class="material-symbols-rounded text-sm me-1">code</i> Manual Config
+                                    </a>
+                                </li>
+                            </ul>
+
+                            <!-- Builder Mode -->
+                            <div v-if="!manualMode" class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Worker Name</label>
+                                        <input type="text" class="form-control" v-model="newProcess.name"
+                                            placeholder="mysite-worker" :readonly="isEditing">
+                                        <small v-if="isEditing" class="text-muted">Name cannot be changed</small>
+                                        <small v-else class="text-muted">Unique identifier (e.g., mysite-worker)</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Project</label>
+                                        <select class="form-control form-select" v-model="newProcess.project">
+                                            <option value="">-- Select a project --</option>
+                                            <option v-for="proj in projects" :key="proj.name" :value="proj.name">
+                                                {{ proj.name }} {{ proj.isLaravel ? '(Laravel)' : '' }}
+                                            </option>
+                                        </select>
+                                        <small class="text-muted">Or type a custom path:</small>
+                                        <input type="text" class="form-control mt-1" v-model="newProcess.project"
+                                            placeholder="mysite.com">
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-6 mb-3">
+                                            <label class="form-label fw-bold">Workers</label>
+                                            <input type="number" class="form-control" v-model="newProcess.numprocs"
+                                                min="1" max="10">
+                                            <small class="text-muted">Parallel workers</small>
+                                        </div>
+                                        <div class="col-6 mb-3">
+                                            <label class="form-label fw-bold">Sleep (sec)</label>
+                                            <input type="number" class="form-control" v-model="newProcess.sleep" min="1"
+                                                max="60">
+                                            <small class="text-muted">Wait between jobs</small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-6 mb-3">
+                                            <label class="form-label fw-bold">Tries</label>
+                                            <input type="number" class="form-control" v-model="newProcess.tries" min="1"
+                                                max="10">
+                                            <small class="text-muted">Max retry attempts</small>
+                                        </div>
+                                        <div class="col-6 mb-3">
+                                            <label class="form-label fw-bold">Timeout (sec)</label>
+                                            <input type="number" class="form-control" v-model="newProcess.timeout"
+                                                min="30" max="3600">
+                                            <small class="text-muted">Job timeout</small>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Log File</label>
+                                        <input type="text" class="form-control" v-model="newProcess.logfile"
+                                            placeholder="worker.log">
+                                        <small class="text-muted">Saved to /var/www/{{ newProcess.project || 'project'
+                                            }}/{{
+                                                newProcess.logfile || 'worker.log' }}</small>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                    v-model="newProcess.autostart" id="autostart">
+                                                <label class="form-check-label" for="autostart">
+                                                    <strong>Auto Start</strong><br>
+                                                    <small class="text-muted">On boot</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                    v-model="newProcess.autorestart" id="autorestart">
+                                                <label class="form-check-label" for="autorestart">
+                                                    <strong>Auto Restart</strong><br>
+                                                    <small class="text-muted">On crash</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Live Config Preview -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="material-symbols-rounded text-sm me-1">preview</i>
+                                        Generated Config Preview
+                                    </label>
+                                    <pre class="config-preview">{{ generatedConfig }}</pre>
+                                    <small class="text-muted">This file will be saved to: <code>/etc/supervisor/conf.d/{{
+                                        newProcess.name || 'worker' }}.conf</code></small>
+                                </div>
+                            </div>
+
+                            <!-- Manual Mode -->
+                            <div v-else>
+                                <div class="mb-3">
                                     <label class="form-label fw-bold">Worker Name</label>
                                     <input type="text" class="form-control" v-model="newProcess.name"
                                         placeholder="mysite-worker" :readonly="isEditing">
-                                    <small v-if="isEditing" class="text-muted">Name cannot be changed</small>
-                                    <small v-else class="text-muted">Unique identifier for this worker</small>
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Project Folder</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">/var/www/</span>
-                                        <input type="text" class="form-control" v-model="newProcess.project"
-                                            placeholder="mysite.com">
-                                    </div>
-                                    <small class="text-muted">Project directory name</small>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">
+                                        <i class="material-symbols-rounded text-sm me-1">code</i>
+                                        Custom Supervisor Config
+                                    </label>
+                                    <textarea class="form-control config-editor" v-model="newProcess.rawConfig"
+                                        rows="15" placeholder="[program:myworker]
+command=/usr/bin/php /var/www/mysite/artisan queue:work
+autostart=true
+autorestart=true
+user=www-data
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/mysite/worker.log"></textarea>
+                                    <small class="text-muted">Write your complete supervisor configuration. The
+                                        [program:name]
+                                        section will use the Worker Name above.</small>
                                 </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-3 mb-3">
-                                    <label class="form-label fw-bold">Workers</label>
-                                    <input type="number" class="form-control" v-model="newProcess.numprocs" min="1"
-                                        max="10">
-                                    <small class="text-muted">Number of workers</small>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <label class="form-label fw-bold">Sleep (sec)</label>
-                                    <input type="number" class="form-control" v-model="newProcess.sleep" min="1"
-                                        max="60">
-                                    <small class="text-muted">Wait between jobs</small>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <label class="form-label fw-bold">Tries</label>
-                                    <input type="number" class="form-control" v-model="newProcess.tries" min="1"
-                                        max="10">
-                                    <small class="text-muted">Max retry attempts</small>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <label class="form-label fw-bold">Timeout (sec)</label>
-                                    <input type="number" class="form-control" v-model="newProcess.timeout" min="30"
-                                        max="3600">
-                                    <small class="text-muted">Job timeout</small>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Log File</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">/var/www/{{ newProcess.project || 'mysite.com'
-                                    }}/</span>
-                                    <input type="text" class="form-control" v-model="newProcess.logfile"
-                                        placeholder="worker.log">
-                                </div>
-                                <small class="text-muted">Where to save worker logs</small>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" v-model="newProcess.autostart"
-                                            id="autostart">
-                                        <label class="form-check-label" for="autostart">
-                                            <strong>Auto Start</strong><br>
-                                            <small class="text-muted">Start on system boot</small>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" v-model="newProcess.autorestart"
-                                            id="autorestart">
-                                        <label class="form-check-label" for="autorestart">
-                                            <strong>Auto Restart</strong><br>
-                                            <small class="text-muted">Restart on crash</small>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Command Preview -->
-                            <div class="alert alert-secondary py-2 mb-0">
-                                <small class="fw-bold">Command Preview:</small><br>
-                                <code class="text-xs">/usr/bin/php /var/www/{{ newProcess.project || 'mysite.com' }}/artisan
-                        queue:work --sleep={{ newProcess.sleep }} --tries={{ newProcess.tries }} --timeout={{
-                            newProcess.timeout }}</code>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -351,7 +413,7 @@
                         <div class="toast-body text-white">
                             <i class="material-symbols-rounded me-2 text-sm">{{ toastType === 'success' ? 'check_circle'
                                 : 'error'
-                            }}</i>
+                                }}</i>
                             {{ toastMessage }}
                         </div>
                         <button type="button" class="btn-close btn-close-white me-2 m-auto"
@@ -462,6 +524,10 @@ const toastMessage = ref('')
 const toastType = ref('success')
 const showToast = ref(false)
 
+// Projects dropdown
+const projects = ref([])
+const manualMode = ref(false)
+
 // Form
 const newProcess = ref({
     name: '',
@@ -472,8 +538,8 @@ const newProcess = ref({
     sleep: 3,
     tries: 3,
     timeout: 120,
-    stopwaitsecs: 3600,
-    logfile: ''
+    logfile: 'worker.log',
+    rawConfig: ''
 })
 
 // System users for dropdown - not needed, always www-data
@@ -482,9 +548,30 @@ const systemUsers = ref([])
 const runningCount = computed(() => processes.value.filter(p => p.status === 'RUNNING').length)
 const stoppedCount = computed(() => processes.value.filter(p => p.status !== 'RUNNING').length)
 
+// Live config preview
+const generatedConfig = computed(() => {
+    const p = newProcess.value
+    const project = p.project || 'mysite.com'
+    const name = p.name || 'worker'
+    const directory = `/var/www/${project}`
+    const command = `/usr/bin/php ${directory}/artisan queue:work --sleep=${p.sleep} --tries=${p.tries} --timeout=${p.timeout}`
+    const logfile = `${directory}/${p.logfile || 'worker.log'}`
+
+    return `[program:${name}]
+process_name=%(program_name)s_%(process_num)02d
+command=${command}
+autostart=${p.autostart ? 'true' : 'false'}
+autorestart=${p.autorestart ? 'true' : 'false'}
+user=www-data
+numprocs=${p.numprocs}
+redirect_stderr=true
+stdout_logfile=${logfile}
+stopwaitsecs=3600`
+})
+
 onMounted(async () => {
     await loadStatus()
-    await loadSystemUsers()
+    await loadProjects()
     if (status.value.installed) {
         await loadProcesses()
     }
@@ -501,6 +588,15 @@ const loadStatus = async () => {
         status.value = response.data
     } catch (error) {
         console.error('Failed to load status:', error)
+    }
+}
+
+const loadProjects = async () => {
+    try {
+        const response = await axios.get('/supervisor/projects')
+        projects.value = response.data.projects || []
+    } catch (error) {
+        console.error('Failed to load projects:', error)
     }
 }
 
@@ -691,8 +787,10 @@ const resetForm = () => {
         sleep: 3,
         tries: 3,
         timeout: 120,
-        logfile: 'worker.log'
+        logfile: 'worker.log',
+        rawConfig: ''
     }
+    manualMode.value = false
 }
 
 const startAll = async () => {
@@ -809,5 +907,36 @@ const getStatusBadge = (status) => {
     color: #344767;
     font-size: 0.875rem;
     margin-bottom: 0.5rem;
+}
+
+/* Config preview */
+.config-preview {
+    background-color: #1e1e2e;
+    color: #a6e3a1;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 16px;
+    border-radius: 8px;
+    height: 350px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+.config-editor {
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    background-color: #f8f9fa !important;
+}
+
+/* Nav tabs */
+.nav-tabs .nav-link {
+    color: #495057;
+}
+
+.nav-tabs .nav-link.active {
+    color: #e91e63;
+    font-weight: 600;
 }
 </style>

@@ -89,6 +89,41 @@ class SupervisorController extends Controller
     }
 
     /**
+     * Get list of projects in /var/www
+     */
+    public function getProjects()
+    {
+        try {
+            $projects = [];
+            $wwwPath = '/var/www';
+            
+            if (is_dir($wwwPath)) {
+                $dirs = scandir($wwwPath);
+                foreach ($dirs as $dir) {
+                    if ($dir === '.' || $dir === '..') continue;
+                    $fullPath = "{$wwwPath}/{$dir}";
+                    if (is_dir($fullPath)) {
+                        // Check if it's a Laravel project (has artisan file)
+                        $isLaravel = file_exists("{$fullPath}/artisan");
+                        $projects[] = [
+                            'name' => $dir,
+                            'path' => $fullPath,
+                            'isLaravel' => $isLaravel
+                        ];
+                    }
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'projects' => $projects
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Install supervisor
      */
     public function install()
