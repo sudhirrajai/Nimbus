@@ -210,9 +210,14 @@ const isActive = (path) => {
 }
 
 const closeSidebar = () => {
-  document.body.classList.remove('g-sidenav-pinned')
-  const sidenav = document.getElementById('sidenav-main')
-  sidenav?.classList.remove('bg-white')
+  // Use global function if available (set by navbar)
+  if (window.closeMobileSidebar) {
+    window.closeMobileSidebar()
+  } else {
+    document.body.classList.remove('g-sidenav-pinned')
+    const sidenav = document.getElementById('sidenav-main')
+    sidenav?.classList.remove('show-mobile')
+  }
 }
 </script>
 

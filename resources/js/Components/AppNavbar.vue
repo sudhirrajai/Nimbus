@@ -7,7 +7,7 @@
       <!-- Mobile menu toggle button -->
       <div class="d-xl-none">
         <a href="#" class="nav-link text-body p-0" @click.prevent="toggleSidebar">
-          <i class="material-symbols-rounded text-dark">menu</i>
+          <i class="material-symbols-rounded text-dark" style="font-size: 28px;">menu</i>
         </a>
       </div>
 
@@ -61,30 +61,50 @@
       </div>
     </div>
   </nav>
+  
+  <!-- Mobile sidebar overlay -->
+  <div 
+    v-if="sidebarOpen" 
+    class="sidenav-overlay" 
+    @click="closeSidebar"
+  ></div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 
 const page = usePage()
+const sidebarOpen = ref(false)
 
 const userName = computed(() => {
   return page.props.auth?.user?.name || 'Admin'
 })
 
 const toggleSidebar = () => {
-  const body = document.body
+  sidebarOpen.value = !sidebarOpen.value
   const sidenav = document.getElementById('sidenav-main')
   
-  if (body.classList.contains('g-sidenav-pinned')) {
-    body.classList.remove('g-sidenav-pinned')
-    sidenav?.classList.remove('bg-white')
+  if (sidebarOpen.value) {
+    sidenav?.classList.add('show-mobile')
+    document.body.style.overflow = 'hidden'
   } else {
-    body.classList.add('g-sidenav-pinned')
-    sidenav?.classList.add('bg-white')
+    sidenav?.classList.remove('show-mobile')
+    document.body.style.overflow = ''
   }
 }
+
+const closeSidebar = () => {
+  sidebarOpen.value = false
+  const sidenav = document.getElementById('sidenav-main')
+  sidenav?.classList.remove('show-mobile')
+  document.body.style.overflow = ''
+}
+
+// Expose closeSidebar globally so sidebar can call it
+onMounted(() => {
+  window.closeMobileSidebar = closeSidebar
+})
 
 const logout = () => {
   router.post('/logout')
@@ -110,4 +130,30 @@ const logout = () => {
 .dropdown-item.text-danger:hover {
   background-color: #fee2e2;
 }
+
+.sidenav-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1039;
+}
 </style>
+
+<style>
+/* Global styles for mobile sidebar */
+@media (max-width: 1199.98px) {
+  #sidenav-main {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  #sidenav-main.show-mobile {
+    transform: translateX(0);
+    z-index: 1040;
+  }
+}
+</style>
+
