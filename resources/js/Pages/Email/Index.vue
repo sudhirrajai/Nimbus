@@ -207,6 +207,10 @@
                             <span class="badge bg-gradient-success">Active</span>
                           </td>
                           <td>
+                            <button class="btn btn-link text-primary p-1" title="SMTP/IMAP Settings"
+                              @click="showSmtpSettings(account)">
+                              <i class="material-symbols-rounded">tune</i>
+                            </button>
                             <button class="btn btn-link text-info p-1" title="Webmail"
                               @click="openWebmail(account.email)">
                               <i class="material-symbols-rounded">open_in_new</i>
@@ -521,6 +525,164 @@
       </div>
       <div v-if="showChangePasswordModal" class="modal-backdrop fade show"></div>
 
+      <!-- SMTP/IMAP Settings Modal -->
+      <div class="modal fade" :class="{ show: showSmtpModal }" :style="showSmtpModal ? 'display: block;' : ''"
+        tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header bg-gradient-dark">
+              <h5 class="modal-title text-white">
+                <i class="material-symbols-rounded me-2">settings</i>
+                Email Configuration: {{ selectedAccountForSettings?.email }}
+              </h5>
+              <button type="button" class="btn-close btn-close-white" @click="showSmtpModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <div class="row">
+                <!-- IMAP Settings -->
+                <div class="col-md-6 mb-4">
+                  <div class="card bg-gray-100 h-100">
+                    <div class="card-body">
+                      <h6 class="text-uppercase text-xs font-weight-bolder text-primary mb-3">
+                        <i class="material-symbols-rounded text-sm me-1">inbox</i>
+                        Incoming Mail (IMAP)
+                      </h6>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Host:</span>
+                        <code class="ms-2">{{ mailHost }}</code>
+                        <button class="btn btn-link btn-sm p-0 ms-2" @click="copyToClipboard(mailHost)">
+                          <i class="material-symbols-rounded text-xs">content_copy</i>
+                        </button>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Port:</span>
+                        <code class="ms-2">993</code>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Security:</span>
+                        <span class="badge bg-success ms-2">SSL/TLS</span>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Username:</span>
+                        <code class="ms-2">{{ selectedAccountForSettings?.email }}</code>
+                        <button class="btn btn-link btn-sm p-0 ms-2"
+                          @click="copyToClipboard(selectedAccountForSettings?.email)">
+                          <i class="material-symbols-rounded text-xs">content_copy</i>
+                        </button>
+                      </div>
+                      <div class="settings-row">
+                        <span class="fw-bold">Password:</span>
+                        <span class="ms-2 text-muted">Your email password</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SMTP Settings -->
+                <div class="col-md-6 mb-4">
+                  <div class="card bg-gray-100 h-100">
+                    <div class="card-body">
+                      <h6 class="text-uppercase text-xs font-weight-bolder text-info mb-3">
+                        <i class="material-symbols-rounded text-sm me-1">send</i>
+                        Outgoing Mail (SMTP)
+                      </h6>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Host:</span>
+                        <code class="ms-2">{{ mailHost }}</code>
+                        <button class="btn btn-link btn-sm p-0 ms-2" @click="copyToClipboard(mailHost)">
+                          <i class="material-symbols-rounded text-xs">content_copy</i>
+                        </button>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Port:</span>
+                        <code class="ms-2">587</code>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Security:</span>
+                        <span class="badge bg-warning ms-2">STARTTLS</span>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Username:</span>
+                        <code class="ms-2">{{ selectedAccountForSettings?.email }}</code>
+                        <button class="btn btn-link btn-sm p-0 ms-2"
+                          @click="copyToClipboard(selectedAccountForSettings?.email)">
+                          <i class="material-symbols-rounded text-xs">content_copy</i>
+                        </button>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Password:</span>
+                        <span class="ms-2 text-muted">Your email password</span>
+                      </div>
+                      <div class="settings-row">
+                        <span class="fw-bold">Auth:</span>
+                        <span class="badge bg-primary ms-2">Required</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- POP3 Settings -->
+                <div class="col-md-6">
+                  <div class="card bg-gray-100">
+                    <div class="card-body">
+                      <h6 class="text-uppercase text-xs font-weight-bolder text-secondary mb-3">
+                        <i class="material-symbols-rounded text-sm me-1">download</i>
+                        Incoming Mail (POP3)
+                      </h6>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Host:</span>
+                        <code class="ms-2">{{ mailHost }}</code>
+                      </div>
+                      <div class="settings-row mb-2">
+                        <span class="fw-bold">Port:</span>
+                        <code class="ms-2">995</code>
+                      </div>
+                      <div class="settings-row">
+                        <span class="fw-bold">Security:</span>
+                        <span class="badge bg-success ms-2">SSL/TLS</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Webmail -->
+                <div class="col-md-6">
+                  <div class="card bg-gray-100">
+                    <div class="card-body">
+                      <h6 class="text-uppercase text-xs font-weight-bolder text-dark mb-3">
+                        <i class="material-symbols-rounded text-sm me-1">web</i>
+                        Webmail Access
+                      </h6>
+                      <p class="mb-2">Access your email from any browser:</p>
+                      <code>https://{{ mailHost }}/roundcube</code>
+                      <button class="btn btn-link btn-sm p-0 ms-2"
+                        @click="copyToClipboard('https://' + mailHost + '/roundcube')">
+                        <i class="material-symbols-rounded text-xs">content_copy</i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert alert-info mt-3 mb-0">
+                <i class="material-symbols-rounded me-2">info</i>
+                <strong>Tip:</strong> Use your full email address ({{ selectedAccountForSettings?.email }}) as the
+                username in
+                all email clients.
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-primary" @click="copyAllSettings">
+                <i class="material-symbols-rounded text-sm me-1">content_copy</i>
+                Copy All Settings
+              </button>
+              <button type="button" class="btn btn-secondary" @click="showSmtpModal = false">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-if="showSmtpModal" class="modal-backdrop fade show"></div>
+
       <!-- Terminal Modal -->
       <div class="modal fade" :class="{ show: showTerminalModal }" :style="showTerminalModal ? 'display: block;' : ''"
         tabindex="-1">
@@ -590,6 +752,11 @@ const newAlias = ref({ source: '', destination: '' })
 const selectedAccount = ref(null)
 const showPassword = ref(false)
 const newPassword = ref('')
+
+// SMTP Settings Modal
+const showSmtpModal = ref(false)
+const selectedAccountForSettings = ref(null)
+const mailHost = ref(window.location.hostname)
 
 onMounted(async () => {
   await loadStatus()
@@ -813,6 +980,58 @@ const openWebmail = async (email) => {
 const formatDate = (date) => {
   if (!date) return ''
   return new Date(date).toLocaleDateString()
+}
+
+const showSmtpSettings = (account) => {
+  selectedAccountForSettings.value = account
+  showSmtpModal.value = true
+}
+
+const copyToClipboard = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    // Could add a toast notification here
+  } catch (err) {
+    console.error('Failed to copy:', err)
+  }
+}
+
+const copyAllSettings = async () => {
+  const email = selectedAccountForSettings.value?.email
+  const settings = `
+Email Configuration for: ${email}
+================================
+
+INCOMING MAIL (IMAP)
+--------------------
+Host: ${mailHost.value}
+Port: 993
+Security: SSL/TLS
+Username: ${email}
+Password: Your email password
+
+INCOMING MAIL (POP3)
+--------------------
+Host: ${mailHost.value}
+Port: 995
+Security: SSL/TLS
+Username: ${email}
+
+OUTGOING MAIL (SMTP)
+--------------------
+Host: ${mailHost.value}
+Port: 587
+Security: STARTTLS
+Username: ${email}
+Password: Your email password
+Authentication: Required
+
+WEBMAIL ACCESS
+--------------
+URL: https://${mailHost.value}/roundcube
+`
+  await copyToClipboard(settings.trim())
+  alert('Settings copied to clipboard!')
 }
 </script>
 
