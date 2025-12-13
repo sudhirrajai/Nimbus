@@ -23,27 +23,30 @@
         </div>
 
         <ul class="navbar-nav d-flex align-items-center justify-content-end">
-          <!-- User dropdown -->
-          <li class="nav-item dropdown pe-3">
+          <!-- User dropdown - Vue controlled -->
+          <li class="nav-item dropdown pe-3" ref="dropdownRef">
             <a
               href="#"
               class="nav-link text-body p-0 d-flex align-items-center"
-              id="dropdownUser"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
+              @click.prevent="toggleDropdown"
             >
               <i class="material-symbols-rounded">account_circle</i>
               <span class="d-sm-inline d-none ms-1 text-dark text-sm">{{ userName }}</span>
+              <i class="material-symbols-rounded ms-1 text-sm">expand_more</i>
             </a>
-            <ul class="dropdown-menu dropdown-menu-end px-2 py-3" aria-labelledby="dropdownUser">
+            <ul 
+              class="dropdown-menu dropdown-menu-end px-2 py-3" 
+              :class="{ 'show': dropdownOpen }"
+              :style="dropdownOpen ? 'display: block;' : ''"
+            >
               <li>
-                <a class="dropdown-item border-radius-md" href="/profile">
+                <a class="dropdown-item border-radius-md" href="/profile" @click="closeDropdown">
                   <i class="material-symbols-rounded me-2 text-sm">person</i>
                   Profile
                 </a>
               </li>
               <li>
-                <a class="dropdown-item border-radius-md" href="/settings">
+                <a class="dropdown-item border-radius-md" href="/settings" @click="closeDropdown">
                   <i class="material-symbols-rounded me-2 text-sm">settings</i>
                   Settings
                 </a>
@@ -71,14 +74,40 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 
 const page = usePage()
 const sidebarOpen = ref(false)
+const dropdownOpen = ref(false)
+const dropdownRef = ref(null)
 
 const userName = computed(() => {
   return page.props.auth?.user?.name || 'Admin'
+})
+
+const toggleDropdown = () => {
+  dropdownOpen.value = !dropdownOpen.value
+}
+
+const closeDropdown = () => {
+  dropdownOpen.value = false
+}
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
+    closeDropdown()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+  window.closeMobileSidebar = closeSidebar
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 const toggleSidebar = () => {
@@ -101,12 +130,8 @@ const closeSidebar = () => {
   document.body.style.overflow = ''
 }
 
-// Expose closeSidebar globally so sidebar can call it
-onMounted(() => {
-  window.closeMobileSidebar = closeSidebar
-})
-
 const logout = () => {
+  closeDropdown()
   router.post('/logout')
 }
 </script>
@@ -115,6 +140,10 @@ const logout = () => {
 .dropdown-menu {
   min-width: 180px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 8px;
 }
 
 .dropdown-item {
@@ -156,4 +185,3 @@ const logout = () => {
   }
 }
 </style>
-
