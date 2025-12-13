@@ -156,6 +156,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/logs', [SupervisorController::class, 'viewLogs'])->name('logs');
         Route::post('/reload', [SupervisorController::class, 'reloadConfig'])->name('reload');
         Route::get('/users', [SupervisorController::class, 'getSystemUsers'])->name('users');
+        Route::get('/config', [SupervisorController::class, 'getProcessConfig'])->name('config');
+        Route::post('/update', [SupervisorController::class, 'updateProcess'])->name('update');
+        Route::post('/start-all', [SupervisorController::class, 'startAll'])->name('start-all');
+        Route::post('/stop-all', [SupervisorController::class, 'stopAll'])->name('stop-all');
+        Route::post('/restart-all', [SupervisorController::class, 'restartAll'])->name('restart-all');
     });
 
     // Cron Jobs routes

@@ -409,4 +409,154 @@ CONFIG;
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Get process configuration
+     */
+    public function getProcessConfig(Request $request)
+    {
+        try {
+            $name = $request->input('name');
+            $configPath = "/etc/supervisor/conf.d/{$name}.conf";
+            
+            if (!file_exists($configPath)) {
+                return response()->json(['error' => 'Configuration not found'], 404);
+            }
+            
+            $content = file_get_contents($configPath);
+            
+            // Parse config file
+            $config = [
+                'name' => $name,
+                'command' => '',
+                'directory' => '/tmp',
+                'user' => 'www-data',
+                'numprocs' => 1,
+                'autostart' => true,
+                'autorestart' => true
+            ];
+            
+            if (preg_match('/command\s*=\s*(.+)$/m', $content, $m)) {
+                $config['command'] = trim($m[1]);
+            }
+            if (preg_match('/directory\s*=\s*(.+)$/m', $content, $m)) {
+                $config['directory'] = trim($m[1]);
+            }
+            if (preg_match('/user\s*=\s*(.+)$/m', $content, $m)) {
+                $config['user'] = trim($m[1]);
+            }
+            if (preg_match('/numprocs\s*=\s*(\d+)/m', $content, $m)) {
+                $config['numprocs'] = (int)$m[1];
+            }
+            if (preg_match('/autostart\s*=\s*(true|false)/m', $content, $m)) {
+                $config['autostart'] = $m[1] === 'true';
+            }
+            if (preg_match('/autorestart\s*=\s*(true|false)/m', $content, $m)) {
+                $config['autorestart'] = $m[1] === 'true';
+            }
+            
+            return response()->json([
+                'success' => true,
+                'config' => $config,
+                'raw' => $content
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Update process configuration
+     */
+    public function updateProcess(Request $request)
+    {
+        try {
+            $name = $request->input('name');
+            $command = $request->input('command');
+            $directory = $request->input('directory', '/tmp');
+            $user = $request->input('user', 'www-data');
+            $numprocs = $request->input('numprocs', 1);
+            $autostart = $request->input('autostart', true) ? 'true' : 'false';
+            $autorestart = $request->input('autorestart', true) ? 'true' : 'false';
+            $stdoutLog = "/var/log/supervisor/{$name}.log";
+            $stderrLog = "/var/log/supervisor/{$name}.error.log";
+
+            $config = <<<CONFIG
+[program:{$name}]
+command={$command}
+directory={$directory}
+user={$user}
+numprocs={$numprocs}
+autostart={$autostart}
+autorestart={$autorestart}
+stdout_logfile={$stdoutLog}
+stderr_logfile={$stderrLog}
+stdout_logfile_maxbytes=10MB
+stderr_logfile_maxbytes=10MB
+CONFIG;
+
+            $configPath = "/etc/supervisor/conf.d/{$name}.conf";
+            $tempFile = "/tmp/{$name}.conf";
+            file_put_contents($tempFile, $config);
+            exec("sudo mv {$tempFile} {$configPath}");
+            exec("sudo supervisorctl reread");
+            exec("sudo supervisorctl update");
+            exec("sudo supervisorctl restart {$name} 2>/dev/null");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Process {$name} updated successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Start all processes
+     */
+    public function startAll()
+    {
+        try {
+            exec("sudo supervisorctl start all 2>&1", $output, $code);
+            return response()->json([
+                'success' => $code === 0,
+                'message' => implode("\n", $output)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Stop all processes
+     */
+    public function stopAll()
+    {
+        try {
+            exec("sudo supervisorctl stop all 2>&1", $output, $code);
+            return response()->json([
+                'success' => $code === 0,
+                'message' => implode("\n", $output)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Restart all processes
+     */
+    public function restartAll()
+    {
+        try {
+            exec("sudo supervisorctl restart all 2>&1", $output, $code);
+            return response()->json([
+                'success' => $code === 0,
+                'message' => implode("\n", $output)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

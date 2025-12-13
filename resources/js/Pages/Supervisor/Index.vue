@@ -113,12 +113,27 @@
                         <div class="card">
                             <div class="card-header pb-0 d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0">Supervisor Processes</h6>
-                                <div>
-                                    <button class="btn btn-sm btn-outline-primary me-2" @click="reloadConfig">
-                                        <i class="material-symbols-rounded text-sm me-1">refresh</i>
-                                        Reload Config
+                                <div class="d-flex gap-2">
+                                    <!-- Bulk Actions -->
+                                    <div class="btn-group" v-if="processes.length > 0">
+                                        <button class="btn btn-sm btn-outline-success" @click="startAll"
+                                            title="Start All">
+                                            <i class="material-symbols-rounded text-sm">play_arrow</i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning" @click="stopAll"
+                                            title="Stop All">
+                                            <i class="material-symbols-rounded text-sm">stop</i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-info" @click="restartAll"
+                                            title="Restart All">
+                                            <i class="material-symbols-rounded text-sm">refresh</i>
+                                        </button>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary" @click="reloadConfig">
+                                        <i class="material-symbols-rounded text-sm me-1">sync</i>
+                                        Reload
                                     </button>
-                                    <button class="btn btn-sm bg-gradient-primary" @click="showCreateModal = true">
+                                    <button class="btn btn-sm bg-gradient-primary" @click="openCreateModal">
                                         <i class="material-symbols-rounded text-sm me-1">add</i>
                                         New Process
                                     </button>
@@ -165,7 +180,7 @@
                                                 </td>
                                                 <td>
                                                     <span :class="getStatusBadge(process.status)">{{ process.status
-                                                        }}</span>
+                                                    }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="text-sm">{{ process.pid || '-' }}</span>
@@ -192,6 +207,10 @@
                                                         @click="openLogs(process.name)">
                                                         <i class="material-symbols-rounded">description</i>
                                                     </button>
+                                                    <button class="btn btn-link text-secondary p-1" title="Edit"
+                                                        @click="editProcess(process.name)">
+                                                        <i class="material-symbols-rounded">edit</i>
+                                                    </button>
                                                     <button class="btn btn-link text-danger p-1" title="Delete"
                                                         @click="confirmDelete(process.name)">
                                                         <i class="material-symbols-rounded">delete</i>
@@ -214,8 +233,8 @@
                     <div class="modal-content">
                         <div class="modal-header bg-gradient-primary">
                             <h5 class="modal-title text-white">
-                                <i class="material-symbols-rounded me-2">add_circle</i>
-                                Create Supervisor Process
+                                <i class="material-symbols-rounded me-2">{{ isEditing ? 'edit' : 'add_circle' }}</i>
+                                {{ isEditing ? 'Edit Process' : 'Create Supervisor Process' }}
                             </h5>
                             <button type="button" class="btn-close btn-close-white"
                                 @click="showCreateModal = false"></button>
@@ -225,8 +244,9 @@
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">Process Name</label>
                                     <input type="text" class="form-control" v-model="newProcess.name"
-                                        placeholder="my-worker">
-                                    <small class="text-muted">Alphanumeric and dashes only</small>
+                                        placeholder="my-worker" :readonly="isEditing">
+                                    <small v-if="isEditing" class="text-muted">Name cannot be changed</small>
+                                    <small v-else class="text-muted">Alphanumeric and dashes only</small>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">User</label>
@@ -273,10 +293,10 @@
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary"
                                 @click="showCreateModal = false">Cancel</button>
-                            <button type="button" class="btn bg-gradient-primary" @click="createProcess"
+                            <button type="button" class="btn bg-gradient-primary" @click="saveProcess"
                                 :disabled="creating">
                                 <span v-if="creating" class="spinner-border spinner-border-sm me-2"></span>
-                                {{ creating ? 'Creating...' : 'Create Process' }}
+                                {{ creating ? 'Saving...' : (isEditing ? 'Update Process' : 'Create Process') }}
                             </button>
                         </div>
                     </div>
@@ -362,6 +382,7 @@ import axios from 'axios'
 const loading = ref(true)
 const installing = ref(false)
 const creating = ref(false)
+const isEditing = ref(false)
 const status = ref({ installed: false, running: false })
 const processes = ref([])
 
@@ -561,6 +582,76 @@ const reloadConfig = async () => {
         await axios.post('/supervisor/reload')
         await loadProcesses()
         alert('Configuration reloaded')
+    } catch (error) {
+        alert('Failed: ' + (error.response?.data?.error || error.message))
+    }
+}
+
+const openCreateModal = () => {
+    isEditing.value = false
+    newProcess.value = { name: '', command: '', directory: '/usr/local/nimbus', user: 'www-data', numprocs: 1, autostart: true, autorestart: true }
+    showCreateModal.value = true
+}
+
+const editProcess = async (name) => {
+    try {
+        const response = await axios.get('/supervisor/config', { params: { name } })
+        if (response.data.success) {
+            newProcess.value = response.data.config
+            isEditing.value = true
+            showCreateModal.value = true
+        }
+    } catch (error) {
+        alert('Failed to load config: ' + (error.response?.data?.error || error.message))
+    }
+}
+
+const saveProcess = async () => {
+    if (!newProcess.value.name || !newProcess.value.command) {
+        alert('Name and Command are required')
+        return
+    }
+    creating.value = true
+    try {
+        if (isEditing.value) {
+            await axios.post('/supervisor/update', newProcess.value)
+        } else {
+            await axios.post('/supervisor/create', newProcess.value)
+        }
+        showCreateModal.value = false
+        newProcess.value = { name: '', command: '', directory: '/usr/local/nimbus', user: 'www-data', numprocs: 1, autostart: true, autorestart: true }
+        isEditing.value = false
+        await loadProcesses()
+    } catch (error) {
+        alert('Failed: ' + (error.response?.data?.error || error.message))
+    } finally {
+        creating.value = false
+    }
+}
+
+const startAll = async () => {
+    try {
+        await axios.post('/supervisor/start-all')
+        await loadProcesses()
+    } catch (error) {
+        alert('Failed: ' + (error.response?.data?.error || error.message))
+    }
+}
+
+const stopAll = async () => {
+    if (!confirm('Stop all processes?')) return
+    try {
+        await axios.post('/supervisor/stop-all')
+        await loadProcesses()
+    } catch (error) {
+        alert('Failed: ' + (error.response?.data?.error || error.message))
+    }
+}
+
+const restartAll = async () => {
+    try {
+        await axios.post('/supervisor/restart-all')
+        await loadProcesses()
     } catch (error) {
         alert('Failed: ' + (error.response?.data?.error || error.message))
     }
