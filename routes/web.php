@@ -135,5 +135,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/alias/delete', [EmailController::class, 'deleteAlias'])->name('alias.delete');
         Route::get('/webmail', [EmailController::class, 'getWebmailUrl'])->name('webmail');
         Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
+        Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
     });
 });

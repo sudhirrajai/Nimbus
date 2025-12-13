@@ -352,37 +352,86 @@
       <!-- Create Account Modal -->
       <div class="modal fade" :class="{ show: showCreateAccountModal }"
         :style="showCreateAccountModal ? 'display: block;' : ''" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Create Email Account</h5>
-              <button type="button" class="btn-close" @click="showCreateAccountModal = false"></button>
+            <div class="modal-header bg-gradient-primary">
+              <h5 class="modal-title text-white">
+                <i class="material-symbols-rounded me-2">person_add</i>
+                Create Email Account
+              </h5>
+              <button type="button" class="btn-close btn-close-white" @click="showCreateAccountModal = false"></button>
             </div>
             <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label">Email Address</label>
+              <!-- Domain Selection -->
+              <div class="mb-4">
+                <label class="form-label fw-bold">
+                  <i class="material-symbols-rounded text-sm me-1">dns</i>
+                  Select Domain
+                </label>
+                <select class="form-select form-select-lg" v-model="newAccount.domain">
+                  <option value="">-- Choose a domain --</option>
+                  <option v-for="d in domains" :key="d.id" :value="d.name">{{ d.name }}</option>
+                </select>
+                <small class="text-muted" v-if="domains.length === 0">
+                  No domains enabled. Go to Domains tab to enable one first.
+                </small>
+              </div>
+
+              <!-- Username -->
+              <div class="mb-4">
+                <label class="form-label fw-bold">
+                  <i class="material-symbols-rounded text-sm me-1">person</i>
+                  Username
+                </label>
+                <div class="input-group input-group-lg">
+                  <input type="text" class="form-control" v-model="newAccount.username" placeholder="john.doe"
+                    @input="newAccount.username = newAccount.username.toLowerCase()">
+                  <span class="input-group-text bg-light">@{{ newAccount.domain || 'domain.com' }}</span>
+                </div>
+                <small class="text-muted">Only lowercase letters, numbers, dots and hyphens allowed</small>
+              </div>
+
+              <!-- Email Preview -->
+              <div class="alert alert-info py-2 mb-4" v-if="newAccount.username && newAccount.domain">
+                <i class="material-symbols-rounded text-sm me-1">mail</i>
+                Email will be: <strong>{{ newAccount.username }}@{{ newAccount.domain }}</strong>
+              </div>
+
+              <!-- Password -->
+              <div class="mb-4">
+                <label class="form-label fw-bold">
+                  <i class="material-symbols-rounded text-sm me-1">key</i>
+                  Password
+                </label>
                 <div class="input-group">
-                  <input type="text" class="form-control" v-model="newAccount.username" placeholder="username">
-                  <span class="input-group-text">@</span>
-                  <select class="form-select" v-model="newAccount.domain">
-                    <option value="">Select domain</option>
-                    <option v-for="d in domains" :key="d.id" :value="d.name">{{ d.name }}</option>
-                  </select>
+                  <input :type="showPassword ? 'text' : 'password'" class="form-control form-control-lg"
+                    v-model="newAccount.password" placeholder="Minimum 8 characters">
+                  <button class="btn btn-outline-secondary" type="button" @click="showPassword = !showPassword">
+                    <i class="material-symbols-rounded">{{ showPassword ? 'visibility_off' : 'visibility' }}</i>
+                  </button>
                 </div>
               </div>
+
+              <!-- Quota -->
               <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-control" v-model="newAccount.password"
-                  placeholder="Minimum 8 characters">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Quota (MB)</label>
-                <input type="number" class="form-control" v-model="newAccount.quota" min="10" max="10240">
+                <label class="form-label fw-bold">
+                  <i class="material-symbols-rounded text-sm me-1">storage</i>
+                  Mailbox Quota
+                </label>
+                <div class="input-group">
+                  <input type="number" class="form-control" v-model="newAccount.quota" min="10" max="10240">
+                  <span class="input-group-text">MB</span>
+                </div>
+                <small class="text-muted">Maximum storage for this mailbox (10 MB - 10 GB)</small>
               </div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" @click="showCreateAccountModal = false">Cancel</button>
-              <button type="button" class="btn bg-gradient-primary" @click="createAccount" :disabled="creatingAccount">
+              <button type="button" class="btn btn-outline-secondary" @click="showCreateAccountModal = false">
+                Cancel
+              </button>
+              <button type="button" class="btn bg-gradient-primary" @click="createAccount"
+                :disabled="creatingAccount || !newAccount.username || !newAccount.domain || !newAccount.password">
+                <span v-if="creatingAccount" class="spinner-border spinner-border-sm me-2"></span>
                 {{ creatingAccount ? 'Creating...' : 'Create Account' }}
               </button>
             </div>
@@ -539,6 +588,7 @@ const newAccount = ref({ username: '', domain: '', password: '', quota: 1024 })
 const newDomain = ref('')
 const newAlias = ref({ source: '', destination: '' })
 const selectedAccount = ref(null)
+const showPassword = ref(false)
 const newPassword = ref('')
 
 onMounted(async () => {

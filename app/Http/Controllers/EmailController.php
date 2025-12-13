@@ -746,4 +746,88 @@ BASH;
         $salt = '$6$' . substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./'), 0, 16) . '$';
         return '{SHA512-CRYPT}' . crypt($password, $salt);
     }
+
+    /**
+     * Configure Roundcube in Nginx
+     */
+    public function configureRoundcube()
+    {
+        try {
+            // Check if Roundcube is installed
+            $roundcubePath = '/var/lib/roundcube';
+            if (!is_dir($roundcubePath)) {
+                $roundcubePath = '/usr/share/roundcube';
+            }
+
+            if (!is_dir($roundcubePath)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Roundcube is not installed'
+                ], 400);
+            }
+
+            // Nginx config for Roundcube
+            $nginxConfig = <<<'CONFIG'
+# Roundcube Webmail
+location /roundcube {
+    alias /var/lib/roundcube/public_html;
+    index index.php;
+    
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass unix:/var/run/php/php-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $request_filename;
+        fastcgi_intercept_errors on;
+    }
+    
+    location ~ /\. {
+        deny all;
+    }
+}
+CONFIG;
+
+            // Find the nimbus nginx config and add roundcube
+            $nimbusConfig = '/etc/nginx/sites-available/nimbus';
+            if (file_exists($nimbusConfig)) {
+                $currentConfig = file_get_contents($nimbusConfig);
+                
+                // Check if already configured
+                if (strpos($currentConfig, 'location /roundcube') === false) {
+                    // Find the last closing brace and insert before it
+                    $lastBrace = strrpos($currentConfig, '}');
+                    $newConfig = substr($currentConfig, 0, $lastBrace) . "\n    " . 
+                                 str_replace("\n", "\n    ", trim($nginxConfig)) . 
+                                 "\n" . substr($currentConfig, $lastBrace);
+                    
+                    // Write config
+                    $tempFile = '/tmp/nimbus_nginx.conf';
+                    file_put_contents($tempFile, $newConfig);
+                    exec("sudo mv {$tempFile} {$nimbusConfig}");
+                    
+                    // Test and reload nginx
+                    exec('sudo nginx -t 2>&1', $output, $code);
+                    if ($code !== 0) {
+                        return response()->json([
+                            'success' => false,
+                            'error' => 'Nginx config test failed',
+                            'details' => implode("\n", $output)
+                        ], 500);
+                    }
+                    
+                    exec('sudo systemctl reload nginx');
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Roundcube configured successfully',
+                'url' => '/roundcube'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
