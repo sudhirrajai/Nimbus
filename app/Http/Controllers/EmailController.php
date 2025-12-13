@@ -132,9 +132,17 @@ wait_for_apt
 sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
 
 echo ""
-echo "[4/8] Installing Roundcube..."
+echo "[4/8] Installing Roundcube (without Apache)..."
 wait_for_apt
-sudo apt-get install -y roundcube roundcube-mysql 2>&1
+# Install roundcube-core to avoid Apache dependency, use nginx instead
+sudo apt-get install -y roundcube-core roundcube-mysql php-fpm php-mysql php-xml php-mbstring php-intl php-zip php-gd php-curl 2>&1
+
+# Stop and disable Apache2 if it was installed as a dependency
+if systemctl is-active --quiet apache2 2>/dev/null; then
+    echo "Stopping Apache2 (we use Nginx instead)..."
+    sudo systemctl stop apache2
+    sudo systemctl disable apache2
+fi
 
 echo ""
 echo "[5/8] Creating mail directories..."
