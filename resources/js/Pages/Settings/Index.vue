@@ -192,8 +192,8 @@ const settings = ref({
 })
 
 const saving = ref(false)
-const laravelVersion = ref('11.x')
-const phpVersion = ref('8.1')
+const laravelVersion = ref('12.x')
+const phpVersion = ref('8.2')
 
 // Toast
 const showToast = ref(false)
