@@ -698,13 +698,62 @@ BASH;
     }
 
     /**
-     * Get webmail URL
+     * Get webmail URL (for general access)
      */
     public function getWebmailUrl()
     {
         return response()->json([
             'url' => '/roundcube'
         ]);
+    }
+
+    /**
+     * Generate SSO token for Roundcube auto-login
+     */
+    public function webmailLogin(Request $request)
+    {
+        try {
+            $request->validate([
+                'email' => 'required|email'
+            ]);
+
+            $email = $request->input('email');
+            
+            // Check if email exists
+            $user = DB::table('virtual_users')->where('email', $email)->first();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Email account not found'
+                ], 404);
+            }
+
+            // Generate one-time token
+            $token = \Illuminate\Support\Str::random(64);
+            
+            // Store token with email (expires in 60 seconds)
+            $tokenFile = storage_path("app/roundcube_tokens/{$token}.json");
+            $tokenDir = dirname($tokenFile);
+            if (!is_dir($tokenDir)) {
+                mkdir($tokenDir, 0755, true);
+            }
+            
+            file_put_contents($tokenFile, json_encode([
+                'email' => $email,
+                'created_at' => time(),
+                'expires_at' => time() + 60
+            ]));
+
+            return response()->json([
+                'success' => true,
+                'url' => "/roundcube/sso.php?token={$token}"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

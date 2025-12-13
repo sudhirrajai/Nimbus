@@ -795,8 +795,19 @@ const deleteAlias = async (id) => {
   }
 }
 
-const openWebmail = (email) => {
-  window.open('/roundcube', '_blank')
+const openWebmail = async (email) => {
+  try {
+    const response = await axios.post('/email/webmail-login', { email })
+    if (response.data.success) {
+      window.open(response.data.url, '_blank')
+    } else {
+      // Fallback to regular roundcube
+      window.open('/roundcube', '_blank')
+    }
+  } catch (error) {
+    // Fallback to regular roundcube
+    window.open('/roundcube', '_blank')
+  }
 }
 
 const formatDate = (date) => {
