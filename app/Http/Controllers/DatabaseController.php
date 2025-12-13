@@ -330,17 +330,19 @@ class DatabaseController extends Controller
             $password = $request->input('password');
             $host = $request->input('host', 'localhost');
 
-            // Check if user exists
-            $exists = DB::select("SELECT User FROM mysql.user WHERE User = ? AND Host = ?", [$username, $host]);
-            if (!empty($exists)) {
+            // Check if user exists using sudo mysql
+            $output = [];
+            exec("sudo mysql -N -e \"SELECT User FROM mysql.user WHERE User = '{$username}' AND Host = '{$host}'\" 2>&1", $output, $code);
+            if (!empty($output) && $code === 0 && trim($output[0]) !== '') {
                 return response()->json(['error' => 'User already exists'], 400);
             }
 
-            // Create user - use raw SQL with proper escaping (DDL doesn't support prepared statements)
-            $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            $escapedPass = $this->escapeString($password);
-            DB::statement("CREATE USER {$escapedUser}@{$escapedHost} IDENTIFIED BY {$escapedPass}");
+            // Create user using sudo mysql
+            exec("sudo mysql -e \"CREATE USER '{$username}'@'{$host}' IDENTIFIED BY '{$password}'\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to create user: " . implode("\n", $output));
+            }
 
             return response()->json([
                 'message' => "User '{$username}'@'{$host}' created successfully",
@@ -372,9 +374,13 @@ class DatabaseController extends Controller
                 return response()->json(['error' => 'Cannot delete root user'], 403);
             }
 
-            $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            DB::statement("DROP USER IF EXISTS {$escapedUser}@{$escapedHost}");
+            // Delete user using sudo mysql
+            $output = [];
+            exec("sudo mysql -e \"DROP USER IF EXISTS '{$username}'@'{$host}'\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to delete user: " . implode("\n", $output));
+            }
 
             return response()->json([
                 'message' => "User '{$username}'@'{$host}' deleted successfully"
@@ -413,11 +419,15 @@ class DatabaseController extends Controller
 
             $privilegeStr = implode(', ', $privileges);
             
-            // Grant privileges
-            $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO {$escapedUser}@{$escapedHost}");
-            DB::statement("FLUSH PRIVILEGES");
+            // Grant privileges using sudo mysql
+            $output = [];
+            exec("sudo mysql -e \"GRANT {$privilegeStr} ON \`{$database}\`.* TO '{$username}'@'{$host}'\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to grant privileges: " . implode("\n", $output));
+            }
+            
+            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
 
             return response()->json([
                 'message' => "User '{$username}' assigned to database '{$database}' with privileges: " . $privilegeStr
@@ -584,16 +594,29 @@ class DatabaseController extends Controller
     public function getUsers()
     {
         try {
-            $users = DB::select("SELECT User, Host FROM mysql.user WHERE User != '' AND User NOT LIKE 'mysql.%'");
+            // Use sudo mysql to query mysql.user table (nimbus user doesn't have permission)
+            $output = [];
+            exec("sudo mysql -N -e \"SELECT User, Host FROM mysql.user WHERE User != '' AND User NOT LIKE 'mysql.%'\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to query users: " . implode("\n", $output));
+            }
             
             $result = [];
-            foreach ($users as $user) {
-                if ($user->User === 'root' || $user->User === 'debian-sys-maint') continue;
-                
-                $result[] = [
-                    'username' => $user->User,
-                    'host' => $user->Host
-                ];
+            foreach ($output as $line) {
+                $parts = preg_split('/\s+/', trim($line));
+                if (count($parts) >= 2) {
+                    $username = $parts[0];
+                    $host = $parts[1];
+                    
+                    // Skip system users
+                    if ($username === 'root' || $username === 'debian-sys-maint' || $username === 'mariadb.sys') continue;
+                    
+                    $result[] = [
+                        'username' => $username,
+                        'host' => $host
+                    ];
+                }
             }
 
             return response()->json(['users' => $result]);
