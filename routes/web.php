@@ -155,6 +155,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/delete', [SupervisorController::class, 'deleteProcess'])->name('delete');
         Route::get('/logs', [SupervisorController::class, 'viewLogs'])->name('logs');
         Route::post('/reload', [SupervisorController::class, 'reloadConfig'])->name('reload');
+        Route::get('/users', [SupervisorController::class, 'getSystemUsers'])->name('users');
     });
 
     // Cron Jobs routes

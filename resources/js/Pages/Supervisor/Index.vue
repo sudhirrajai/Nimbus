@@ -165,7 +165,7 @@
                                                 </td>
                                                 <td>
                                                     <span :class="getStatusBadge(process.status)">{{ process.status
-                                                    }}</span>
+                                                        }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="text-sm">{{ process.pid || '-' }}</span>
@@ -230,8 +230,12 @@
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">User</label>
-                                    <input type="text" class="form-control" v-model="newProcess.user"
-                                        placeholder="www-data">
+                                    <select class="form-control form-select" v-model="newProcess.user">
+                                        <option value="">Select user...</option>
+                                        <option v-for="user in systemUsers" :key="user.username" :value="user.username">
+                                            {{ user.username }} (UID: {{ user.uid }})
+                                        </option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -387,11 +391,15 @@ const newProcess = ref({
     autorestart: true
 })
 
+// System users for dropdown
+const systemUsers = ref([])
+
 const runningCount = computed(() => processes.value.filter(p => p.status === 'RUNNING').length)
 const stoppedCount = computed(() => processes.value.filter(p => p.status !== 'RUNNING').length)
 
 onMounted(async () => {
     await loadStatus()
+    await loadSystemUsers()
     if (status.value.installed) {
         await loadProcesses()
     }
@@ -408,6 +416,15 @@ const loadStatus = async () => {
         status.value = response.data
     } catch (error) {
         console.error('Failed to load status:', error)
+    }
+}
+
+const loadSystemUsers = async () => {
+    try {
+        const response = await axios.get('/supervisor/users')
+        systemUsers.value = response.data.users || []
+    } catch (error) {
+        console.error('Failed to load users:', error)
     }
 }
 

@@ -36,6 +36,59 @@ class SupervisorController extends Controller
     }
 
     /**
+     * Get list of system users suitable for running processes
+     */
+    public function getSystemUsers()
+    {
+        try {
+            $users = [];
+            
+            // Read /etc/passwd and filter regular users
+            $passwd = file_get_contents('/etc/passwd');
+            $lines = explode("\n", $passwd);
+            
+            foreach ($lines as $line) {
+                if (empty($line)) continue;
+                
+                $parts = explode(':', $line);
+                if (count($parts) < 7) continue;
+                
+                $username = $parts[0];
+                $uid = (int)$parts[2];
+                $shell = $parts[6];
+                
+                // Include:
+                // - Regular users (UID >= 1000)
+                // - www-data (commonly used for web apps)
+                // - root (for system processes)
+                // - users with valid shells
+                $validShells = ['/bin/bash', '/bin/sh', '/bin/zsh', '/usr/bin/bash', '/usr/bin/zsh'];
+                
+                if ($uid >= 1000 || $username === 'www-data' || $username === 'root') {
+                    if ($username === 'nobody' || str_contains($shell, 'nologin') || str_contains($shell, 'false')) {
+                        continue;
+                    }
+                    
+                    $users[] = [
+                        'username' => $username,
+                        'uid' => $uid
+                    ];
+                }
+            }
+            
+            // Sort by username
+            usort($users, fn($a, $b) => strcmp($a['username'], $b['username']));
+            
+            return response()->json([
+                'success' => true,
+                'users' => $users
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Install supervisor
      */
     public function install()
