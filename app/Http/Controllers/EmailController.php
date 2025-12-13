@@ -134,8 +134,16 @@ sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd d
 echo ""
 echo "[4/8] Installing Roundcube (without Apache)..."
 wait_for_apt
+
+# Detect current PHP version to avoid installing different version
+PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
+echo "Using current PHP version: $PHP_VERSION"
+
 # Install roundcube-core to avoid Apache dependency, use nginx instead
-sudo apt-get install -y roundcube-core roundcube-mysql php-fpm php-mysql php-xml php-mbstring php-intl php-zip php-gd php-curl 2>&1
+# Use version-specific PHP packages to avoid changing PHP version
+sudo apt-get install -y roundcube-core roundcube-mysql 2>&1
+# Only install missing extensions for current PHP, don't install php-fpm (already have it)
+sudo apt-get install -y php${PHP_VERSION}-intl php${PHP_VERSION}-zip 2>&1 || true
 
 # Stop and disable Apache2 if it was installed as a dependency
 if systemctl is-active --quiet apache2 2>/dev/null; then
