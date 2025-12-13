@@ -65,7 +65,7 @@
         </li>
 
         <li class="nav-item">
-          <Link href="/cron-jobs" class="nav-link" :class="isActive('/cron-jobs')">
+          <Link href="/cron" class="nav-link" :class="isActive('/cron')">
             <i class="material-symbols-rounded opacity-5">schedule</i>
             <span class="nav-link-text ms-1">Cron Jobs</span>
           </Link>

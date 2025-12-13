@@ -223,7 +223,7 @@
                             <div class="mb-3">
                                 <label class="form-label fw-bold">Command</label>
                                 <input type="text" class="form-control" v-model="form.command"
-                                    placeholder="php /usr/local/nimbus/artisan schedule:run">
+                                    placeholder="php /var/www/yoursite/artisan schedule:run">
                                 <small class="text-muted">Full path to command or script</small>
                             </div>
 
@@ -232,11 +232,11 @@
                                 <label class="form-label">Common Commands</label>
                                 <div class="d-flex flex-wrap gap-2">
                                     <button class="btn btn-sm btn-outline-secondary"
-                                        @click="form.command = 'php /usr/local/nimbus/artisan schedule:run >> /dev/null 2>&1'">
+                                        @click="form.command = 'php /var/www/yoursite/artisan schedule:run >> /dev/null 2>&1'">
                                         Laravel Scheduler
                                     </button>
                                     <button class="btn btn-sm btn-outline-secondary"
-                                        @click="form.command = 'php /usr/local/nimbus/artisan queue:work --stop-when-empty >> /dev/null 2>&1'">
+                                        @click="form.command = 'php /var/www/yoursite/artisan queue:work --stop-when-empty >> /dev/null 2>&1'">
                                         Queue Worker
                                     </button>
                                     <button class="btn btn-sm btn-outline-secondary"
