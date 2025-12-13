@@ -17,7 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             SetPanelAuthCookie::class,
         ]);
+        
+        // Redirect unauthenticated users to login
+        $middleware->redirectGuestsTo('/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();
+
