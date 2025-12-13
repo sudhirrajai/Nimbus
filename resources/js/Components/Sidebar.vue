@@ -45,7 +45,7 @@
         </li>
 
         <li class="nav-item">
-          <Link href="/database" class="nav-link" :class="isActive('/databases')">
+          <Link href="/database" class="nav-link" :class="isActive('/database')">
             <i class="material-symbols-rounded opacity-5">storage</i>
             <span class="nav-link-text ms-1">Databases</span>
           </Link>
