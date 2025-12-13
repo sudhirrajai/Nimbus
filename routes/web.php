@@ -104,6 +104,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
         Route::post('/install-phpmyadmin', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-phpmyadmin');
         Route::post('/reinstall-phpmyadmin', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-phpmyadmin');
+        Route::get('/install-status', [DatabaseController::class, 'getInstallStatus'])->name('install-status');
         Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');
         Route::get('/list', [DatabaseController::class, 'getDatabases'])->name('list');
         Route::get('/users', [DatabaseController::class, 'getUsers'])->name('users');

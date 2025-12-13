@@ -54,15 +54,28 @@
       <div class="row" v-if="status.checked && !status.phpMyAdminInstalled">
         <div class="col-12">
           <div class="card">
-            <div class="card-body text-center py-5">
+            <div class="card-body text-center py-5" v-if="!installing">
               <i class="material-symbols-rounded text-warning" style="font-size: 4rem;">database</i>
               <h4 class="mt-3">phpMyAdmin Not Installed</h4>
               <p class="text-secondary mb-4">Install phpMyAdmin to manage your MySQL databases</p>
               <button class="btn bg-gradient-primary btn-lg" @click="installPhpMyAdmin" :disabled="installing">
-                <span v-if="installing" class="spinner-border spinner-border-sm me-2"></span>
-                <i v-else class="material-symbols-rounded text-sm me-1">download</i>
+                <i class="material-symbols-rounded text-sm me-1">download</i>
                 Install phpMyAdmin
               </button>
+            </div>
+            <!-- Terminal view during installation -->
+            <div class="card-body" v-else>
+              <h5 class="mb-3">
+                <span class="spinner-border spinner-border-sm me-2"></span>
+                Installing phpMyAdmin...
+              </h5>
+              <div class="terminal-output bg-dark text-white p-3 rounded"
+                style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
+                {{ installLog || 'Starting installation...' }}</div>
+              <div class="mt-3 text-secondary text-sm">
+                <i class="material-symbols-rounded text-sm align-middle">info</i>
+                This may take a few minutes. Please wait...
+              </div>
             </div>
           </div>
         </div>
@@ -330,7 +343,7 @@
                           }}</span>
                         <span v-if="user.privileges?.length > 3" class="text-xs text-secondary">+{{
                           user.privileges.length - 3
-                        }} more</span>
+                          }} more</span>
                       </td>
                       <td>
                         <button class="btn btn-link text-primary p-0 me-2" @click="editUserPermissions(user)"
@@ -468,6 +481,7 @@ const updatingPassword = ref(false)
 const status = ref({ checked: false, phpMyAdminInstalled: false })
 const credentials = ref(null)
 const showCredentials = ref(false)
+const installLog = ref('')
 const databases = ref([])
 const users = ref([])
 
@@ -555,13 +569,43 @@ const installPhpMyAdmin = async () => {
     status.value.phpMyAdminInstalled = true
 
     showAlert('success', response.data.message)
+
+    // Start polling for status if polling mode
+    if (response.data.polling) {
+      pollInstallStatus()
+    } else {
+      installing.value = false
+    }
   } catch (error) {
     const errMsg = error.response?.data?.error || 'Failed to install phpMyAdmin'
     const details = error.response?.data?.details || ''
     showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
     console.error('phpMyAdmin install error:', error.response?.data)
-  } finally {
     installing.value = false
+  }
+}
+
+// Poll for installation status
+const pollInstallStatus = async () => {
+  try {
+    const response = await axios.get('/database/install-status')
+    installLog.value = response.data.log
+
+    if (response.data.status === 'done') {
+      installing.value = false
+      status.value.phpMyAdminInstalled = true
+      showCredentials.value = true
+      showAlert('success', 'phpMyAdmin installed successfully!')
+    } else if (response.data.status === 'error') {
+      installing.value = false
+      showAlert('danger', 'Installation failed. Check the log for details.')
+    } else {
+      // Still running, poll again in 2 seconds
+      setTimeout(pollInstallStatus, 2000)
+    }
+  } catch (error) {
+    console.error('Poll error:', error)
+    setTimeout(pollInstallStatus, 2000)
   }
 }
 

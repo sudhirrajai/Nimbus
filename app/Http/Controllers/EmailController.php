@@ -101,6 +101,9 @@ class EmailController extends Controller
             file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
             file_put_contents($statusFile, 'running');
 
+            // Detect PHP version for roundcube extensions
+            $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+
             // Installation script
             $script = <<<BASH
 #!/bin/bash
@@ -135,15 +138,14 @@ echo ""
 echo "[4/8] Installing Roundcube (without Apache)..."
 wait_for_apt
 
-# Detect current PHP version to avoid installing different version
-PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
-echo "Using current PHP version: $PHP_VERSION"
+# PHP version detected by Nimbus: {$phpVersion}
+echo "Using PHP version: {$phpVersion}"
 
 # Install roundcube-core to avoid Apache dependency, use nginx instead
 # Use version-specific PHP packages to avoid changing PHP version
 sudo apt-get install -y roundcube-core roundcube-mysql 2>&1
 # Only install missing extensions for current PHP, don't install php-fpm (already have it)
-sudo apt-get install -y php${PHP_VERSION}-intl php${PHP_VERSION}-zip 2>&1 || true
+sudo apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip 2>&1 || true
 
 # Stop and disable Apache2 if it was installed as a dependency
 if systemctl is-active --quiet apache2 2>/dev/null; then
