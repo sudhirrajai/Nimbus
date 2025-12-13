@@ -1,15 +1,9 @@
 <template>
-  <aside
-    class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
-    id="sidenav-main"
-  >
+  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
+    id="sidenav-main">
     <div class="sidenav-header">
-      <i
-        class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
-        id="iconSidenav"
-        @click="closeSidebar"
-        style="cursor: pointer; z-index: 10;"
-      ></i>
+      <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
+        id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
 
       <a class="navbar-brand px-4 py-3 m-0" href="#">
         <span class="ms-1 text-sm text-dark font-weight-bold">Nimbus Control Panel</span>
@@ -30,9 +24,7 @@
 
         <!-- Server Management Section -->
         <li class="nav-item mt-3">
-          <h6
-            class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5"
-          >
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Server Management
           </h6>
         </li>
@@ -88,9 +80,7 @@
 
         <!-- Files & Resources Section -->
         <li class="nav-item mt-3">
-          <h6
-            class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5"
-          >
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Files & Resources
           </h6>
         </li>
@@ -111,9 +101,7 @@
 
         <!-- Email Section -->
         <li class="nav-item mt-3">
-          <h6
-            class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5"
-          >
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Email
           </h6>
         </li>
@@ -125,11 +113,30 @@
           </Link>
         </li>
 
+        <!-- Automation Section -->
+        <li class="nav-item mt-3">
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
+            Automation
+          </h6>
+        </li>
+
+        <li class="nav-item">
+          <Link href="/supervisor" class="nav-link" :class="isActive('/supervisor')">
+            <i class="material-symbols-rounded opacity-5">memory</i>
+            <span class="nav-link-text ms-1">Supervisor</span>
+          </Link>
+        </li>
+
+        <li class="nav-item">
+          <Link href="/cron" class="nav-link" :class="isActive('/cron')">
+            <i class="material-symbols-rounded opacity-5">schedule</i>
+            <span class="nav-link-text ms-1">Cron Jobs</span>
+          </Link>
+        </li>
+
         <!-- Monitoring Section -->
         <li class="nav-item mt-3">
-          <h6
-            class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5"
-          >
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Monitoring
           </h6>
         </li>
@@ -150,9 +157,7 @@
 
         <!-- Account Section -->
         <li class="nav-item mt-3">
-          <h6
-            class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5"
-          >
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Account
           </h6>
         </li>
@@ -193,12 +198,12 @@ const page = usePage()
 
 const isActive = (path) => {
   const currentPath = page.url
-  
+
   // Check if current path matches or starts with the given path
   if (currentPath === path || currentPath.startsWith(path + '/')) {
     return 'active bg-gradient-dark text-white'
   }
-  
+
   return 'text-dark'
 }
 

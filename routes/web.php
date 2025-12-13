@@ -11,6 +11,8 @@ use App\Http\Controllers\NginxController;
 use App\Http\Controllers\SslController;
 use App\Http\Controllers\DatabaseController;
 use App\Http\Controllers\EmailController;
+use App\Http\Controllers\SupervisorController;
+use App\Http\Controllers\CronController;
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -137,5 +139,32 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
         Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
         Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
+    });
+
+    // Supervisor Management routes
+    Route::prefix('supervisor')->name('supervisor.')->group(function () {
+        Route::get('/', [SupervisorController::class, 'index'])->name('index');
+        Route::get('/status', [SupervisorController::class, 'getStatus'])->name('status');
+        Route::post('/install', [SupervisorController::class, 'install'])->name('install');
+        Route::get('/install-log', [SupervisorController::class, 'getInstallLog'])->name('install-log');
+        Route::get('/processes', [SupervisorController::class, 'getProcesses'])->name('processes');
+        Route::post('/start', [SupervisorController::class, 'startProcess'])->name('start');
+        Route::post('/stop', [SupervisorController::class, 'stopProcess'])->name('stop');
+        Route::post('/restart', [SupervisorController::class, 'restartProcess'])->name('restart');
+        Route::post('/create', [SupervisorController::class, 'createProcess'])->name('create');
+        Route::post('/delete', [SupervisorController::class, 'deleteProcess'])->name('delete');
+        Route::get('/logs', [SupervisorController::class, 'viewLogs'])->name('logs');
+        Route::post('/reload', [SupervisorController::class, 'reloadConfig'])->name('reload');
+    });
+
+    // Cron Jobs routes
+    Route::prefix('cron')->name('cron.')->group(function () {
+        Route::get('/', [CronController::class, 'index'])->name('index');
+        Route::get('/jobs', [CronController::class, 'getJobs'])->name('jobs');
+        Route::post('/create', [CronController::class, 'createJob'])->name('create');
+        Route::post('/update', [CronController::class, 'updateJob'])->name('update');
+        Route::post('/delete', [CronController::class, 'deleteJob'])->name('delete');
+        Route::post('/run', [CronController::class, 'runNow'])->name('run');
+        Route::post('/describe', [CronController::class, 'describeSchedule'])->name('describe');
     });
 });
