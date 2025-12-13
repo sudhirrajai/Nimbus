@@ -144,6 +144,86 @@ class DatabaseController extends Controller
     }
 
     /**
+     * Reinstall phpMyAdmin (remove and install again)
+     */
+    public function reinstallPhpMyAdmin()
+    {
+        try {
+            $output = [];
+            
+            // Remove existing phpMyAdmin
+            exec("sudo apt-get purge -y phpmyadmin 2>&1", $output, $code);
+            exec("sudo apt-get autoremove -y 2>&1", $output, $code);
+            
+            // Remove credentials file
+            if (file_exists($this->credentialsPath)) {
+                unlink($this->credentialsPath);
+            }
+            
+            // Remove nginx config
+            $snippetPath = '/etc/nginx/snippets/phpmyadmin.conf';
+            if (file_exists($snippetPath)) {
+                $this->executeSudoCommand("rm -f {$snippetPath}");
+            }
+            
+            // Set debconf selections to avoid interactive prompts
+            exec("echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections 2>&1", $output, $code);
+            
+            // Update and reinstall
+            exec("sudo apt-get update 2>&1", $output, $code);
+            exec("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                return response()->json([
+                    'error' => 'Failed to reinstall phpMyAdmin',
+                    'details' => implode("\n", $output)
+                ], 500);
+            }
+            
+            // Generate new admin credentials
+            $adminUser = 'nimbus_admin';
+            $adminPass = Str::random(16);
+            
+            // Drop old user if exists and create new
+            exec("sudo mysql -e \"DROP USER IF EXISTS '{$adminUser}'@'localhost'\" 2>&1", $output, $code);
+            $this->createMySQLUser($adminUser, $adminPass, true);
+            
+            // Configure nginx for phpMyAdmin
+            $this->configurePhpMyAdminNginx();
+            
+            // Save credentials
+            $credentials = [
+                'username' => $adminUser,
+                'password' => $adminPass,
+                'created_at' => now()->toDateTimeString(),
+                'url' => '/phpmyadmin'
+            ];
+            
+            $credentialsDir = dirname($this->credentialsPath);
+            if (!File::exists($credentialsDir)) {
+                File::makeDirectory($credentialsDir, 0755, true);
+            }
+            File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
+            
+            // Reload nginx
+            $this->executeSudoCommand("systemctl reload nginx");
+            
+            return response()->json([
+                'message' => 'phpMyAdmin reinstalled successfully',
+                'credentials' => $credentials,
+                'showCredentials' => true
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to reinstall phpMyAdmin: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get all databases with their users
      */
     public function getDatabases()
@@ -631,22 +711,25 @@ class DatabaseController extends Controller
      */
     private function configurePhpMyAdminNginx()
     {
-        $config = <<<'NGINX'
+        // Detect PHP version dynamically
+        $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+        
+        $config = <<<NGINX
 # phpMyAdmin configuration
 location /phpmyadmin {
     alias /usr/share/phpmyadmin;
     index index.php;
-    
+
     location ~ ^/phpmyadmin/(.+\.php)$ {
-        alias /usr/share/phpmyadmin/$1;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        alias /usr/share/phpmyadmin/\$1;
+        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
         fastcgi_index index.php;
         include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $request_filename;
+        fastcgi_param SCRIPT_FILENAME \$request_filename;
     }
-    
+
     location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
-        alias /usr/share/phpmyadmin/$1;
+        alias /usr/share/phpmyadmin/\$1;
     }
 }
 NGINX;
@@ -659,16 +742,21 @@ NGINX;
         $this->executeSudoCommand("mv {$tempPath} {$snippetPath}");
         $this->executeSudoCommand("chmod 644 {$snippetPath}");
 
+        // Create snippets directory if not exists
+        $this->executeSudoCommand("mkdir -p /etc/nginx/snippets");
+
         // Add include to Nimbus nginx config if not already present
         $nimbusConfig = '/etc/nginx/sites-available/nimbus';
         if (file_exists($nimbusConfig)) {
-            $output = [];
-            exec("sudo grep -l 'phpmyadmin.conf' {$nimbusConfig} 2>&1", $output);
-            if (empty($output)) {
+            $content = file_get_contents($nimbusConfig);
+            if (strpos($content, 'phpmyadmin.conf') === false) {
                 // Add include before the last closing brace
-                $this->executeSudoCommand("sudo sed -i '/^}/i\\    include snippets/phpmyadmin.conf;' {$nimbusConfig}");
+                $this->executeSudoCommand("sed -i '/^}/i\\    include snippets/phpmyadmin.conf;' {$nimbusConfig}");
             }
         }
+        
+        // Reload nginx
+        $this->executeSudoCommand("nginx -t && systemctl reload nginx");
     }
 
     /**

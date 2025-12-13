@@ -11,6 +11,11 @@
               <p class="mb-0 text-sm">Manage MySQL databases, users, and phpMyAdmin</p>
             </div>
             <div class="d-flex gap-2" v-if="status.phpMyAdminInstalled">
+              <button class="btn btn-outline-warning mb-0" @click="reinstallPhpMyAdmin" :disabled="reinstalling">
+                <span v-if="reinstalling" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">refresh</i>
+                {{ reinstalling ? 'Reinstalling...' : 'Reinstall' }}
+              </button>
               <button class="btn btn-outline-secondary mb-0" @click="loadData" :disabled="loading">
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
@@ -114,10 +119,10 @@
               <div class="card-body">
                 <div class="mb-3">
                   <label class="form-label text-xs text-uppercase">Database Name</label>
-                  <input type="text" class="form-control" v-model="newDatabase.name" 
-                    placeholder="my_database" pattern="[a-zA-Z][a-zA-Z0-9_]*">
+                  <input type="text" class="form-control" v-model="newDatabase.name" placeholder="my_database"
+                    pattern="[a-zA-Z][a-zA-Z0-9_]*">
                 </div>
-                <button class="btn bg-gradient-primary w-100" @click="createDatabase" 
+                <button class="btn bg-gradient-primary w-100" @click="createDatabase"
                   :disabled="!newDatabase.name || creatingDb">
                   <span v-if="creatingDb" class="spinner-border spinner-border-sm me-1"></span>
                   Create Database
@@ -141,7 +146,7 @@
                   <label class="form-label text-xs text-uppercase">Password</label>
                   <input type="password" class="form-control" v-model="newUser.password" placeholder="********">
                 </div>
-                <button class="btn bg-gradient-success w-100" @click="createUser" 
+                <button class="btn bg-gradient-success w-100" @click="createUser"
                   :disabled="!newUser.username || !newUser.password || creatingUser">
                   <span v-if="creatingUser" class="spinner-border spinner-border-sm me-1"></span>
                   Create User
@@ -173,7 +178,7 @@
                     </option>
                   </select>
                 </div>
-                <button class="btn bg-gradient-info w-100" @click="showAssignModal = true" 
+                <button class="btn bg-gradient-info w-100" @click="showAssignModal = true"
                   :disabled="!assignment.database || !assignment.username">
                   Select Permissions
                 </button>
@@ -200,7 +205,8 @@
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Database</th>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Users</th>
-                        <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
+                        <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
+                          Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -216,20 +222,24 @@
                         </td>
                         <td>
                           <div v-if="db.users.length > 0">
-                            <span v-for="(user, index) in db.users" :key="user.username" class="badge bg-gradient-secondary me-1 mb-1">
+                            <span v-for="(user, index) in db.users" :key="user.username"
+                              class="badge bg-gradient-secondary me-1 mb-1">
                               {{ user.username }}
                             </span>
                           </div>
                           <span v-else class="text-xs text-secondary">No users assigned</span>
                         </td>
                         <td class="text-center">
-                          <button class="btn btn-link text-info mb-0 px-2" @click="openPhpMyAdmin(db)" title="Open in phpMyAdmin">
+                          <button class="btn btn-link text-info mb-0 px-2" @click="openPhpMyAdmin(db)"
+                            title="Open in phpMyAdmin">
                             <i class="material-symbols-rounded text-sm">open_in_new</i>
                           </button>
-                          <button class="btn btn-link text-primary mb-0 px-2" @click="manageDatabase(db)" title="Manage">
+                          <button class="btn btn-link text-primary mb-0 px-2" @click="manageDatabase(db)"
+                            title="Manage">
                             <i class="material-symbols-rounded text-sm">settings</i>
                           </button>
-                          <button class="btn btn-link text-danger mb-0 px-2" @click="confirmDeleteDb(db)" title="Delete">
+                          <button class="btn btn-link text-danger mb-0 px-2" @click="confirmDeleteDb(db)"
+                            title="Delete">
                             <i class="material-symbols-rounded text-sm">delete</i>
                           </button>
                         </td>
@@ -264,7 +274,8 @@
               <div class="row">
                 <div class="col-6" v-for="priv in availablePrivileges" :key="priv">
                   <div class="form-check">
-                    <input class="form-check-input" type="checkbox" :value="priv" v-model="assignment.privileges" :id="'priv-' + priv">
+                    <input class="form-check-input" type="checkbox" :value="priv" v-model="assignment.privileges"
+                      :id="'priv-' + priv">
                     <label class="form-check-label text-sm" :for="'priv-' + priv">{{ priv }}</label>
                   </div>
                 </div>
@@ -277,7 +288,8 @@
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" @click="showAssignModal = false">Cancel</button>
-              <button class="btn bg-gradient-success" @click="assignUser" :disabled="assignment.privileges.length === 0 || assigning">
+              <button class="btn bg-gradient-success" @click="assignUser"
+                :disabled="assignment.privileges.length === 0 || assigning">
                 <span v-if="assigning" class="spinner-border spinner-border-sm me-1"></span>
                 Assign Permissions
               </button>
@@ -313,17 +325,24 @@
                     <tr v-for="user in managingDb?.users" :key="user.username">
                       <td>{{ user.username }}@{{ user.host }}</td>
                       <td>
-                        <span v-for="priv in user.privileges?.slice(0, 3)" :key="priv" class="badge bg-secondary me-1">{{ priv }}</span>
-                        <span v-if="user.privileges?.length > 3" class="text-xs text-secondary">+{{ user.privileges.length - 3 }} more</span>
+                        <span v-for="priv in user.privileges?.slice(0, 3)" :key="priv"
+                          class="badge bg-secondary me-1">{{ priv
+                          }}</span>
+                        <span v-if="user.privileges?.length > 3" class="text-xs text-secondary">+{{
+                          user.privileges.length - 3
+                        }} more</span>
                       </td>
                       <td>
-                        <button class="btn btn-link text-primary p-0 me-2" @click="editUserPermissions(user)" title="Edit permissions">
+                        <button class="btn btn-link text-primary p-0 me-2" @click="editUserPermissions(user)"
+                          title="Edit permissions">
                           <i class="material-symbols-rounded text-sm">edit</i>
                         </button>
-                        <button class="btn btn-link text-warning p-0 me-2" @click="changeUserPassword(user)" title="Change password">
+                        <button class="btn btn-link text-warning p-0 me-2" @click="changeUserPassword(user)"
+                          title="Change password">
                           <i class="material-symbols-rounded text-sm">key</i>
                         </button>
-                        <button class="btn btn-link text-danger p-0" @click="removeUserAccess(user)" title="Remove access">
+                        <button class="btn btn-link text-danger p-0" @click="removeUserAccess(user)"
+                          title="Remove access">
                           <i class="material-symbols-rounded text-sm">person_remove</i>
                         </button>
                       </td>
@@ -360,7 +379,8 @@
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" @click="showPasswordModal = false">Cancel</button>
-              <button class="btn bg-gradient-warning" @click="updatePassword" :disabled="!newPassword || updatingPassword">
+              <button class="btn bg-gradient-warning" @click="updatePassword"
+                :disabled="!newPassword || updatingPassword">
                 <span v-if="updatingPassword" class="spinner-border spinner-border-sm me-1"></span>
                 Update Password
               </button>
@@ -438,6 +458,7 @@ import axios from 'axios'
 
 const loading = ref(false)
 const installing = ref(false)
+const reinstalling = ref(false)
 const creatingDb = ref(false)
 const creatingUser = ref(false)
 const assigning = ref(false)
@@ -494,7 +515,7 @@ const checkStatus = async () => {
     loading.value = true
     const response = await axios.get('/database/status')
     status.value = { ...response.data, checked: true }
-    
+
     if (status.value.phpMyAdminInstalled) {
       await loadData()
     }
@@ -526,13 +547,13 @@ const installPhpMyAdmin = async () => {
   try {
     installing.value = true
     showAlert('info', 'Installing phpMyAdmin... This may take a few minutes.')
-    
+
     const response = await axios.post('/database/install-phpmyadmin')
-    
+
     credentials.value = response.data.credentials
     showCredentials.value = true
     status.value.phpMyAdminInstalled = true
-    
+
     showAlert('success', response.data.message)
   } catch (error) {
     const errMsg = error.response?.data?.error || 'Failed to install phpMyAdmin'
@@ -541,6 +562,31 @@ const installPhpMyAdmin = async () => {
     console.error('phpMyAdmin install error:', error.response?.data)
   } finally {
     installing.value = false
+  }
+}
+
+const reinstallPhpMyAdmin = async () => {
+  if (!confirm('Are you sure you want to reinstall phpMyAdmin? This will remove and reinstall it with new credentials.')) {
+    return
+  }
+
+  try {
+    reinstalling.value = true
+    showAlert('info', 'Reinstalling phpMyAdmin... This may take a few minutes.')
+
+    const response = await axios.post('/database/reinstall-phpmyadmin')
+
+    credentials.value = response.data.credentials
+    showCredentials.value = true
+
+    showAlert('success', response.data.message)
+  } catch (error) {
+    const errMsg = error.response?.data?.error || 'Failed to reinstall phpMyAdmin'
+    const details = error.response?.data?.details || ''
+    showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
+    console.error('phpMyAdmin reinstall error:', error.response?.data)
+  } finally {
+    reinstalling.value = false
   }
 }
 
@@ -675,7 +721,7 @@ const openPhpMyAdmin = async (db) => {
     showAlert('warning', 'No users assigned to this database. Assign a user first.')
     return
   }
-  
+
   try {
     showAlert('info', 'Opening phpMyAdmin...')
     const response = await axios.post('/database/phpmyadmin/access', {
