@@ -93,7 +93,7 @@
         </li>
 
         <li class="nav-item">
-          <Link href="/ftp-accounts" class="nav-link" :class="isActive('/ftp-accounts')">
+          <Link href="/ftp" class="nav-link" :class="isActive('/ftp-accounts')">
             <i class="material-symbols-rounded opacity-5">cloud_upload</i>
             <span class="nav-link-text ms-1">FTP Accounts</span>
           </Link>
