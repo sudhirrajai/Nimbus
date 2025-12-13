@@ -78,6 +78,7 @@ class EmailController extends Controller
 
     /**
      * Install mail server (Postfix, Dovecot, Roundcube)
+     * Runs in background with log file for real-time output
      */
     public function installMailServer(Request $request)
     {
@@ -90,34 +91,49 @@ class EmailController extends Controller
             $dbUser = config('database.connections.mysql.username');
             $dbPass = config('database.connections.mysql.password');
 
+            // Log file path
+            $logFile = storage_path('logs/mailserver_install.log');
+            $statusFile = storage_path('logs/mailserver_install.status');
+            
+            // Clear previous logs
+            file_put_contents($logFile, "=== Mail Server Installation Started ===\n");
+            file_put_contents($logFile, "Hostname: {$hostname}\n", FILE_APPEND);
+            file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
+            file_put_contents($statusFile, 'running');
+
             // Installation script
             $script = <<<BASH
 #!/bin/bash
-set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Update package list
-sudo apt-get update
+echo "[1/8] Updating package list..."
+sudo apt-get update 2>&1
 
-# Install Postfix
+echo ""
+echo "[2/8] Installing Postfix..."
 echo "postfix postfix/mailname string {$hostname}" | sudo debconf-set-selections
 echo "postfix postfix/main_mailer_type string 'Internet Site'" | sudo debconf-set-selections
-sudo apt-get install -y postfix postfix-mysql
+sudo apt-get install -y postfix postfix-mysql 2>&1
 
-# Install Dovecot
-sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql
+echo ""
+echo "[3/8] Installing Dovecot..."
+sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
 
-# Install Roundcube
-sudo apt-get install -y roundcube roundcube-mysql
+echo ""
+echo "[4/8] Installing Roundcube..."
+sudo apt-get install -y roundcube roundcube-mysql 2>&1
 
-# Create mail directory
+echo ""
+echo "[5/8] Creating mail directories..."
 sudo mkdir -p /var/mail/vhosts
-sudo groupadd -g 5000 vmail 2>/dev/null || true
-sudo useradd -g vmail -u 5000 vmail -d /var/mail 2>/dev/null || true
+sudo groupadd -g 5000 vmail 2>/dev/null || echo "Group vmail already exists"
+sudo useradd -g vmail -u 5000 vmail -d /var/mail 2>/dev/null || echo "User vmail already exists"
 sudo chown -R vmail:vmail /var/mail
+echo "Mail directories created"
 
-# Configure Postfix for virtual mailboxes
+echo ""
+echo "[6/8] Configuring Postfix..."
 sudo tee /etc/postfix/mysql-virtual-mailbox-domains.cf > /dev/null << 'EOF'
 user = {$dbUser}
 password = {$dbPass}
@@ -142,14 +158,15 @@ dbname = {$dbName}
 query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1
 EOF
 
-# Update Postfix main.cf
 sudo postconf -e "myhostname = {$hostname}"
 sudo postconf -e "virtual_transport = lmtp:unix:private/dovecot-lmtp"
 sudo postconf -e "virtual_mailbox_domains = mysql:/etc/postfix/mysql-virtual-mailbox-domains.cf"
 sudo postconf -e "virtual_mailbox_maps = mysql:/etc/postfix/mysql-virtual-mailbox-maps.cf"
 sudo postconf -e "virtual_alias_maps = mysql:/etc/postfix/mysql-virtual-alias-maps.cf"
+echo "Postfix configured"
 
-# Configure Dovecot
+echo ""
+echo "[7/8] Configuring Dovecot..."
 sudo tee /etc/dovecot/conf.d/10-mail.conf > /dev/null << 'EOF'
 mail_location = maildir:/var/mail/vhosts/%d/%n
 mail_privileged_group = mail
@@ -208,14 +225,23 @@ EOF
 
 sudo chmod 640 /etc/dovecot/dovecot-sql.conf.ext
 sudo chown root:dovecot /etc/dovecot/dovecot-sql.conf.ext
+echo "Dovecot configured"
 
-# Restart services
+echo ""
+echo "[8/8] Starting services..."
 sudo systemctl restart postfix
 sudo systemctl restart dovecot
 sudo systemctl enable postfix
 sudo systemctl enable dovecot
+echo "Services started"
 
-echo "Mail server installation complete!"
+echo ""
+echo "=========================================="
+echo "  Mail Server Installation Complete!"
+echo "=========================================="
+echo ""
+echo "Postfix: $(systemctl is-active postfix)"
+echo "Dovecot: $(systemctl is-active dovecot)"
 BASH;
 
             // Write script to temp file
@@ -223,26 +249,14 @@ BASH;
             file_put_contents($scriptPath, $script);
             chmod($scriptPath, 0755);
 
-            // Execute script
-            $output = [];
-            $returnCode = 0;
-            exec("sudo bash {$scriptPath} 2>&1", $output, $returnCode);
-
-            // Clean up
-            unlink($scriptPath);
-
-            if ($returnCode !== 0) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Installation failed',
-                    'details' => implode("\n", $output)
-                ], 500);
-            }
+            // Execute script in background, output to log file
+            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}";
+            exec("nohup bash -c '{$command}' > /dev/null 2>&1 &");
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mail server installed successfully',
-                'output' => implode("\n", $output)
+                'message' => 'Installation started',
+                'logFile' => 'mailserver_install.log'
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -250,6 +264,31 @@ BASH;
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get installation log content
+     */
+    public function getInstallLog()
+    {
+        $logFile = storage_path('logs/mailserver_install.log');
+        $statusFile = storage_path('logs/mailserver_install.status');
+        
+        $log = file_exists($logFile) ? file_get_contents($logFile) : '';
+        $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'unknown';
+        
+        // Check if still running
+        $isRunning = $status === 'running';
+        $isComplete = $status === '0';
+        $isFailed = !$isRunning && !$isComplete && $status !== 'unknown';
+        
+        return response()->json([
+            'log' => $log,
+            'status' => $status,
+            'isRunning' => $isRunning,
+            'isComplete' => $isComplete,
+            'isFailed' => $isFailed
+        ]);
     }
 
     /**

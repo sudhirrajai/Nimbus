@@ -121,6 +121,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/', [EmailController::class, 'index'])->name('index');
         Route::get('/status', [EmailController::class, 'getStatus'])->name('status');
         Route::post('/install', [EmailController::class, 'installMailServer'])->name('install');
+        Route::get('/install-log', [EmailController::class, 'getInstallLog'])->name('install-log');
         Route::get('/domains', [EmailController::class, 'getDomains'])->name('domains');
         Route::post('/domain/enable', [EmailController::class, 'enableDomain'])->name('domain.enable');
         Route::post('/domain/disable', [EmailController::class, 'disableDomain'])->name('domain.disable');
