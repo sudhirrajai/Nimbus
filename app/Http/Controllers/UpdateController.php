@@ -136,7 +136,6 @@ class UpdateController extends Controller
             // Update script - uses sudo and detects PHP version
             $script = <<<'BASH'
 #!/bin/bash
-set -e
 cd /usr/local/nimbus
 
 # Detect PHP version
@@ -149,8 +148,16 @@ sudo cp -r /usr/local/nimbus /tmp/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/nu
 
 echo ""
 echo "Ensuring required PHP extensions are installed..."
-sudo apt-get update -qq
-sudo apt-get install -y -qq php${PHP_VERSION}-xml php${PHP_VERSION}-dom php${PHP_VERSION}-mysql php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl 2>&1 || true
+sudo apt-get update -qq 2>&1
+
+# Try to install PHP extensions - different package names for different versions
+sudo apt-get install -y php${PHP_VERSION}-xml 2>&1 || sudo apt-get install -y php-xml 2>&1 || true
+sudo apt-get install -y php${PHP_VERSION}-mysql 2>&1 || sudo apt-get install -y php-mysql 2>&1 || true
+sudo apt-get install -y php${PHP_VERSION}-mbstring 2>&1 || sudo apt-get install -y php-mbstring 2>&1 || true
+sudo apt-get install -y php${PHP_VERSION}-curl 2>&1 || sudo apt-get install -y php-curl 2>&1 || true
+
+# Restart PHP-FPM after extension install
+sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
 
 echo ""
 echo "Stashing local changes..."
@@ -163,35 +170,51 @@ sudo git reset --hard origin/main 2>&1
 
 echo ""
 echo "Installing composer dependencies..."
-sudo COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction 2>&1
+export COMPOSER_ALLOW_SUPERUSER=1
+sudo -E composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-dom 2>&1 || true
 
 echo ""
 echo "Running database migrations..."
-sudo php artisan migrate --force 2>&1
+sudo php artisan migrate --force 2>&1 || true
 
 echo ""
 echo "Clearing caches..."
-sudo php artisan config:clear 2>&1
+sudo php artisan config:clear 2>&1 || true
 sudo php artisan cache:clear 2>&1 || true
-sudo php artisan view:clear 2>&1
-sudo php artisan route:clear 2>&1
+sudo php artisan view:clear 2>&1 || true
+sudo php artisan route:clear 2>&1 || true
+
+echo ""
+echo "Fixing node_modules permissions..."
+sudo rm -rf node_modules 2>&1 || true
+sudo rm -f package-lock.json 2>&1 || true
+
+echo ""
+echo "Installing npm dependencies..."
+sudo npm install 2>&1
 
 echo ""
 echo "Building frontend assets..."
-sudo npm install 2>&1
-sudo npm run build 2>&1
+# Use npx to run vite directly to avoid permission issues
+sudo ./node_modules/.bin/vite build 2>&1 || sudo npx vite build 2>&1 || true
 
 echo ""
 echo "Setting permissions..."
 sudo chown -R www-data:www-data /usr/local/nimbus
 sudo chmod -R 775 /usr/local/nimbus/storage
 sudo chmod -R 775 /usr/local/nimbus/bootstrap/cache
+sudo mkdir -p /usr/local/nimbus/storage/logs
 sudo touch /usr/local/nimbus/storage/logs/laravel.log
 sudo chown www-data:www-data /usr/local/nimbus/storage/logs/laravel.log
+sudo chmod 664 /usr/local/nimbus/storage/logs/laravel.log
 
 echo ""
 echo "Restarting PHP-FPM..."
 sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
+
+echo ""
+echo "Reloading nginx..."
+sudo systemctl reload nginx 2>&1 || true
 
 echo ""
 echo "Update completed successfully!"

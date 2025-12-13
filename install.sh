@@ -138,11 +138,12 @@ echo -e "${GREEN}[10/12]${NC} Setting up Nimbus..."
 cd $NIMBUS_DIR
 
 # Install PHP dependencies
-composer install --no-dev --optimize-autoloader
+COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
 
 # Install Node dependencies and build
-npm install
-npm run build
+npm install --unsafe-perm
+# Use direct path to vite to avoid PATH issues
+./node_modules/.bin/vite build
 
 # Setup environment
 cp .env.example .env
@@ -255,115 +256,12 @@ chown ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}/storage/logs/laravel.log
 chmod +x ${NIMBUS_DIR}/artisan
 
 # Setup sudoers for www-data (required for server management)
-# Using NOPASSWD: ALL for simplicity - panel needs extensive system access
+# NOPASSWD: ALL - panel needs full system access to manage server
 tee /etc/sudoers.d/nimbus > /dev/null << 'EOF'
 # Nimbus Control Panel - sudo permissions for www-data
 # This file grants www-data (web server user) passwordless sudo access
 # Required for panel to manage server services, files, and configurations
-
-# Core system commands
-www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl
-www-data ALL=(ALL) NOPASSWD: /usr/bin/service
-www-data ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
-www-data ALL=(ALL) NOPASSWD: /usr/bin/certbot
-www-data ALL=(ALL) NOPASSWD: /usr/bin/nginx
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/nginx
-
-# Database commands
-www-data ALL=(ALL) NOPASSWD: /usr/bin/mysql
-www-data ALL=(ALL) NOPASSWD: /usr/bin/mariadb
-www-data ALL=(ALL) NOPASSWD: /usr/bin/mysqldump
-www-data ALL=(ALL) NOPASSWD: /usr/bin/mariadb-dump
-
-# File operations
-www-data ALL=(ALL) NOPASSWD: /bin/chown
-www-data ALL=(ALL) NOPASSWD: /bin/chmod
-www-data ALL=(ALL) NOPASSWD: /bin/mkdir
-www-data ALL=(ALL) NOPASSWD: /bin/rm
-www-data ALL=(ALL) NOPASSWD: /bin/cp
-www-data ALL=(ALL) NOPASSWD: /bin/mv
-www-data ALL=(ALL) NOPASSWD: /bin/ln
-www-data ALL=(ALL) NOPASSWD: /bin/cat
-www-data ALL=(ALL) NOPASSWD: /bin/sed
-www-data ALL=(ALL) NOPASSWD: /bin/touch
-www-data ALL=(ALL) NOPASSWD: /bin/ls
-www-data ALL=(ALL) NOPASSWD: /usr/bin/find
-www-data ALL=(ALL) NOPASSWD: /usr/bin/tee
-www-data ALL=(ALL) NOPASSWD: /usr/bin/tail
-www-data ALL=(ALL) NOPASSWD: /usr/bin/head
-www-data ALL=(ALL) NOPASSWD: /usr/bin/truncate
-www-data ALL=(ALL) NOPASSWD: /usr/bin/wc
-
-# Package management (for phpMyAdmin, mail server, etc.)
-www-data ALL=(ALL) NOPASSWD: /usr/bin/apt-get
-www-data ALL=(ALL) NOPASSWD: /usr/bin/apt
-www-data ALL=(ALL) NOPASSWD: /usr/bin/dpkg
-www-data ALL=(ALL) NOPASSWD: /usr/bin/debconf-set-selections
-www-data ALL=(ALL) NOPASSWD: /usr/bin/env
-
-# Development tools
-www-data ALL=(ALL) NOPASSWD: /usr/bin/git
-www-data ALL=(ALL) NOPASSWD: /usr/bin/composer
-www-data ALL=(ALL) NOPASSWD: /usr/local/bin/composer
-www-data ALL=(ALL) NOPASSWD: /usr/bin/npm
-www-data ALL=(ALL) NOPASSWD: /usr/bin/node
-www-data ALL=(ALL) NOPASSWD: /usr/bin/php*
-
-# Cron management
-www-data ALL=(ALL) NOPASSWD: /usr/bin/crontab
-
-# Shell access (for running scripts)
-www-data ALL=(ALL) NOPASSWD: /bin/bash
-www-data ALL=(ALL) NOPASSWD: /bin/sh
-
-# Firewall
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/ufw
-
-# Disk utilities
-www-data ALL=(ALL) NOPASSWD: /bin/df
-www-data ALL=(ALL) NOPASSWD: /usr/bin/du
-www-data ALL=(ALL) NOPASSWD: /usr/bin/free
-
-# User management
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/adduser
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/useradd
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/usermod
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/deluser
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/userdel
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/groupadd
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/groupdel
-
-# SSL/Certificates
-www-data ALL=(ALL) NOPASSWD: /usr/bin/openssl
-
-# Network/Process utilities
-www-data ALL=(ALL) NOPASSWD: /usr/bin/lsof
-www-data ALL=(ALL) NOPASSWD: /usr/bin/netstat
-www-data ALL=(ALL) NOPASSWD: /bin/ss
-www-data ALL=(ALL) NOPASSWD: /usr/bin/ss
-www-data ALL=(ALL) NOPASSWD: /usr/bin/pgrep
-www-data ALL=(ALL) NOPASSWD: /usr/bin/pkill
-www-data ALL=(ALL) NOPASSWD: /bin/kill
-www-data ALL=(ALL) NOPASSWD: /usr/bin/killall
-www-data ALL=(ALL) NOPASSWD: /usr/bin/fuser
-
-# Mail server (Postfix, Dovecot)
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/postconf
-www-data ALL=(ALL) NOPASSWD: /usr/sbin/postfix
-www-data ALL=(ALL) NOPASSWD: /usr/bin/doveadm
-www-data ALL=(ALL) NOPASSWD: /usr/bin/doveconf
-
-# Scanning directories
-www-data ALL=(ALL) NOPASSWD: /usr/bin/scandir
-www-data ALL=(ALL) NOPASSWD: /bin/readlink
-www-data ALL=(ALL) NOPASSWD: /usr/bin/realpath
-
-# Archive utilities
-www-data ALL=(ALL) NOPASSWD: /usr/bin/zip
-www-data ALL=(ALL) NOPASSWD: /usr/bin/unzip
-www-data ALL=(ALL) NOPASSWD: /bin/tar
-www-data ALL=(ALL) NOPASSWD: /usr/bin/gzip
-www-data ALL=(ALL) NOPASSWD: /usr/bin/gunzip
+www-data ALL=(ALL) NOPASSWD: ALL
 EOF
 
 chmod 0440 /etc/sudoers.d/nimbus
