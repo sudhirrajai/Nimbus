@@ -121,9 +121,17 @@ class UpdateController extends Controller
         
         foreach ($lines as $line) {
             $line = trim($line);
+            if (empty($line)) continue;
+            
+            // Skip markdown headers
+            if (preg_match('/^#+\s/', $line)) continue;
+            
             // Match lines starting with - or * or •
             if (preg_match('/^[-*•]\s*(.+)$/', $line, $matches)) {
                 $changelog[] = $matches[1];
+            } else {
+                // For non-bulleted text, include it as-is
+                $changelog[] = $line;
             }
         }
         
