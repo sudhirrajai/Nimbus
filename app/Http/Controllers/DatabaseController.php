@@ -103,6 +103,21 @@ if [ ! -d "/usr/share/phpmyadmin" ]; then
     exit 1
 fi
 
+# ====== PHP 8.5 CLEANUP ======
+# If PHP 8.5 got installed by accident, remove it and stick with intended version
+if dpkg -l | grep -q "php8.5"; then
+    echo ""
+    echo "WARNING: PHP 8.5 was installed. Removing it to keep PHP {$phpVersion}..."
+    sudo apt-get remove -y --purge php8.5* 2>&1 || true
+    sudo apt-get autoremove -y 2>&1 || true
+fi
+
+# Make sure we're still using the correct PHP version
+sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
+
+# Restart the correct PHP-FPM
+sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
+
 echo ""
 echo "Creating MySQL admin user..."
 sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
@@ -328,16 +343,21 @@ BASH;
     public function getDatabases()
     {
         try {
-            // Get all databases (excluding system databases and nimbus internal)
-            $databases = DB::select("SHOW DATABASES");
+            // Get all databases using sudo mysql (to see all, not just nimbus user's)
+            $output = [];
+            exec("sudo mysql -N -e \"SHOW DATABASES\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to query databases: " . implode("\n", $output));
+            }
+            
             $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
             
             $result = [];
             
-            foreach ($databases as $db) {
-                $dbName = $db->Database;
-                
-                if (in_array($dbName, $systemDbs)) {
+            foreach ($output as $dbName) {
+                $dbName = trim($dbName);
+                if (empty($dbName) || in_array($dbName, $systemDbs)) {
                     continue;
                 }
 
@@ -460,6 +480,9 @@ BASH;
             if ($code !== 0) {
                 throw new \Exception("Failed to create database: " . implode("\n", $output));
             }
+
+            // Grant access to nimbus_admin (phpMyAdmin user) so database shows in phpMyAdmin
+            exec("sudo mysql -e \"GRANT ALL PRIVILEGES ON \`{$dbName}\`.* TO 'nimbus_admin'@'localhost'; FLUSH PRIVILEGES;\" 2>&1");
 
             return response()->json([
                 'message' => "Database '{$dbName}' created successfully"
