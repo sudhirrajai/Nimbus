@@ -85,6 +85,18 @@ class EmailController extends Controller
         try {
             $hostname = $request->input('hostname', gethostname());
             
+            // Check if another installation is in progress
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Another installation is in progress: {$lockContent}. Please wait for it to complete."
+                ], 409);
+            }
+            
+            // Create lock file
+            file_put_contents($lockFile, 'Mail Server installation');
+            
             // Get MySQL credentials
             $dbHost = config('database.connections.mysql.host');
             $dbName = config('database.connections.mysql.database');
@@ -303,6 +315,9 @@ echo "=========================================="
 echo ""
 echo "Postfix: $(systemctl is-active postfix)"
 echo "Dovecot: $(systemctl is-active dovecot)"
+
+# Remove lock file
+rm -f /usr/local/nimbus/storage/logs/nimbus_install.lock
 BASH;
 
             // Write script to temp file
