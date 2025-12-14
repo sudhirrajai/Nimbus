@@ -343,7 +343,7 @@
                           }}</span>
                         <span v-if="user.privileges?.length > 3" class="text-xs text-secondary">+{{
                           user.privileges.length - 3
-                          }} more</span>
+                        }} more</span>
                       </td>
                       <td>
                         <button class="btn btn-link text-primary p-0 me-2" @click="editUserPermissions(user)"
@@ -560,21 +560,23 @@ const loadData = async () => {
 const installPhpMyAdmin = async () => {
   try {
     installing.value = true
+    installLog.value = '' // Reset log
     showAlert('info', 'Installing phpMyAdmin... This may take a few minutes.')
 
     const response = await axios.post('/database/install-phpmyadmin')
 
-    credentials.value = response.data.credentials
-    showCredentials.value = true
-    status.value.phpMyAdminInstalled = true
-
-    showAlert('success', response.data.message)
-
     // Start polling for status if polling mode
     if (response.data.polling) {
+      // Save credentials for later display
+      credentials.value = response.data.credentials
       pollInstallStatus()
     } else {
+      // Synchronous mode - installation completed immediately
+      credentials.value = response.data.credentials
+      showCredentials.value = true
+      status.value.phpMyAdminInstalled = true
       installing.value = false
+      showAlert('success', response.data.message)
     }
   } catch (error) {
     const errMsg = error.response?.data?.error || 'Failed to install phpMyAdmin'

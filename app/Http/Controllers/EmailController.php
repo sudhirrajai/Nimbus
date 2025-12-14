@@ -149,8 +149,8 @@ echo "roundcube-core roundcube/reconfigure-webserver multiselect none" | sudo de
 # Install only roundcube core without recommends to avoid pulling php dependencies
 sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
 
-# Install roundcube PHP package for current version only
-sudo apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
+# Install roundcube PHP package for current version only (using noninteractive mode)
+sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
 
 # Make sure we're still using the correct PHP version
 sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true

@@ -414,6 +414,73 @@ class FileManagerController extends Controller
     }
 
     /**
+     * Extract ZIP or tar.gz archive
+     */
+    public function extract(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'path' => 'nullable|string',
+                'name' => 'required|string',
+                'destination' => 'nullable|string'
+            ]);
+
+            $path = $request->input('path', '');
+            $name = $request->input('name');
+            $destination = $request->input('destination', '');
+
+            $dirPath = $this->getFullPath($domain, $path);
+            $archivePath = $dirPath . '/' . $name;
+
+            // If no destination specified, extract to same directory
+            if (empty($destination)) {
+                $destPath = $dirPath;
+            } else {
+                $destPath = $this->getFullPath($domain, $destination);
+            }
+
+            if (!$this->isValidPath($archivePath) || !$this->isValidPath($destPath)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            if (!File::exists($archivePath)) {
+                return response()->json(['error' => 'Archive not found'], 404);
+            }
+
+            // Create destination directory if it doesn't exist
+            if (!File::exists($destPath)) {
+                $this->executeSudoCommand("mkdir -p " . escapeshellarg($destPath));
+            }
+
+            $escapedArchive = escapeshellarg($archivePath);
+            $escapedDest = escapeshellarg($destPath);
+            $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+            // Determine extraction command based on file type
+            if ($extension === 'zip') {
+                $this->executeSudoCommand("unzip -o {$escapedArchive} -d {$escapedDest}");
+            } elseif ($extension === 'gz' || str_ends_with(strtolower($name), '.tar.gz')) {
+                $this->executeSudoCommand("tar -xzf {$escapedArchive} -C {$escapedDest}");
+            } elseif ($extension === 'tar') {
+                $this->executeSudoCommand("tar -xf {$escapedArchive} -C {$escapedDest}");
+            } else {
+                return response()->json(['error' => 'Unsupported archive format. Supported: zip, tar, tar.gz'], 400);
+            }
+
+            // Set proper ownership
+            $this->executeSudoCommand("chown -R www-data:www-data {$escapedDest}");
+
+            return response()->json([
+                'message' => 'Archive extracted successfully',
+                'destination' => $destination ?: $path
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Extract error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Read file content
      */
     public function read(Request $request, $domain)
