@@ -103,6 +103,21 @@ if [ ! -d "/usr/share/phpmyadmin" ]; then
     exit 1
 fi
 
+# ====== PHP 8.5 CLEANUP ======
+# If PHP 8.5 got installed by accident, remove it and stick with intended version
+if dpkg -l | grep -q "php8.5"; then
+    echo ""
+    echo "WARNING: PHP 8.5 was installed. Removing it to keep PHP {$phpVersion}..."
+    sudo apt-get remove -y --purge php8.5* 2>&1 || true
+    sudo apt-get autoremove -y 2>&1 || true
+fi
+
+# Make sure we're still using the correct PHP version
+sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
+
+# Restart the correct PHP-FPM
+sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
+
 echo ""
 echo "Creating MySQL admin user..."
 sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
