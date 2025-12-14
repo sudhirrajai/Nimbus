@@ -145,11 +145,15 @@ echo "Using PHP version: {$phpVersion}"
 echo "roundcube-core roundcube/dbconfig-install boolean false" | sudo debconf-set-selections
 echo "roundcube-core roundcube/reconfigure-webserver multiselect none" | sudo debconf-set-selections
 
-# Install roundcube-core to avoid Apache dependency, use nginx instead
-# Use version-specific PHP packages to avoid changing PHP version
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y roundcube-core roundcube-mysql 2>&1
-# Only install missing extensions for current PHP, don't install php-fpm (already have it)
-sudo apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip 2>&1 || true
+# Pin the current PHP version to prevent installing new PHP versions
+# Install only roundcube core without recommends to avoid pulling php dependencies
+sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
+
+# Install roundcube PHP package for current version only
+sudo apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
+
+# Make sure we're still using the correct PHP version
+sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
 
 # Stop and disable Apache2 if it was installed as a dependency
 if systemctl is-active --quiet apache2 2>/dev/null; then

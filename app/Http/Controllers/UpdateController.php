@@ -138,9 +138,20 @@ class UpdateController extends Controller
 #!/bin/bash
 cd /usr/local/nimbus
 
+# Fix git safe directory issue
+sudo git config --global --add safe.directory /usr/local/nimbus
+
 # Detect PHP version
 PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
 echo "Detected PHP version: $PHP_VERSION"
+
+# Function to wait for apt locks
+wait_for_apt() {
+    while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+        echo "Waiting for other apt process to finish..."
+        sleep 3
+    done
+}
 
 echo ""
 echo "Backing up current version..."
@@ -148,13 +159,12 @@ sudo cp -r /usr/local/nimbus /tmp/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/nu
 
 echo ""
 echo "Ensuring required PHP extensions are installed..."
+wait_for_apt
 sudo apt-get update -qq 2>&1
 
-# Try to install PHP extensions - different package names for different versions
-sudo apt-get install -y php${PHP_VERSION}-xml 2>&1 || sudo apt-get install -y php-xml 2>&1 || true
-sudo apt-get install -y php${PHP_VERSION}-mysql 2>&1 || sudo apt-get install -y php-mysql 2>&1 || true
-sudo apt-get install -y php${PHP_VERSION}-mbstring 2>&1 || sudo apt-get install -y php-mbstring 2>&1 || true
-sudo apt-get install -y php${PHP_VERSION}-curl 2>&1 || sudo apt-get install -y php-curl 2>&1 || true
+# Try to install PHP extensions for detected version only (avoid installing new PHP)
+wait_for_apt
+sudo apt-get install -y php${PHP_VERSION}-xml php${PHP_VERSION}-mysql php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl 2>&1 || true
 
 # Restart PHP-FPM after extension install
 sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
