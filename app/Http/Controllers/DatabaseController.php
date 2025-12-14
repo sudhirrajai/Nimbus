@@ -328,16 +328,21 @@ BASH;
     public function getDatabases()
     {
         try {
-            // Get all databases (excluding system databases and nimbus internal)
-            $databases = DB::select("SHOW DATABASES");
+            // Get all databases using sudo mysql (to see all, not just nimbus user's)
+            $output = [];
+            exec("sudo mysql -N -e \"SHOW DATABASES\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to query databases: " . implode("\n", $output));
+            }
+            
             $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
             
             $result = [];
             
-            foreach ($databases as $db) {
-                $dbName = $db->Database;
-                
-                if (in_array($dbName, $systemDbs)) {
+            foreach ($output as $dbName) {
+                $dbName = trim($dbName);
+                if (empty($dbName) || in_array($dbName, $systemDbs)) {
                     continue;
                 }
 
@@ -460,6 +465,9 @@ BASH;
             if ($code !== 0) {
                 throw new \Exception("Failed to create database: " . implode("\n", $output));
             }
+
+            // Grant access to nimbus_admin (phpMyAdmin user) so database shows in phpMyAdmin
+            exec("sudo mysql -e \"GRANT ALL PRIVILEGES ON \`{$dbName}\`.* TO 'nimbus_admin'@'localhost'; FLUSH PRIVILEGES;\" 2>&1");
 
             return response()->json([
                 'message' => "Database '{$dbName}' created successfully"
