@@ -384,22 +384,33 @@ BASH;
     private function getDatabaseUsers($dbName)
     {
         try {
-            $users = DB::select("
-                SELECT DISTINCT User, Host 
-                FROM mysql.db 
-                WHERE Db = ? OR Db = ?
-            ", [$dbName, str_replace('_', '\\_', $dbName)]);
+            // Use sudo mysql to query users with access to this database
+            $escapedDb = escapeshellarg($dbName);
+            $escapedDbWildcard = escapeshellarg(str_replace('_', '\\_', $dbName));
+            
+            $output = [];
+            exec("sudo mysql -N -e \"SELECT DISTINCT User, Host FROM mysql.db WHERE Db = {$escapedDb} OR Db = {$escapedDbWildcard}\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                return [];
+            }
 
             $result = [];
-            foreach ($users as $user) {
-                if ($user->User === 'root' || $user->User === '') continue;
-                
-                $privileges = $this->getUserPrivileges($user->User, $user->Host, $dbName);
-                $result[] = [
-                    'username' => $user->User,
-                    'host' => $user->Host,
-                    'privileges' => $privileges
-                ];
+            foreach ($output as $line) {
+                $parts = preg_split('/\s+/', trim($line));
+                if (count($parts) >= 2) {
+                    $user = $parts[0];
+                    $host = $parts[1];
+                    
+                    if ($user === 'root' || $user === '' || $user === 'nimbus_admin') continue;
+                    
+                    $privileges = $this->getUserPrivileges($user, $host, $dbName);
+                    $result[] = [
+                        'username' => $user,
+                        'host' => $host,
+                        'privileges' => $privileges
+                    ];
+                }
             }
 
             return $result;
@@ -414,11 +425,19 @@ BASH;
     private function getUserPrivileges($username, $host, $dbName)
     {
         try {
-            $grants = DB::select("SHOW GRANTS FOR ?@?", [$username, $host]);
+            $escapedUser = escapeshellarg($username);
+            $escapedHost = escapeshellarg($host);
+            
+            $output = [];
+            exec("sudo mysql -N -e \"SHOW GRANTS FOR {$escapedUser}@{$escapedHost}\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                return [];
+            }
+            
             $privileges = [];
             
-            foreach ($grants as $grant) {
-                $grantStr = reset((array)$grant);
+            foreach ($output as $grantStr) {
                 if (stripos($grantStr, $dbName) !== false || stripos($grantStr, '*.*') !== false) {
                     // Parse privileges from GRANT statement
                     if (preg_match('/GRANT (.+) ON/', $grantStr, $matches)) {
