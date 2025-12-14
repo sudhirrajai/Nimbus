@@ -313,9 +313,9 @@ BASH;
     public function getDatabases()
     {
         try {
-            // Get all databases (excluding system databases)
+            // Get all databases (excluding system databases and nimbus internal)
             $databases = DB::select("SHOW DATABASES");
-            $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin'];
+            $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
             
             $result = [];
             
@@ -431,14 +431,20 @@ BASH;
 
             $dbName = $request->input('name');
             
-            // Check if database exists
-            $exists = DB::select("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?", [$dbName]);
-            if (!empty($exists)) {
+            // Check if database exists using sudo mysql
+            $output = [];
+            exec("sudo mysql -N -e \"SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '{$dbName}'\" 2>&1", $output, $code);
+            if (!empty($output) && trim($output[0]) !== '') {
                 return response()->json(['error' => 'Database already exists'], 400);
             }
 
-            // Create database
-            DB::statement("CREATE DATABASE `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            // Create database using sudo mysql
+            $output = [];
+            exec("sudo mysql -e \"CREATE DATABASE \`{$dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to create database: " . implode("\n", $output));
+            }
 
             return response()->json([
                 'message' => "Database '{$dbName}' created successfully"
@@ -462,12 +468,18 @@ BASH;
             $dbName = $request->input('name');
             
             // Prevent deleting system databases
-            $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin'];
+            $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus'];
             if (in_array($dbName, $systemDbs)) {
                 return response()->json(['error' => 'Cannot delete system database'], 403);
             }
 
-            DB::statement("DROP DATABASE IF EXISTS `{$dbName}`");
+            // Delete database using sudo mysql
+            $output = [];
+            exec("sudo mysql -e \"DROP DATABASE IF EXISTS \`{$dbName}\`\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to delete database: " . implode("\n", $output));
+            }
 
             return response()->json([
                 'message' => "Database '{$dbName}' deleted successfully"
@@ -773,8 +785,9 @@ BASH;
                     $username = $parts[0];
                     $host = $parts[1];
                     
-                    // Skip system users
-                    if ($username === 'root' || $username === 'debian-sys-maint' || $username === 'mariadb.sys') continue;
+                    // Skip system users and nimbus internal users
+                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube'];
+                    if (in_array($username, $systemUsers)) continue;
                     
                     $result[] = [
                         'username' => $username,
