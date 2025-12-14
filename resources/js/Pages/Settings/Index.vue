@@ -107,7 +107,7 @@
                             <div class="row">
                                 <div class="col-md-3">
                                     <p class="text-sm mb-0 text-secondary">Panel Version</p>
-                                    <p class="text-sm fw-bold">v1.0.0</p>
+                                    <p class="text-sm fw-bold">v{{ panelVersion }}</p>
                                 </div>
                                 <div class="col-md-3">
                                     <p class="text-sm mb-0 text-secondary">Laravel Version</p>
@@ -184,6 +184,12 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
+const props = defineProps({
+    panelVersion: { type: String, default: '1.0.0' },
+    laravelVersion: { type: String, default: '12.x' },
+    phpVersion: { type: String, default: '8.2' }
+})
+
 const settings = ref({
     panel_name: 'Nimbus',
     timezone: 'UTC',
@@ -192,8 +198,6 @@ const settings = ref({
 })
 
 const saving = ref(false)
-const laravelVersion = ref('12.x')
-const phpVersion = ref('8.2')
 
 // Toast
 const showToast = ref(false)
