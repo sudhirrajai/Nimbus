@@ -144,6 +144,15 @@ class UpdateController extends Controller
     public function performUpdate()
     {
         try {
+            // Check if another installation is in progress (phpMyAdmin, mail server, etc.)
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Cannot update while another installation is in progress: {$lockContent}. Please wait for it to complete."
+                ], 409);
+            }
+            
             $logFile = storage_path('logs/update.log');
             $statusFile = storage_path('logs/update_status.txt');
             
