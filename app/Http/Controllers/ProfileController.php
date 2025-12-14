@@ -71,7 +71,14 @@ class ProfileController extends Controller
      */
     public function settings()
     {
-        return Inertia::render('Settings/Index');
+        $versionFile = base_path('VERSION');
+        $panelVersion = file_exists($versionFile) ? trim(file_get_contents($versionFile)) : '1.0.0';
+        
+        return Inertia::render('Settings/Index', [
+            'panelVersion' => $panelVersion,
+            'laravelVersion' => app()->version(),
+            'phpVersion' => PHP_VERSION
+        ]);
     }
 
     /**
