@@ -9,11 +9,20 @@ use Illuminate\Support\Facades\Cache;
 
 class UpdateController extends Controller
 {
-    // Current version - increment this when releasing new versions
-    const CURRENT_VERSION = '1.0.0';
-    
     // GitHub repository
     const GITHUB_REPO = 'sudhirrajai/Nimbus';
+    
+    /**
+     * Get current version from VERSION file
+     */
+    private function getCurrentVersion()
+    {
+        $versionFile = base_path('VERSION');
+        if (file_exists($versionFile)) {
+            return trim(file_get_contents($versionFile));
+        }
+        return '1.0.0'; // Fallback
+    }
     
     /**
      * Display updates page
@@ -21,7 +30,7 @@ class UpdateController extends Controller
     public function index()
     {
         return Inertia::render('Updates/Index', [
-            'currentVersion' => self::CURRENT_VERSION
+            'currentVersion' => $this->getCurrentVersion()
         ]);
     }
 
@@ -36,11 +45,12 @@ class UpdateController extends Controller
                 return $this->fetchUpdateInfo();
             });
             
+            $currentVersion = $this->getCurrentVersion();
             return response()->json([
                 'success' => true,
-                'currentVersion' => self::CURRENT_VERSION,
-                'latestVersion' => $updateInfo['version'] ?? self::CURRENT_VERSION,
-                'hasUpdate' => version_compare($updateInfo['version'] ?? self::CURRENT_VERSION, self::CURRENT_VERSION, '>'),
+                'currentVersion' => $currentVersion,
+                'latestVersion' => $updateInfo['version'] ?? $currentVersion,
+                'hasUpdate' => version_compare($updateInfo['version'] ?? $currentVersion, $currentVersion, '>'),
                 'changelog' => $updateInfo['changelog'] ?? [],
                 'releaseDate' => $updateInfo['releaseDate'] ?? null,
                 'releaseUrl' => $updateInfo['releaseUrl'] ?? null
@@ -49,7 +59,7 @@ class UpdateController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => $e->getMessage(),
-                'currentVersion' => self::CURRENT_VERSION
+                'currentVersion' => $this->getCurrentVersion()
             ]);
         }
     }
@@ -92,7 +102,7 @@ class UpdateController extends Controller
         }
         
         return [
-            'version' => self::CURRENT_VERSION,
+            'version' => $this->getCurrentVersion(),
             'changelog' => [],
             'releaseDate' => null,
             'releaseUrl' => null
