@@ -313,9 +313,9 @@ BASH;
     public function getDatabases()
     {
         try {
-            // Get all databases (excluding system databases)
+            // Get all databases (excluding system databases and nimbus internal)
             $databases = DB::select("SHOW DATABASES");
-            $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin'];
+            $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
             
             $result = [];
             
@@ -785,8 +785,9 @@ BASH;
                     $username = $parts[0];
                     $host = $parts[1];
                     
-                    // Skip system users
-                    if ($username === 'root' || $username === 'debian-sys-maint' || $username === 'mariadb.sys') continue;
+                    // Skip system users and nimbus internal users
+                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube'];
+                    if (in_array($username, $systemUsers)) continue;
                     
                     $result[] = [
                         'username' => $username,
