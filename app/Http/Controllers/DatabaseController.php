@@ -52,6 +52,18 @@ class DatabaseController extends Controller
                 return response()->json(['error' => 'phpMyAdmin is already installed'], 400);
             }
 
+            // Check if another installation is in progress
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Another installation is in progress: {$lockContent}. Please wait for it to complete."
+                ], 409);
+            }
+            
+            // Create lock file
+            file_put_contents($lockFile, 'phpMyAdmin installation');
+
             $logFile = storage_path('logs/phpmyadmin_install.log');
             $statusFile = storage_path('logs/phpmyadmin_status.txt');
             
@@ -133,6 +145,9 @@ sudo nginx -t 2>&1
 echo ""
 echo "Reloading nginx..."
 sudo systemctl reload nginx 2>&1
+
+# Remove lock file
+rm -f /usr/local/nimbus/storage/logs/nimbus_install.lock
 
 echo ""
 echo "Installation completed successfully!"
