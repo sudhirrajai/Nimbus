@@ -49,17 +49,8 @@
                   <i class="material-symbols-rounded text-sm me-1">upload</i>
                   Upload File
                 </button>
-                <input 
-                  ref="fileInput" 
-                  type="file" 
-                  style="display:none" 
-                  @change="handleFileUpload"
-                />
-                <button 
-                  v-if="currentPath" 
-                  class="btn btn-sm bg-gradient-warning mb-0" 
-                  @click="goUpOneLevel"
-                >
+                <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" />
+                <button v-if="currentPath" class="btn btn-sm bg-gradient-warning mb-0" @click="goUpOneLevel">
                   <i class="material-symbols-rounded text-sm me-1">arrow_upward</i>
                   Up One Level
                 </button>
@@ -93,13 +84,8 @@
                 </div>
 
                 <div class="ms-auto form-check form-switch">
-                  <input 
-                    class="form-check-input" 
-                    type="checkbox" 
-                    id="showHiddenToggle"
-                    v-model="showHidden"
-                    @change="loadFiles"
-                  >
+                  <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden"
+                    @change="loadFiles">
                   <label class="form-check-label text-sm" for="showHiddenToggle">
                     Show Hidden Files
                   </label>
@@ -115,18 +101,10 @@
         <div class="col-12">
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb bg-transparent mb-0 pb-0">
-              <li 
-                v-for="(crumb, index) in breadcrumbs" 
-                :key="index"
-                class="breadcrumb-item"
-                :class="{ active: index === breadcrumbs.length - 1 }"
-              >
-                <a 
-                  v-if="index < breadcrumbs.length - 1"
-                  href="#" 
-                  @click.prevent="navigateTo(crumb.path)"
-                  class="text-dark"
-                >
+              <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item"
+                :class="{ active: index === breadcrumbs.length - 1 }">
+                <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)"
+                  class="text-dark">
                   {{ crumb.name }}
                 </a>
                 <span v-else>{{ crumb.name }}</span>
@@ -145,45 +123,38 @@
                 <table class="table align-items-center mb-0">
                   <thead>
                     <tr>
-                      <th style="width:40px" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
+                      <th style="width:40px"
+                        class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                         <!-- placeholder for checkbox column -->
                       </th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Name</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Modified</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Permissions</th>
-                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
+                        Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr 
-                      v-for="item in items" 
-                      :key="item.name + item.type"
-                      @contextmenu.prevent="openContextMenu($event, item)"
-                      class="file-row"
-                      :class="{ 'text-muted': item.hidden }"
-                    >
+                    <tr v-for="item in items" :key="item.name + item.type"
+                      @contextmenu.prevent="openContextMenu($event, item)" class="file-row"
+                      :class="{ 'text-muted': item.hidden }">
                       <td>
-                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @change="toggleSelectItem(item, $event)">
+                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)"
+                          @change="toggleSelectItem(item, $event)">
                       </td>
 
                       <td>
                         <div class="d-flex px-2 py-1 align-items-center">
                           <div class="me-3">
-                            <i 
-                              class="material-symbols-rounded" 
-                              :class="item.type === 'directory' ? 'text-warning' : 'text-info'"
-                            >
+                            <i class="material-symbols-rounded"
+                              :class="item.type === 'directory' ? 'text-warning' : 'text-info'">
                               {{ item.type === 'directory' ? 'folder' : 'description' }}
                             </i>
                           </div>
                           <div>
-                            <a 
-                              v-if="item.type === 'directory'"
-                              href="#" 
-                              @click.prevent="openDirectory(item.name)"
-                              class="text-sm font-weight-bold mb-0"
-                            >
+                            <a v-if="item.type === 'directory'" href="#" @click.prevent="openDirectory(item.name)"
+                              class="text-sm font-weight-bold mb-0">
                               {{ item.name }}
                             </a>
                             <span v-else class="text-sm font-weight-bold mb-0">
@@ -202,43 +173,25 @@
                         <span class="text-xs">{{ item.modified }}</span>
                       </td>
                       <td>
-                        <span 
-                          class="badge badge-sm bg-gradient-secondary cursor-pointer"
-                          @click="openPermissionsModal(item)"
-                          title="Click to change permissions"
-                        >
+                        <span class="badge badge-sm bg-gradient-secondary cursor-pointer"
+                          @click="openPermissionsModal(item)" title="Click to change permissions">
                           {{ item.permissions }}
                         </span>
                       </td>
                       <td class="align-middle text-center">
-                        <button 
-                          v-if="item.type === 'file' && item.editable"
-                          class="btn btn-link text-primary mb-0 px-2"
-                          @click="editFile(item.name)"
-                          title="Edit"
-                        >
+                        <button v-if="item.type === 'file' && item.editable" class="btn btn-link text-primary mb-0 px-2"
+                          @click="editFile(item.name)" title="Edit">
                           <i class="material-symbols-rounded text-sm">edit_note</i>
                         </button>
-                        <button 
-                          v-if="item.type === 'file'"
-                          class="btn btn-link text-success mb-0 px-2"
-                          @click="downloadFile(item.name)"
-                          title="Download"
-                        >
+                        <button v-if="item.type === 'file'" class="btn btn-link text-success mb-0 px-2"
+                          @click="downloadFile(item.name)" title="Download">
                           <i class="material-symbols-rounded text-sm">download</i>
                         </button>
-                        <button 
-                          class="btn btn-link text-warning mb-0 px-2"
-                          @click="openRenameModal(item)"
-                          title="Rename"
-                        >
+                        <button class="btn btn-link text-warning mb-0 px-2" @click="openRenameModal(item)"
+                          title="Rename">
                           <i class="material-symbols-rounded text-sm">label</i>
                         </button>
-                        <button 
-                          class="btn btn-link text-danger mb-0 px-2"
-                          @click="confirmDelete(item)"
-                          title="Delete"
-                        >
+                        <button class="btn btn-link text-danger mb-0 px-2" @click="confirmDelete(item)" title="Delete">
                           <i class="material-symbols-rounded text-sm">delete</i>
                         </button>
                       </td>
@@ -267,68 +220,44 @@
       </div>
 
       <!-- Context Menu -->
-      <div 
-        v-if="contextMenu.show" 
-        class="context-menu"
-        :style="contextMenuStyle"
-        @click.stop
-      >
-        <div 
-          v-if="contextMenu.item.type === 'file' && contextMenu.item.editable"
-          class="context-menu-item"
-          @click="editFile(contextMenu.item.name); closeContextMenu()"
-        >
+      <div v-if="contextMenu.show" class="context-menu" :style="contextMenuStyle" @click.stop>
+        <div v-if="contextMenu.item.type === 'file' && contextMenu.item.editable" class="context-menu-item"
+          @click="editFile(contextMenu.item.name); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">edit_note</i>
           Edit
         </div>
-        <div 
-          v-if="contextMenu.item.type === 'file'"
-          class="context-menu-item"
-          @click="downloadFile(contextMenu.item.name); closeContextMenu()"
-        >
+        <div v-if="contextMenu.item.type === 'file'" class="context-menu-item"
+          @click="downloadFile(contextMenu.item.name); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">download</i>
           Download
         </div>
-        <div 
-          class="context-menu-item"
-          @click="openRenameModal(contextMenu.item); closeContextMenu()"
-        >
+        <div class="context-menu-item" @click="openRenameModal(contextMenu.item); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">label</i>
           Rename
         </div>
-        <div 
-          class="context-menu-item"
-          @click="openCopyMoveModal(contextMenu.item, 'copy'); closeContextMenu()"
-        >
+        <div class="context-menu-item" @click="openCopyMoveModal(contextMenu.item, 'copy'); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">content_copy</i>
           Copy
         </div>
-        <div 
-          class="context-menu-item"
-          @click="openCopyMoveModal(contextMenu.item, 'move'); closeContextMenu()"
-        >
+        <div class="context-menu-item" @click="openCopyMoveModal(contextMenu.item, 'move'); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">drive_file_move</i>
           Move
         </div>
-        <div 
-          class="context-menu-item"
-          @click="openPermissionsModal(contextMenu.item); closeContextMenu()"
-        >
+        <div class="context-menu-item" @click="openPermissionsModal(contextMenu.item); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">shield</i>
           Permissions
         </div>
-        <div 
-          class="context-menu-item"
-          @click="zipItem(contextMenu.item); closeContextMenu()"
-        >
+        <div class="context-menu-item" @click="zipItem(contextMenu.item); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">folder_zip</i>
           Create ZIP
         </div>
+        <div v-if="contextMenu.item.type === 'file' && isArchive(contextMenu.item.name)" class="context-menu-item"
+          @click="openExtractModal(contextMenu.item); closeContextMenu()">
+          <i class="material-symbols-rounded text-sm me-2">unarchive</i>
+          Extract Here
+        </div>
         <div class="context-menu-divider"></div>
-        <div 
-          class="context-menu-item text-danger"
-          @click="confirmDelete(contextMenu.item); closeContextMenu()"
-        >
+        <div class="context-menu-item text-danger" @click="confirmDelete(contextMenu.item); closeContextMenu()">
           <i class="material-symbols-rounded text-sm me-2">delete</i>
           Delete
         </div>
@@ -346,25 +275,14 @@
             <div class="modal-body">
               <div class="form-group">
                 <label class="form-label">Permission Mode</label>
-                <input 
-                  v-model="newPermissions" 
-                  type="text" 
-                  class="form-control" 
-                  placeholder="0755"
-                  maxlength="4"
-                  pattern="[0-7]{3,4}"
-                />
+                <input v-model="newPermissions" type="text" class="form-control" placeholder="0755" maxlength="4"
+                  pattern="[0-7]{3,4}" />
                 <small class="text-muted d-block mt-1">
                   Common: 644 (files), 755 (folders), 777 (full access)
                 </small>
               </div>
               <div class="form-check mt-3" v-if="selectedItem?.type === 'directory'">
-                <input 
-                  class="form-check-input" 
-                  type="checkbox" 
-                  v-model="recursivePermissions"
-                  id="recursiveCheck"
-                >
+                <input class="form-check-input" type="checkbox" v-model="recursivePermissions" id="recursiveCheck">
                 <label class="form-check-label" for="recursiveCheck">
                   Apply recursively to all files and folders inside
                 </label>
@@ -402,14 +320,9 @@
                   <span class="input-group-text bg-light border-end-0">
                     <i class="material-symbols-rounded text-primary">description</i>
                   </span>
-                  <input 
-                    ref="createFileInput"
-                    v-model="newFileName" 
-                    type="text" 
-                    class="form-control form-control-lg ps-0 border-start-0" 
-                    placeholder="Enter file name with extension (e.g., index.html)"
-                    @keyup.enter="createFile"
-                  />
+                  <input ref="createFileInput" v-model="newFileName" type="text"
+                    class="form-control form-control-lg ps-0 border-start-0"
+                    placeholder="Enter file name with extension (e.g., index.html)" @keyup.enter="createFile" />
                 </div>
                 <small class="text-muted mt-2 d-block">
                   <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
@@ -455,14 +368,9 @@
                   <span class="input-group-text bg-light border-end-0">
                     <i class="material-symbols-rounded text-info">folder</i>
                   </span>
-                  <input 
-                    ref="createFolderInput"
-                    v-model="newDirName" 
-                    type="text" 
-                    class="form-control form-control-lg ps-0 border-start-0" 
-                    placeholder="Enter folder name (e.g., images, assets)"
-                    @keyup.enter="createDirectory"
-                  />
+                  <input ref="createFolderInput" v-model="newDirName" type="text"
+                    class="form-control form-control-lg ps-0 border-start-0"
+                    placeholder="Enter folder name (e.g., images, assets)" @keyup.enter="createDirectory" />
                 </div>
                 <small class="text-muted mt-2 d-block">
                   <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
@@ -506,11 +414,8 @@
                 {{ uploadFileName }}
               </p>
               <div class="progress mb-2" style="height: 8px;">
-                <div 
-                  class="progress-bar bg-gradient-success" 
-                  role="progressbar"
-                  :style="{ width: uploadProgress + '%' }"
-                ></div>
+                <div class="progress-bar bg-gradient-success" role="progressbar"
+                  :style="{ width: uploadProgress + '%' }"></div>
               </div>
               <div class="d-flex justify-content-between">
                 <span class="text-xs text-secondary">{{ uploadProgress }}% complete</span>
@@ -531,7 +436,8 @@
             <div class="modal-header border-0 pb-0">
               <div class="d-flex align-items-center">
                 <div :class="['modal-icon', copyMoveAction === 'copy' ? 'bg-gradient-info' : 'bg-gradient-warning']">
-                  <i class="material-symbols-rounded">{{ copyMoveAction === 'copy' ? 'content_copy' : 'drive_file_move' }}</i>
+                  <i class="material-symbols-rounded">{{ copyMoveAction === 'copy' ? 'content_copy' : 'drive_file_move'
+                  }}</i>
                 </div>
                 <div class="ms-3">
                   <h5 class="modal-title mb-0">{{ copyMoveAction === 'copy' ? 'Copy' : 'Move' }} Item</h5>
@@ -544,8 +450,10 @@
               <!-- Source Info -->
               <div class="source-info-card mb-4">
                 <div class="d-flex align-items-center">
-                  <i class="material-symbols-rounded text-lg" :class="isBulkCopyMove ? 'text-primary' : (copyMoveItem?.type === 'directory' ? 'text-warning' : 'text-info')">
-                    {{ isBulkCopyMove ? 'folder_copy' : (copyMoveItem?.type === 'directory' ? 'folder' : 'description') }}
+                  <i class="material-symbols-rounded text-lg"
+                    :class="isBulkCopyMove ? 'text-primary' : (copyMoveItem?.type === 'directory' ? 'text-warning' : 'text-info')">
+                    {{ isBulkCopyMove ? 'folder_copy' : (copyMoveItem?.type === 'directory' ? 'folder' : 'description')
+                    }}
                   </i>
                   <div class="ms-3">
                     <p class="mb-0 fw-bold">{{ copyMoveItem?.name }}</p>
@@ -553,7 +461,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- Destination Input -->
               <div class="form-group mb-0">
                 <label class="form-label fw-bold text-dark">
@@ -561,16 +469,13 @@
                 </label>
                 <div class="input-group input-group-lg">
                   <span class="input-group-text bg-light border-end-0">
-                    <i class="material-symbols-rounded" :class="copyMoveAction === 'copy' ? 'text-info' : 'text-warning'">folder_open</i>
+                    <i class="material-symbols-rounded"
+                      :class="copyMoveAction === 'copy' ? 'text-info' : 'text-warning'">folder_open</i>
                   </span>
-                  <input 
-                    ref="copyMoveInput"
-                    v-model="copyMoveDestination" 
-                    type="text" 
-                    class="form-control form-control-lg ps-0 border-start-0" 
+                  <input ref="copyMoveInput" v-model="copyMoveDestination" type="text"
+                    class="form-control form-control-lg ps-0 border-start-0"
                     placeholder="Leave empty for root, or enter path like 'images/icons'"
-                    @keyup.enter="executeCopyMove"
-                  />
+                    @keyup.enter="executeCopyMove" />
                 </div>
                 <small class="text-muted mt-2 d-block">
                   <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
@@ -583,13 +488,11 @@
                 <i class="material-symbols-rounded text-sm me-1">close</i>
                 Cancel
               </button>
-              <button 
-                :class="['btn', copyMoveAction === 'copy' ? 'bg-gradient-info' : 'bg-gradient-warning']"
-                @click="executeCopyMove"
-                :disabled="copyMoveProcessing"
-              >
+              <button :class="['btn', copyMoveAction === 'copy' ? 'bg-gradient-info' : 'bg-gradient-warning']"
+                @click="executeCopyMove" :disabled="copyMoveProcessing">
                 <span v-if="copyMoveProcessing" class="spinner-border spinner-border-sm me-2"></span>
-                <i v-else class="material-symbols-rounded text-sm me-1">{{ copyMoveAction === 'copy' ? 'content_copy' : 'drive_file_move' }}</i>
+                <i v-else class="material-symbols-rounded text-sm me-1">{{ copyMoveAction === 'copy' ? 'content_copy' :
+                  'drive_file_move' }}</i>
                 {{ copyMoveAction === 'copy' ? 'Copy Here' : 'Move Here' }}
               </button>
             </div>
@@ -609,12 +512,7 @@
             <div class="modal-body">
               <div class="form-group">
                 <label>New Name</label>
-                <input 
-                  v-model="renameName" 
-                  type="text" 
-                  class="form-control"
-                  @keyup.enter="renameItem"
-                />
+                <input v-model="renameName" type="text" class="form-control" @keyup.enter="renameItem" />
               </div>
             </div>
             <div class="modal-footer">
@@ -646,6 +544,55 @@
         </div>
       </div>
 
+      <!-- Extract Modal -->
+      <div class="modal-backdrop fade show" v-if="showExtractModal" @click="showExtractModal = false"></div>
+      <div class="modal fade show" style="display:block" v-if="showExtractModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div class="modal-icon bg-gradient-success">
+                  <i class="material-symbols-rounded">unarchive</i>
+                </div>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">Extract Archive</h5>
+                  <p class="text-sm text-secondary mb-0">{{ extractItem?.name }}</p>
+                </div>
+              </div>
+              <button type="button" class="btn-close" @click="showExtractModal = false"></button>
+            </div>
+            <div class="modal-body pt-4">
+              <div class="form-group mb-0">
+                <label class="form-label fw-bold text-dark">Destination Path (optional)</label>
+                <div class="input-group input-group-lg">
+                  <span class="input-group-text bg-light border-end-0">
+                    <i class="material-symbols-rounded text-success">folder_open</i>
+                  </span>
+                  <input v-model="extractDestination" type="text"
+                    class="form-control form-control-lg ps-0 border-start-0"
+                    placeholder="Leave empty for same directory" @keyup.enter="executeExtract" />
+                </div>
+                <small class="text-muted mt-2 d-block">
+                  <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
+                  Leave empty to extract to the current directory, or enter a relative path.
+                </small>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary" @click="showExtractModal = false">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Cancel
+              </button>
+              <button class="btn bg-gradient-success" @click="executeExtract" :disabled="extractProcessing">
+                <span v-if="extractProcessing" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">unarchive</i>
+                Extract
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- File Editor Modal -->
       <div class="modal-backdrop fade show" v-if="showEditorModal" @click="closeEditor"></div>
       <div class="modal fade show d-block" v-if="showEditorModal">
@@ -656,12 +603,8 @@
               <button type="button" class="btn-close" @click="closeEditor"></button>
             </div>
             <div class="modal-body">
-              <textarea 
-                v-model="fileContent" 
-                class="form-control font-monospace" 
-                rows="25"
-                style="font-size: 13px;"
-              ></textarea>
+              <textarea v-model="fileContent" class="form-control font-monospace" rows="25"
+                style="font-size: 13px;"></textarea>
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" @click="closeEditor">Cancel</button>
@@ -732,6 +675,12 @@ const copyMoveInput = ref(null)
 const isBulkCopyMove = ref(false)
 const bulkCopyMoveItems = ref([])
 
+// Extract modal state
+const showExtractModal = ref(false)
+const extractItem = ref(null)
+const extractDestination = ref('')
+const extractProcessing = ref(false)
+
 // Template refs for autofocus
 const createFileInput = ref(null)
 const createFolderInput = ref(null)
@@ -754,22 +703,22 @@ const hasSelected = computed(() => selectedItems.value.length > 0)
 
 const contextMenuStyle = computed(() => {
   if (!contextMenu.value.show) return {}
-  
+
   const menuWidth = 200
   const menuHeight = 350
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
-  
+
   let x = contextMenu.value.x
   let y = contextMenu.value.y
-  
+
   if (x + menuWidth > windowWidth) {
     x = windowWidth - menuWidth - 10
   }
   if (y + menuHeight > windowHeight) {
     y = windowHeight - menuHeight - 10
   }
-  
+
   return {
     top: `${y}px`,
     left: `${x}px`
@@ -1005,12 +954,12 @@ const handleFileUpload = async (event) => {
         uploadProgress.value = percentCompleted
       }
     })
-    
+
     showAlert('success', 'File uploaded successfully')
     loadFiles()
   } catch (error) {
     let errorMessage = 'Failed to upload file'
-    
+
     if (error.response) {
       // Server responded with an error
       if (error.response.status === 413) {
@@ -1025,7 +974,7 @@ const handleFileUpload = async (event) => {
     } else if (error.message) {
       errorMessage = error.message
     }
-    
+
     showAlert('danger', errorMessage)
   } finally {
     uploading.value = false
@@ -1112,14 +1061,49 @@ const bulkZip = async () => {
   }
 }
 
+// Check if file is an extractable archive
+const isArchive = (filename) => {
+  const lower = filename.toLowerCase()
+  return lower.endsWith('.zip') || lower.endsWith('.tar') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz')
+}
+
+// Open extract modal
+const openExtractModal = (item) => {
+  extractItem.value = item
+  extractDestination.value = '' // Empty means same directory
+  extractProcessing.value = false
+  showExtractModal.value = true
+}
+
+// Execute extraction
+const executeExtract = async () => {
+  if (!extractItem.value) return
+
+  try {
+    extractProcessing.value = true
+    await axios.post(`/file-manager/${props.domain}/extract`, {
+      path: currentPath.value || '',
+      name: extractItem.value.name,
+      destination: extractDestination.value
+    })
+    showAlert('success', 'Archive extracted successfully')
+    showExtractModal.value = false
+    loadFiles()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to extract archive')
+  } finally {
+    extractProcessing.value = false
+  }
+}
+
 // Bulk Copy/Move: opens the modal for bulk operations
 const bulkCopyMove = (action) => {
   if (!hasSelected.value) return
-  
+
   // Set bulk mode
   isBulkCopyMove.value = true
   bulkCopyMoveItems.value = [...selectedItems.value]
-  copyMoveItem.value = { 
+  copyMoveItem.value = {
     name: `${selectedItems.value.length} items`,
     type: 'multiple'
   }
@@ -1127,7 +1111,7 @@ const bulkCopyMove = (action) => {
   copyMoveDestination.value = currentPath.value || ''
   copyMoveProcessing.value = false
   showCopyMoveModal.value = true
-  
+
   setTimeout(() => {
     copyMoveInput.value?.focus()
     copyMoveInput.value?.select()
@@ -1163,7 +1147,7 @@ const closeCopyMoveModal = () => {
 
 const executeCopyMove = async () => {
   copyMoveProcessing.value = true
-  
+
   try {
     if (isBulkCopyMove.value) {
       // Bulk operation
@@ -1201,7 +1185,8 @@ const executeCopyMove = async () => {
 .modal {
   background: rgba(0, 0, 0, 0.5);
   position: fixed;
-  z-index: 20050; /* ensure above sidebar */
+  z-index: 20050;
+  /* ensure above sidebar */
   top: 0;
   left: 0;
   width: 100%;
@@ -1210,7 +1195,8 @@ const executeCopyMove = async () => {
 
 .modal-backdrop {
   position: fixed;
-  z-index: 20040; /* slightly below modal but above everything else */
+  z-index: 20040;
+  /* slightly below modal but above everything else */
 }
 
 /* Keep the modal-content style */
@@ -1236,7 +1222,7 @@ const executeCopyMove = async () => {
   gap: 0.5rem;
 }
 
-.breadcrumb-item + .breadcrumb-item::before {
+.breadcrumb-item+.breadcrumb-item::before {
   content: "/";
 }
 
@@ -1389,6 +1375,7 @@ textarea.font-monospace {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -1403,6 +1390,7 @@ textarea.font-monospace {
     transform: translate(0, -20px);
     opacity: 0;
   }
+
   to {
     transform: translate(0, 0);
     opacity: 1;

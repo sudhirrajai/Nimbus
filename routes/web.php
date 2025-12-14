@@ -63,6 +63,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/move', [FileManagerController::class, 'move'])->name('move');
         Route::post('/{domain}/chmod', [FileManagerController::class, 'chmod'])->name('chmod');
         Route::post('/{domain}/zip', [FileManagerController::class, 'zip'])->name('zip');
+        Route::post('/{domain}/extract', [FileManagerController::class, 'extract'])->name('extract');
         Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
         Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
     });
