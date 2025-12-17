@@ -845,6 +845,54 @@ BASH;
     }
 
     /**
+     * Open phpMyAdmin with SSO (auto-login with nimbus_admin)
+     */
+    public function openPhpMyAdminSSO()
+    {
+        try {
+            // Read credentials from file
+            if (!file_exists($this->credentialsPath)) {
+                return response()->json(['error' => 'phpMyAdmin credentials not found. Please reinstall phpMyAdmin.'], 404);
+            }
+            
+            $credentials = json_decode(File::get($this->credentialsPath), true);
+            if (!$credentials || empty($credentials['username']) || empty($credentials['password'])) {
+                return response()->json(['error' => 'Invalid phpMyAdmin credentials'], 500);
+            }
+            
+            // Generate a secure one-time token
+            $token = Str::random(64);
+            
+            // Ensure token directory exists
+            $tokenDir = storage_path('app/pma_tokens');
+            if (!is_dir($tokenDir)) {
+                mkdir($tokenDir, 0755, true);
+            }
+            
+            // Store token data
+            $tokenData = [
+                'username' => $credentials['username'],
+                'password' => $credentials['password'],
+                'host' => 'localhost',
+                'database' => '',
+                'created' => time(),
+                'panel_user' => auth()->user()->email ?? 'unknown'
+            ];
+            
+            file_put_contents($tokenDir . '/' . $token . '.json', json_encode($tokenData));
+
+            // Return the SSO URL
+            return response()->json([
+                'success' => true,
+                'url' => "/pma_signon.php?token={$token}"
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to generate phpMyAdmin SSO: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * phpMyAdmin view page (authenticated)
      */
     public function phpMyAdminView(Request $request)

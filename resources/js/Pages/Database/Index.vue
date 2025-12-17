@@ -20,10 +20,11 @@
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
               </button>
-              <a href="/phpmyadmin" target="_blank" class="btn bg-gradient-info mb-0">
-                <i class="material-symbols-rounded text-sm me-1">open_in_new</i>
+              <button class="btn bg-gradient-info mb-0" @click="openPhpMyAdminSSO" :disabled="openingPma">
+                <span v-if="openingPma" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">open_in_new</i>
                 phpMyAdmin
-              </a>
+              </button>
             </div>
           </div>
         </div>
@@ -343,7 +344,7 @@
                           }}</span>
                         <span v-if="user.privileges?.length > 3" class="text-xs text-secondary">+{{
                           user.privileges.length - 3
-                        }} more</span>
+                          }} more</span>
                       </td>
                       <td>
                         <button class="btn btn-link text-primary p-0 me-2" @click="editUserPermissions(user)"
@@ -472,6 +473,7 @@ import axios from 'axios'
 const loading = ref(false)
 const installing = ref(false)
 const reinstalling = ref(false)
+const openingPma = ref(false)
 const creatingDb = ref(false)
 const creatingUser = ref(false)
 const assigning = ref(false)
@@ -658,6 +660,24 @@ const reinstallPhpMyAdmin = async () => {
     console.error('phpMyAdmin reinstall error:', error.response?.data)
   } finally {
     reinstalling.value = false
+  }
+}
+
+const openPhpMyAdminSSO = async () => {
+  try {
+    openingPma.value = true
+    const response = await axios.get('/database/phpmyadmin/sso')
+
+    if (response.data.success && response.data.url) {
+      // Open phpMyAdmin with SSO token in new tab
+      window.open(response.data.url, '_blank')
+    } else {
+      showAlert('danger', response.data.error || 'Failed to generate SSO link')
+    }
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to open phpMyAdmin')
+  } finally {
+    openingPma.value = false
   }
 }
 
