@@ -588,26 +588,51 @@ const installPhpMyAdmin = async () => {
 }
 
 // Poll for installation status
+let pollAttempts = 0;
+const maxPollAttempts = 180; // Max 6 minutes (2 second intervals)
+
 const pollInstallStatus = async () => {
   try {
+    pollAttempts++;
     const response = await axios.get('/database/install-status')
     installLog.value = response.data.log
 
-    if (response.data.status === 'done') {
+    if (response.data.status === 'done' || (response.data.installed && response.data.status !== 'running')) {
       installing.value = false
       status.value.phpMyAdminInstalled = true
       showCredentials.value = true
       showAlert('success', 'phpMyAdmin installed successfully!')
+      pollAttempts = 0;
     } else if (response.data.status === 'error') {
       installing.value = false
       showAlert('danger', 'Installation failed. Check the log for details.')
+      pollAttempts = 0;
+    } else if (pollAttempts >= maxPollAttempts) {
+      // Timeout - check if actually installed anyway
+      if (response.data.installed) {
+        installing.value = false
+        status.value.phpMyAdminInstalled = true
+        showCredentials.value = true
+        showAlert('success', 'phpMyAdmin installed successfully!')
+      } else {
+        installing.value = false
+        showAlert('warning', 'Installation timed out. Please refresh the page to check status.')
+      }
+      pollAttempts = 0;
     } else {
       // Still running, poll again in 2 seconds
       setTimeout(pollInstallStatus, 2000)
     }
   } catch (error) {
     console.error('Poll error:', error)
-    setTimeout(pollInstallStatus, 2000)
+    // On error, keep trying unless we've hit max attempts
+    if (pollAttempts < maxPollAttempts) {
+      setTimeout(pollInstallStatus, 2000)
+    } else {
+      installing.value = false
+      showAlert('danger', 'Lost connection while polling. Please refresh the page.')
+      pollAttempts = 0;
+    }
   }
 }
 

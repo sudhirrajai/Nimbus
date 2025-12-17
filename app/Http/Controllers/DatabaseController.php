@@ -78,10 +78,24 @@ class DatabaseController extends Controller
             // Detect PHP version
             $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
             
-            // Install script
+            // Get the log and status file paths for the script
+            $scriptLogFile = $logFile;
+            $scriptStatusFile = $statusFile;
+            $scriptLockFile = $lockFile;
+            
+            // Install script - use unquoted heredoc for variable interpolation
             $script = <<<BASH
 #!/bin/bash
-cd /usr/local/nimbus
+cd /usr/local/nimbus 2>/dev/null || cd /tmp
+
+LOG_FILE="{$scriptLogFile}"
+STATUS_FILE="{$scriptStatusFile}"
+LOCK_FILE="{$scriptLockFile}"
+
+cleanup() {
+    rm -f "\$LOCK_FILE"
+}
+trap cleanup EXIT
 
 echo "Setting up debconf selections..."
 echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections
@@ -100,6 +114,7 @@ sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1
 
 if [ ! -d "/usr/share/phpmyadmin" ]; then
     echo "ERROR: phpMyAdmin installation failed!"
+    echo "error" > "\$STATUS_FILE"
     exit 1
 fi
 
@@ -129,12 +144,13 @@ echo ""
 echo "Configuring nginx..."
 sudo mkdir -p /etc/nginx/snippets
 
-sudo tee /etc/nginx/snippets/phpmyadmin.conf > /dev/null << 'NGINX'
+# Create nginx config with actual PHP version (using cat EOF for variable interpolation)
+cat << NGINXEOF | sudo tee /etc/nginx/snippets/phpmyadmin.conf > /dev/null
 location /phpmyadmin {
     alias /usr/share/phpmyadmin;
     index index.php;
 
-    location ~ ^/phpmyadmin/(.+\.php)$ {
+    location ~ ^/phpmyadmin/(.+\.php)\$ {
         alias /usr/share/phpmyadmin/\$1;
         fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
         fastcgi_index index.php;
@@ -142,11 +158,11 @@ location /phpmyadmin {
         fastcgi_param SCRIPT_FILENAME \$request_filename;
     }
 
-    location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
+    location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))\$ {
         alias /usr/share/phpmyadmin/\$1;
     }
 }
-NGINX
+NGINXEOF
 
 # Add include to nimbus config if not present
 if ! grep -q 'phpmyadmin.conf' /etc/nginx/sites-available/nimbus; then
@@ -155,19 +171,23 @@ fi
 
 echo ""
 echo "Testing nginx configuration..."
-sudo nginx -t 2>&1
+if ! sudo nginx -t 2>&1; then
+    echo "ERROR: nginx configuration test failed!"
+    echo "error" > "\$STATUS_FILE"
+    exit 1
+fi
 
 echo ""
 echo "Reloading nginx..."
 sudo systemctl reload nginx 2>&1
 
-# Remove lock file
-rm -f /usr/local/nimbus/storage/logs/nimbus_install.lock
-
 echo ""
 echo "Installation completed successfully!"
 echo "Username: {$adminUser}"
 echo "Password: {$adminPass}"
+
+# Signal completion
+echo "done" > "\$STATUS_FILE"
 BASH;
 
             $tempScript = "/tmp/phpmyadmin_install.sh";
@@ -213,13 +233,26 @@ BASH;
         $log = file_exists($logFile) ? file_get_contents($logFile) : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
         
-        // Check if install is complete
-        if (strpos($log, 'Installation completed successfully') !== false) {
-            file_put_contents($statusFile, 'done');
-            $status = 'done';
-        } elseif (strpos($log, 'ERROR:') !== false) {
-            file_put_contents($statusFile, 'error');
-            $status = 'error';
+        // Check if install is complete via log message
+        if ($status === 'running') {
+            if (strpos($log, 'Installation completed successfully') !== false) {
+                file_put_contents($statusFile, 'done');
+                $status = 'done';
+            } elseif (strpos($log, 'ERROR:') !== false) {
+                file_put_contents($statusFile, 'error');
+                $status = 'error';
+            } 
+            // Fallback: if phpMyAdmin directory exists and log shows nginx reload completed
+            elseif (file_exists($this->phpMyAdminPath) && strpos($log, 'Reloading nginx') !== false) {
+                // Check if process is still running by looking for recent log activity
+                $lastModified = filemtime($logFile);
+                $timeSinceUpdate = time() - $lastModified;
+                // If no log update in 10 seconds and phpMyAdmin exists, consider it done
+                if ($timeSinceUpdate > 10) {
+                    file_put_contents($statusFile, 'done');
+                    $status = 'done';
+                }
+            }
         }
         
         return response()->json([
