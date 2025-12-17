@@ -117,6 +117,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
         Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
         Route::post('/phpmyadmin/access', [DatabaseController::class, 'getPhpMyAdminUrl'])->name('phpmyadmin.access');
+        Route::get('/phpmyadmin/sso', [DatabaseController::class, 'openPhpMyAdminSSO'])->name('phpmyadmin.sso');
         Route::get('/phpmyadmin/signon/{token}', [DatabaseController::class, 'phpMyAdminSignon'])->name('phpmyadmin.signon');
         Route::get('/phpmyadmin-view', [DatabaseController::class, 'phpMyAdminView'])->name('phpmyadmin.view');
     });
