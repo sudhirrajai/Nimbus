@@ -88,6 +88,16 @@ class DatabaseController extends Controller
 #!/bin/bash
 cd /usr/local/nimbus 2>/dev/null || cd /tmp
 
+# ====== SUPPRESS ALL INTERACTIVE PROMPTS ======
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+export UCF_FORCE_CONFFNEW=1
+export UCF_FORCE_CONFFDEF=yes
+export APT_LISTCHANGES_FRONTEND=none
+export APT_LISTBUGS_FRONTEND=none
+
 LOG_FILE="{$scriptLogFile}"
 STATUS_FILE="{$scriptStatusFile}"
 LOCK_FILE="{$scriptLockFile}"
@@ -97,40 +107,55 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Suppress needrestart
+if [ -f /etc/needrestart/needrestart.conf ]; then
+    sudo sed -i "s/^#\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
+    sudo sed -i "s/\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
+fi
+
 echo "Setting up debconf selections..."
-echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/dbconfig-install boolean false' | sudo debconf-set-selections
 echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections
 echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections
 echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections
 echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/setup-username string admin' | sudo debconf-set-selections
+echo 'phpmyadmin phpmyadmin/setup-password string ' | sudo debconf-set-selections
 
 echo ""
 echo "Updating package cache..."
-sudo apt-get update 2>&1
+sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1
 
 echo ""
 echo "Installing phpMyAdmin..."
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1
+sudo DEBIAN_FRONTEND=noninteractive \
+    DEBCONF_NONINTERACTIVE_SEEN=true \
+    NEEDRESTART_MODE=a \
+    UCF_FORCE_CONFFNEW=1 \
+    apt-get install -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    -o Dpkg::Options::="--force-confnew" \
+    -o APT::Get::Assume-Yes=true \
+    phpmyadmin 2>&1
 
 if [ ! -d "/usr/share/phpmyadmin" ]; then
-    echo "ERROR: phpMyAdmin installation failed!"
+    echo "ERROR: phpMyAdmin installation failed - directory not found!"
     echo "error" > "\$STATUS_FILE"
     exit 1
 fi
 
-# ====== PHP 8.5 CLEANUP ======
-# If PHP 8.5 got installed by accident, remove it and stick with intended version
+# ====== PHP VERSION CLEANUP ======
+# If PHP 8.5 got installed by accident, remove it
 if dpkg -l | grep -q "php8.5"; then
     echo ""
     echo "WARNING: PHP 8.5 was installed. Removing it to keep PHP {$phpVersion}..."
-    sudo apt-get remove -y --purge php8.5* 2>&1 || true
-    sudo apt-get autoremove -y 2>&1 || true
+    sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge php8.5* 2>&1 || true
+    sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y 2>&1 || true
 fi
 
-# Make sure we're still using the correct PHP version
+# Make sure we're using the correct PHP version
 sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
-
-# Restart the correct PHP-FPM
 sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
 
 echo ""
@@ -139,6 +164,46 @@ sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
+
+echo ""
+echo "Configuring phpMyAdmin for SSO-only authentication..."
+# Write signon config - this DISABLES the login form entirely.
+# Users can ONLY log in via the Nimbus panel token (pma_signon.php).
+NIMBUS_PORT=$(grep -oP 'listen \K\d+' /etc/nginx/sites-available/nimbus 2>/dev/null | head -1 || echo "2095")
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+sudo mkdir -p /etc/phpmyadmin/conf.d 2>/dev/null || true
+
+# Check if /etc/phpmyadmin/conf.d is usable (some installs put config elsewhere)
+PMA_CONF_DIR="/etc/phpmyadmin/conf.d"
+if [ ! -d "\$PMA_CONF_DIR" ]; then
+    PMA_CONF_DIR="/usr/share/phpmyadmin"
+fi
+
+cat <<'PMACONF' | sudo tee "\$PMA_CONF_DIR/nimbus_sso.php" > /dev/null
+<?php
+/**
+ * Nimbus SSO Configuration for phpMyAdmin
+ * Forces token-only login via Nimbus panel.
+ * Direct username/password login is disabled.
+ */
+
+// Use signon authentication - disables the login form
+\$cfg['Servers'][1]['auth_type'] = 'signon';
+\$cfg['Servers'][1]['SignonSession'] = 'SignonSession';
+\$cfg['Servers'][1]['SignonURL']    = '/pma_signon.php';
+\$cfg['Servers'][1]['LogoutURL']    = '/database';
+
+// Clear any hardcoded user/pass (force SSO)
+unset(\$cfg['Servers'][1]['user']);
+unset(\$cfg['Servers'][1]['password']);
+
+// Allow login from any host since we control auth
+\$cfg['Servers'][1]['host'] = 'localhost';
+\$cfg['Servers'][1]['AllowNoPassword'] = false;
+PMACONF
+
+echo "SSO config written to \$PMA_CONF_DIR/nimbus_sso.php"
 
 echo ""
 echo "Configuring nginx..."
@@ -185,6 +250,7 @@ echo ""
 echo "Installation completed successfully!"
 echo "Username: {$adminUser}"
 echo "Password: {$adminPass}"
+echo "SSO: Enabled (login only via Nimbus panel)"
 
 # Signal completion
 echo "done" > "\$STATUS_FILE"
@@ -298,9 +364,9 @@ BASH;
         try {
             $output = [];
             
-            // Remove existing phpMyAdmin
-            exec("sudo apt-get purge -y phpmyadmin 2>&1", $output, $code);
-            exec("sudo apt-get autoremove -y 2>&1", $output, $code);
+            // Remove existing phpMyAdmin (non-interactive)
+            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get purge -y phpmyadmin 2>&1", $output, $code);
+            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y 2>&1", $output, $code);
             
             // Remove credentials file
             if (file_exists($this->credentialsPath)) {
@@ -314,15 +380,17 @@ BASH;
             }
             
             // Set debconf selections to avoid interactive prompts
-            exec("echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | sudo debconf-set-selections 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/dbconfig-install boolean false' | sudo debconf-set-selections 2>&1", $output, $code);
             exec("echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections 2>&1", $output, $code);
             exec("echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections 2>&1", $output, $code);
             exec("echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections 2>&1", $output, $code);
             exec("echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections 2>&1", $output, $code);
-            
-            // Update and reinstall
-            exec("sudo apt-get update 2>&1", $output, $code);
-            exec("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y phpmyadmin 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/setup-username string admin' | sudo debconf-set-selections 2>&1", $output, $code);
+            exec("echo 'phpmyadmin phpmyadmin/setup-password string ' | sudo debconf-set-selections 2>&1", $output, $code);
+
+            // Update and reinstall (full non-interactive)
+            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1", $output, $code);
+            exec("sudo DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true NEEDRESTART_MODE=a UCF_FORCE_CONFFNEW=1 apt-get install -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" phpmyadmin 2>&1", $output, $code);
             
             if ($code !== 0) {
                 return response()->json([
@@ -338,6 +406,9 @@ BASH;
             // Drop old user if exists and create new
             exec("sudo mysql -e \"DROP USER IF EXISTS '{$adminUser}'@'localhost'\" 2>&1", $output, $code);
             $this->createMySQLUser($adminUser, $adminPass, true);
+            
+            // Apply SSO-only config (no direct login)
+            $this->applyPhpMyAdminSSOConfig();
             
             // Configure nginx for phpMyAdmin
             $this->configurePhpMyAdminNginx();
@@ -781,53 +852,57 @@ BASH;
     }
 
     /**
-     * Get phpMyAdmin access URL for a specific database (with auto-login token)
+     * Get phpMyAdmin access URL for a specific database (with auto-login SSO token)
      */
     public function getPhpMyAdminUrl(Request $request)
     {
         try {
             $request->validate([
                 'database' => 'required|string|max:64',
-                'username' => 'required|string|max:32',
-                'host' => 'nullable|string'
+                'username' => 'nullable|string|max:32',
+                'host'     => 'nullable|string'
             ]);
 
             $database = $request->input('database');
-            $username = $request->input('username');
-            $host = $request->input('host', 'localhost');
-            
+            $host     = $request->input('host', 'localhost');
+
+            // Use nimbus_admin credentials (has ALL PRIVILEGES - can open any DB)
+            // Fall back to nimbus DB user if credentials file not found
+            if (file_exists($this->credentialsPath)) {
+                $credentials = json_decode(File::get($this->credentialsPath), true);
+                $mysqlUser   = $credentials['username'] ?? config('database.connections.mysql.username');
+                $mysqlPass   = $credentials['password'] ?? config('database.connections.mysql.password');
+            } else {
+                $mysqlUser = config('database.connections.mysql.username');
+                $mysqlPass = config('database.connections.mysql.password');
+            }
+
             // Generate a secure one-time token
             $token = Str::random(64);
-            
+
             // Ensure token directory exists
             $tokenDir = storage_path('app/pma_tokens');
             if (!is_dir($tokenDir)) {
                 mkdir($tokenDir, 0755, true);
             }
-            
-            // Get MySQL credentials from .env (for the nimbus admin user)
-            // For security, we use the configured nimbus MySQL user
-            $mysqlUser = config('database.connections.mysql.username');
-            $mysqlPass = config('database.connections.mysql.password');
-            
-            // Store token data in file
+
+            // Store token data
             $tokenData = [
-                'username' => $mysqlUser,
-                'password' => $mysqlPass,
-                'host' => $host,
-                'database' => $database,
-                'created' => time(),
+                'username'   => $mysqlUser,
+                'password'   => $mysqlPass,
+                'host'       => $host,
+                'database'   => $database,
+                'created'    => time(),
                 'panel_user' => auth()->user()->email ?? 'unknown'
             ];
-            
+
             file_put_contents($tokenDir . '/' . $token . '.json', json_encode($tokenData));
 
-            // Return URL to signon script
+            // Return SSO URL
             return response()->json([
-                'url' => "/pma_signon.php?token={$token}&db=" . urlencode($database),
-                'username' => $mysqlUser,
+                'url'      => "/pma_signon.php?token={$token}&db=" . urlencode($database),
                 'database' => $database,
-                'message' => "Opening phpMyAdmin for database '{$database}'"
+                'message'  => "Opening phpMyAdmin for database '{$database}'"
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get phpMyAdmin URL: " . $e->getMessage());
@@ -992,6 +1067,53 @@ NGINX;
         
         // Reload nginx
         $this->executeSudoCommand("nginx -t && systemctl reload nginx");
+    }
+
+    /**
+     * Apply SSO-only config for phpMyAdmin
+     * Disables the login form - users must come via panel token
+     */
+    private function applyPhpMyAdminSSOConfig()
+    {
+        $ssoConfig = <<<'PHP'
+<?php
+/**
+ * Nimbus SSO Configuration for phpMyAdmin
+ * Forces token-only login via Nimbus panel.
+ * Direct username/password login is disabled.
+ */
+
+// Use signon authentication - disables the login form
+$cfg['Servers'][1]['auth_type'] = 'signon';
+$cfg['Servers'][1]['SignonSession'] = 'SignonSession';
+$cfg['Servers'][1]['SignonURL']    = '/pma_signon.php';
+$cfg['Servers'][1]['LogoutURL']    = '/database';
+
+// Clear any hardcoded user/pass (force SSO only)
+unset($cfg['Servers'][1]['user']);
+unset($cfg['Servers'][1]['password']);
+
+// Local host only
+$cfg['Servers'][1]['host'] = 'localhost';
+$cfg['Servers'][1]['AllowNoPassword'] = false;
+PHP;
+
+        $tempFile = '/tmp/nimbus_pma_sso_' . time() . '.php';
+        file_put_contents($tempFile, $ssoConfig);
+
+        // Try /etc/phpmyadmin/conf.d/ first (standard location)
+        $confDir = '/etc/phpmyadmin/conf.d';
+        $this->executeSudoCommand("mkdir -p {$confDir}");
+
+        // Check if dir is writable/exists after creation
+        $output = [];
+        exec("test -d {$confDir} && echo 'exists'", $output);
+        $targetDir = (!empty($output) && $output[0] === 'exists') ? $confDir : '/usr/share/phpmyadmin';
+
+        $this->executeSudoCommand("cp {$tempFile} {$targetDir}/nimbus_sso.php");
+        $this->executeSudoCommand("chmod 644 {$targetDir}/nimbus_sso.php");
+
+        unlink($tempFile);
     }
 
     /**
