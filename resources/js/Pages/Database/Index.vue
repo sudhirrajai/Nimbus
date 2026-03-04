@@ -430,36 +430,7 @@
         </div>
       </div>
 
-      <!-- phpMyAdmin Access Modal -->
-      <div class="modal-backdrop fade show" v-if="showPmaModal" @click="showPmaModal = false"></div>
-      <div class="modal fade show d-block" v-if="showPmaModal">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="material-symbols-rounded text-info me-2">open_in_new</i>
-                Open phpMyAdmin
-              </h5>
-              <button type="button" class="btn-close" @click="showPmaModal = false"></button>
-            </div>
-            <div class="modal-body">
-              <p>Opening phpMyAdmin for database <strong>{{ pmaAccess?.database }}</strong></p>
-              <div class="alert alert-info">
-                <p class="mb-1"><strong>Login with:</strong></p>
-                <p class="mb-0">Username: <code>{{ pmaAccess?.username }}</code></p>
-                <p class="mb-0 text-sm text-secondary">Enter your database user password</p>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="showPmaModal = false">Cancel</button>
-              <a :href="pmaAccess?.url" target="_blank" class="btn bg-gradient-info" @click="showPmaModal = false">
-                <i class="material-symbols-rounded text-sm me-1">open_in_new</i>
-                Open phpMyAdmin
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- phpMyAdmin SSO Access - no modal needed, opens directly via token -->
 
     </div>
   </MainLayout>
@@ -808,21 +779,16 @@ const deleteDatabase = async () => {
 }
 
 const openPhpMyAdmin = async (db) => {
-  if (db.users.length === 0) {
-    showAlert('warning', 'No users assigned to this database. Assign a user first.')
-    return
-  }
-
   try {
-    showAlert('info', 'Opening phpMyAdmin...')
+    showAlert('info', `Opening phpMyAdmin for '${db.name}'...`)
     const response = await axios.post('/database/phpmyadmin/access', {
       database: db.name,
-      username: db.users[0].username
+      username: db.users.length > 0 ? db.users[0].username : 'nimbus_admin'
     })
-    // Open directly in new tab
+    // Open directly via SSO token — no password prompt
     window.open(response.data.url, '_blank')
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to get phpMyAdmin access')
+    showAlert('danger', error.response?.data?.error || 'Failed to open phpMyAdmin')
   }
 }
 </script>

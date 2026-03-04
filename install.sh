@@ -97,17 +97,31 @@ apt-get install -y mariadb-server mariadb-client
 systemctl enable mariadb
 systemctl start mariadb
 
-# Secure MariaDB - use unix_socket authentication for root (allows sudo mysql without password)
+# Wait for MariaDB to be ready
+echo -e "${YELLOW}Waiting for MariaDB to be ready...${NC}"
+for i in $(seq 1 30); do
+    if mysqladmin ping --silent 2>/dev/null; then
+        echo -e "${GREEN}MariaDB is ready${NC}"
+        break
+    fi
+    sleep 1
+done
+
+# Secure MariaDB
+# On fresh installs, root uses unix_socket auth (no password needed via sudo).
+# We try the MariaDB-specific combined syntax first, fall back to plain password if needed.
 MYSQL_ROOT_PASS=$(openssl rand -base64 24)
 
-# Configure root to use unix_socket auth (allows sudo mysql without password)
-# Also set a password for remote tools that need it
-mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket OR mysql_native_password USING PASSWORD('${MYSQL_ROOT_PASS}');"
-mysql -e "DELETE FROM mysql.user WHERE User='';"
-mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-mysql -e "DROP DATABASE IF EXISTS test;"
-mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
-mysql -e "FLUSH PRIVILEGES;"
+# Try combined unix_socket OR native_password auth (MariaDB 10.4+)
+mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket OR mysql_native_password USING PASSWORD('${MYSQL_ROOT_PASS}');" 2>/dev/null || \
+    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';" 2>/dev/null || \
+    echo -e "${YELLOW}Note: root auth method unchanged (unix_socket will be used)${NC}"
+
+mysql -e "DELETE FROM mysql.user WHERE User='';" 2>/dev/null || true
+mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" 2>/dev/null || true
+mysql -e "DROP DATABASE IF EXISTS test;" 2>/dev/null || true
+mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" 2>/dev/null || true
+mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
 
 echo -e "${GREEN}[6/12]${NC} Installing Composer..."
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -131,11 +145,16 @@ git clone $GITHUB_REPO $NIMBUS_DIR
 cd $NIMBUS_DIR
 
 # Create Nimbus database
+# Use 'mysql' directly (unix_socket) since root auth may still be unix_socket
 NIMBUS_DB_PASS=$(openssl rand -base64 24)
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE IF NOT EXISTS nimbus;"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "CREATE USER IF NOT EXISTS 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "GRANT ALL PRIVILEGES ON nimbus.* TO 'nimbus'@'localhost';"
-mysql -u root -p"${MYSQL_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
+mysql -e "CREATE DATABASE IF NOT EXISTS nimbus;" 2>/dev/null || \
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE IF NOT EXISTS nimbus;"
+mysql -e "CREATE USER IF NOT EXISTS 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';" 2>/dev/null || \
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "CREATE USER IF NOT EXISTS 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';"
+mysql -e "GRANT ALL PRIVILEGES ON nimbus.* TO 'nimbus'@'localhost';" 2>/dev/null || \
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "GRANT ALL PRIVILEGES ON nimbus.* TO 'nimbus'@'localhost';"
+mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || \
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
 
 echo -e "${GREEN}[10/12]${NC} Setting up Nimbus..."
 cd $NIMBUS_DIR
