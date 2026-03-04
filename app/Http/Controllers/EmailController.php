@@ -120,7 +120,15 @@ class EmailController extends Controller
             $script = <<<BASH
 #!/bin/bash
 
+# Disable interactive prompts (Ubuntu 22.04+ needrestart, kernel upgrade dialogs)
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+# Disable needrestart temporarily for this installation
+if [ -f /etc/needrestart/needrestart.conf ]; then
+    sudo sed -i "s/^#\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
+fi
 
 # Function to wait for apt locks
 wait_for_apt() {
@@ -132,19 +140,19 @@ wait_for_apt() {
 
 echo "[1/8] Updating package list..."
 wait_for_apt
-sudo apt-get update 2>&1
+sudo DEBIAN_FRONTEND=noninteractive apt-get update 2>&1
 
 echo ""
 echo "[2/8] Installing Postfix..."
 wait_for_apt
 echo "postfix postfix/mailname string {$hostname}" | sudo debconf-set-selections
 echo "postfix postfix/main_mailer_type string 'Internet Site'" | sudo debconf-set-selections
-sudo apt-get install -y postfix postfix-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix postfix-mysql 2>&1
 
 echo ""
 echo "[3/8] Installing Dovecot..."
 wait_for_apt
-sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
 
 echo ""
 echo "[4/8] Installing Roundcube (without Apache)..."
