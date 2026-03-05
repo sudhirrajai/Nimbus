@@ -127,49 +127,69 @@ echo -e "${GREEN}[6/12]${NC} Installing Composer..."
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 echo -e "${GREEN}[7/12]${NC} Installing Node.js ${NODE_VERSION}..."
-# Clear stale apt cache before adding nodesource repo
+# Clear stale apt cache before touching nodesource repo
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-# Try nodesource with up to 3 retries (handles transient CDN mirror sync errors)
 NODE_INSTALLED=false
+
+# Helper: check if currently installed node meets required major version
+node_version_ok() {
+    command -v node &>/dev/null || return 1
+    local installed_major; installed_major=$(node -e "process.stdout.write(String(process.version.match(/^v(\d+)/)[1]))" 2>/dev/null)
+    [ "${installed_major}" -ge "${NODE_VERSION}" ] 2>/dev/null
+}
+
+# --- Attempt 1-3: nodesource repo ---
 for ATTEMPT in 1 2 3; do
     echo -e "  Attempt ${ATTEMPT}/3 via nodesource..."
-    if curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x -o /tmp/nodesource_setup.sh 2>/dev/null; then
-        if bash /tmp/nodesource_setup.sh 2>/dev/null && apt-get install -y nodejs 2>/dev/null; then
+    if curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" -o /tmp/nodesource_setup.sh; then
+        bash /tmp/nodesource_setup.sh && apt-get install -y nodejs npm && true
+        # Only accept if we got the right major version
+        if node_version_ok; then
             NODE_INSTALLED=true
             break
+        else
+            echo -e "  ${YELLOW}nodesource installed wrong Node version ($(node -v)), trying again...${NC}"
+            apt-get purge -y nodejs npm libnode* 2>/dev/null || true
+            apt-get clean && rm -rf /var/lib/apt/lists/*
         fi
     fi
     if [ $ATTEMPT -lt 3 ]; then
-        echo -e "  ${YELLOW}Attempt ${ATTEMPT} failed, retrying in 10s...${NC}"
-        sleep 10
-        apt-get clean && rm -rf /var/lib/apt/lists/*
+        echo -e "  ${YELLOW}Attempt ${ATTEMPT} failed, retrying in 15s...${NC}"
+        sleep 15
     fi
 done
 
-# Fallback: install via nvm if nodesource failed
+# --- Fallback: nvm (works on any distro, no CDN dependency) ---
 if [ "$NODE_INSTALLED" = false ]; then
-    echo -e "${YELLOW}nodesource failed, falling back to nvm...${NC}"
+    echo -e "${YELLOW}nodesource unavailable, installing Node.js ${NODE_VERSION} via nvm...${NC}"
+    # Remove any wrong-version node first
+    apt-get purge -y nodejs npm libnode* 2>/dev/null || true
+
+    export NVM_DIR="/root/.nvm"
     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-    export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    nvm install ${NODE_VERSION}
-    nvm use ${NODE_VERSION}
-    nvm alias default ${NODE_VERSION}
-    # Make node/npm available system-wide
-    ln -sf "$(nvm which ${NODE_VERSION})" /usr/local/bin/node
-    ln -sf "$(dirname $(nvm which ${NODE_VERSION}))/npm" /usr/local/bin/npm
-    ln -sf "$(dirname $(nvm which ${NODE_VERSION}))/npx" /usr/local/bin/npx
+    nvm install "${NODE_VERSION}"
+    nvm use "${NODE_VERSION}"
+    nvm alias default "${NODE_VERSION}"
+
+    # Symlink into /usr/local/bin so node/npm/npx are on PATH for all scripts
+    NODE_BIN_DIR="$(dirname "$(nvm which ${NODE_VERSION})")"
+    ln -sf "${NODE_BIN_DIR}/node" /usr/local/bin/node
+    ln -sf "${NODE_BIN_DIR}/npm"  /usr/local/bin/npm
+    ln -sf "${NODE_BIN_DIR}/npx"  /usr/local/bin/npx
     NODE_INSTALLED=true
 fi
 
-# Verify installation
-if ! command -v npm &>/dev/null; then
-    echo -e "${RED}ERROR: npm not found after Node.js installation! Cannot continue.${NC}"
+# --- Final verification ---
+if ! command -v npm &>/dev/null || ! node_version_ok; then
+    echo -e "${RED}ERROR: Node.js ${NODE_VERSION}+ / npm not available after installation!${NC}"
+    echo -e "${RED}  node: $(node -v 2>/dev/null || echo 'not found')${NC}"
+    echo -e "${RED}  npm:  $(npm  -v 2>/dev/null || echo 'not found')${NC}"
     exit 1
 fi
-echo -e "${GREEN}Node.js $(node -v) and npm $(npm -v) installed successfully.${NC}"
+echo -e "${GREEN}✓ Node.js $(node -v) and npm $(npm -v) ready.${NC}"
 
 echo -e "${GREEN}[8/12]${NC} Installing Supervisor..."
 apt-get install -y supervisor
