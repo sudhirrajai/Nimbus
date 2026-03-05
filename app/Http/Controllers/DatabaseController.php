@@ -990,6 +990,84 @@ PHP;
     }
 
     /**
+     * Create the Adminer SSO Wrapper (public/adminer/index.php)
+     */
+    private function createAdminerWrapper()
+    {
+        if (!file_exists($this->adminerPublicPath)) {
+            mkdir($this->adminerPublicPath, 0755, true);
+        }
+
+        $wrapperPath = $this->adminerPublicPath . '/index.php';
+        
+        $content = <<<'PHP'
+<?php
+/**
+ * Adminer SSO Wrapper — Nimbus Panel
+ * This file auto-connects to the database using session credentials.
+ */
+@session_start();
+
+// 1. Basic Auth Check
+if (empty($_SESSION['adminer_username'])) {
+    header('Location: /database?notice=unauthorized');
+    exit;
+}
+
+// 2. Timeout check (token validity)
+if (isset($_SESSION['adminer_created']) && (time() - $_SESSION['adminer_created'] > 300)) {
+    // Session expired for this specific signon
+    unset($_SESSION['adminer_username'], $_SESSION['adminer_password'], $_SESSION['adminer_server']);
+    header('Location: /database?notice=session_expired');
+    exit;
+}
+
+// 3. Adminer Autologin Implementation
+function adminer_object()
+{
+    // Credentials from session (set by pma_signon.php)
+    $_nimbus_server   = $_SESSION['adminer_server']   ?? 'localhost';
+    $_nimbus_username = $_SESSION['adminer_username'];
+    $_nimbus_password = $_SESSION['adminer_password'];
+    $_nimbus_db       = $_SESSION['adminer_db']       ?? '';
+
+    class AdminerNimbus extends Adminer
+    {
+        private $server, $username, $password, $db;
+
+        function __construct($server, $username, $password, $db)
+        {
+            $this->server   = $server;
+            $this->username = $username;
+            $this->password = $password;
+            $this->db       = $db;
+        }
+
+        // Disable login screen entirely
+        function name() { return 'Nimbus Database Manager'; }
+        
+        // Auto-login
+        function credentials() {
+            return [$this->server, $this->username, $this->password];
+        }
+
+        function database() {
+            return $this->db;
+        }
+    }
+
+    return new AdminerNimbus($_nimbus_server, $_nimbus_username, $_nimbus_password, $_nimbus_db);
+}
+
+// 4. Include the main Adminer script
+include '/usr/share/adminer/adminer.php';
+PHP;
+
+        file_put_contents($wrapperPath, $content);
+        chmod($wrapperPath, 0644);
+    }
+
+    /**
      * Format bytes to human readable
      */
     private function formatBytes($bytes, $precision = 2)
