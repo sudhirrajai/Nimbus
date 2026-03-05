@@ -103,6 +103,7 @@ if [ "${1}" = "--uninstall" ] || [ "${1}" = "uninstall" ]; then
         /tmp/nodesource_setup.sh \
         /tmp/adminer_install.sh \
         /tmp/adminer_reinstall.sh \
+        /usr/local/nimbus/storage/logs/nimbus_install.lock \
         /tmp/adminer_install.sh
 
     echo ""
