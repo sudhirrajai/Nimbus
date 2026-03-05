@@ -8,7 +8,7 @@
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h4 class="font-weight-bolder mb-0">Database Management</h4>
-              <p class="mb-0 text-sm">Manage MySQL databases, users, and phpMyAdmin</p>
+              <p class="mb-0 text-sm">Manage MySQL databases, users, and Adminer</p>
             </div>
             <div class="d-flex gap-2" v-if="status.phpMyAdminInstalled">
               <button class="btn btn-outline-warning mb-0" @click="reinstallPhpMyAdmin" :disabled="reinstalling">
@@ -23,7 +23,7 @@
               <button class="btn bg-gradient-info mb-0" @click="openPhpMyAdminSSO" :disabled="openingPma">
                 <span v-if="openingPma" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">open_in_new</i>
-                phpMyAdmin
+                Adminer
               </button>
             </div>
           </div>
@@ -51,24 +51,24 @@
         </div>
       </div>
 
-      <!-- phpMyAdmin Not Installed -->
+      <!-- Adminer Not Installed -->
       <div class="row" v-if="status.checked && !status.phpMyAdminInstalled">
         <div class="col-12">
           <div class="card">
             <div class="card-body text-center py-5" v-if="!installing">
               <i class="material-symbols-rounded text-warning" style="font-size: 4rem;">database</i>
-              <h4 class="mt-3">phpMyAdmin Not Installed</h4>
-              <p class="text-secondary mb-4">Install phpMyAdmin to manage your MySQL databases</p>
+              <h4 class="mt-3">Adminer Not Installed</h4>
+              <p class="text-secondary mb-4">Install Adminer to manage your MySQL databases</p>
               <button class="btn bg-gradient-primary btn-lg" @click="installPhpMyAdmin" :disabled="installing">
                 <i class="material-symbols-rounded text-sm me-1">download</i>
-                Install phpMyAdmin
+                Install Adminer
               </button>
             </div>
             <!-- Terminal view during installation -->
             <div class="card-body" v-else>
               <h5 class="mb-3">
                 <span class="spinner-border spinner-border-sm me-2"></span>
-                Installing phpMyAdmin...
+                Installing Adminer...
               </h5>
               <div class="terminal-output bg-dark text-white p-3 rounded"
                 style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
@@ -89,14 +89,14 @@
             <div class="card-body text-white">
               <h5 class="text-white mb-3">
                 <i class="material-symbols-rounded me-2">check_circle</i>
-                phpMyAdmin Installed Successfully!
+                Adminer Installed Successfully!
               </h5>
               <p class="mb-3">Save these credentials securely. They will only be shown once.</p>
               <div class="bg-white text-dark p-3 rounded mb-3">
                 <div class="row">
                   <div class="col-md-4">
                     <label class="text-xs text-uppercase text-secondary">URL</label>
-                    <p class="mb-0 font-weight-bold">/phpmyadmin</p>
+                    <p class="mb-0 font-weight-bold">/adminer/</p>
                   </div>
                   <div class="col-md-4">
                     <label class="text-xs text-uppercase text-secondary">Username</label>
@@ -245,7 +245,7 @@
                         </td>
                         <td class="text-center">
                           <button class="btn btn-link text-info mb-0 px-2" @click="openPhpMyAdmin(db)"
-                            title="Open in phpMyAdmin">
+                            title="Open in Adminer">
                             <i class="material-symbols-rounded text-sm">open_in_new</i>
                           </button>
                           <button class="btn btn-link text-primary mb-0 px-2" @click="manageDatabase(db)"
@@ -534,7 +534,7 @@ const installPhpMyAdmin = async () => {
   try {
     installing.value = true
     installLog.value = '' // Reset log
-    showAlert('info', 'Installing phpMyAdmin... This may take a few minutes.')
+    showAlert('info', 'Installing Adminer... This may take a few minutes.')
 
     const response = await axios.post('/database/install-phpmyadmin')
 
@@ -552,7 +552,7 @@ const installPhpMyAdmin = async () => {
       showAlert('success', response.data.message)
     }
   } catch (error) {
-    const errMsg = error.response?.data?.error || 'Failed to install phpMyAdmin'
+    const errMsg = error.response?.data?.error || 'Failed to install Adminer'
     const details = error.response?.data?.details || ''
     showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
     console.error('phpMyAdmin install error:', error.response?.data)
@@ -574,7 +574,7 @@ const pollInstallStatus = async () => {
       installing.value = false
       status.value.phpMyAdminInstalled = true
       showCredentials.value = true
-      showAlert('success', 'phpMyAdmin installed successfully!')
+      showAlert('success', 'Adminer installed successfully!')
       pollAttempts = 0;
     } else if (response.data.status === 'error') {
       installing.value = false
@@ -586,7 +586,7 @@ const pollInstallStatus = async () => {
         installing.value = false
         status.value.phpMyAdminInstalled = true
         showCredentials.value = true
-        showAlert('success', 'phpMyAdmin installed successfully!')
+        showAlert('success', 'Adminer installed successfully!')
       } else {
         installing.value = false
         showAlert('warning', 'Installation timed out. Please refresh the page to check status.')
@@ -637,7 +637,7 @@ const reinstallPhpMyAdmin = async () => {
 const openPhpMyAdminSSO = async () => {
   try {
     openingPma.value = true
-    const response = await axios.get('/database/phpmyadmin/sso')
+    const response = await axios.get('/database/adminer//sso')
 
     if (response.data.success && response.data.url) {
       // Open phpMyAdmin with SSO token in new tab
@@ -781,7 +781,7 @@ const deleteDatabase = async () => {
 const openPhpMyAdmin = async (db) => {
   try {
     showAlert('info', `Opening phpMyAdmin for '${db.name}'...`)
-    const response = await axios.post('/database/phpmyadmin/access', {
+    const response = await axios.post('/database/adminer//access', {
       database: db.name,
       username: db.users.length > 0 ? db.users[0].username : 'nimbus_admin'
     })
