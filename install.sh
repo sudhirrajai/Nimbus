@@ -261,6 +261,7 @@ fi
 echo -e "${GREEN}✓ Node.js $(node -v) and npm $(npm -v) ready.${NC}"
 
 echo -e "${GREEN}[8/12]${NC} Installing Supervisor..."
+apt-get update -y
 apt-get install -y supervisor
 systemctl enable supervisor
 systemctl start supervisor
