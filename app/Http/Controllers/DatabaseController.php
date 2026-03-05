@@ -34,7 +34,7 @@ class DatabaseController extends Controller
             $hasCredentials = file_exists($this->credentialsPath);
             
             return response()->json([
-                'phpMyAdminInstalled' => $isInstalled,
+                'viewerInstalled' => $isInstalled,
                 'credentialsSet' => $hasCredentials,
                 'firstTimeSetup' => $isInstalled && !$hasCredentials
             ]);

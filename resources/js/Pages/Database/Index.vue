@@ -10,7 +10,7 @@
               <h4 class="font-weight-bolder mb-0">Database Management</h4>
               <p class="mb-0 text-sm">Manage MySQL databases, users, and Database Viewer</p>
             </div>
-            <div class="d-flex gap-2" v-if="status.Database ViewerInstalled">
+            <div class="d-flex gap-2" v-if="status.viewerInstalled">
               <button class="btn btn-outline-warning mb-0" @click="reinstallPhpMyAdmin" :disabled="reinstalling">
                 <span v-if="reinstalling" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">refresh</i>
@@ -52,7 +52,7 @@
       </div>
 
       <!-- Database Viewer Not Installed -->
-      <div class="row" v-if="status.checked && !status.Database ViewerInstalled">
+      <div class="row" v-if="status.checked && !status.viewerInstalled">
         <div class="col-12">
           <div class="card">
             <div class="card-body text-center py-5" v-if="!installing">
@@ -121,7 +121,7 @@
       </div>
 
       <!-- Database Management (when Database Viewer is installed) -->
-      <template v-if="status.Database ViewerInstalled && !showCredentials">
+      <template v-if="status.viewerInstalled && !showCredentials">
         <!-- Create Forms Row -->
         <div class="row mb-4">
           <!-- Create Database -->
@@ -451,7 +451,7 @@ const assigning = ref(false)
 const deletingDb = ref(false)
 const updatingPassword = ref(false)
 
-const status = ref({ checked: false, Database ViewerInstalled: false })
+const status = ref({ checked: false, viewerInstalled: false })
 const credentials = ref(null)
 const showCredentials = ref(false)
 const installLog = ref('')
@@ -503,7 +503,7 @@ const checkStatus = async () => {
     const response = await axios.get('/database/status')
     status.value = { ...response.data, checked: true }
 
-    if (status.value.Database ViewerInstalled) {
+    if (status.value.viewerInstalled) {
       await loadData()
     }
   } catch (error) {
@@ -547,7 +547,7 @@ const installPhpMyAdmin = async () => {
       // Synchronous mode - installation completed immediately
       credentials.value = response.data.credentials
       showCredentials.value = true
-      status.value.Database ViewerInstalled = true
+      status.value.viewerInstalled = true
       installing.value = false
       showAlert('success', response.data.message)
     }
@@ -572,7 +572,7 @@ const pollInstallStatus = async () => {
 
     if (response.data.status === 'done' || (response.data.installed && response.data.status !== 'running')) {
       installing.value = false
-      status.value.Database ViewerInstalled = true
+      status.value.viewerInstalled = true
       showCredentials.value = true
       showAlert('success', 'Database Viewer installed successfully!')
       pollAttempts = 0;
@@ -584,7 +584,7 @@ const pollInstallStatus = async () => {
       // Timeout - check if actually installed anyway
       if (response.data.installed) {
         installing.value = false
-        status.value.Database ViewerInstalled = true
+        status.value.viewerInstalled = true
         showCredentials.value = true
         showAlert('success', 'Database Viewer installed successfully!')
       } else {
