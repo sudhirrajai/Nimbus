@@ -127,11 +127,26 @@ echo -e "${GREEN}[6/12]${NC} Installing Composer..."
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 echo -e "${GREEN}[7/12]${NC} Installing Node.js ${NODE_VERSION}..."
-# Try nodesource first (most reliable on Ubuntu/Debian)
+# Clear stale apt cache before adding nodesource repo
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
+# Try nodesource with up to 3 retries (handles transient CDN mirror sync errors)
 NODE_INSTALLED=false
-if curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x -o /tmp/nodesource_setup.sh; then
-    bash /tmp/nodesource_setup.sh && apt-get install -y nodejs && NODE_INSTALLED=true
-fi
+for ATTEMPT in 1 2 3; do
+    echo -e "  Attempt ${ATTEMPT}/3 via nodesource..."
+    if curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x -o /tmp/nodesource_setup.sh 2>/dev/null; then
+        if bash /tmp/nodesource_setup.sh 2>/dev/null && apt-get install -y nodejs 2>/dev/null; then
+            NODE_INSTALLED=true
+            break
+        fi
+    fi
+    if [ $ATTEMPT -lt 3 ]; then
+        echo -e "  ${YELLOW}Attempt ${ATTEMPT} failed, retrying in 10s...${NC}"
+        sleep 10
+        apt-get clean && rm -rf /var/lib/apt/lists/*
+    fi
+done
 
 # Fallback: install via nvm if nodesource failed
 if [ "$NODE_INSTALLED" = false ]; then
