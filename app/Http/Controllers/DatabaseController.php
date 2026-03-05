@@ -10,8 +10,11 @@ use Inertia\Inertia;
 
 class DatabaseController extends Controller
 {
-    private $phpMyAdminPath = '/usr/share/phpmyadmin';
+    private $phpMyAdminPath = '/usr/share/adminer';
+    private $adminerPublicPath = null;
     private $credentialsPath = '/usr/local/nimbus/storage/app/phpmyadmin_credentials.json';
+
+    public function __construct() { $this->adminerPublicPath = public_path('adminer'); }
 
     /**
      * Display database management page
@@ -27,7 +30,7 @@ class DatabaseController extends Controller
     public function getStatus()
     {
         try {
-            $isInstalled = file_exists($this->phpMyAdminPath);
+            $isInstalled = file_exists($this->phpMyAdminPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
             $hasCredentials = file_exists($this->credentialsPath);
             
             return response()->json([
@@ -42,290 +45,97 @@ class DatabaseController extends Controller
     }
 
     /**
-     * Install phpMyAdmin
+     * Install Adminer (no apt — just downloads a single PHP file)
      */
     public function installPhpMyAdmin()
     {
         try {
-            // Check if already installed
-            if (file_exists($this->phpMyAdminPath)) {
-                return response()->json(['error' => 'phpMyAdmin is already installed'], 400);
+            if (file_exists($this->phpMyAdminPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php')) {
+                return response()->json(['error' => 'Adminer is already installed'], 400);
             }
-
-            // Check if another installation is in progress
             $lockFile = storage_path('logs/nimbus_install.lock');
             if (file_exists($lockFile)) {
                 $lockContent = file_get_contents($lockFile);
-                return response()->json([
-                    'error' => "Another installation is in progress: {$lockContent}. Please wait for it to complete."
-                ], 409);
+                return response()->json(['error' => "Another installation is in progress: {$lockContent}. Please wait."], 409);
             }
-            
-            // Create lock file
-            file_put_contents($lockFile, 'phpMyAdmin installation');
-
-            $logFile = storage_path('logs/phpmyadmin_install.log');
+            file_put_contents($lockFile, 'Adminer installation');
+            $logFile    = storage_path('logs/phpmyadmin_install.log');
             $statusFile = storage_path('logs/phpmyadmin_status.txt');
-            
-            // Clear old logs
-            file_put_contents($logFile, "phpMyAdmin installation started at " . date('Y-m-d H:i:s') . "\n");
+            file_put_contents($logFile,    "Adminer installation started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
-            
-            // Generate credentials
             $adminUser = 'nimbus_admin';
             $adminPass = Str::random(16);
-            
-            // Detect PHP version
-            $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
-            
-            // Get the log and status file paths for the script
-            $scriptLogFile = $logFile;
+            $this->createAdminerWrapper();
+            $scriptLockFile   = $lockFile;
+            $scriptLogFile    = $logFile;
             $scriptStatusFile = $statusFile;
-            $scriptLockFile = $lockFile;
-            
-            // Install script - use unquoted heredoc for variable interpolation
             $script = <<<BASH
 #!/bin/bash
-cd /usr/local/nimbus 2>/dev/null || cd /tmp
-
-# ====== SUPPRESS ALL INTERACTIVE PROMPTS ======
-export DEBIAN_FRONTEND=noninteractive
-export DEBCONF_NONINTERACTIVE_SEEN=true
-export NEEDRESTART_MODE=a
-export NEEDRESTART_SUSPEND=1
-export UCF_FORCE_CONFFNEW=1
-export UCF_FORCE_CONFFDEF=yes
-export APT_LISTCHANGES_FRONTEND=none
-export APT_LISTBUGS_FRONTEND=none
-
 LOG_FILE="{$scriptLogFile}"
 STATUS_FILE="{$scriptStatusFile}"
 LOCK_FILE="{$scriptLockFile}"
-
-cleanup() {
-    rm -f "\$LOCK_FILE"
-}
+cleanup() { rm -f "\$LOCK_FILE"; }
 trap cleanup EXIT
-
-# Suppress needrestart
-if [ -f /etc/needrestart/needrestart.conf ]; then
-    sudo sed -i "s/^#\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
-    sudo sed -i "s/\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
+ADMINER_STORE="/usr/share/adminer"
+ADMINER_VERSION="4.8.1"
+GH_URL="https://github.com/vrana/adminer/releases/download/v\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
+ALT_URL="https://www.adminer.org/static/download/\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
+echo "Creating Adminer directory..."; sudo mkdir -p "\$ADMINER_STORE"
+echo "Downloading Adminer \${ADMINER_VERSION}..."
+sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
+    echo "Primary failed, trying adminer.org..."
+    sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 fi
-
-echo "Setting up debconf selections..."
-echo 'phpmyadmin phpmyadmin/dbconfig-install boolean false' | sudo debconf-set-selections
-echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections
-echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections
-echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections
-echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections
-echo 'phpmyadmin phpmyadmin/setup-username string admin' | sudo debconf-set-selections
-echo 'phpmyadmin phpmyadmin/setup-password string ' | sudo debconf-set-selections
-
-echo ""
-echo "Updating package cache..."
-sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1
-
-echo ""
-echo "Installing phpMyAdmin..."
-sudo DEBIAN_FRONTEND=noninteractive \
-    DEBCONF_NONINTERACTIVE_SEEN=true \
-    NEEDRESTART_MODE=a \
-    UCF_FORCE_CONFFNEW=1 \
-    apt-get install -y \
-    -o Dpkg::Options::="--force-confdef" \
-    -o Dpkg::Options::="--force-confold" \
-    -o Dpkg::Options::="--force-confnew" \
-    -o APT::Get::Assume-Yes=true \
-    phpmyadmin 2>&1
-
-if [ ! -d "/usr/share/phpmyadmin" ]; then
-    echo "ERROR: phpMyAdmin installation failed - directory not found!"
-    echo "error" > "\$STATUS_FILE"
-    exit 1
+if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
+    echo "ERROR: Failed to download Adminer!"; echo "error" > "\$STATUS_FILE"; exit 1
 fi
-
-# ====== PHP VERSION CLEANUP ======
-# If PHP 8.5 got installed by accident, remove it
-if dpkg -l | grep -q "php8.5"; then
-    echo ""
-    echo "WARNING: PHP 8.5 was installed. Removing it to keep PHP {$phpVersion}..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge php8.5* 2>&1 || true
-    sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y 2>&1 || true
-fi
-
-# Make sure we're using the correct PHP version
-sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
-sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
-
-echo ""
+echo "Setting permissions..."
+sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 755 "\$ADMINER_STORE"; sudo chmod 644 "\$ADMINER_STORE/adminer.php"
 echo "Creating MySQL admin user..."
 sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
-
-echo ""
-echo "Configuring phpMyAdmin for SSO-only authentication..."
-# Write signon config - this DISABLES the login form entirely.
-# Users can ONLY log in via the Nimbus panel token (pma_signon.php).
-NIMBUS_PORT=$(grep -oP 'listen \K\d+' /etc/nginx/sites-available/nimbus 2>/dev/null | head -1 || echo "2095")
-SERVER_IP=$(hostname -I | awk '{print $1}')
-
-sudo mkdir -p /etc/phpmyadmin/conf.d 2>/dev/null || true
-
-# Check if /etc/phpmyadmin/conf.d is usable (some installs put config elsewhere)
-PMA_CONF_DIR="/etc/phpmyadmin/conf.d"
-if [ ! -d "\$PMA_CONF_DIR" ]; then
-    PMA_CONF_DIR="/usr/share/phpmyadmin"
-fi
-
-cat <<'PMACONF' | sudo tee "\$PMA_CONF_DIR/nimbus_sso.php" > /dev/null
-<?php
-/**
- * Nimbus SSO Configuration for phpMyAdmin
- * Forces token-only login via Nimbus panel.
- * Direct username/password login is disabled.
- */
-
-// Use signon authentication - disables the login form
-\$cfg['Servers'][1]['auth_type'] = 'signon';
-\$cfg['Servers'][1]['SignonSession'] = 'SignonSession';
-\$cfg['Servers'][1]['SignonURL']    = '/pma_signon.php';
-\$cfg['Servers'][1]['LogoutURL']    = '/database';
-
-// Clear any hardcoded user/pass (force SSO)
-unset(\$cfg['Servers'][1]['user']);
-unset(\$cfg['Servers'][1]['password']);
-
-// Allow login from any host since we control auth
-\$cfg['Servers'][1]['host'] = 'localhost';
-\$cfg['Servers'][1]['AllowNoPassword'] = false;
-PMACONF
-
-echo "SSO config written to \$PMA_CONF_DIR/nimbus_sso.php"
-
-echo ""
-echo "Configuring nginx..."
-sudo mkdir -p /etc/nginx/snippets
-
-# Create nginx config with actual PHP version (using cat EOF for variable interpolation)
-cat << NGINXEOF | sudo tee /etc/nginx/snippets/phpmyadmin.conf > /dev/null
-location /phpmyadmin {
-    alias /usr/share/phpmyadmin;
-    index index.php;
-
-    location ~ ^/phpmyadmin/(.+\.php)\$ {
-        alias /usr/share/phpmyadmin/\$1;
-        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME \$request_filename;
-    }
-
-    location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))\$ {
-        alias /usr/share/phpmyadmin/\$1;
-    }
-}
-NGINXEOF
-
-# Add include to nimbus config if not present
-if ! grep -q 'phpmyadmin.conf' /etc/nginx/sites-available/nimbus; then
-    sudo sed -i '/^}/i\    include snippets/phpmyadmin.conf;' /etc/nginx/sites-available/nimbus
-fi
-
-echo ""
-echo "Testing nginx configuration..."
-if ! sudo nginx -t 2>&1; then
-    echo "ERROR: nginx configuration test failed!"
-    echo "error" > "\$STATUS_FILE"
-    exit 1
-fi
-
-echo ""
-echo "Reloading nginx..."
-sudo systemctl reload nginx 2>&1
-
-echo ""
-echo "Installation completed successfully!"
-echo "Username: {$adminUser}"
-echo "Password: {$adminPass}"
-echo "SSO: Enabled (login only via Nimbus panel)"
-
-# Signal completion
+echo "Installation completed successfully; echo "Username: {$adminUser}"; echo "Adminer: Ready at /adminer/"
 echo "done" > "\$STATUS_FILE"
 BASH;
-
-            $tempScript = "/tmp/phpmyadmin_install.sh";
+            $tempScript = '/tmp/adminer_install.sh';
             file_put_contents($tempScript, $script);
             chmod($tempScript, 0755);
-            
-            // Run install in background
             exec("sudo bash {$tempScript} >> {$logFile} 2>&1 &");
-            
-            // Save credentials to file
-            $credentials = [
-                'username' => $adminUser,
-                'password' => $adminPass,
-                'created_at' => now()->toDateTimeString(),
-                'url' => '/phpmyadmin'
-            ];
-            
+            $credentials = ['username' => $adminUser, 'password' => $adminPass, 'created_at' => now()->toDateTimeString(), 'url' => '/adminer/'];
             $credentialsDir = dirname($this->credentialsPath);
-            if (!File::exists($credentialsDir)) {
-                File::makeDirectory($credentialsDir, 0755, true);
-            }
+            if (!File::exists($credentialsDir)) { File::makeDirectory($credentialsDir, 0755, true); }
             File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
-
-            return response()->json([
-                'message' => 'phpMyAdmin installation started...',
-                'credentials' => $credentials,
-                'polling' => true
-            ]);
+            return response()->json(['message' => 'Adminer installation started...', 'credentials' => $credentials, 'polling' => true]);
         } catch (\Exception $e) {
-            \Log::error("Failed to install phpMyAdmin: " . $e->getMessage());
+            \Log::error("Failed to install Adminer: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Get phpMyAdmin install status/log
+     * Get Adminer install status / log
      */
     public function getInstallStatus()
     {
-        $logFile = storage_path('logs/phpmyadmin_install.log');
+        $logFile    = storage_path('logs/phpmyadmin_install.log');
         $statusFile = storage_path('logs/phpmyadmin_status.txt');
-        
-        $log = file_exists($logFile) ? file_get_contents($logFile) : '';
+        $log    = file_exists($logFile)    ? file_get_contents($logFile)    : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
-        
-        // Check if install is complete via log message
         if ($status === 'running') {
+            $adminerReady = file_exists($this->phpMyAdminPath . '/adminer.php');
             if (strpos($log, 'Installation completed successfully') !== false) {
-                file_put_contents($statusFile, 'done');
-                $status = 'done';
+                file_put_contents($statusFile, 'done'); $status = 'done';
             } elseif (strpos($log, 'ERROR:') !== false) {
-                file_put_contents($statusFile, 'error');
-                $status = 'error';
-            } 
-            // Fallback: if phpMyAdmin directory exists and log shows nginx reload completed
-            elseif (file_exists($this->phpMyAdminPath) && strpos($log, 'Reloading nginx') !== false) {
-                // Check if process is still running by looking for recent log activity
-                $lastModified = filemtime($logFile);
-                $timeSinceUpdate = time() - $lastModified;
-                // If no log update in 10 seconds and phpMyAdmin exists, consider it done
-                if ($timeSinceUpdate > 10) {
-                    file_put_contents($statusFile, 'done');
-                    $status = 'done';
-                }
+                file_put_contents($statusFile, 'error'); $status = 'error';
+            } elseif ($adminerReady && (time() - filemtime($logFile) > 5)) {
+                file_put_contents($statusFile, 'done'); $status = 'done';
             }
         }
-        
-        return response()->json([
-            'status' => $status,
-            'log' => $log,
-            'installed' => file_exists($this->phpMyAdminPath)
-        ]);
+        $isInstalled = file_exists($this->phpMyAdminPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
+        return response()->json(['status' => $status, 'log' => $log, 'installed' => $isInstalled]);
     }
 
     /**
@@ -362,81 +172,83 @@ BASH;
     public function reinstallPhpMyAdmin()
     {
         try {
-            $output = [];
-            
-            // Remove existing phpMyAdmin (non-interactive)
-            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get purge -y phpmyadmin 2>&1", $output, $code);
-            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y 2>&1", $output, $code);
-            
+            // Remove existing Adminer files
+            $adminerFile = $this->phpMyAdminPath . '/adminer.php';
+            if (file_exists($adminerFile)) {
+                $this->executeSudoCommand("rm -f {$adminerFile}");
+            }
+            $wrapperFile = $this->adminerPublicPath . '/index.php';
+            if (file_exists($wrapperFile)) {
+                unlink($wrapperFile);
+            }
+
             // Remove credentials file
             if (file_exists($this->credentialsPath)) {
                 unlink($this->credentialsPath);
             }
-            
-            // Remove nginx config
-            $snippetPath = '/etc/nginx/snippets/phpmyadmin.conf';
-            if (file_exists($snippetPath)) {
-                $this->executeSudoCommand("rm -f {$snippetPath}");
-            }
-            
-            // Set debconf selections to avoid interactive prompts
-            exec("echo 'phpmyadmin phpmyadmin/dbconfig-install boolean false' | sudo debconf-set-selections 2>&1", $output, $code);
-            exec("echo 'phpmyadmin phpmyadmin/app-password-confirm password ' | sudo debconf-set-selections 2>&1", $output, $code);
-            exec("echo 'phpmyadmin phpmyadmin/mysql/admin-pass password ' | sudo debconf-set-selections 2>&1", $output, $code);
-            exec("echo 'phpmyadmin phpmyadmin/mysql/app-pass password ' | sudo debconf-set-selections 2>&1", $output, $code);
-            exec("echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect none' | sudo debconf-set-selections 2>&1", $output, $code);
-            exec("echo 'phpmyadmin phpmyadmin/setup-username string admin' | sudo debconf-set-selections 2>&1", $output, $code);
-            exec("echo 'phpmyadmin phpmyadmin/setup-password string ' | sudo debconf-set-selections 2>&1", $output, $code);
 
-            // Update and reinstall (full non-interactive)
-            exec("sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1", $output, $code);
-            exec("sudo DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true NEEDRESTART_MODE=a UCF_FORCE_CONFFNEW=1 apt-get install -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" phpmyadmin 2>&1", $output, $code);
-            
-            if ($code !== 0) {
-                return response()->json([
-                    'error' => 'Failed to reinstall phpMyAdmin',
-                    'details' => implode("\n", $output)
-                ], 500);
-            }
-            
-            // Generate new admin credentials
+            // Generate new credentials
             $adminUser = 'nimbus_admin';
             $adminPass = Str::random(16);
-            
-            // Drop old user if exists and create new
-            exec("sudo mysql -e \"DROP USER IF EXISTS '{$adminUser}'@'localhost'\" 2>&1", $output, $code);
-            $this->createMySQLUser($adminUser, $adminPass, true);
-            
-            // Apply SSO-only config (no direct login)
-            $this->applyPhpMyAdminSSOConfig();
-            
-            // Configure nginx for phpMyAdmin
-            $this->configurePhpMyAdminNginx();
-            
+
+            // Re-create SSO wrapper
+            $this->createAdminerWrapper();
+
+            // Re-download Adminer + recreate MySQL user
+            $logFile    = storage_path('logs/phpmyadmin_install.log');
+            $statusFile = storage_path('logs/phpmyadmin_status.txt');
+            $lockFile   = storage_path('logs/nimbus_install.lock');
+            file_put_contents($logFile,    "Adminer reinstall started at " . date('Y-m-d H:i:s') . "\n");
+            file_put_contents($statusFile, 'running');
+            file_put_contents($lockFile,   'Adminer reinstall');
+
+            $scriptLockFile   = $lockFile;
+            $scriptLogFile    = $logFile;
+            $scriptStatusFile = $statusFile;
+
+            $script = <<<BASH
+#!/bin/bash
+LOG_FILE="{$scriptLogFile}"; STATUS_FILE="{$scriptStatusFile}"; LOCK_FILE="{$scriptLockFile}"
+cleanup() { rm -f "\$LOCK_FILE"; }; trap cleanup EXIT
+ADMINER_STORE="/usr/share/adminer"; ADMINER_VERSION="4.8.1"
+GH_URL="https://github.com/vrana/adminer/releases/download/v\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
+ALT_URL="https://www.adminer.org/static/download/\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
+echo "Downloading Adminer \${ADMINER_VERSION}..."; sudo mkdir -p "\$ADMINER_STORE"
+sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1; fi
+if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then echo "ERROR: Download failed!"; echo "error" > "\$STATUS_FILE"; exit 1; fi
+sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 644 "\$ADMINER_STORE/adminer.php"
+echo "Recreating MySQL admin user..."
+sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
+sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
+sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
+sudo mysql -e "FLUSH PRIVILEGES" 2>&1
+echo "Installation completed successfully!"; echo "done" > "\$STATUS_FILE"
+BASH;
+            $tempScript = '/tmp/adminer_reinstall.sh';
+            file_put_contents($tempScript, $script);
+            chmod($tempScript, 0755);
+            exec("sudo bash {$tempScript} >> {$logFile} 2>&1 &");
+
             // Save credentials
             $credentials = [
-                'username' => $adminUser,
-                'password' => $adminPass,
+                'username'   => $adminUser,
+                'password'   => $adminPass,
                 'created_at' => now()->toDateTimeString(),
-                'url' => '/phpmyadmin'
+                'url'        => '/adminer/'
             ];
-            
             $credentialsDir = dirname($this->credentialsPath);
-            if (!File::exists($credentialsDir)) {
-                File::makeDirectory($credentialsDir, 0755, true);
-            }
+            if (!File::exists($credentialsDir)) { File::makeDirectory($credentialsDir, 0755, true); }
             File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
-            
-            // Reload nginx
-            $this->executeSudoCommand("systemctl reload nginx");
-            
+
             return response()->json([
-                'message' => 'phpMyAdmin reinstalled successfully',
-                'credentials' => $credentials,
-                'showCredentials' => true
+                'message'         => 'Adminer reinstall started...',
+                'credentials'     => $credentials,
+                'showCredentials' => true,
+                'polling'         => true
             ]);
         } catch (\Exception $e) {
-            \Log::error("Failed to reinstall phpMyAdmin: " . $e->getMessage());
+            \Log::error("Failed to reinstall Adminer: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
