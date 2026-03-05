@@ -127,8 +127,34 @@ echo -e "${GREEN}[6/12]${NC} Installing Composer..."
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 echo -e "${GREEN}[7/12]${NC} Installing Node.js ${NODE_VERSION}..."
-curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-apt-get install -y nodejs
+# Try nodesource first (most reliable on Ubuntu/Debian)
+NODE_INSTALLED=false
+if curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x -o /tmp/nodesource_setup.sh; then
+    bash /tmp/nodesource_setup.sh && apt-get install -y nodejs && NODE_INSTALLED=true
+fi
+
+# Fallback: install via nvm if nodesource failed
+if [ "$NODE_INSTALLED" = false ]; then
+    echo -e "${YELLOW}nodesource failed, falling back to nvm...${NC}"
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm install ${NODE_VERSION}
+    nvm use ${NODE_VERSION}
+    nvm alias default ${NODE_VERSION}
+    # Make node/npm available system-wide
+    ln -sf "$(nvm which ${NODE_VERSION})" /usr/local/bin/node
+    ln -sf "$(dirname $(nvm which ${NODE_VERSION}))/npm" /usr/local/bin/npm
+    ln -sf "$(dirname $(nvm which ${NODE_VERSION}))/npx" /usr/local/bin/npx
+    NODE_INSTALLED=true
+fi
+
+# Verify installation
+if ! command -v npm &>/dev/null; then
+    echo -e "${RED}ERROR: npm not found after Node.js installation! Cannot continue.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Node.js $(node -v) and npm $(npm -v) installed successfully.${NC}"
 
 echo -e "${GREEN}[8/12]${NC} Installing Supervisor..."
 apt-get install -y supervisor
@@ -163,7 +189,7 @@ cd $NIMBUS_DIR
 COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
 
 # Install Node dependencies and build
-npm install --unsafe-perm
+npm ci --unsafe-perm
 # Use direct path to vite to avoid PATH issues
 ./node_modules/.bin/vite build
 
