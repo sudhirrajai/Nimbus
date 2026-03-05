@@ -2,7 +2,8 @@
 
 # Nimbus Control Panel - Installer Script
 # One-command installation for Ubuntu/Debian servers
-# Usage: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash
+# Usage:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/install.sh | sudo bash
+# Uninstall: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/install.sh | sudo bash -s -- --uninstall
 
 set -e
 
@@ -40,6 +41,74 @@ echo -e "${NC}"
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: Please run as root (sudo)${NC}"
     exit 1
+fi
+
+# ─────────────────────────────────────────────────────────────────
+# UNINSTALL mode — removes everything the installer created
+# ─────────────────────────────────────────────────────────────────
+if [ "${1}" = "--uninstall" ] || [ "${1}" = "uninstall" ]; then
+    echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║         Nimbus Uninstaller                   ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}This will remove Nimbus and all its dependencies.${NC}"
+    echo -e "${YELLOW}MySQL databases will also be removed!${NC}"
+    echo ""
+    read -r -p "Are you sure? Type 'yes' to continue: " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Uninstall cancelled."
+        exit 0
+    fi
+
+    echo -e "\n${RED}[1/5]${NC} Stopping services..."
+    for SVC in nginx "php${PHP_VERSION}-fpm" mariadb mysql supervisor; do
+        systemctl stop    "$SVC" 2>/dev/null || true
+        systemctl disable "$SVC" 2>/dev/null || true
+    done
+
+    echo -e "${RED}[2/5]${NC} Removing packages..."
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y \
+        nginx nginx-common nginx-full nginx-core \
+        "php${PHP_VERSION}*" php8.1* php8.2* php8.3* php8.4* php8.5* \
+        mariadb-server mariadb-client mariadb-common \
+        supervisor \
+        nodejs npm libnode* \
+        2>/dev/null || true
+    DEBIAN_FRONTEND=noninteractive apt-get autoremove -y --purge 2>/dev/null || true
+    apt-get clean
+
+    echo -e "${RED}[3/5]${NC} Removing Nimbus files..."
+    rm -rf \
+        "${NIMBUS_DIR}" \
+        /usr/share/adminer \
+        /usr/local/nimbus \
+        /root/.nvm
+
+    echo -e "${RED}[4/5]${NC} Removing config directories..."
+    rm -rf \
+        /etc/nginx \
+        /etc/php \
+        /var/lib/mysql \
+        /var/log/mysql \
+        /etc/mysql \
+        /etc/supervisor \
+        /var/log/supervisor
+
+    echo -e "${RED}[5/5]${NC} Removing temp/lock files..."
+    rm -f \
+        /usr/local/bin/composer \
+        /usr/local/bin/node \
+        /usr/local/bin/npm \
+        /usr/local/bin/npx \
+        /tmp/nodesource_setup.sh \
+        /tmp/adminer_install.sh \
+        /tmp/adminer_reinstall.sh \
+        /tmp/adminer_install.sh
+
+    echo ""
+    echo -e "${GREEN}✓ Nimbus uninstalled successfully. System is clean.${NC}"
+    echo -e "${YELLOW}  Note: Standard system packages like curl/git were not removed.${NC}"
+    exit 0
 fi
 
 # Check OS
