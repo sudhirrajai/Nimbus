@@ -65,7 +65,7 @@ class DatabaseController extends Controller
             file_put_contents($statusFile, 'running');
             $adminUser = 'nimbus_admin';
             $adminPass = Str::random(16);
-            $this->createDatabase ViewerWrapper();
+            $this->createDatabaseViewerWrapper();
             $scriptLockFile   = $lockFile;
             $scriptLogFile    = $logFile;
             $scriptStatusFile = $statusFile;
@@ -97,7 +97,7 @@ sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
-echo "Installation completed successfully; echo "Username: {$adminUser}"; echo "Database Viewer: Ready at /adminer/"
+echo "Installation completed successfully"; echo "Username: {$adminUser}"; echo "Database Viewer: Ready at /adminer/"
 echo "done" > "\$STATUS_FILE"
 BASH;
             $tempScript = '/tmp/adminer_install.sh';
@@ -192,7 +192,7 @@ BASH;
             $adminPass = Str::random(16);
 
             // Re-create SSO wrapper
-            $this->createDatabase ViewerWrapper();
+            $this->createDatabaseViewerWrapper();
 
             // Re-download Database Viewer + recreate MySQL user
             $logFile    = storage_path('logs/phpmyadmin_install.log');
@@ -782,7 +782,7 @@ BASH;
     /**
      * Database Viewer view page (authenticated)
      */
-    public function Database ViewerView(Request $request)
+    public function DatabaseViewerView(Request $request)
     {
         return Inertia::render('Database/PhpMyAdmin', [
             'database' => $request->query('db', '')
@@ -992,7 +992,7 @@ PHP;
     /**
      * Create the Database Viewer SSO Wrapper (public/adminer/index.php)
      */
-    private function createDatabase ViewerWrapper()
+    private function createDatabaseViewerWrapper()
     {
         if (!file_exists($this->adminerPublicPath)) {
             mkdir($this->adminerPublicPath, 0755, true);
@@ -1031,7 +1031,7 @@ function adminer_object()
     $_nimbus_password = $_SESSION['adminer_password'];
     $_nimbus_db       = $_SESSION['adminer_db']       ?? '';
 
-    class Database ViewerNimbus extends Database Viewer
+    class DatabaseViewerNimbus extends Adminer
     {
         private $server, $username, $password, $db;
 
@@ -1056,7 +1056,7 @@ function adminer_object()
         }
     }
 
-    return new Database ViewerNimbus($_nimbus_server, $_nimbus_username, $_nimbus_password, $_nimbus_db);
+    return new DatabaseViewerNimbus($_nimbus_server, $_nimbus_username, $_nimbus_password, $_nimbus_db);
 }
 
 // 4. Include the main Database Viewer script
