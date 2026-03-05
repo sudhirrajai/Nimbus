@@ -10,7 +10,7 @@ use Inertia\Inertia;
 
 class DatabaseController extends Controller
 {
-    private $Database ViewerPath = '/usr/share/adminer';
+    private $viewerPath = '/usr/share/adminer';
     private $adminerPublicPath = null;
     private $credentialsPath = '/usr/local/nimbus/storage/app/phpmyadmin_credentials.json';
 
@@ -30,7 +30,7 @@ class DatabaseController extends Controller
     public function getStatus()
     {
         try {
-            $isInstalled = file_exists($this->Database ViewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
+            $isInstalled = file_exists($this->viewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
             $hasCredentials = file_exists($this->credentialsPath);
             
             return response()->json([
@@ -50,7 +50,7 @@ class DatabaseController extends Controller
     public function installPhpMyAdmin()
     {
         try {
-            if (file_exists($this->Database ViewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php')) {
+            if (file_exists($this->viewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php')) {
                 return response()->json(['error' => 'Database Viewer is already installed'], 400);
             }
             $lockFile = storage_path('logs/nimbus_install.lock');
@@ -125,7 +125,7 @@ BASH;
         $log    = file_exists($logFile)    ? file_get_contents($logFile)    : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
         if ($status === 'running') {
-            $adminerReady = file_exists($this->Database ViewerPath . '/adminer.php');
+            $adminerReady = file_exists($this->viewerPath . '/adminer.php');
             if (strpos($log, 'Installation completed successfully') !== false) {
                 file_put_contents($statusFile, 'done'); $status = 'done';
             } elseif (strpos($log, 'ERROR:') !== false) {
@@ -134,7 +134,7 @@ BASH;
                 file_put_contents($statusFile, 'done'); $status = 'done';
             }
         }
-        $isInstalled = file_exists($this->Database ViewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
+        $isInstalled = file_exists($this->viewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
         return response()->json(['status' => $status, 'log' => $log, 'installed' => $isInstalled]);
     }
 
@@ -173,7 +173,7 @@ BASH;
     {
         try {
             // Remove existing Database Viewer files
-            $adminerFile = $this->Database ViewerPath . '/adminer.php';
+            $adminerFile = $this->viewerPath . '/adminer.php';
             if (file_exists($adminerFile)) {
                 $this->executeSudoCommand("rm -f {$adminerFile}");
             }
