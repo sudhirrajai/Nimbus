@@ -10,7 +10,7 @@ use Inertia\Inertia;
 
 class DatabaseController extends Controller
 {
-    private $phpMyAdminPath = '/usr/share/adminer';
+    private $Database ViewerPath = '/usr/share/adminer';
     private $adminerPublicPath = null;
     private $credentialsPath = '/usr/local/nimbus/storage/app/phpmyadmin_credentials.json';
 
@@ -25,12 +25,12 @@ class DatabaseController extends Controller
     }
 
     /**
-     * Get phpMyAdmin installation status
+     * Get Database Viewer installation status
      */
     public function getStatus()
     {
         try {
-            $isInstalled = file_exists($this->phpMyAdminPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
+            $isInstalled = file_exists($this->Database ViewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
             $hasCredentials = file_exists($this->credentialsPath);
             
             return response()->json([
@@ -45,27 +45,27 @@ class DatabaseController extends Controller
     }
 
     /**
-     * Install Adminer (no apt — just downloads a single PHP file)
+     * Install Database Viewer (no apt — just downloads a single PHP file)
      */
     public function installPhpMyAdmin()
     {
         try {
-            if (file_exists($this->phpMyAdminPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php')) {
-                return response()->json(['error' => 'Adminer is already installed'], 400);
+            if (file_exists($this->Database ViewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php')) {
+                return response()->json(['error' => 'Database Viewer is already installed'], 400);
             }
             $lockFile = storage_path('logs/nimbus_install.lock');
             if (file_exists($lockFile)) {
                 $lockContent = file_get_contents($lockFile);
                 return response()->json(['error' => "Another installation is in progress: {$lockContent}. Please wait."], 409);
             }
-            file_put_contents($lockFile, 'Adminer installation');
+            file_put_contents($lockFile, 'Database Viewer installation');
             $logFile    = storage_path('logs/phpmyadmin_install.log');
             $statusFile = storage_path('logs/phpmyadmin_status.txt');
-            file_put_contents($logFile,    "Adminer installation started at " . date('Y-m-d H:i:s') . "\n");
+            file_put_contents($logFile,    "Database Viewer installation started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
             $adminUser = 'nimbus_admin';
             $adminPass = Str::random(16);
-            $this->createAdminerWrapper();
+            $this->createDatabase ViewerWrapper();
             $scriptLockFile   = $lockFile;
             $scriptLogFile    = $logFile;
             $scriptStatusFile = $statusFile;
@@ -80,15 +80,15 @@ ADMINER_STORE="/usr/share/adminer"
 ADMINER_VERSION="4.8.1"
 GH_URL="https://github.com/vrana/adminer/releases/download/v\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
 ALT_URL="https://www.adminer.org/static/download/\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
-echo "Creating Adminer directory..."; sudo mkdir -p "\$ADMINER_STORE"
-echo "Downloading Adminer \${ADMINER_VERSION}..."
+echo "Creating Database Viewer directory..."; sudo mkdir -p "\$ADMINER_STORE"
+echo "Downloading Database Viewer \${ADMINER_VERSION}..."
 sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
     echo "Primary failed, trying adminer.org..."
     sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 fi
 if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
-    echo "ERROR: Failed to download Adminer!"; echo "error" > "\$STATUS_FILE"; exit 1
+    echo "ERROR: Failed to download Database Viewer!"; echo "error" > "\$STATUS_FILE"; exit 1
 fi
 echo "Setting permissions..."
 sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 755 "\$ADMINER_STORE"; sudo chmod 644 "\$ADMINER_STORE/adminer.php"
@@ -97,7 +97,7 @@ sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
-echo "Installation completed successfully; echo "Username: {$adminUser}"; echo "Adminer: Ready at /adminer/"
+echo "Installation completed successfully; echo "Username: {$adminUser}"; echo "Database Viewer: Ready at /adminer/"
 echo "done" > "\$STATUS_FILE"
 BASH;
             $tempScript = '/tmp/adminer_install.sh';
@@ -108,15 +108,15 @@ BASH;
             $credentialsDir = dirname($this->credentialsPath);
             if (!File::exists($credentialsDir)) { File::makeDirectory($credentialsDir, 0755, true); }
             File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
-            return response()->json(['message' => 'Adminer installation started...', 'credentials' => $credentials, 'polling' => true]);
+            return response()->json(['message' => 'Database Viewer installation started...', 'credentials' => $credentials, 'polling' => true]);
         } catch (\Exception $e) {
-            \Log::error("Failed to install Adminer: " . $e->getMessage());
+            \Log::error("Failed to install Database Viewer: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Get Adminer install status / log
+     * Get Database Viewer install status / log
      */
     public function getInstallStatus()
     {
@@ -125,7 +125,7 @@ BASH;
         $log    = file_exists($logFile)    ? file_get_contents($logFile)    : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
         if ($status === 'running') {
-            $adminerReady = file_exists($this->phpMyAdminPath . '/adminer.php');
+            $adminerReady = file_exists($this->Database ViewerPath . '/adminer.php');
             if (strpos($log, 'Installation completed successfully') !== false) {
                 file_put_contents($statusFile, 'done'); $status = 'done';
             } elseif (strpos($log, 'ERROR:') !== false) {
@@ -134,7 +134,7 @@ BASH;
                 file_put_contents($statusFile, 'done'); $status = 'done';
             }
         }
-        $isInstalled = file_exists($this->phpMyAdminPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
+        $isInstalled = file_exists($this->Database ViewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
         return response()->json(['status' => $status, 'log' => $log, 'installed' => $isInstalled]);
     }
 
@@ -150,7 +150,7 @@ BASH;
 
             $credentials = json_decode(File::get($this->credentialsPath), true);
             
-            $content = "phpMyAdmin Credentials\n";
+            $content = "Database Viewer Credentials\n";
             $content .= "======================\n\n";
             $content .= "URL: /phpmyadmin\n";
             $content .= "Username: {$credentials['username']}\n";
@@ -167,13 +167,13 @@ BASH;
     }
 
     /**
-     * Reinstall phpMyAdmin (remove and install again)
+     * Reinstall Database Viewer (remove and install again)
      */
     public function reinstallPhpMyAdmin()
     {
         try {
-            // Remove existing Adminer files
-            $adminerFile = $this->phpMyAdminPath . '/adminer.php';
+            // Remove existing Database Viewer files
+            $adminerFile = $this->Database ViewerPath . '/adminer.php';
             if (file_exists($adminerFile)) {
                 $this->executeSudoCommand("rm -f {$adminerFile}");
             }
@@ -192,15 +192,15 @@ BASH;
             $adminPass = Str::random(16);
 
             // Re-create SSO wrapper
-            $this->createAdminerWrapper();
+            $this->createDatabase ViewerWrapper();
 
-            // Re-download Adminer + recreate MySQL user
+            // Re-download Database Viewer + recreate MySQL user
             $logFile    = storage_path('logs/phpmyadmin_install.log');
             $statusFile = storage_path('logs/phpmyadmin_status.txt');
             $lockFile   = storage_path('logs/nimbus_install.lock');
-            file_put_contents($logFile,    "Adminer reinstall started at " . date('Y-m-d H:i:s') . "\n");
+            file_put_contents($logFile,    "Database Viewer reinstall started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
-            file_put_contents($lockFile,   'Adminer reinstall');
+            file_put_contents($lockFile,   'Database Viewer reinstall');
 
             $scriptLockFile   = $lockFile;
             $scriptLogFile    = $logFile;
@@ -213,7 +213,7 @@ cleanup() { rm -f "\$LOCK_FILE"; }; trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"; ADMINER_VERSION="4.8.1"
 GH_URL="https://github.com/vrana/adminer/releases/download/v\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
 ALT_URL="https://www.adminer.org/static/download/\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
-echo "Downloading Adminer \${ADMINER_VERSION}..."; sudo mkdir -p "\$ADMINER_STORE"
+echo "Downloading Database Viewer \${ADMINER_VERSION}..."; sudo mkdir -p "\$ADMINER_STORE"
 sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1; fi
 if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then echo "ERROR: Download failed!"; echo "error" > "\$STATUS_FILE"; exit 1; fi
@@ -242,13 +242,13 @@ BASH;
             File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
 
             return response()->json([
-                'message'         => 'Adminer reinstall started...',
+                'message'         => 'Database Viewer reinstall started...',
                 'credentials'     => $credentials,
                 'showCredentials' => true,
                 'polling'         => true
             ]);
         } catch (\Exception $e) {
-            \Log::error("Failed to reinstall Adminer: " . $e->getMessage());
+            \Log::error("Failed to reinstall Database Viewer: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -416,7 +416,7 @@ BASH;
                 throw new \Exception("Failed to create database: " . implode("\n", $output));
             }
 
-            // Grant access to nimbus_admin (phpMyAdmin user) so database shows in phpMyAdmin
+            // Grant access to nimbus_admin (Database Viewer user) so database shows in Database Viewer
             exec("sudo mysql -e \"GRANT ALL PRIVILEGES ON \`{$dbName}\`.* TO 'nimbus_admin'@'localhost'; FLUSH PRIVILEGES;\" 2>&1");
 
             return response()->json([
@@ -780,9 +780,9 @@ BASH;
     }
 
     /**
-     * phpMyAdmin view page (authenticated)
+     * Database Viewer view page (authenticated)
      */
-    public function phpMyAdminView(Request $request)
+    public function Database ViewerView(Request $request)
     {
         return Inertia::render('Database/PhpMyAdmin', [
             'database' => $request->query('db', '')
@@ -829,7 +829,7 @@ BASH;
     }
 
     /**
-     * Configure nginx for phpMyAdmin
+     * Configure nginx for Database Viewer
      */
     private function configurePhpMyAdminNginx()
     {
@@ -837,7 +837,7 @@ BASH;
         $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
         
         $config = <<<NGINX
-# phpMyAdmin configuration
+# Database Viewer configuration
 location /phpmyadmin {
     alias /usr/share/phpmyadmin;
     index index.php;
@@ -882,7 +882,7 @@ NGINX;
     }
 
     /**
-     * Apply SSO-only config for phpMyAdmin
+     * Apply SSO-only config for Database Viewer
      * Disables the login form - users must come via panel token
      */
     private function applyPhpMyAdminSSOConfig()
@@ -890,7 +890,7 @@ NGINX;
         $ssoConfig = <<<'PHP'
 <?php
 /**
- * Nimbus SSO Configuration for phpMyAdmin
+ * Nimbus SSO Configuration for Database Viewer
  * Forces token-only login via Nimbus panel.
  * Direct username/password login is disabled.
  */
@@ -990,9 +990,9 @@ PHP;
     }
 
     /**
-     * Create the Adminer SSO Wrapper (public/adminer/index.php)
+     * Create the Database Viewer SSO Wrapper (public/adminer/index.php)
      */
-    private function createAdminerWrapper()
+    private function createDatabase ViewerWrapper()
     {
         if (!file_exists($this->adminerPublicPath)) {
             mkdir($this->adminerPublicPath, 0755, true);
@@ -1003,7 +1003,7 @@ PHP;
         $content = <<<'PHP'
 <?php
 /**
- * Adminer SSO Wrapper — Nimbus Panel
+ * Database Viewer SSO Wrapper — Nimbus Panel
  * This file auto-connects to the database using session credentials.
  */
 @session_start();
@@ -1022,7 +1022,7 @@ if (isset($_SESSION['adminer_created']) && (time() - $_SESSION['adminer_created'
     exit;
 }
 
-// 3. Adminer Autologin Implementation
+// 3. Database Viewer Autologin Implementation
 function adminer_object()
 {
     // Credentials from session (set by pma_signon.php)
@@ -1031,7 +1031,7 @@ function adminer_object()
     $_nimbus_password = $_SESSION['adminer_password'];
     $_nimbus_db       = $_SESSION['adminer_db']       ?? '';
 
-    class AdminerNimbus extends Adminer
+    class Database ViewerNimbus extends Database Viewer
     {
         private $server, $username, $password, $db;
 
@@ -1056,10 +1056,10 @@ function adminer_object()
         }
     }
 
-    return new AdminerNimbus($_nimbus_server, $_nimbus_username, $_nimbus_password, $_nimbus_db);
+    return new Database ViewerNimbus($_nimbus_server, $_nimbus_username, $_nimbus_password, $_nimbus_db);
 }
 
-// 4. Include the main Adminer script
+// 4. Include the main Database Viewer script
 include '/usr/share/adminer/adminer.php';
 PHP;
 

@@ -1,9 +1,9 @@
 <?php
 /**
- * Adminer Single Sign-On — Nimbus Panel
+ * Database Viewer Single Sign-On — Nimbus Panel
  *
  * Validates a one-time token issued by the panel, sets session credentials
- * for the Adminer SSO wrapper, then redirects to /adminer/.
+ * for the Database Viewer SSO wrapper, then redirects to /adminer/.
  *
  * Direct access without a valid token is blocked.
  */
@@ -45,14 +45,14 @@ if (time() - $tokenData['created'] > 300) {
 // Consume token (one-time use)
 @unlink($tokenFile);
 
-// Set Adminer session credentials (read by public/adminer/index.php)
+// Set Database Viewer session credentials (read by public/adminer/index.php)
 $_SESSION['adminer_server']   = $tokenData['host']     ?? 'localhost';
 $_SESSION['adminer_username'] = $tokenData['username'];
 $_SESSION['adminer_password'] = $tokenData['password'];
 $_SESSION['adminer_db']       = $db;
 $_SESSION['adminer_created']  = time();
 
-// Redirect to Adminer
+// Redirect to Database Viewer
 $target = '/adminer/';
 if (!empty($db)) {
     $target .= '?db=' . urlencode($db);
