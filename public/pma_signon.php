@@ -23,7 +23,7 @@ $tokenDir  = '/usr/local/nimbus/storage/app/pma_tokens';
 $tokenFile = $tokenDir . '/' . $token . '.json';
 
 if (!file_exists($tokenFile) || !is_file($tokenFile)) {
-    showError('Access Denied', 'Invalid or expired session. Please access the DB manager from the Nimbus panel.', 'security');
+    showError('Access Denied', 'Invalid or expired session. Please access the Database Viewer from the Nimbus panel.', 'security');
     exit;
 }
 

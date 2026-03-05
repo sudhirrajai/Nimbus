@@ -664,9 +664,9 @@ BASH;
     }
 
     /**
-     * Get phpMyAdmin access URL for a specific database (with auto-login SSO token)
+     * Get Database Viewer access URL for a specific database (with auto-login SSO token)
      */
-    public function getPhpMyAdminUrl(Request $request)
+    public function getDatabaseViewerUrl(Request $request)
     {
         try {
             $request->validate([
@@ -714,37 +714,37 @@ BASH;
             return response()->json([
                 'url'      => "/pma_signon.php?token={$token}&db=" . urlencode($database),
                 'database' => $database,
-                'message'  => "Opening phpMyAdmin for database '{$database}'"
+                'message'  => "Opening Database Viewer for database '{$database}'"
             ]);
         } catch (\Exception $e) {
-            \Log::error("Failed to get phpMyAdmin URL: " . $e->getMessage());
+            \Log::error("Failed to get Database Viewer URL: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * phpMyAdmin signon - legacy redirect (now handled by pma_signon.php)
+     * Database Viewer signon - legacy redirect (now handled by pma_signon.php)
      */
-    public function phpMyAdminSignon($token)
+    public function databaseViewerSignon($token)
     {
         // Redirect to the new signon script
         return redirect("/pma_signon.php?token={$token}");
     }
 
     /**
-     * Open phpMyAdmin with SSO (auto-login with nimbus_admin)
+     * Open Database Viewer with SSO (auto-login with nimbus_admin)
      */
-    public function openPhpMyAdminSSO()
+    public function openDatabaseViewerSSO()
     {
         try {
             // Read credentials from file
             if (!file_exists($this->credentialsPath)) {
-                return response()->json(['error' => 'phpMyAdmin credentials not found. Please reinstall phpMyAdmin.'], 404);
+                return response()->json(['error' => 'Database Viewer credentials not found. Please reinstall it.'], 404);
             }
             
             $credentials = json_decode(File::get($this->credentialsPath), true);
             if (!$credentials || empty($credentials['username']) || empty($credentials['password'])) {
-                return response()->json(['error' => 'Invalid phpMyAdmin credentials'], 500);
+                return response()->json(['error' => 'Invalid Database Viewer credentials'], 500);
             }
             
             // Generate a secure one-time token
@@ -774,7 +774,7 @@ BASH;
                 'url' => "/pma_signon.php?token={$token}"
             ]);
         } catch (\Exception $e) {
-            \Log::error("Failed to generate phpMyAdmin SSO: " . $e->getMessage());
+            \Log::error("Failed to generate Database Viewer SSO: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
