@@ -1035,8 +1035,9 @@ function adminer_object() {
 }
 
 ob_start(function($buffer) {
+    // Replace text branding safely without breaking file paths (like adminer.css)
     $buffer = str_replace('Adminer', 'System', $buffer);
-    $buffer = str_replace('adminer', 'system', $buffer);
+    $buffer = str_replace('<title>System', '<title>Database', $buffer);
     $buffer = str_replace('Logout successful. Thanks for using System, consider donating.', 'Logged out successfully.', $buffer);
     return $buffer;
 });
