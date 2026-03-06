@@ -14,7 +14,7 @@ class DatabaseController extends Controller
     private $adminerPublicPath = null;
     private $credentialsPath = '/usr/local/nimbus/storage/app/phpmyadmin_credentials.json';
 
-    public function __construct() { $this->adminerPublicPath = public_path('adminer'); }
+    public function __construct() { $this->adminerPublicPath = public_path('db'); }
 
     /**
      * Display database management page
@@ -97,14 +97,14 @@ sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
-echo "Installation completed successfully"; echo "Username: {$adminUser}"; echo "Database Viewer: Ready at /adminer/"
+echo "Installation completed successfully"; echo "Username: {$adminUser}"; echo "Database Viewer: Ready at /db/"
 echo "done" > "\$STATUS_FILE"
 BASH;
             $tempScript = '/tmp/adminer_install.sh';
             file_put_contents($tempScript, $script);
             chmod($tempScript, 0755);
             exec("sudo bash {$tempScript} >> {$logFile} 2>&1 &");
-            $credentials = ['username' => $adminUser, 'password' => $adminPass, 'created_at' => now()->toDateTimeString(), 'url' => '/adminer/'];
+            $credentials = ['username' => $adminUser, 'password' => $adminPass, 'created_at' => now()->toDateTimeString(), 'url' => '/db/'];
             $credentialsDir = dirname($this->credentialsPath);
             if (!File::exists($credentialsDir)) { File::makeDirectory($credentialsDir, 0755, true); }
             File::put($this->credentialsPath, json_encode($credentials, JSON_PRETTY_PRINT));
@@ -235,7 +235,7 @@ BASH;
                 'username'   => $adminUser,
                 'password'   => $adminPass,
                 'created_at' => now()->toDateTimeString(),
-                'url'        => '/adminer/'
+                'url'        => '/db/'
             ];
             $credentialsDir = dirname($this->credentialsPath);
             if (!File::exists($credentialsDir)) { File::makeDirectory($credentialsDir, 0755, true); }
@@ -990,7 +990,7 @@ PHP;
     }
 
     /**
-     * Create the Database Viewer SSO Wrapper (public/adminer/index.php)
+     * Create the Database Viewer SSO Wrapper (public/db/index.php)
      */
     private function createDatabaseViewerWrapper()
     {
@@ -1020,7 +1020,7 @@ if (isset($_SESSION['adminer_created']) && (time() - $_SESSION['adminer_created'
 
 function adminer_object() {
     class NimbusDB extends Adminer {
-        function name() { return 'Nimbus'; }
+        function name() { return ''; }
         function credentials() {
             return [$_SESSION['adminer_server'] ?? 'localhost', $_SESSION['adminer_username'], $_SESSION['adminer_password']];
         }
@@ -1034,7 +1034,15 @@ function adminer_object() {
     return new NimbusDB;
 }
 
+ob_start(function($buffer) {
+    $buffer = str_replace('Adminer', 'System', $buffer);
+    $buffer = str_replace('adminer', 'system', $buffer);
+    $buffer = str_replace('Logout successful. Thanks for using System, consider donating.', 'Logged out successfully.', $buffer);
+    return $buffer;
+});
+
 include '/usr/share/adminer/adminer.php';
+ob_end_flush();
 PHP;
 
         file_put_contents($wrapperPath, $content);

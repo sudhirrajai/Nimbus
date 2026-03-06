@@ -55,8 +55,8 @@ $_SESSION['adminer_created']  = time();
 // Log signon for debugging
 error_log("[NIMBUS-SOO] Session started for " . ($_SESSION['adminer_username'] ?? 'unknown') . " target DB: " . ($db ?: 'NONE'));
 
-// Redirect to Nimbus DB
-$target = '/adminer/';
+// Redirect to DB Viewer
+$target = '/db/';
 if (!empty($db)) {
     $target .= '?db=' . urlencode($db);
 }

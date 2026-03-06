@@ -4,7 +4,7 @@
       <div class="header-bar border-bottom">
         <h5 class="mb-0 text-dark font-weight-bolder">
           <i class="material-symbols-rounded me-2 text-primary">storage</i>
-          Nimbus DB
+          Database
         </h5>
         <div class="controls">
           <button class="btn btn-sm btn-outline-dark me-2 mb-0" @click="openInNewTab">
@@ -17,12 +17,7 @@
           </button>
         </div>
       </div>
-      <iframe 
-        ref="pmaFrame"
-        :src="pmaUrl" 
-        class="pma-iframe"
-        frameborder="0"
-      ></iframe>
+      <iframe ref="pmaFrame" :src="pmaUrl" class="pma-iframe" frameborder="0"></iframe>
     </div>
   </MainLayout>
 </template>
@@ -41,7 +36,7 @@ const props = defineProps({
 const pmaFrame = ref(null)
 
 const pmaUrl = computed(() => {
-  let url = '/phpmyadmin/index.php'
+  let url = '/db/'
   if (props.database) {
     url += '?db=' + encodeURIComponent(props.database)
   }

@@ -36,15 +36,30 @@ body {
     border: none !important;
     box-shadow: 0 0.25rem 0.375rem -0.0625rem rgba(20, 20, 20, 0.12), 0 0.125rem 0.25rem -0.0625rem rgba(20, 20, 20, 0.07) !important;
     z-index: 1000;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+/* Scrollbar styling for menu */
+#menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+#menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#menu::-webkit-scrollbar-thumb {
+    background: var(--bs-gray-300);
+    border-radius: 10px;
+}
+
+#menu::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-gray-600);
 }
 
 #menu h1 {
-    padding: 0 2rem 1.5rem !important;
-    margin: 0 !important;
-    font-size: 1.25rem !important;
-    font-weight: 700 !important;
-    color: var(--bs-gray-700) !important;
-    border-bottom: 1px solid var(--bs-gray-200);
+    display: none !important;
 }
 
 #menu h1 a {
@@ -105,6 +120,18 @@ h2 {
     font-weight: 700 !important;
     color: var(--bs-gray-700) !important;
     margin-bottom: 1.5rem !important;
+}
+
+/* Hide Login text when login form is present */
+h2:has(+ #login),
+h2:has(+ div > #login),
+h2:has(+ script + #login),
+h2:has(~ #login) {
+    display: none !important;
+}
+
+#version {
+    display: none !important;
 }
 
 /* Links/Breadcrumbs area */
@@ -190,20 +217,18 @@ input[type="submit"]:hover {
 
 /* Logout button */
 #logout {
-    position: absolute;
-    top: 2rem;
-    right: 3rem;
-    z-index: 10;
+    display: none !important;
 }
 
 /* Login box */
 #login {
     background: #fff;
-    max-width: 400px;
-    margin: 5rem auto !important;
-    padding: 2.5rem !important;
+    max-width: 380px;
+    margin: 15vh auto !important;
+    padding: 3rem !important;
     border-radius: 1rem !important;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    border: 1px solid var(--bs-gray-200);
 }
 
 #login th {
@@ -233,6 +258,9 @@ input[type="submit"]:hover {
     background: #66d43233 !important;
     color: #1a8a00 !important;
     border: 1px solid #66d432 !important;
+    max-width: 400px;
+    margin: 0 auto 1.5rem !important;
+    text-align: center;
 }
 
 .error {
