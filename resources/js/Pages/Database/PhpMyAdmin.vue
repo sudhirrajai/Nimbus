@@ -4,7 +4,7 @@
       <div class="header-bar">
         <h5 class="mb-0">
           <i class="material-symbols-rounded me-2">database</i>
-          phpMyAdmin
+          Nimbus DB
         </h5>
         <div class="controls">
           <button class="btn btn-sm btn-outline-secondary me-2" @click="openInNewTab">
@@ -76,7 +76,7 @@ const openInNewTab = () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(195deg, #42424a, #191919);
   color: white;
 }
 

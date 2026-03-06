@@ -8,7 +8,7 @@
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h4 class="font-weight-bolder mb-0">Database Management</h4>
-              <p class="mb-0 text-sm">Manage MySQL databases, users, and Database Viewer</p>
+              <p class="mb-0 text-sm">Manage MySQL databases, users, and Nimbus DB</p>
             </div>
             <div class="d-flex gap-2" v-if="status.viewerInstalled">
               <button class="btn btn-outline-warning mb-0" @click="reinstallPhpMyAdmin" :disabled="reinstalling">
@@ -23,7 +23,7 @@
               <button class="btn bg-gradient-info mb-0" @click="openPhpMyAdminSSO" :disabled="openingPma">
                 <span v-if="openingPma" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">open_in_new</i>
-                Database Viewer
+                Nimbus DB
               </button>
             </div>
           </div>
@@ -57,18 +57,18 @@
           <div class="card">
             <div class="card-body text-center py-5" v-if="!installing">
               <i class="material-symbols-rounded text-warning" style="font-size: 4rem;">database</i>
-              <h4 class="mt-3">Database Viewer Not Installed</h4>
+              <h4 class="mt-3">Nimbus DB Not Installed</h4>
               <p class="text-secondary mb-4">Install Database Viewer to manage your MySQL databases</p>
               <button class="btn bg-gradient-primary btn-lg" @click="installPhpMyAdmin" :disabled="installing">
                 <i class="material-symbols-rounded text-sm me-1">download</i>
-                Install Database Viewer
+                Install Nimbus DB
               </button>
             </div>
             <!-- Terminal view during installation -->
             <div class="card-body" v-else>
               <h5 class="mb-3">
                 <span class="spinner-border spinner-border-sm me-2"></span>
-                Installing Database Viewer...
+                Installing Nimbus DB...
               </h5>
               <div class="terminal-output bg-dark text-white p-3 rounded"
                 style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
@@ -89,7 +89,7 @@
             <div class="card-body text-white">
               <h5 class="text-white mb-3">
                 <i class="material-symbols-rounded me-2">check_circle</i>
-                Database Viewer Installed Successfully!
+                Nimbus DB Installed Successfully!
               </h5>
               <p class="mb-3">Save these credentials securely. They will only be shown once.</p>
               <div class="bg-white text-dark p-3 rounded mb-3">
@@ -245,7 +245,7 @@
                         </td>
                         <td class="text-center">
                           <button class="btn btn-link text-info mb-0 px-2" @click="openPhpMyAdmin(db)"
-                            title="Open in Database Viewer">
+                            title="Open in Nimbus DB">
                             <i class="material-symbols-rounded text-sm">open_in_new</i>
                           </button>
                           <button class="btn btn-link text-primary mb-0 px-2" @click="manageDatabase(db)"
@@ -430,7 +430,7 @@
         </div>
       </div>
 
-      <!-- Database Viewer SSO Access - no modal needed, opens directly via token -->
+      <!-- Nimbus DB SSO Access - no modal needed, opens directly via token -->
 
     </div>
   </MainLayout>
@@ -534,7 +534,7 @@ const installPhpMyAdmin = async () => {
   try {
     installing.value = true
     installLog.value = '' // Reset log
-    showAlert('info', 'Installing Database Viewer... This may take a few minutes.')
+    showAlert('info', 'Installing Nimbus DB... This may take a few minutes.')
 
     const response = await axios.post('/database/install-viewer')
 
@@ -552,7 +552,7 @@ const installPhpMyAdmin = async () => {
       showAlert('success', response.data.message)
     }
   } catch (error) {
-    const errMsg = error.response?.data?.error || 'Failed to install Database Viewer'
+    const errMsg = error.response?.data?.error || 'Failed to install Nimbus DB'
     const details = error.response?.data?.details || ''
     showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
     console.error('Database Viewer install error:', error.response?.data)
@@ -574,7 +574,7 @@ const pollInstallStatus = async () => {
       installing.value = false
       status.value.viewerInstalled = true
       showCredentials.value = true
-      showAlert('success', 'Database Viewer installed successfully!')
+      showAlert('success', 'Nimbus DB installed successfully!')
       pollAttempts = 0;
     } else if (response.data.status === 'error') {
       installing.value = false
@@ -586,7 +586,7 @@ const pollInstallStatus = async () => {
         installing.value = false
         status.value.viewerInstalled = true
         showCredentials.value = true
-        showAlert('success', 'Database Viewer installed successfully!')
+        showAlert('success', 'Nimbus DB installed successfully!')
       } else {
         installing.value = false
         showAlert('warning', 'Installation timed out. Please refresh the page to check status.')
@@ -616,7 +616,7 @@ const reinstallPhpMyAdmin = async () => {
 
   try {
     reinstalling.value = true
-    showAlert('info', 'Reinstalling Database Viewer... This may take a few minutes.')
+    showAlert('info', 'Reinstalling Nimbus DB... This may take a few minutes.')
 
     const response = await axios.post('/database/reinstall-viewer')
 
@@ -625,7 +625,7 @@ const reinstallPhpMyAdmin = async () => {
 
     showAlert('success', response.data.message)
   } catch (error) {
-    const errMsg = error.response?.data?.error || 'Failed to reinstall Database Viewer'
+    const errMsg = error.response?.data?.error || 'Failed to reinstall Nimbus DB'
     const details = error.response?.data?.details || ''
     showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
     console.error('Database Viewer reinstall error:', error.response?.data)
@@ -646,7 +646,7 @@ const openPhpMyAdminSSO = async () => {
       showAlert('danger', response.data.error || 'Failed to generate SSO link')
     }
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to open Database Viewer')
+    showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
   } finally {
     openingPma.value = false
   }
@@ -780,7 +780,7 @@ const deleteDatabase = async () => {
 
 const openPhpMyAdmin = async (db) => {
   try {
-    showAlert('info', `Opening Database Viewer for '${db.name}'...`)
+    showAlert('info', `Opening Nimbus DB for '${db.name}'...`)
     const response = await axios.post('/database/viewer/access', {
       database: db.name,
       username: db.users.length > 0 ? db.users[0].username : 'nimbus_admin'
@@ -788,7 +788,7 @@ const openPhpMyAdmin = async (db) => {
     // Open directly via SSO token — no password prompt
     window.open(response.data.url, '_blank')
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to open Database Viewer')
+    showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
   }
 }
 </script>

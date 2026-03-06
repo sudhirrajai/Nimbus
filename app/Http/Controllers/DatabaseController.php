@@ -712,9 +712,9 @@ BASH;
 
             // Return SSO URL
             return response()->json([
-                'url'      => "/pma_signon.php?token={$token}&db=" . urlencode($database),
+                'url'      => "/pma_signon.php?token={$token}" . (empty($database) ? "" : "&db=" . urlencode($database)),
                 'database' => $database,
-                'message'  => "Opening Database Viewer for database '{$database}'"
+                'message'  => "Opening Nimbus DB"
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get Database Viewer URL: " . $e->getMessage());
@@ -1003,63 +1003,37 @@ PHP;
         $content = <<<'PHP'
 <?php
 /**
- * Database Viewer SSO Wrapper — Nimbus Panel
- * This file auto-connects to the database using session credentials.
+ * Nimbus DB SSO Wrapper
  */
 @session_start();
 
-// 1. Basic Auth Check
 if (empty($_SESSION['adminer_username'])) {
     header('Location: /database?notice=unauthorized');
     exit;
 }
 
-// 2. Timeout check (token validity)
-if (isset($_SESSION['adminer_created']) && (time() - $_SESSION['adminer_created'] > 300)) {
-    // Session expired for this specific signon
+if (isset($_SESSION['adminer_created']) && (time() - $_SESSION['adminer_created'] > 900)) {
     unset($_SESSION['adminer_username'], $_SESSION['adminer_password'], $_SESSION['adminer_server']);
     header('Location: /database?notice=session_expired');
     exit;
 }
 
-// 3. Database Viewer Autologin Implementation
-function adminer_object()
-{
-    // Credentials from session (set by pma_signon.php)
-    $_nimbus_server   = $_SESSION['adminer_server']   ?? 'localhost';
-    $_nimbus_username = $_SESSION['adminer_username'];
-    $_nimbus_password = $_SESSION['adminer_password'];
-    $_nimbus_db       = $_SESSION['adminer_db']       ?? '';
-
-    class DatabaseViewerNimbus extends Adminer
-    {
-        private $server, $username, $password, $db;
-
-        function __construct($server, $username, $password, $db)
-        {
-            $this->server   = $server;
-            $this->username = $username;
-            $this->password = $password;
-            $this->db       = $db;
-        }
-
-        // Disable login screen entirely
-        function name() { return 'Nimbus Database Manager'; }
-        
-        // Auto-login
+function adminer_object() {
+    class NimbusDB extends Adminer {
+        function name() { return 'Nimbus'; }
         function credentials() {
-            return [$this->server, $this->username, $this->password];
+            return [$_SESSION['adminer_server'] ?? 'localhost', $_SESSION['adminer_username'], $_SESSION['adminer_password']];
         }
-
         function database() {
-            return $this->db;
+            return $_SESSION['adminer_db'] ?? '';
+        }
+        function login($login, $password) {
+            return true;
         }
     }
-
-    return new DatabaseViewerNimbus($_nimbus_server, $_nimbus_username, $_nimbus_password, $_nimbus_db);
+    return new NimbusDB;
 }
 
-// 4. Include the main Database Viewer script
 include '/usr/share/adminer/adminer.php';
 PHP;
 
