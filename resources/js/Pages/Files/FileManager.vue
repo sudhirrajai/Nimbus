@@ -437,7 +437,7 @@
               <div class="d-flex align-items-center">
                 <div :class="['modal-icon', copyMoveAction === 'copy' ? 'bg-gradient-info' : 'bg-gradient-warning']">
                   <i class="material-symbols-rounded">{{ copyMoveAction === 'copy' ? 'content_copy' : 'drive_file_move'
-                  }}</i>
+                    }}</i>
                 </div>
                 <div class="ms-3">
                   <h5 class="modal-title mb-0">{{ copyMoveAction === 'copy' ? 'Copy' : 'Move' }} Item</h5>
@@ -737,8 +737,8 @@ const showAlert = (type, message) => {
 const openContextMenu = (event, item) => {
   contextMenu.value = {
     show: true,
-    x: event.pageX,
-    y: event.pageY,
+    x: event.clientX,
+    y: event.clientY,
     item: item
   }
 }

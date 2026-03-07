@@ -432,6 +432,9 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
+
+    # Upload limit
+    client_max_body_size 2048M;
     
     # PHP handling
     location ~ \.php$ {

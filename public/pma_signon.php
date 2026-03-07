@@ -1,9 +1,9 @@
 <?php
 /**
- * Adminer Single Sign-On — Nimbus Panel
+ * Nimbus DB SSO — Nimbus Panel
  *
  * Validates a one-time token issued by the panel, sets session credentials
- * for the Adminer SSO wrapper, then redirects to /adminer/.
+ * for the Nimbus DB SSO wrapper, then redirects to /adminer/.
  *
  * Direct access without a valid token is blocked.
  */
@@ -23,7 +23,7 @@ $tokenDir  = '/usr/local/nimbus/storage/app/pma_tokens';
 $tokenFile = $tokenDir . '/' . $token . '.json';
 
 if (!file_exists($tokenFile) || !is_file($tokenFile)) {
-    showError('Access Denied', 'Invalid or expired session. Please access the DB manager from the Nimbus panel.', 'security');
+    showError('Access Denied', 'Invalid or expired session. Please access Nimbus DB from the Nimbus panel.', 'security');
     exit;
 }
 
@@ -45,18 +45,24 @@ if (time() - $tokenData['created'] > 300) {
 // Consume token (one-time use)
 @unlink($tokenFile);
 
-// Set Adminer session credentials (read by public/adminer/index.php)
+// Set Nimbus DB session credentials (read by public/adminer/index.php)
 $_SESSION['adminer_server']   = $tokenData['host']     ?? 'localhost';
 $_SESSION['adminer_username'] = $tokenData['username'];
 $_SESSION['adminer_password'] = $tokenData['password'];
 $_SESSION['adminer_db']       = $db;
 $_SESSION['adminer_created']  = time();
 
-// Redirect to Adminer
-$target = '/adminer/';
+// Log signon for debugging
+error_log("[NIMBUS-SOO] Session started for " . ($_SESSION['adminer_username'] ?? 'unknown') . " target DB: " . ($db ?: 'NONE'));
+
+// Redirect to DB Viewer
+$target = '/db/';
 if (!empty($db)) {
     $target .= '?db=' . urlencode($db);
 }
+
+// Ensure session is written before redirect
+session_write_close();
 header('Location: ' . $target);
 exit;
 
@@ -93,7 +99,7 @@ function showError($title, $message, $type = 'error')
         <div class="icon"><?= $icon ?></div>
         <h1><?= htmlspecialchars($title) ?></h1>
         <p><?= htmlspecialchars($message) ?></p>
-        <a href="/database" class="btn">Go to Database Manager</a>
+        <a href="/database" class="btn">Return to Nimbus</a>
         <small>Redirecting in 4 seconds...</small>
     </div>
 </body>

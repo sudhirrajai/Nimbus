@@ -1,28 +1,23 @@
 <template>
   <MainLayout>
     <div class="phpmyadmin-wrapper">
-      <div class="header-bar">
-        <h5 class="mb-0">
-          <i class="material-symbols-rounded me-2">database</i>
-          phpMyAdmin
+      <div class="header-bar border-bottom">
+        <h5 class="mb-0 text-dark font-weight-bolder">
+          <i class="material-symbols-rounded me-2 text-primary">storage</i>
+          Database
         </h5>
         <div class="controls">
-          <button class="btn btn-sm btn-outline-secondary me-2" @click="openInNewTab">
+          <button class="btn btn-sm btn-outline-dark me-2 mb-0" @click="openInNewTab">
             <i class="material-symbols-rounded text-sm me-1">open_in_new</i>
             Open in New Tab
           </button>
-          <button class="btn btn-sm btn-outline-primary" @click="refresh">
+          <button class="btn btn-sm bg-gradient-dark mb-0 text-white" @click="refresh">
             <i class="material-symbols-rounded text-sm me-1">refresh</i>
             Refresh
           </button>
         </div>
       </div>
-      <iframe 
-        ref="pmaFrame"
-        :src="pmaUrl" 
-        class="pma-iframe"
-        frameborder="0"
-      ></iframe>
+      <iframe ref="pmaFrame" :src="pmaUrl" class="pma-iframe" frameborder="0"></iframe>
     </div>
   </MainLayout>
 </template>
@@ -41,7 +36,7 @@ const props = defineProps({
 const pmaFrame = ref(null)
 
 const pmaUrl = computed(() => {
-  let url = '/phpmyadmin/index.php'
+  let url = '/db/'
   if (props.database) {
     url += '?db=' + encodeURIComponent(props.database)
   }
@@ -75,25 +70,22 @@ const openInNewTab = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #f0f2f5;
 }
 
 .header-bar h5 {
   display: flex;
   align-items: center;
-  font-weight: 600;
+  font-weight: 700;
+  color: #344767;
 }
 
 .controls .btn {
-  border-color: rgba(255,255,255,0.5);
-  color: white;
-}
-
-.controls .btn:hover {
-  background: rgba(255,255,255,0.2);
-  border-color: white;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.75rem;
 }
 
 .pma-iframe {

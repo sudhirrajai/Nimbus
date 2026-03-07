@@ -103,8 +103,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
     Route::prefix('database')->name('database.')->group(function () {
         Route::get('/', [DatabaseController::class, 'index'])->name('index');
         Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
-        Route::post('/install-phpmyadmin', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-phpmyadmin');
-        Route::post('/reinstall-phpmyadmin', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-phpmyadmin');
+        Route::post('/install-viewer', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-viewer');
+        Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-viewer');
         Route::get('/install-status', [DatabaseController::class, 'getInstallStatus'])->name('install-status');
         Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');
         Route::get('/list', [DatabaseController::class, 'getDatabases'])->name('list');
@@ -116,10 +116,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
         Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
         Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
-        Route::post('/phpmyadmin/access', [DatabaseController::class, 'getPhpMyAdminUrl'])->name('phpmyadmin.access');
-        Route::get('/phpmyadmin/sso', [DatabaseController::class, 'openPhpMyAdminSSO'])->name('phpmyadmin.sso');
-        Route::get('/phpmyadmin/signon/{token}', [DatabaseController::class, 'phpMyAdminSignon'])->name('phpmyadmin.signon');
-        Route::get('/phpmyadmin-view', [DatabaseController::class, 'phpMyAdminView'])->name('phpmyadmin.view');
+        Route::post('/viewer/access', [DatabaseController::class, 'getDatabaseViewerUrl'])->name('viewer.access');
+        Route::get('/viewer/sso', [DatabaseController::class, 'openDatabaseViewerSSO'])->name('viewer.sso');
+        Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
+        Route::get('/viewer-view', [DatabaseController::class, 'DatabaseViewerView'])->name('viewer.view');
     });
 
     // Email Management routes

@@ -2,7 +2,8 @@
 
 # Nimbus Control Panel - Installer Script
 # One-command installation for Ubuntu/Debian servers
-# Usage: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash
+# Usage:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/install.sh | sudo bash
+# Uninstall: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/install.sh | sudo bash -s -- --uninstall
 
 set -e
 
@@ -40,6 +41,75 @@ echo -e "${NC}"
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: Please run as root (sudo)${NC}"
     exit 1
+fi
+
+# ─────────────────────────────────────────────────────────────────
+# UNINSTALL mode — removes everything the installer created
+# ─────────────────────────────────────────────────────────────────
+if [ "${1}" = "--uninstall" ] || [ "${1}" = "uninstall" ]; then
+    echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║         Nimbus Uninstaller                   ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}This will remove Nimbus and all its dependencies.${NC}"
+    echo -e "${YELLOW}MySQL databases will also be removed!${NC}"
+    echo ""
+    read -r -p "Are you sure? Type 'yes' to continue: " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Uninstall cancelled."
+        exit 0
+    fi
+
+    echo -e "\n${RED}[1/5]${NC} Stopping services..."
+    for SVC in nginx "php${PHP_VERSION}-fpm" mariadb mysql supervisor; do
+        systemctl stop    "$SVC" 2>/dev/null || true
+        systemctl disable "$SVC" 2>/dev/null || true
+    done
+
+    echo -e "${RED}[2/5]${NC} Removing packages..."
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y \
+        nginx nginx-common nginx-full nginx-core \
+        "php${PHP_VERSION}*" php8.1* php8.2* php8.3* php8.4* php8.5* \
+        mariadb-server mariadb-client mariadb-common \
+        supervisor \
+        nodejs npm libnode* \
+        2>/dev/null || true
+    DEBIAN_FRONTEND=noninteractive apt-get autoremove -y --purge 2>/dev/null || true
+    apt-get clean
+
+    echo -e "${RED}[3/5]${NC} Removing Nimbus files..."
+    rm -rf \
+        "${NIMBUS_DIR}" \
+        /usr/share/adminer \
+        /usr/local/nimbus \
+        /root/.nvm
+
+    echo -e "${RED}[4/5]${NC} Removing config directories..."
+    rm -rf \
+        /etc/nginx \
+        /etc/php \
+        /var/lib/mysql \
+        /var/log/mysql \
+        /etc/mysql \
+        /etc/supervisor \
+        /var/log/supervisor
+
+    echo -e "${RED}[5/5]${NC} Removing temp/lock files..."
+    rm -f \
+        /usr/local/bin/composer \
+        /usr/local/bin/node \
+        /usr/local/bin/npm \
+        /usr/local/bin/npx \
+        /tmp/nodesource_setup.sh \
+        /tmp/adminer_install.sh \
+        /tmp/adminer_reinstall.sh \
+        /usr/local/nimbus/storage/logs/nimbus_install.lock \
+        /tmp/adminer_install.sh
+
+    echo ""
+    echo -e "${GREEN}✓ Nimbus uninstalled successfully. System is clean.${NC}"
+    echo -e "${YELLOW}  Note: Standard system packages like curl/git were not removed.${NC}"
+    exit 0
 fi
 
 # Check OS
@@ -127,51 +197,72 @@ echo -e "${GREEN}[6/12]${NC} Installing Composer..."
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 echo -e "${GREEN}[7/12]${NC} Installing Node.js ${NODE_VERSION}..."
-# Clear stale apt cache before adding nodesource repo
+# Clear stale apt cache before touching nodesource repo
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-# Try nodesource with up to 3 retries (handles transient CDN mirror sync errors)
 NODE_INSTALLED=false
+
+# Helper: check if currently installed node meets required major version
+node_version_ok() {
+    command -v node &>/dev/null || return 1
+    local installed_major; installed_major=$(node -e "process.stdout.write(String(process.version.match(/^v(\d+)/)[1]))" 2>/dev/null)
+    [ "${installed_major}" -ge "${NODE_VERSION}" ] 2>/dev/null
+}
+
+# --- Attempt 1-3: nodesource repo ---
 for ATTEMPT in 1 2 3; do
     echo -e "  Attempt ${ATTEMPT}/3 via nodesource..."
-    if curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x -o /tmp/nodesource_setup.sh 2>/dev/null; then
-        if bash /tmp/nodesource_setup.sh 2>/dev/null && apt-get install -y nodejs 2>/dev/null; then
+    if curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" -o /tmp/nodesource_setup.sh; then
+        bash /tmp/nodesource_setup.sh && apt-get install -y nodejs npm && true
+        # Only accept if we got the right major version
+        if node_version_ok; then
             NODE_INSTALLED=true
             break
+        else
+            echo -e "  ${YELLOW}nodesource installed wrong Node version ($(node -v)), trying again...${NC}"
+            apt-get purge -y nodejs npm libnode* 2>/dev/null || true
+            apt-get clean && rm -rf /var/lib/apt/lists/*
         fi
     fi
     if [ $ATTEMPT -lt 3 ]; then
-        echo -e "  ${YELLOW}Attempt ${ATTEMPT} failed, retrying in 10s...${NC}"
-        sleep 10
-        apt-get clean && rm -rf /var/lib/apt/lists/*
+        echo -e "  ${YELLOW}Attempt ${ATTEMPT} failed, retrying in 15s...${NC}"
+        sleep 15
     fi
 done
 
-# Fallback: install via nvm if nodesource failed
+# --- Fallback: nvm (works on any distro, no CDN dependency) ---
 if [ "$NODE_INSTALLED" = false ]; then
-    echo -e "${YELLOW}nodesource failed, falling back to nvm...${NC}"
+    echo -e "${YELLOW}nodesource unavailable, installing Node.js ${NODE_VERSION} via nvm...${NC}"
+    # Remove any wrong-version node first
+    apt-get purge -y nodejs npm libnode* 2>/dev/null || true
+
+    export NVM_DIR="/root/.nvm"
     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-    export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    nvm install ${NODE_VERSION}
-    nvm use ${NODE_VERSION}
-    nvm alias default ${NODE_VERSION}
-    # Make node/npm available system-wide
-    ln -sf "$(nvm which ${NODE_VERSION})" /usr/local/bin/node
-    ln -sf "$(dirname $(nvm which ${NODE_VERSION}))/npm" /usr/local/bin/npm
-    ln -sf "$(dirname $(nvm which ${NODE_VERSION}))/npx" /usr/local/bin/npx
+    nvm install "${NODE_VERSION}"
+    nvm use "${NODE_VERSION}"
+    nvm alias default "${NODE_VERSION}"
+
+    # Symlink into /usr/local/bin so node/npm/npx are on PATH for all scripts
+    NODE_BIN_DIR="$(dirname "$(nvm which ${NODE_VERSION})")"
+    ln -sf "${NODE_BIN_DIR}/node" /usr/local/bin/node
+    ln -sf "${NODE_BIN_DIR}/npm"  /usr/local/bin/npm
+    ln -sf "${NODE_BIN_DIR}/npx"  /usr/local/bin/npx
     NODE_INSTALLED=true
 fi
 
-# Verify installation
-if ! command -v npm &>/dev/null; then
-    echo -e "${RED}ERROR: npm not found after Node.js installation! Cannot continue.${NC}"
+# --- Final verification ---
+if ! command -v npm &>/dev/null || ! node_version_ok; then
+    echo -e "${RED}ERROR: Node.js ${NODE_VERSION}+ / npm not available after installation!${NC}"
+    echo -e "${RED}  node: $(node -v 2>/dev/null || echo 'not found')${NC}"
+    echo -e "${RED}  npm:  $(npm  -v 2>/dev/null || echo 'not found')${NC}"
     exit 1
 fi
-echo -e "${GREEN}Node.js $(node -v) and npm $(npm -v) installed successfully.${NC}"
+echo -e "${GREEN}✓ Node.js $(node -v) and npm $(npm -v) ready.${NC}"
 
 echo -e "${GREEN}[8/12]${NC} Installing Supervisor..."
+apt-get update -y
 apt-get install -y supervisor
 systemctl enable supervisor
 systemctl start supervisor
