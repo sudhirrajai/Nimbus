@@ -28,7 +28,8 @@
       <div class="row" v-if="alert.show">
         <div class="col-12">
           <div :class="`alert alert-${alert.type} alert-dismissible fade show`" role="alert">
-            <span class="alert-icon"><i class="material-symbols-rounded">{{ alert.type === 'success' ? 'check_circle' : 'error' }}</i></span>
+            <span class="alert-icon"><i class="material-symbols-rounded">{{ alert.type === 'success' ? 'check_circle' :
+                'error' }}</i></span>
             <span class="alert-text">{{ alert.message }}</span>
             <button type="button" class="btn-close" @click="alert.show = false"></button>
           </div>
@@ -114,19 +115,11 @@
                         {{ formatSettingName(key) }}
                       </label>
                       <div class="input-group input-group-sm">
-                        <input 
-                          type="text" 
-                          class="form-control" 
-                          :value="value"
-                          :ref="`input-${key}`"
-                          @keyup.enter="updateQuickSetting(key, $event.target.value)"
-                        />
-                        <button 
-                          class="btn btn-sm bg-gradient-primary mb-0" 
-                          @click="updateQuickSetting(key, $refs[`input-${key}`][0].value)"
-                          title="Save"
-                          :disabled="updatingSettings[key]"
-                        >
+                        <input type="text" class="form-control" :value="value" :ref="`input-${key}`"
+                          @keyup.enter="updateQuickSetting(key, $event.target.value)" />
+                        <button class="btn btn-sm bg-gradient-primary mb-0"
+                          @click="updateQuickSetting(key, $refs[`input-${key}`][0].value)" title="Save"
+                          :disabled="updatingSettings[key]">
                           <span v-if="updatingSettings[key]" class="spinner-border spinner-border-sm"></span>
                           <i v-else class="material-symbols-rounded text-xs">save</i>
                         </button>
@@ -157,7 +150,8 @@
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">File</th>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Type</th>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
-                        <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
+                        <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
+                          Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -182,12 +176,8 @@
                           <span class="badge badge-sm bg-gradient-danger" v-else>Missing</span>
                         </td>
                         <td class="text-center">
-                          <button 
-                            class="btn btn-link text-primary mb-0 px-2" 
-                            @click="openEditor(ini)"
-                            title="Edit file"
-                            :disabled="!ini.exists"
-                          >
+                          <button class="btn btn-link text-primary mb-0 px-2" @click="openEditor(ini)" title="Edit file"
+                            :disabled="!ini.exists">
                             <i class="material-symbols-rounded text-sm">edit</i>
                           </button>
                         </td>
@@ -221,14 +211,11 @@
             <div class="modal-body">
               <div class="alert alert-warning py-2 mb-3">
                 <i class="material-symbols-rounded text-sm me-1">warning</i>
-                <small>Be careful when editing php.ini. Invalid settings may cause PHP to fail. A backup will be created before saving.</small>
+                <small>Be careful when editing php.ini. Invalid settings may cause PHP to fail. A backup will be created
+                  before saving.</small>
               </div>
-              <textarea 
-                v-model="editorContent" 
-                class="form-control font-monospace" 
-                rows="25"
-                style="font-size: 13px;"
-              ></textarea>
+              <textarea v-model="editorContent" class="form-control font-monospace" rows="25"
+                style="font-size: 13px;"></textarea>
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" @click="closeEditor">Cancel</button>
@@ -371,9 +358,11 @@ const saveIniFile = async () => {
 
 const updateQuickSetting = async (setting, value) => {
   if (!value || !value.trim()) return
-  
-  // Find the FPM ini file (primary)
+
+  // Find the FPM and CLI ini files
   const fpmIni = iniFiles.value.find(ini => ini.label.includes('FPM'))
+  const cliIni = iniFiles.value.find(ini => ini.label.includes('CLI'))
+
   if (!fpmIni) {
     showAlert('danger', 'PHP-FPM configuration file not found')
     return
@@ -381,28 +370,41 @@ const updateQuickSetting = async (setting, value) => {
 
   try {
     updatingSettings[setting] = true
-    
-    // Update the setting
+
+    // Update the setting in FPM
     await axios.post('/php/update-setting', {
       path: fpmIni.path,
       setting: setting,
       value: value.trim()
     })
-    
+
+    // Also update in CLI if it exists
+    if (cliIni) {
+      try {
+        await axios.post('/php/update-setting', {
+          path: cliIni.path,
+          setting: setting,
+          value: value.trim()
+        })
+      } catch (cliError) {
+        console.warn('Failed to update CLI ini:', cliError)
+      }
+    }
+
     // Update local display immediately (optimistic update)
     currentSettings.value[setting] = value.trim()
-    
+
     showAlert('info', `Setting '${setting}' updated. Restarting PHP-FPM...`)
-    
+
     // Auto-restart PHP-FPM
     await autoRestartPhp()
-    
+
     // Wait longer for PHP-FPM to fully restart, then reload settings
     setTimeout(async () => {
       await loadInfo()
       showAlert('success', `PHP-FPM restarted! Setting '${setting}' is now active.`)
     }, 5000) // Increased to 5 seconds
-    
+
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to update setting')
     // Reload to show actual values if update failed
@@ -433,7 +435,7 @@ const restartPhp = async () => {
     await axios.post('/php/restart', { version })
     showAlert('info', 'PHP-FPM restart scheduled. Reloading settings in 5 seconds...')
     showRestartModal.value = false
-    
+
     // Wait longer for PHP-FPM to restart, then reload info
     setTimeout(async () => {
       await loadInfo()

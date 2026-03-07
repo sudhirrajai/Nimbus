@@ -59,7 +59,10 @@ body {
 }
 
 #menu h1 {
-    display: none !important;
+    margin-bottom: 2rem !important;
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    color: var(--bs-gray-900) !important;
 }
 
 #menu h1 a {
@@ -217,7 +220,10 @@ input[type="submit"]:hover {
 
 /* Logout button */
 #logout {
-    display: none !important;
+    position: absolute !important;
+    top: 2rem;
+    right: 3rem;
+    z-index: 100;
 }
 
 /* Login box */

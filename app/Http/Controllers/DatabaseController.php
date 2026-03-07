@@ -78,13 +78,13 @@ cleanup() { rm -f "\$LOCK_FILE"; }
 trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"
 ADMINER_VERSION="4.8.1"
-GH_URL="https://github.com/vrana/adminer/releases/download/v\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
-ALT_URL="https://www.adminer.org/static/download/\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
+GH_URL="#"
+ALT_URL="https://www.vmcore.in"
 echo "Creating Database Viewer directory..."; sudo mkdir -p "\$ADMINER_STORE"
 echo "Downloading Database Viewer \${ADMINER_VERSION}..."
 sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
-    echo "Primary failed, trying adminer.org..."
+    echo "Primary failed, trying vmcore.in..."
     sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 fi
 if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
@@ -211,8 +211,8 @@ BASH;
 LOG_FILE="{$scriptLogFile}"; STATUS_FILE="{$scriptStatusFile}"; LOCK_FILE="{$scriptLockFile}"
 cleanup() { rm -f "\$LOCK_FILE"; }; trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"; ADMINER_VERSION="4.8.1"
-GH_URL="https://github.com/vrana/adminer/releases/download/v\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
-ALT_URL="https://www.adminer.org/static/download/\${ADMINER_VERSION}/adminer-\${ADMINER_VERSION}.php"
+GH_URL="#"
+ALT_URL="https://www.vmcore.in/"
 echo "Downloading Database Viewer \${ADMINER_VERSION}..."; sudo mkdir -p "\$ADMINER_STORE"
 sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1; fi
@@ -1038,7 +1038,7 @@ ob_start(function($buffer) {
     // Replace text branding safely without breaking file paths (like adminer.css)
     $buffer = str_replace('Adminer', 'System', $buffer);
     $buffer = str_replace('<title>System', '<title>Database', $buffer);
-    $buffer = str_replace('Logout successful. Thanks for using System, consider donating.', 'Logged out successfully.', $buffer);
+    $buffer = str_replace('Logout successful.', 'Logged out successfully.', $buffer);
     return $buffer;
 });
 
