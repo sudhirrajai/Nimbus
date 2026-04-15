@@ -13,6 +13,7 @@ use App\Http\Controllers\DatabaseController;
 use App\Http\Controllers\EmailController;
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\CronController;
+use App\Http\Controllers\GitDeploymentController;
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -46,6 +47,26 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
         Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
+    });
+
+    // Git Deployments routes
+    Route::get('/deployments', [GitDeploymentController::class, 'index'])->name('deployments.index');
+    Route::get('/deployments/create', [GitDeploymentController::class, 'create'])->name('deployments.create');
+    Route::get('/deployments/{id}/view-logs', [GitDeploymentController::class, 'showLogs'])->name('deployments.view-logs');
+
+    Route::prefix('deployments')->name('deployments.')->group(function () {
+        Route::get('/list', [GitDeploymentController::class, 'list'])->name('list');
+        Route::get('/domains', [GitDeploymentController::class, 'getDomains'])->name('domains');
+        Route::post('/', [GitDeploymentController::class, 'store'])->name('store');
+        Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
+        Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
+        Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
+        Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
+        Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
+        Route::post('/{id}/redeploy', [GitDeploymentController::class, 'redeploy'])->name('redeploy');
+        Route::delete('/{id}', [GitDeploymentController::class, 'destroy'])->name('destroy');
+        Route::get('/blacklist', [GitDeploymentController::class, 'getBlacklist'])->name('blacklist');
+        Route::post('/blacklist', [GitDeploymentController::class, 'updateBlacklist'])->name('blacklist.update');
     });
 
     // File Manager routes
