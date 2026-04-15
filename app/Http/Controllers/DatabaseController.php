@@ -78,8 +78,8 @@ cleanup() { rm -f "\$LOCK_FILE"; }
 trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"
 ADMINER_VERSION="4.8.1"
-GH_URL="#"
-ALT_URL="https://www.vmcore.in"
+GH_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
+ALT_URL="https://www.adminer.org/static/download/4.8.1/adminer-4.8.1.php"
 echo "Creating Database Viewer directory..."; sudo mkdir -p "\$ADMINER_STORE"
 echo "Downloading Database Viewer \${ADMINER_VERSION}..."
 sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
@@ -987,6 +987,32 @@ PHP;
         }
         
         return $output;
+    }
+
+    /**
+     * Forcefully clear the installation lock file
+     */
+    public function clearInstallLock()
+    {
+        try {
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            
+            if (file_exists($lockFile)) {
+                $this->executeSudoCommand("rm -f {$lockFile}");
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Installation lock cleared successfully. You can now start new processes.'
+                ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'No active lock file found.'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to clear install lock: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**
