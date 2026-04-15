@@ -132,8 +132,8 @@ class GitDeploymentService
             $cloneCommand = "git clone {$cloneUrl} --branch {$deployment->branch} --single-branch --depth 1 {$domainPath}/repo_temp";
             $output = $this->executeCommand($cloneCommand);
 
-            // Move contents from repo_temp to domain root
-            $this->executeCommand("shopt -s dotglob && mv {$domainPath}/repo_temp/* {$domainPath}/ 2>/dev/null; rm -rf {$domainPath}/repo_temp");
+            // Move contents from repo_temp to domain root (including hidden files)
+            $this->executeCommand("cp -a {$domainPath}/repo_temp/. {$domainPath}/ && rm -rf {$domainPath}/repo_temp");
 
             // Get current commit hash
             $commitHash = trim($this->executeCommand("cd {$domainPath} && git rev-parse HEAD")[0] ?? '');

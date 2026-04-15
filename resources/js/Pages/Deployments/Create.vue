@@ -64,7 +64,7 @@
 
       <!-- Step Content -->
       <div class="row">
-        <div class="col-12 col-lg-8 mx-auto">
+        <div class="col-12 col-lg-7">
           <div class="card">
             <div class="card-body p-4">
 
@@ -335,6 +335,70 @@
             </div>
           </div>
         </div>
+
+        <!-- Help & Documentation Sidebar -->
+        <div class="col-12 col-lg-5">
+          <div class="card h-100">
+            <div class="card-header pb-0 p-4">
+              <div class="row">
+                <div class="col-md-8 d-flex align-items-center">
+                  <h6 class="mb-0 text-dark font-weight-bold">Deployment Automation</h6>
+                </div>
+              </div>
+            </div>
+            <div class="card-body p-4">
+              <p class="text-sm">
+                Nimbus uses an optional <code>nimbus.yaml</code> file in your repository root to automate the deployment process.
+              </p>
+
+              <div class="timeline timeline-one-side">
+                <div class="timeline-block mb-3">
+                  <span class="timeline-step">
+                    <i class="material-symbols-rounded text-info text-gradient">download_for_offline</i>
+                  </span>
+                  <div class="timeline-content">
+                    <h6 class="text-dark text-sm font-weight-bold mb-0">1. Clone & Validation</h6>
+                    <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">The repository is cloned and runtimes (PHP, Node, etc.) are verified.</p>
+                  </div>
+                </div>
+                <div class="timeline-block mb-3">
+                  <span class="timeline-step">
+                    <i class="material-symbols-rounded text-success text-gradient">build</i>
+                  </span>
+                  <div class="timeline-content">
+                    <h6 class="text-dark text-sm font-weight-bold mb-0">2. Install & Build</h6>
+                    <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">Your <code>install</code> and <code>build</code> commands are executed in sequence.</p>
+                  </div>
+                </div>
+                <div class="timeline-block mb-3">
+                  <span class="timeline-step">
+                    <i class="material-symbols-rounded text-warning text-gradient">settings_suggest</i>
+                  </span>
+                  <div class="timeline-content">
+                    <h6 class="text-dark text-sm font-weight-bold mb-0">3. Environment & Nginx</h6>
+                    <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">Environment variables are injected into <code>.env</code> and Nginx is auto-configured.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-gray-100 border-radius-lg p-3 mt-4">
+                <h6 class="text-sm mb-2 text-dark font-weight-bold">Need a template?</h6>
+                <p class="text-xs text-secondary">Download our recommended <code>nimbus.yaml</code> template to get started with zero configuration.</p>
+                <button @click="downloadExampleYaml" class="btn btn-sm bg-gradient-dark mb-0 w-100 mt-2">
+                  <i class="material-symbols-rounded text-sm me-1">download</i>
+                  Download Example YAML
+                </button>
+              </div>
+
+              <div class="mt-4">
+                <h6 class="text-sm mb-2 text-dark font-weight-bold">Security Note</h6>
+                <p class="text-xs text-secondary">
+                  Commands are scanned against a security blacklist. Avoid using chained commands (<code>&&</code>, <code>||</code>) on a single line; use separate list items instead.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -501,6 +565,47 @@ const createDeployment = async () => {
 
 const goBack = () => {
   router.visit('/deployments')
+}
+
+const downloadExampleYaml = () => {
+  const content = `version: 1
+
+# Required runtimes (optional)
+# Nimbus will verify these are installed before proceeding
+runtime:
+  php: 8.2
+  node: 20
+
+# Commands to run during the installation phase (optional)
+# These run in the root of your repository
+install:
+  - composer install --no-dev --optimize-autoloader
+  - npm install
+
+# Commands to run during the build phase (optional)
+build:
+  - npm run build
+  - php artisan migrate --force
+
+# Environment variables to be added/updated in .env (optional)
+env:
+  APP_ENV: production
+  APP_DEBUG: "false"
+
+# Nginx configuration overrides (optional)
+nginx:
+  root: public
+  php_version: 8.2
+`
+  const blob = new Blob([content], { type: 'text/yaml' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'nimbus.yaml'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
 }
 </script>
 
