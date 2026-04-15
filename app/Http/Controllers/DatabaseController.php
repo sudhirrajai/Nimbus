@@ -994,9 +994,8 @@ PHP;
      */
     private function createDatabaseViewerWrapper()
     {
-        if (!file_exists($this->adminerPublicPath)) {
-            mkdir($this->adminerPublicPath, 0755, true);
-        }
+        // Use sudo to create the directory if it doesn't exist
+        $this->executeSudoCommand("mkdir -p {$this->adminerPublicPath}");
 
         $wrapperPath = $this->adminerPublicPath . '/index.php';
         
@@ -1046,8 +1045,16 @@ include '/usr/share/adminer/adminer.php';
 ob_end_flush();
 PHP;
 
-        file_put_contents($wrapperPath, $content);
-        chmod($wrapperPath, 0644);
+        // Write to a temporary file first
+        $tempPath = '/tmp/nimbus_db_wrapper_' . time() . '.php';
+        file_put_contents($tempPath, $content);
+
+        // Move to public path using sudo
+        $this->executeSudoCommand("mv {$tempPath} {$wrapperPath}");
+        $this->executeSudoCommand("chmod 644 {$wrapperPath}");
+        
+        // Ensure it's owned by the web user
+        $this->executeSudoCommand("chown -R www-data:www-data " . dirname($wrapperPath));
     }
 
     /**
