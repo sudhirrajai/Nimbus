@@ -97,7 +97,8 @@ class DomainController extends Controller
             // Create folder structure using sudo for proper permissions
             $this->executeSudoCommand("mkdir -p {$path}/public {$path}/logs");
             $this->executeSudoCommand("chown -R www-data:www-data {$path}");
-            $this->executeSudoCommand("chmod -R 755 {$path}");
+            $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
+            $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
             $createdDirs = true;
 
             // Create basic index file
@@ -557,10 +558,15 @@ NGINX;
             'chown -R www-data:www-data ' . escapeshellarg($domainPath)
         );
         $this->executeSudoCommand(
-            'chmod 755 ' . escapeshellarg($publicPath) . ' ' . escapeshellarg($logsPath)
+            'chmod 2775 '
+            . escapeshellarg($domainPath)
+            . ' '
+            . escapeshellarg($publicPath)
+            . ' '
+            . escapeshellarg($logsPath)
         );
         $this->executeSudoCommand(
-            'chmod 644 ' . escapeshellarg($accessLogPath) . ' ' . escapeshellarg($errorLogPath)
+            'chmod 664 ' . escapeshellarg($accessLogPath) . ' ' . escapeshellarg($errorLogPath)
         );
     }
 

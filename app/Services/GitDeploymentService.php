@@ -491,8 +491,8 @@ class GitDeploymentService
 
         try {
             $this->executeCommand("sudo chown -R www-data:www-data {$domainPath}");
-            $this->executeCommand("sudo find {$domainPath} -type d -exec chmod 755 {} \\;");
-            $this->executeCommand("sudo find {$domainPath} -type f -exec chmod 644 {} \\;");
+            $this->executeCommand("sudo find {$domainPath} -type d -exec chmod 2775 {} \\;");
+            $this->executeCommand("sudo find {$domainPath} -type f -exec chmod 664 {} \\;");
 
             // Make common directories writable if they exist
             $writableDirs = ['storage', 'bootstrap/cache', 'var', 'tmp', 'cache', 'writable'];
