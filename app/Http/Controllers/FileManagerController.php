@@ -978,25 +978,26 @@ class FileManagerController extends Controller
             return null;
         }
 
-        $output = [];
-        $returnCode = 0;
-        $gitUser = escapeshellarg(env('NIMBUS_GIT_USER', $this->gitSystemUser));
-        $escapedSearchPath = escapeshellarg($realSearchPath);
+        $currentPath = $realSearchPath;
 
-        exec("sudo -u {$gitUser} env GIT_TERMINAL_PROMPT=0 git -C {$escapedSearchPath} rev-parse --show-toplevel 2>&1", $output, $returnCode);
+        while ($currentPath && strpos($currentPath, $domainPath) === 0) {
+            if (File::exists($currentPath . DIRECTORY_SEPARATOR . '.git')) {
+                return $currentPath;
+            }
 
-        if ($returnCode !== 0 || empty($output[0])) {
-            return null;
+            if ($currentPath === $domainPath) {
+                break;
+            }
+
+            $parentPath = dirname($currentPath);
+            if ($parentPath === $currentPath) {
+                break;
+            }
+
+            $currentPath = $parentPath;
         }
 
-        $repoPath = trim($output[0]);
-        $realRepoPath = realpath($repoPath);
-
-        if (!$realRepoPath || strpos($realRepoPath, $domainPath) !== 0) {
-            return null;
-        }
-
-        return $realRepoPath;
+        return null;
     }
 
     private function toDomainRelativePath($domain, $fullPath)
@@ -1018,8 +1019,9 @@ class FileManagerController extends Controller
         $returnCode = 0;
         $gitUser = escapeshellarg(env('NIMBUS_GIT_USER', $this->gitSystemUser));
         $escapedRepoPath = escapeshellarg($repoPath);
+        $escapedSafeDirectory = escapeshellarg("safe.directory={$repoPath}");
         $escapedArguments = implode(' ', array_map('escapeshellarg', $arguments));
-        $command = "sudo -u {$gitUser} env GIT_TERMINAL_PROMPT=0 git -C {$escapedRepoPath} {$escapedArguments}";
+        $command = "sudo -u {$gitUser} env GIT_TERMINAL_PROMPT=0 git -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
 
         \Log::debug("Executing git command: {$command}");
         exec("{$command} 2>&1", $output, $returnCode);
