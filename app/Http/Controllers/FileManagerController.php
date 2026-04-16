@@ -10,6 +10,7 @@ use Inertia\Inertia;
 class FileManagerController extends Controller
 {
     private $basePath = '/var/www/';
+    private $gitSystemUser = 'sudhir';
 
     /**
      * Display file manager for a domain
@@ -692,6 +693,155 @@ class FileManagerController extends Controller
         }
     }
 
+    /**
+     * Get Git status for the current file manager path.
+     */
+    public function gitStatus(Request $request, $domain)
+    {
+        try {
+            $path = $request->input('path', '');
+            $fullPath = $this->getFullPath($domain, $path);
+
+            if (!$this->isValidPath($fullPath)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            $repoPath = $this->resolveGitRepository($domain, $fullPath);
+
+            if (!$repoPath) {
+                return response()->json([
+                    'available' => false,
+                    'message' => 'No Git repository found in this folder or its parent folders.'
+                ]);
+            }
+
+            $branch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
+            $statusLines = $this->executeGitCommand($repoPath, ['status', '--short', '--branch']);
+            $branchLines = $this->executeGitCommand($repoPath, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+            $stashLines = $this->executeGitCommand($repoPath, ['stash', 'list']);
+
+            $cleanStatusLines = array_values(array_filter(array_map('trim', $statusLines)));
+            $branches = array_values(array_filter(array_map('trim', $branchLines)));
+            $stashes = array_map(function ($line) {
+                if (preg_match('/^(stash@\{\d+\}):(.*)$/', $line, $matches)) {
+                    return [
+                        'ref' => trim($matches[1]),
+                        'message' => trim($matches[2]),
+                    ];
+                }
+
+                return [
+                    'ref' => trim($line),
+                    'message' => trim($line),
+                ];
+            }, array_values(array_filter(array_map('trim', $stashLines))));
+
+            return response()->json([
+                'available' => true,
+                'repoRoot' => $this->toDomainRelativePath($domain, $repoPath),
+                'branch' => $branch,
+                'branches' => $branches,
+                'statusLines' => $cleanStatusLines,
+                'dirty' => count(array_filter($cleanStatusLines, fn ($line) => !str_starts_with($line, '##'))) > 0,
+                'stashes' => $stashes,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Git status error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Run a fixed Git action for the current repository.
+     */
+    public function gitAction(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'path' => 'nullable|string',
+                'action' => 'required|string|in:pull,push,commit,switch_branch,stash,stash_pop',
+                'message' => 'nullable|string|max:500',
+                'branch' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9._\/-]+$/'],
+                'stash' => ['nullable', 'string', 'max:100', 'regex:/^stash@\{\d+\}$/'],
+            ]);
+
+            $path = $request->input('path', '');
+            $action = $request->input('action');
+            $message = trim((string) $request->input('message', ''));
+            $branch = trim((string) $request->input('branch', ''));
+            $stash = trim((string) $request->input('stash', ''));
+            $fullPath = $this->getFullPath($domain, $path);
+
+            if (!$this->isValidPath($fullPath)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            $repoPath = $this->resolveGitRepository($domain, $fullPath);
+
+            if (!$repoPath) {
+                return response()->json(['error' => 'No Git repository found for this path.'], 404);
+            }
+
+            $output = [];
+
+            switch ($action) {
+                case 'pull':
+                    $currentBranch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
+                    $output = $this->executeGitCommand($repoPath, ['pull', '--ff-only', 'origin', $currentBranch]);
+                    break;
+
+                case 'push':
+                    $currentBranch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
+                    $output = $this->executeGitCommand($repoPath, ['push', 'origin', $currentBranch]);
+                    break;
+
+                case 'commit':
+                    if ($message === '') {
+                        return response()->json(['error' => 'Commit message is required.'], 422);
+                    }
+
+                    $status = $this->executeGitCommand($repoPath, ['status', '--porcelain']);
+                    if (count(array_filter(array_map('trim', $status))) === 0) {
+                        return response()->json(['error' => 'There are no changes to commit.'], 422);
+                    }
+
+                    $this->executeGitCommand($repoPath, ['add', '-A']);
+                    $output = $this->executeGitCommand($repoPath, ['commit', '-m', $message]);
+                    break;
+
+                case 'switch_branch':
+                    if ($branch === '') {
+                        return response()->json(['error' => 'Branch name is required.'], 422);
+                    }
+
+                    $output = $this->executeGitCommand($repoPath, ['switch', $branch]);
+                    break;
+
+                case 'stash':
+                    $output = $message !== ''
+                        ? $this->executeGitCommand($repoPath, ['stash', 'push', '-m', $message])
+                        : $this->executeGitCommand($repoPath, ['stash', 'push']);
+                    break;
+
+                case 'stash_pop':
+                    $output = $stash !== ''
+                        ? $this->executeGitCommand($repoPath, ['stash', 'pop', $stash])
+                        : $this->executeGitCommand($repoPath, ['stash', 'pop']);
+                    break;
+            }
+
+            return response()->json([
+                'message' => 'Git action completed successfully.',
+                'output' => implode("\n", $output),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['error' => $e->validator->errors()->first()], 422);
+        } catch (\Exception $e) {
+            \Log::error("Git action error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // Helper methods
 
     private function getFullPath($domain, $path = '')
@@ -816,6 +966,71 @@ class FileManagerController extends Controller
         }
 
         return $breadcrumbs;
+    }
+
+    private function resolveGitRepository($domain, $fullPath)
+    {
+        $domainPath = realpath($this->basePath . $domain);
+        $searchPath = File::isDirectory($fullPath) ? $fullPath : dirname($fullPath);
+        $realSearchPath = realpath($searchPath);
+
+        if (!$domainPath || !$realSearchPath || strpos($realSearchPath, $domainPath) !== 0) {
+            return null;
+        }
+
+        $output = [];
+        $returnCode = 0;
+        $gitUser = escapeshellarg(env('NIMBUS_GIT_USER', $this->gitSystemUser));
+        $escapedSearchPath = escapeshellarg($realSearchPath);
+
+        exec("sudo -u {$gitUser} env GIT_TERMINAL_PROMPT=0 git -C {$escapedSearchPath} rev-parse --show-toplevel 2>&1", $output, $returnCode);
+
+        if ($returnCode !== 0 || empty($output[0])) {
+            return null;
+        }
+
+        $repoPath = trim($output[0]);
+        $realRepoPath = realpath($repoPath);
+
+        if (!$realRepoPath || strpos($realRepoPath, $domainPath) !== 0) {
+            return null;
+        }
+
+        return $realRepoPath;
+    }
+
+    private function toDomainRelativePath($domain, $fullPath)
+    {
+        $domainRoot = realpath($this->basePath . $domain);
+        $realPath = realpath($fullPath);
+
+        if (!$domainRoot || !$realPath) {
+            return '';
+        }
+
+        $relative = ltrim(substr($realPath, strlen($domainRoot)), DIRECTORY_SEPARATOR);
+        return str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+    }
+
+    private function executeGitCommand($repoPath, array $arguments)
+    {
+        $output = [];
+        $returnCode = 0;
+        $gitUser = escapeshellarg(env('NIMBUS_GIT_USER', $this->gitSystemUser));
+        $escapedRepoPath = escapeshellarg($repoPath);
+        $escapedArguments = implode(' ', array_map('escapeshellarg', $arguments));
+        $command = "sudo -u {$gitUser} env GIT_TERMINAL_PROMPT=0 git -C {$escapedRepoPath} {$escapedArguments}";
+
+        \Log::debug("Executing git command: {$command}");
+        exec("{$command} 2>&1", $output, $returnCode);
+
+        if ($returnCode !== 0) {
+            $errorMsg = trim(implode("\n", $output)) ?: 'Git command failed.';
+            \Log::error($errorMsg);
+            throw new \Exception($errorMsg);
+        }
+
+        return $output;
     }
 
     private function executeSudoCommand($command)

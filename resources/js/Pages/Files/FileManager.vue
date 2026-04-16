@@ -114,6 +114,118 @@
         </div>
       </div>
 
+      <!-- Git Panel -->
+      <div class="row mb-3">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-body p-3">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h6 class="mb-1">Git Repository</h6>
+                  <p class="text-sm text-secondary mb-0">
+                    Manage the nearest Git repository for the current folder.
+                  </p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadGitStatus" :disabled="gitLoading">
+                  <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                  Refresh Git
+                </button>
+              </div>
+
+              <div v-if="gitLoading" class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+              </div>
+
+              <div v-else-if="gitInfo.available">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                  <span class="badge bg-gradient-dark">Branch: {{ gitInfo.branch || 'detached' }}</span>
+                  <span class="badge" :class="gitInfo.dirty ? 'bg-gradient-warning' : 'bg-gradient-success'">
+                    {{ gitInfo.dirty ? 'Working Tree Dirty' : 'Working Tree Clean' }}
+                  </span>
+                  <span class="text-sm text-secondary">
+                    Repo Root: /var/www/{{ domain }}{{ gitInfo.repoRoot ? '/' + gitInfo.repoRoot : '' }}
+                  </span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-lg-4">
+                    <label class="form-label text-sm mb-1">Commit Message</label>
+                    <div class="input-group">
+                      <input v-model="gitCommitMessage" type="text" class="form-control" placeholder="Describe your changes">
+                      <button class="btn bg-gradient-primary mb-0" @click="runGitCommit" :disabled="gitActionLoading || !gitCommitMessage.trim()">
+                        Commit
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-lg-4">
+                    <label class="form-label text-sm mb-1">Switch Branch</label>
+                    <div class="input-group">
+                      <select v-model="gitSelectedBranch" class="form-select">
+                        <option value="">Select branch</option>
+                        <option v-for="branch in gitInfo.branches" :key="branch" :value="branch">
+                          {{ branch }}
+                        </option>
+                      </select>
+                      <button class="btn bg-gradient-info mb-0" @click="runGitSwitchBranch" :disabled="gitActionLoading || !gitSelectedBranch">
+                        Switch
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-lg-4">
+                    <label class="form-label text-sm mb-1">Create Stash</label>
+                    <div class="input-group">
+                      <input v-model="gitStashMessage" type="text" class="form-control" placeholder="Optional stash message">
+                      <button class="btn bg-gradient-secondary mb-0" @click="runGitStash" :disabled="gitActionLoading">
+                        Stash
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                  <button class="btn btn-sm btn-outline-success mb-0" @click="performGitAction('pull')" :disabled="gitActionLoading">
+                    <i class="material-symbols-rounded text-sm me-1">south</i>
+                    Pull
+                  </button>
+                  <button class="btn btn-sm btn-outline-primary mb-0" @click="performGitAction('push')" :disabled="gitActionLoading">
+                    <i class="material-symbols-rounded text-sm me-1">north</i>
+                    Push
+                  </button>
+                  <button class="btn btn-sm btn-outline-dark mb-0" @click="performGitAction('stash_pop')" :disabled="gitActionLoading || gitInfo.stashes.length === 0">
+                    <i class="material-symbols-rounded text-sm me-1">inventory_2</i>
+                    Stash Pop Latest
+                  </button>
+                  <span v-if="gitActionLoading" class="text-sm text-secondary d-inline-flex align-items-center">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Running Git action...
+                  </span>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-lg-6">
+                    <label class="form-label text-sm mb-1">Git Status</label>
+                    <pre class="git-console mb-0">{{ gitInfo.statusLines.length ? gitInfo.statusLines.join('\n') : 'Working tree clean' }}</pre>
+                  </div>
+                  <div class="col-lg-6">
+                    <label class="form-label text-sm mb-1">Stashes</label>
+                    <pre class="git-console mb-0">{{ gitInfo.stashes.length ? gitInfo.stashes.map(stash => `${stash.ref} ${stash.message}`).join('\n') : 'No stashes found' }}</pre>
+                  </div>
+                </div>
+
+                <div v-if="gitLastOutput" class="mt-3">
+                  <label class="form-label text-sm mb-1">Last Git Output</label>
+                  <pre class="git-console mb-0">{{ gitLastOutput }}</pre>
+                </div>
+              </div>
+
+              <div v-else class="text-sm text-secondary">
+                {{ gitInfo.message || 'No Git repository found in this folder or its parent folders.' }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- File List -->
       <div class="row">
         <div class="col-12">
@@ -638,6 +750,22 @@ const breadcrumbs = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const showHidden = ref(false)
+const gitLoading = ref(false)
+const gitActionLoading = ref(false)
+const gitCommitMessage = ref('')
+const gitStashMessage = ref('')
+const gitSelectedBranch = ref('')
+const gitLastOutput = ref('')
+const gitInfo = ref({
+  available: false,
+  message: '',
+  repoRoot: '',
+  branch: '',
+  branches: [],
+  statusLines: [],
+  stashes: [],
+  dirty: false
+})
 
 // selection management
 const selectedItems = ref([]) // array of { name, type }
@@ -782,12 +910,91 @@ const loadFiles = async () => {
     // reset selection because list changed
     selectedItems.value = []
     allSelected.value = false
+    await loadGitStatus()
   } catch (error) {
     showAlert('danger', 'Failed to load files')
     console.error(error)
   } finally {
     loading.value = false
   }
+}
+
+const loadGitStatus = async () => {
+  try {
+    gitLoading.value = true
+    const response = await axios.post(`/file-manager/${props.domain}/git/status`, {
+      path: currentPath.value || ''
+    })
+    gitInfo.value = {
+      available: response.data.available ?? false,
+      message: response.data.message || '',
+      repoRoot: response.data.repoRoot || '',
+      branch: response.data.branch || '',
+      branches: response.data.branches || [],
+      statusLines: response.data.statusLines || [],
+      stashes: response.data.stashes || [],
+      dirty: response.data.dirty || false
+    }
+
+    if (gitInfo.value.branch && !gitSelectedBranch.value) {
+      gitSelectedBranch.value = gitInfo.value.branch
+    }
+  } catch (error) {
+    gitInfo.value = {
+      available: false,
+      message: error.response?.data?.error || 'Failed to load Git status.',
+      repoRoot: '',
+      branch: '',
+      branches: [],
+      statusLines: [],
+      stashes: [],
+      dirty: false
+    }
+  } finally {
+    gitLoading.value = false
+  }
+}
+
+const performGitAction = async (action, payload = {}) => {
+  try {
+    gitActionLoading.value = true
+    const response = await axios.post(`/file-manager/${props.domain}/git/action`, {
+      path: currentPath.value || '',
+      action,
+      ...payload
+    })
+
+    gitLastOutput.value = response.data.output || response.data.message || 'Git action completed successfully.'
+    showAlert('success', response.data.message || 'Git action completed successfully.')
+
+    if (action === 'commit') {
+      gitCommitMessage.value = ''
+    }
+    if (action === 'stash') {
+      gitStashMessage.value = ''
+    }
+
+    await loadFiles()
+  } catch (error) {
+    gitLastOutput.value = error.response?.data?.error || 'Git action failed.'
+    showAlert('danger', gitLastOutput.value)
+  } finally {
+    gitActionLoading.value = false
+  }
+}
+
+const runGitCommit = async () => {
+  if (!gitCommitMessage.value.trim()) return
+  await performGitAction('commit', { message: gitCommitMessage.value.trim() })
+}
+
+const runGitSwitchBranch = async () => {
+  if (!gitSelectedBranch.value) return
+  await performGitAction('switch_branch', { branch: gitSelectedBranch.value })
+}
+
+const runGitStash = async () => {
+  await performGitAction('stash', { message: gitStashMessage.value.trim() })
 }
 
 const navigateTo = (path) => {
@@ -1364,6 +1571,19 @@ textarea.font-monospace {
 /* Text utilities */
 .text-lg {
   font-size: 32px !important;
+}
+
+.git-console {
+  background: #1f2235;
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 1rem;
+  min-height: 120px;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
 }
 
 /* Animation for modal appearance */

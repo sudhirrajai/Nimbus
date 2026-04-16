@@ -87,6 +87,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/extract', [FileManagerController::class, 'extract'])->name('extract');
         Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
         Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
+        Route::post('/{domain}/git/status', [FileManagerController::class, 'gitStatus'])->name('git.status');
+        Route::post('/{domain}/git/action', [FileManagerController::class, 'gitAction'])->name('git.action');
     });
 
     // PHP Configuration routes
