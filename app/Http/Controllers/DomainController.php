@@ -111,6 +111,9 @@ class DomainController extends Controller
             $this->createNginxConfig($domain);
             $createdNginx = true;
 
+            // Ensure all managed domains have the directories/files their nginx configs expect
+            $this->repairManagedDomainStructures();
+
             // Test Nginx configuration before reloading
             $this->executeSudoCommand("nginx -t");
             
@@ -206,6 +209,9 @@ class DomainController extends Controller
             $this->createNginxConfig($newDomain);
             $newConfigCreated = true;
 
+            // Ensure all managed domains have the directories/files their nginx configs expect
+            $this->repairManagedDomainStructures();
+
             // Test and reload Nginx
             $this->executeSudoCommand("nginx -t");
             $this->executeSudoCommand("systemctl reload nginx");
@@ -283,6 +289,9 @@ class DomainController extends Controller
                 \Log::info("Removing Nginx config: $configPath");
                 $this->executeSudoCommand("rm -f {$configPath}");
             }
+
+            // Ensure remaining managed domains still have the directories/files their nginx configs expect
+            $this->repairManagedDomainStructures();
 
             // Step 3: Test and reload Nginx configuration
             \Log::info("Testing Nginx configuration...");
@@ -496,6 +505,63 @@ NGINX;
             \Log::info("Deleting Nginx config: $configPath");
             $this->executeSudoCommand("rm -f {$configPath}");
         }
+    }
+
+    /**
+     * Ensure all managed domain folders contain the structure expected by nginx configs.
+     */
+    private function repairManagedDomainStructures()
+    {
+        if (!File::exists($this->basePath)) {
+            return;
+        }
+
+        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
+
+        foreach (File::directories($this->basePath) as $directory) {
+            $name = basename($directory);
+
+            if (in_array(strtolower($name), $protectedDirs, true)) {
+                continue;
+            }
+
+            $this->ensureDomainStructure($directory);
+        }
+    }
+
+    /**
+     * Create the directories and log files referenced by the nginx template.
+     */
+    private function ensureDomainStructure($domainPath)
+    {
+        $publicPath = $domainPath . '/public';
+        $logsPath = $domainPath . '/logs';
+        $accessLogPath = $logsPath . '/access.log';
+        $errorLogPath = $logsPath . '/error.log';
+
+        $this->executeSudoCommand(
+            'mkdir -p '
+            . escapeshellarg($publicPath)
+            . ' '
+            . escapeshellarg($logsPath)
+        );
+
+        $this->executeSudoCommand(
+            'touch '
+            . escapeshellarg($accessLogPath)
+            . ' '
+            . escapeshellarg($errorLogPath)
+        );
+
+        $this->executeSudoCommand(
+            'chown -R www-data:www-data ' . escapeshellarg($domainPath)
+        );
+        $this->executeSudoCommand(
+            'chmod 755 ' . escapeshellarg($publicPath) . ' ' . escapeshellarg($logsPath)
+        );
+        $this->executeSudoCommand(
+            'chmod 644 ' . escapeshellarg($accessLogPath) . ' ' . escapeshellarg($errorLogPath)
+        );
     }
 
     /**
