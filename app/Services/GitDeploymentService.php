@@ -20,7 +20,6 @@ class GitDeploymentService
         '`',       // backtick execution
         '$(',      // subshell execution
         '#{',      // Ruby-style interpolation
-        '|',       // pipe (can chain to dangerous commands)
     ];
 
     /**
@@ -402,12 +401,15 @@ class GitDeploymentService
 
         // Layer 2: Check for shell chaining operators (;, &&, ||)
         // These are checked separately because they're common injection vectors
-        if (preg_match('/[;&|]{1,2}/', $command)) {
-            // Allow && and || only if they're YAML multi-line or intentional
-            // For safety, we block them all — users should use separate install/build lines
-            if (str_contains($command, ';') || str_contains($command, '&&') || str_contains($command, '||')) {
-                return "Shell chaining operator detected. Use separate lines in nimbus.yaml instead.";
-            }
+        // Users should use separate lines in nimbus.yaml instead of chaining
+        if (str_contains($command, ';')) {
+            return "Shell chaining operator ';' detected. Use separate lines in nimbus.yaml instead.";
+        }
+        if (str_contains($command, '&&')) {
+            return "Shell chaining operator '&&' detected. Use separate lines in nimbus.yaml instead.";
+        }
+        if (str_contains($command, '||')) {
+            return "Shell chaining operator '||' detected. Use separate lines in nimbus.yaml instead.";
         }
 
         // Layer 3: Database blacklist patterns

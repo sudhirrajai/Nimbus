@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\GitDeployment;
 use App\Models\DeploymentLog;
 use App\Models\CommandBlacklist;
+use App\Jobs\RunDeploymentJob;
 use App\Services\GitDeploymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -197,17 +198,15 @@ class GitDeploymentController extends Controller
             // Reset status
             $deployment->update(['status' => 'pending', 'last_error' => null]);
 
-            // Run deployment (synchronous for now — Phase 3 will add queue support)
-            $success = $this->deploymentService->deploy($deployment);
+            // Dispatch deployment as a background job
+            RunDeploymentJob::dispatch($deployment);
 
-            // Refresh the model
-            $deployment->refresh();
+            \Log::info("Deployment job dispatched for {$deployment->domain} by user " . auth()->id());
 
             return response()->json([
-                'success' => $success,
-                'message' => $success ? 'Deployment completed successfully!' : 'Deployment failed.',
-                'status' => $deployment->status,
-                'error' => $deployment->last_error,
+                'success' => true,
+                'message' => 'Deployment started! It will run in the background. Check the logs for progress.',
+                'status' => 'pending',
             ]);
 
         } catch (\Exception $e) {
