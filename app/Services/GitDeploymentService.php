@@ -123,7 +123,7 @@ class GitDeploymentService
 
             // Clean existing content in the domain directory (keep logs dir)
             $cleanOutput = $this->executeCommand(
-                "find {$domainPath} -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +",
+                "sudo find {$domainPath} -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +",
                 $domainPath
             );
 
@@ -131,8 +131,16 @@ class GitDeploymentService
             $cloneCommand = "git clone {$cloneUrl} --branch {$deployment->branch} --single-branch --depth 1 {$domainPath}/repo_temp";
             $output = $this->executeCommand($cloneCommand);
 
-            // Move contents from repo_temp to domain root (including hidden files)
-            $this->executeCommand("cp -a {$domainPath}/repo_temp/. {$domainPath}/ && rm -rf {$domainPath}/repo_temp");
+            // Move contents from repo_temp to the domain root, preserving dotfiles without cp -a metadata issues.
+            $this->executeCommand(
+                "sudo bash -lc 'shopt -s dotglob nullglob && mv "
+                . escapeshellarg($domainPath . "/repo_temp")
+                . "/* "
+                . escapeshellarg($domainPath)
+                . "/ && rmdir "
+                . escapeshellarg($domainPath . "/repo_temp")
+                . "'"
+            );
 
             // Get current commit hash
             $commitHash = trim($this->executeCommand("cd {$domainPath} && git rev-parse HEAD")[0] ?? '');
