@@ -153,7 +153,7 @@ cleanup_packages() {
 
 reset_firewall() {
     echo ""
-    read -r -p "$(echo -e "${YELLOW}Reset UFW firewall rules to defaults? [y/N]: ${NC}")" RESET_FW
+    read -r -p "$(echo -e "${YELLOW}Reset UFW firewall rules to defaults? [y/N]: ${NC}")" RESET_FW < /dev/tty
     if [ "$RESET_FW" = "y" ] || [ "$RESET_FW" = "Y" ]; then
         ufw --force reset 2>/dev/null || true
         ufw default deny incoming 2>/dev/null || true
@@ -181,7 +181,7 @@ mode_full_uninstall() {
     echo ""
     echo -e "${RED}${BOLD}   ⛔ THIS ACTION IS IRREVERSIBLE! ALL DATA WILL BE LOST!${NC}"
     echo ""
-    read -r -p "$(echo -e "${RED}Type 'YES I AM SURE' to continue: ${NC}")" CONFIRM
+    read -r -p "$(echo -e "${RED}Type 'YES I AM SURE' to continue: ${NC}")" CONFIRM < /dev/tty
     if [ "$CONFIRM" != "YES I AM SURE" ]; then
         echo -e "${YELLOW}Uninstall cancelled.${NC}"
         exit 0
@@ -211,7 +211,7 @@ mode_keep_projects_remove_all() {
     echo ""
     echo -e "   ${GREEN}✓ Projects in /var/www will be preserved${NC}"
     echo ""
-    read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" CONFIRM
+    read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" CONFIRM < /dev/tty
     if [ "$CONFIRM" != "yes" ]; then
         echo -e "${YELLOW}Uninstall cancelled.${NC}"
         exit 0
@@ -240,7 +240,7 @@ mode_keep_projects_keep_db() {
     echo -e "   ${GREEN}✓ Database (MariaDB/MySQL) will be preserved${NC}"
     echo -e "   ${GREEN}✓ Projects in /var/www will be preserved${NC}"
     echo ""
-    read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" CONFIRM
+    read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" CONFIRM < /dev/tty
     if [ "$CONFIRM" != "yes" ]; then
         echo -e "${YELLOW}Uninstall cancelled.${NC}"
         exit 0
@@ -272,7 +272,7 @@ mode_portal_only() {
     echo -e "   ${GREEN}✓ Projects in /var/www will be preserved${NC}"
     echo -e "   ${GREEN}✓ Other Nginx vhosts will remain active${NC}"
     echo ""
-    read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" CONFIRM
+    read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" CONFIRM < /dev/tty
     if [ "$CONFIRM" != "yes" ]; then
         echo -e "${YELLOW}Uninstall cancelled.${NC}"
         exit 0
@@ -304,7 +304,7 @@ print_header
 # Check if Nimbus is installed
 if [ ! -d "$NIMBUS_DIR" ]; then
     echo -e "${YELLOW}Nimbus does not appear to be installed at ${NIMBUS_DIR}.${NC}"
-    read -r -p "Continue anyway? [y/N]: " CONTINUE
+    read -r -p "Continue anyway? [y/N]: " CONTINUE < /dev/tty
     if [ "$CONTINUE" != "y" ] && [ "$CONTINUE" != "Y" ]; then
         echo "Exiting."
         exit 0
@@ -328,7 +328,7 @@ echo ""
 echo -e "  ${GREEN}0)${NC} Cancel"
 echo ""
 print_divider
-read -r -p "$(echo -e "${CYAN}Enter your choice [0-4]: ${NC}")" CHOICE
+read -r -p "$(echo -e "${CYAN}Enter your choice [0-4]: ${NC}")" CHOICE < /dev/tty
 
 case "$CHOICE" in
     1) mode_full_uninstall ;;
