@@ -10,7 +10,7 @@ use Inertia\Inertia;
 class FileManagerController extends Controller
 {
     private $basePath = '/var/www/';
-    private $gitSystemUser = 'sudhir';
+    private $gitSystemUser = 'www-data';
 
     /**
      * Display file manager for a domain

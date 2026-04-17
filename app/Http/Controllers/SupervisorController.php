@@ -8,6 +8,11 @@ use Inertia\Inertia;
 
 class SupervisorController extends Controller
 {
+    private function getDefaultProcessUser(): string
+    {
+        return env('NIMBUS_GIT_USER', 'www-data');
+    }
+
     /**
      * Display supervisor management page
      */
@@ -341,13 +346,15 @@ BASH;
             $command = "/usr/bin/php {$directory}/artisan queue:work --sleep={$sleep} --tries={$tries} --timeout={$timeout}";
             $stdout = "{$directory}/{$logfile}";
 
+            $processUser = $this->getDefaultProcessUser();
+
             $config = <<<CONFIG
 [program:{$name}]
 process_name=%(program_name)s_%(process_num)02d
 command={$command}
 autostart={$autostart}
 autorestart={$autorestart}
-user=www-data
+user={$processUser}
 numprocs={$numprocs}
 redirect_stderr=true
 stdout_logfile={$stdout}
@@ -540,13 +547,15 @@ CONFIG;
             $command = "/usr/bin/php {$directory}/artisan queue:work --sleep={$sleep} --tries={$tries} --timeout={$timeout}";
             $stdout = "{$directory}/{$logfile}";
 
+            $processUser = $this->getDefaultProcessUser();
+
             $config = <<<CONFIG
 [program:{$name}]
 process_name=%(program_name)s_%(process_num)02d
 command={$command}
 autostart={$autostart}
 autorestart={$autorestart}
-user=www-data
+user={$processUser}
 numprocs={$numprocs}
 redirect_stderr=true
 stdout_logfile={$stdout}

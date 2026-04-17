@@ -156,6 +156,36 @@ curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh |
 
 ---
 
+## 🗑️ Uninstallation
+
+### One-Command Uninstall
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | sudo bash
+```
+
+The uninstaller is interactive and will ask you to choose a removal mode:
+
+| # | Mode | Portal | Services | Database | Projects (`/var/www`) |
+|---|------|--------|----------|----------|-----------------------|
+| 1 | **Full Uninstall** | ❌ Removed | ❌ Removed | ❌ Removed | ❌ Removed |
+| 2 | **Remove Services + Portal** | ❌ Removed | ❌ Removed | ❌ Removed | ✅ Kept |
+| 3 | **Remove Services (keep DB)** | ❌ Removed | ❌ Removed | ✅ Kept | ✅ Kept |
+| 4 | **Remove Portal Only** | ❌ Removed | ✅ Kept | ✅ Kept | ✅ Kept |
+
+> ⚠️ **Warning:** Modes 1 and 2 will permanently delete all MySQL/MariaDB databases. Back up your data before proceeding.
+
+### What Each Mode Removes
+
+**Services** include: Nginx, PHP-FPM, Node.js, Composer, and Supervisor.
+
+- **Full Uninstall** — Complete wipe. Removes the panel, every installed service, all databases, and all hosted project files. Use this when decommissioning the server.
+- **Remove Services + Portal (Keep Projects)** — Removes everything except the files in `/var/www`. Useful if you want to migrate project files to another server.
+- **Remove Services except DB + Portal (Keep Projects)** — Keeps the database server running along with the project files. Ideal if you plan to export databases manually or migrate them later.
+- **Remove Portal Only** — Only removes the Nimbus panel application and its Nginx vhost. All services (Nginx, PHP, MariaDB, etc.) remain running with their current configurations, and all projects stay intact. Use this if you want to stop using the panel UI but keep your server operational.
+
+---
+
 ## 📸 Screenshots
 
 <div align="center">
@@ -244,6 +274,7 @@ Nimbus/
 │   └── web.php              # Web Routes
 ├── public/                  # Public Assets
 ├── install.sh               # One-command installer
+├── uninstall.sh             # Interactive uninstaller
 └── VERSION                  # Current version
 ```
 
