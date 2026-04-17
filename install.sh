@@ -87,9 +87,9 @@ prompt_database_credentials() {
     echo ""
     echo -e "${BLUE}Database access for Nimbus${NC}"
     echo -e "Detected database engine: ${GREEN}${DB_ENGINE}${NC}"
-    read -r -p "Database root/admin username [root]: " INPUT_DB_ROOT_USER
+    read -r -p "Database root/admin username [root]: " INPUT_DB_ROOT_USER < /dev/tty
     DB_ROOT_USER="${INPUT_DB_ROOT_USER:-root}"
-    read -r -s -p "Database password for ${DB_ROOT_USER} (leave blank for socket auth): " INPUT_DB_ROOT_PASS
+    read -r -s -p "Database password for ${DB_ROOT_USER} (leave blank for socket auth): " INPUT_DB_ROOT_PASS < /dev/tty
     echo ""
 
     if [ -n "$INPUT_DB_ROOT_PASS" ]; then
@@ -274,11 +274,24 @@ done
 
 # Database root/admin access
 MYSQL_ROOT_PASS=$(openssl rand -base64 24)
+
+# First, try socket auth (works on fresh installs where root uses unix_socket).
+# If that fails, prompt the user for credentials.
 if [ "$SKIP_EXISTING" = true ]; then
     prompt_database_credentials
     if ! verify_database_credentials; then
         echo -e "${RED}Unable to authenticate to ${DB_ENGINE} with the provided credentials.${NC}"
         exit 1
+    fi
+else
+    # Fresh install: verify socket auth works; if not, ask for credentials
+    if ! verify_database_credentials; then
+        echo -e "${YELLOW}Socket authentication failed. Prompting for database credentials...${NC}"
+        prompt_database_credentials
+        if ! verify_database_credentials; then
+            echo -e "${RED}Unable to authenticate to ${DB_ENGINE}. Cannot continue.${NC}"
+            exit 1
+        fi
     fi
 fi
 
@@ -290,18 +303,15 @@ if [ "$SKIP_EXISTING" = true ]; then
     echo -e "${YELLOW}Skipping ${DB_ENGINE^} root-auth changes (--skip-existing enabled).${NC}"
 else
     # Try combined unix_socket OR native_password auth (MariaDB 10.4+)
-    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket OR mysql_native_password USING PASSWORD('${MYSQL_ROOT_PASS}');" 2>/dev/null || \
-        mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';" 2>/dev/null || \
+    run_db_command "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket OR mysql_native_password USING PASSWORD('${MYSQL_ROOT_PASS}');" 2>/dev/null || \
+        run_db_command "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';" 2>/dev/null || \
         echo -e "${YELLOW}Note: root auth method unchanged (unix_socket will be used)${NC}"
 
-    mysql -e "DELETE FROM mysql.user WHERE User='';" 2>/dev/null || true
-    mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" 2>/dev/null || true
-    mysql -e "DROP DATABASE IF EXISTS test;" 2>/dev/null || true
-    mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" 2>/dev/null || true
-    mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
-    DB_ROOT_USER="root"
-    DB_ROOT_PASS=""
-    DB_AUTH_MODE="socket"
+    run_db_command "DELETE FROM mysql.user WHERE User='';" 2>/dev/null || true
+    run_db_command "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" 2>/dev/null || true
+    run_db_command "DROP DATABASE IF EXISTS test;" 2>/dev/null || true
+    run_db_command "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" 2>/dev/null || true
+    run_db_command "FLUSH PRIVILEGES;" 2>/dev/null || true
 fi
 
 echo -e "${GREEN}[6/12]${NC} Installing Composer..."
@@ -396,10 +406,12 @@ fi
 git clone $GITHUB_REPO $NIMBUS_DIR
 cd $NIMBUS_DIR
 
-# Create Nimbus database
+# Create Nimbus database and user
+# Use ALTER USER after CREATE to ensure password is always up-to-date (handles reinstalls)
 NIMBUS_DB_PASS=$(openssl rand -base64 24)
 run_db_command "CREATE DATABASE IF NOT EXISTS nimbus;"
 run_db_command "CREATE USER IF NOT EXISTS 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';"
+run_db_command "ALTER USER 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';"
 run_db_command "GRANT ALL PRIVILEGES ON nimbus.* TO 'nimbus'@'localhost';"
 run_db_command "FLUSH PRIVILEGES;"
 
