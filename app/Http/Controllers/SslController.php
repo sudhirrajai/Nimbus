@@ -46,7 +46,8 @@ class SslController extends Controller
                 ->values();
 
             return response()->json([
-                'domains' => $directories
+                'domains' => $directories,
+                'certbotInstalled' => $this->isCertbotInstalled(),
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get SSL domains: " . $e->getMessage());
@@ -61,7 +62,6 @@ class SslController extends Controller
      */
     private function getDomainSslInfo($domain)
     {
-        $certPath = $this->letsencryptPath . $domain . '/fullchain.pem';
         $info = [
             'domain' => $domain,
             'hasSsl' => false,
@@ -71,27 +71,209 @@ class SslController extends Controller
             'daysRemaining' => null,
             'status' => 'no_ssl',
             'autoRenew' => false,
+            'sslSource' => null, // 'letsencrypt', 'nginx_custom', or null
         ];
 
-        // Check if certificate exists
-        $output = [];
-        $returnCode = 0;
-        exec("sudo test -f " . escapeshellarg($certPath) . " && echo 'exists'", $output, $returnCode);
-        
-        if ($returnCode === 0 && isset($output[0]) && $output[0] === 'exists') {
+        // Strategy 1: Check Let's Encrypt certificate path
+        $leCertPath = $this->letsencryptPath . $domain . '/fullchain.pem';
+        $certPath = $this->findCertificatePath($domain, $leCertPath);
+
+        if ($certPath) {
             $info['hasSsl'] = true;
-            
+            $info['sslSource'] = ($certPath === $leCertPath) ? 'letsencrypt' : 'nginx_custom';
+
             // Get certificate details using openssl
             $certInfo = $this->parseCertificate($certPath);
             if ($certInfo) {
                 $info = array_merge($info, $certInfo);
             }
-            
-            // Check auto-renewal status
-            $info['autoRenew'] = $this->checkAutoRenew($domain);
+
+            // Check auto-renewal status (only relevant for Let's Encrypt)
+            if ($info['sslSource'] === 'letsencrypt') {
+                $info['autoRenew'] = $this->checkAutoRenew($domain);
+            }
+
+            return $info;
+        }
+
+        // Strategy 2: Check Nginx config for ssl_certificate directive
+        $nginxSslInfo = $this->checkNginxSslConfig($domain);
+        if ($nginxSslInfo) {
+            $info['hasSsl'] = true;
+            $info['sslSource'] = 'nginx_custom';
+
+            if ($nginxSslInfo['certPath']) {
+                $certInfo = $this->parseCertificate($nginxSslInfo['certPath']);
+                if ($certInfo) {
+                    $info = array_merge($info, $certInfo);
+                }
+            }
+        }
+
+        // Strategy 3: Check if domain responds on HTTPS using openssl s_client
+        if (!$info['hasSsl']) {
+            $liveInfo = $this->checkLiveSsl($domain);
+            if ($liveInfo) {
+                $info['hasSsl'] = true;
+                $info['sslSource'] = 'detected_live';
+                $info = array_merge($info, $liveInfo);
+            }
         }
 
         return $info;
+    }
+
+    /**
+     * Find the certificate file path - checks Let's Encrypt first, then common locations
+     */
+    private function findCertificatePath($domain, $leCertPath)
+    {
+        // Check Let's Encrypt path
+        $output = [];
+        $returnCode = 0;
+        exec("sudo test -f " . escapeshellarg($leCertPath) . " && echo 'exists'", $output, $returnCode);
+
+        if ($returnCode === 0 && isset($output[0]) && $output[0] === 'exists') {
+            return $leCertPath;
+        }
+
+        // Check common alternative paths
+        $alternativePaths = [
+            "/etc/ssl/certs/{$domain}.pem",
+            "/etc/ssl/certs/{$domain}.crt",
+            "/etc/nginx/ssl/{$domain}.pem",
+            "/etc/nginx/ssl/{$domain}.crt",
+            "/etc/nginx/ssl/{$domain}/fullchain.pem",
+            "/etc/pki/tls/certs/{$domain}.pem",
+        ];
+
+        foreach ($alternativePaths as $path) {
+            $output = [];
+            exec("sudo test -f " . escapeshellarg($path) . " && echo 'exists'", $output);
+            if (isset($output[0]) && $output[0] === 'exists') {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check Nginx config for SSL certificate directives
+     */
+    private function checkNginxSslConfig($domain)
+    {
+        $configPaths = [
+            "/etc/nginx/sites-available/{$domain}",
+            "/etc/nginx/sites-enabled/{$domain}",
+        ];
+
+        foreach ($configPaths as $configPath) {
+            $output = [];
+            exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+
+            if (!isset($output[0]) || $output[0] !== 'exists') {
+                continue;
+            }
+
+            // Read the Nginx config and look for SSL directives
+            $configOutput = [];
+            exec("sudo cat " . escapeshellarg($configPath), $configOutput);
+            $configContent = implode("\n", $configOutput);
+
+            // Check for listen 443 ssl or ssl_certificate
+            $hasSSL = preg_match('/listen\s+.*443\s+ssl/i', $configContent)
+                || preg_match('/ssl_certificate\s+/i', $configContent);
+
+            if ($hasSSL) {
+                $certPath = null;
+                // Extract ssl_certificate path
+                if (preg_match('/ssl_certificate\s+([^;]+);/i', $configContent, $matches)) {
+                    $certPath = trim($matches[1]);
+                    // Remove quotes if present
+                    $certPath = trim($certPath, "'\"");
+                }
+
+                return [
+                    'hasSSL' => true,
+                    'certPath' => $certPath,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if a domain has live SSL by probing with openssl
+     */
+    private function checkLiveSsl($domain)
+    {
+        try {
+            $output = [];
+            $returnCode = 0;
+            $cmd = "echo | timeout 5 openssl s_client -servername " . escapeshellarg($domain)
+                . " -connect " . escapeshellarg($domain) . ":443 2>/dev/null"
+                . " | openssl x509 -noout -dates -issuer 2>&1";
+
+            exec($cmd, $output, $returnCode);
+
+            if ($returnCode !== 0 || empty($output)) {
+                return null;
+            }
+
+            $outputStr = implode("\n", $output);
+
+            // If it contains "unable to load" or "error", there's no valid cert
+            if (stripos($outputStr, 'unable to load') !== false || stripos($outputStr, 'error') !== false) {
+                return null;
+            }
+
+            $validFrom = null;
+            $validTo = null;
+            $issuer = 'Unknown';
+
+            foreach ($output as $line) {
+                if (strpos($line, 'notBefore=') === 0) {
+                    $validFrom = strtotime(str_replace('notBefore=', '', $line));
+                }
+                if (strpos($line, 'notAfter=') === 0) {
+                    $validTo = strtotime(str_replace('notAfter=', '', $line));
+                }
+                if (strpos($line, 'issuer=') === 0 || strpos($line, 'issuer =') === 0) {
+                    if (preg_match('/CN\s*=\s*([^,\/]+)/', $line, $matches)) {
+                        $issuer = trim($matches[1]);
+                    }
+                }
+            }
+
+            if (!$validFrom && !$validTo) {
+                return null;
+            }
+
+            $daysRemaining = null;
+            $status = 'valid';
+
+            if ($validTo) {
+                $daysRemaining = floor(($validTo - time()) / 86400);
+                if ($daysRemaining < 0) {
+                    $status = 'expired';
+                } elseif ($daysRemaining <= 30) {
+                    $status = 'expiring_soon';
+                }
+            }
+
+            return [
+                'issuer' => $issuer,
+                'validFrom' => $validFrom ? date('Y-m-d H:i:s', $validFrom) : null,
+                'validTo' => $validTo ? date('Y-m-d H:i:s', $validTo) : null,
+                'daysRemaining' => $daysRemaining,
+                'status' => $status,
+            ];
+        } catch (\Exception $e) {
+            \Log::warning("Live SSL check failed for {$domain}: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -101,18 +283,18 @@ class SslController extends Controller
     {
         try {
             $escapedPath = escapeshellarg($certPath);
-            
+
             // Get certificate dates
             $output = [];
             exec("sudo openssl x509 -in {$escapedPath} -noout -dates 2>&1", $output, $returnCode);
-            
+
             if ($returnCode !== 0) {
                 return null;
             }
 
             $validFrom = null;
             $validTo = null;
-            
+
             foreach ($output as $line) {
                 if (strpos($line, 'notBefore=') === 0) {
                     $validFrom = strtotime(str_replace('notBefore=', '', $line));
@@ -136,10 +318,10 @@ class SslController extends Controller
             // Calculate days remaining
             $daysRemaining = null;
             $status = 'valid';
-            
+
             if ($validTo) {
                 $daysRemaining = floor(($validTo - time()) / 86400);
-                
+
                 if ($daysRemaining < 0) {
                     $status = 'expired';
                 } elseif ($daysRemaining <= 30) {
@@ -173,6 +355,173 @@ class SslController extends Controller
     }
 
     /**
+     * Check if certbot is installed and return its path
+     */
+    private function getCertbotPath()
+    {
+        // Check common locations in priority order
+        $paths = [
+            '/usr/bin/certbot',
+            '/usr/local/bin/certbot',
+            '/snap/bin/certbot',
+        ];
+
+        foreach ($paths as $path) {
+            $output = [];
+            exec("test -x " . escapeshellarg($path) . " && echo 'exists'", $output);
+            if (isset($output[0]) && $output[0] === 'exists') {
+                return $path;
+            }
+        }
+
+        // Fallback: try which
+        $output = [];
+        exec("which certbot 2>/dev/null", $output);
+        if (!empty($output[0]) && trim($output[0]) !== '') {
+            return trim($output[0]);
+        }
+
+        // Fallback: try sudo which (different PATH)
+        $output = [];
+        exec("sudo which certbot 2>/dev/null", $output);
+        if (!empty($output[0]) && trim($output[0]) !== '') {
+            return trim($output[0]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if certbot is installed
+     */
+    private function isCertbotInstalled()
+    {
+        return $this->getCertbotPath() !== null;
+    }
+
+    /**
+     * Attempt to install certbot automatically
+     */
+    private function installCertbot()
+    {
+        $output = [];
+        $returnCode = 0;
+
+        // Try apt-based install (Debian/Ubuntu)
+        \Log::info("Attempting to install certbot via apt...");
+        exec("sudo apt-get update -qq 2>&1 && sudo apt-get install -y -qq certbot python3-certbot-nginx 2>&1", $output, $returnCode);
+
+        if ($returnCode === 0 && $this->isCertbotInstalled()) {
+            \Log::info("Certbot installed successfully via apt");
+            return true;
+        }
+
+        // Try snap-based install as fallback
+        \Log::info("apt install failed, trying snap...");
+        $output = [];
+        exec("sudo snap install --classic certbot 2>&1 && sudo ln -sf /snap/bin/certbot /usr/bin/certbot 2>&1", $output, $returnCode);
+
+        if ($returnCode === 0 && $this->isCertbotInstalled()) {
+            \Log::info("Certbot installed successfully via snap");
+            return true;
+        }
+
+        \Log::error("Failed to install certbot. Output: " . implode("\n", $output));
+        return false;
+    }
+
+    /**
+     * Ensure certbot is available, installing it if necessary.
+     * Returns the certbot path on success, or throws an exception.
+     */
+    private function ensureCertbot()
+    {
+        $certbotPath = $this->getCertbotPath();
+        if ($certbotPath) {
+            return $certbotPath;
+        }
+
+        // Attempt auto-install
+        \Log::info("Certbot not found, attempting automatic installation...");
+        if ($this->installCertbot()) {
+            $certbotPath = $this->getCertbotPath();
+            if ($certbotPath) {
+                return $certbotPath;
+            }
+        }
+
+        throw new \Exception(
+            "Certbot is not installed and automatic installation failed. "
+            . "Please install it manually:\n"
+            . "  sudo apt-get update && sudo apt-get install -y certbot python3-certbot-nginx\n"
+            . "Or via snap:\n"
+            . "  sudo snap install --classic certbot && sudo ln -s /snap/bin/certbot /usr/bin/certbot"
+        );
+    }
+
+    /**
+     * Get certbot installation status
+     */
+    public function certbotStatus()
+    {
+        try {
+            $certbotPath = $this->getCertbotPath();
+            $installed = $certbotPath !== null;
+            $version = null;
+
+            if ($installed) {
+                $output = [];
+                exec("{$certbotPath} --version 2>&1", $output);
+                $version = !empty($output) ? implode(' ', $output) : 'Unknown version';
+            }
+
+            return response()->json([
+                'installed' => $installed,
+                'path' => $certbotPath,
+                'version' => $version,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'installed' => false,
+                'path' => null,
+                'version' => null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Install certbot on the system
+     */
+    public function installCertbotAction()
+    {
+        try {
+            if ($this->isCertbotInstalled()) {
+                return response()->json([
+                    'message' => 'Certbot is already installed',
+                    'path' => $this->getCertbotPath(),
+                ]);
+            }
+
+            if ($this->installCertbot()) {
+                return response()->json([
+                    'message' => 'Certbot installed successfully',
+                    'path' => $this->getCertbotPath(),
+                ]);
+            }
+
+            return response()->json([
+                'error' => 'Failed to install Certbot. Please install manually: sudo apt-get install -y certbot python3-certbot-nginx',
+            ], 500);
+        } catch (\Exception $e) {
+            \Log::error("Failed to install certbot: " . $e->getMessage());
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Install SSL certificate for a domain
      */
     public function installCertificate(Request $request)
@@ -183,7 +532,7 @@ class SslController extends Controller
             ]);
 
             $domain = strtolower(trim($request->input('domain')));
-            
+
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
@@ -194,15 +543,18 @@ class SslController extends Controller
                 return response()->json(['error' => 'Domain directory not found'], 404);
             }
 
+            // Ensure certbot is available (auto-install if needed)
+            $certbotPath = $this->ensureCertbot();
+
             // Run certbot with nginx plugin
             $output = [];
             $returnCode = 0;
-            
-            $cmd = "sudo certbot --nginx -d " . escapeshellarg($domain) . " -d " . escapeshellarg("www.{$domain}") . " --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
-            
+
+            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain) . " -d " . escapeshellarg("www.{$domain}") . " --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
+
             \Log::info("Running certbot: " . $cmd);
             exec($cmd, $output, $returnCode);
-            
+
             $outputStr = implode("\n", $output);
             \Log::info("Certbot output: " . $outputStr);
 
@@ -214,12 +566,19 @@ class SslController extends Controller
                         'details' => $outputStr
                     ], 429);
                 }
-                
+
                 if (strpos($outputStr, 'DNS problem') !== false || strpos($outputStr, 'Could not reach') !== false) {
                     return response()->json([
                         'error' => 'DNS verification failed. Make sure your domain points to this server.',
                         'details' => $outputStr
                     ], 400);
+                }
+
+                if (strpos($outputStr, 'not found') !== false || strpos($outputStr, 'No module named') !== false) {
+                    return response()->json([
+                        'error' => 'Certbot plugin error. Try reinstalling: sudo apt-get install --reinstall python3-certbot-nginx',
+                        'details' => $outputStr
+                    ], 500);
                 }
 
                 return response()->json([
@@ -254,20 +613,23 @@ class SslController extends Controller
             ]);
 
             $domain = strtolower(trim($request->input('domain')));
-            
+
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
+            // Ensure certbot is available
+            $certbotPath = $this->ensureCertbot();
+
             // Run certbot renew for specific domain
             $output = [];
             $returnCode = 0;
-            
-            $cmd = "sudo certbot renew --cert-name " . escapeshellarg($domain) . " --force-renewal 2>&1";
-            
+
+            $cmd = "sudo {$certbotPath} renew --cert-name " . escapeshellarg($domain) . " --force-renewal 2>&1";
+
             \Log::info("Running certbot renew: " . $cmd);
             exec($cmd, $output, $returnCode);
-            
+
             $outputStr = implode("\n", $output);
             \Log::info("Certbot renew output: " . $outputStr);
 
@@ -299,14 +661,17 @@ class SslController extends Controller
     public function renewAll()
     {
         try {
+            // Ensure certbot is available
+            $certbotPath = $this->ensureCertbot();
+
             $output = [];
             $returnCode = 0;
-            
-            $cmd = "sudo certbot renew 2>&1";
-            
+
+            $cmd = "sudo {$certbotPath} renew 2>&1";
+
             \Log::info("Running certbot renew all");
             exec($cmd, $output, $returnCode);
-            
+
             $outputStr = implode("\n", $output);
             \Log::info("Certbot renew all output: " . $outputStr);
 
@@ -337,17 +702,20 @@ class SslController extends Controller
             ]);
 
             $domain = strtolower(trim($request->input('domain')));
-            
+
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
+            // Ensure certbot is available
+            $certbotPath = $this->ensureCertbot();
+
             // Delete certificate using certbot
             $output = [];
             $returnCode = 0;
-            
-            $cmd = "sudo certbot delete --cert-name " . escapeshellarg($domain) . " --non-interactive 2>&1";
-            
+
+            $cmd = "sudo {$certbotPath} delete --cert-name " . escapeshellarg($domain) . " --non-interactive 2>&1";
+
             exec($cmd, $output, $returnCode);
             $outputStr = implode("\n", $output);
 

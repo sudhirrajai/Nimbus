@@ -116,6 +116,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
     Route::prefix('ssl')->name('ssl.')->group(function () {
         Route::get('/', [SslController::class, 'index'])->name('index');
         Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
+        Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
+        Route::post('/install-certbot', [SslController::class, 'installCertbotAction'])->name('install-certbot');
         Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
         Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
         Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
