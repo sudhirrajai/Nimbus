@@ -226,6 +226,11 @@ input[type="submit"]:hover {
     z-index: 100;
 }
 
+/* Hide language switcher */
+#lang {
+    display: none !important;
+}
+
 /* Login box */
 #login {
     background: #fff;
