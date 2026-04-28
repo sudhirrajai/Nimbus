@@ -545,8 +545,13 @@ chmod +x ${NIMBUS_DIR}/artisan
 mkdir -p /var/www
 chown -R ${NIMBUS_USER}:${NIMBUS_USER} /var/www
 chmod 2775 /var/www
-find /var/www -mindepth 1 -type d -exec chmod 2775 {} \; 2>/dev/null || true
-find /var/www -mindepth 1 -type f -exec chmod 664 {} \; 2>/dev/null || true
+
+if [ "$SKIP_EXISTING" = false ]; then
+    # Only recursively change permissions on fresh installs to avoid breaking existing projects
+    find /var/www -mindepth 1 -type d -exec chmod 2775 {} \; 2>/dev/null || true
+    find /var/www -mindepth 1 -type f -exec chmod 664 {} \; 2>/dev/null || true
+fi
+
 setfacl -m g:${NIMBUS_USER}:rwx /var/www
 setfacl -d -m g:${NIMBUS_USER}:rwx /var/www
 
