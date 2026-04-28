@@ -318,7 +318,8 @@ BASH;
                     $user = $parts[0];
                     $host = $parts[1];
                     
-                    if ($user === 'root' || $user === '' || $user === 'nimbus_admin') continue;
+                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
+                    if ($user === '' || in_array($user, $systemUsers)) continue;
                     
                     $privileges = $this->getUserPrivileges($user, $host, $dbName);
                     $result[] = [
@@ -811,7 +812,7 @@ BASH;
                     $host = $parts[1];
                     
                     // Skip system users and nimbus internal users
-                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube'];
+                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
                     if (in_array($username, $systemUsers)) continue;
                     
                     $result[] = [
