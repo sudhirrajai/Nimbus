@@ -9,6 +9,13 @@
     z-index: 999999 !important;
 }
 
+/* Darker borders for form inputs */
+.form-control, .form-select {
+    border: 1px solid #9ca3af !important;
+}
+.form-control:focus, .form-select:focus {
+    border-color: #e91e63 !important;
+}
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
