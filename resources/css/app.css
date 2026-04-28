@@ -1,6 +1,14 @@
 @import 'tailwindcss';
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Modal z-index fix to appear over sidenav */
+.modal-backdrop {
+    z-index: 10000 !important;
+}
+.modal {
+    z-index: 10005 !important;
+}
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
@@ -19,7 +27,6 @@
   }
 /* --- Extracted from Vue Components --- */
 /* From: resources\js\Pages\Auth\Login.vue */
-400;500;600;700&display=swap');
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -324,7 +331,6 @@
   }
 }
 /* From: resources\js\Pages\Auth\Setup.vue */
-400;500;600;700&display=swap');
 .setup-page {
   min-height: 100vh;
   display: flex;
