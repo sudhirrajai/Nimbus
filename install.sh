@@ -588,16 +588,21 @@ sed -i 's/;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=20000/
 systemctl restart php${PHP_VERSION}-fpm
 
 # Configure firewall
-echo -e "${YELLOW}Configuring firewall...${NC}"
-apt-get install -y ufw
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow ${NIMBUS_PORT}/tcp
-ufw --force enable
+if [ "$SKIP_EXISTING" = true ] && command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
+    echo -e "${YELLOW}Firewall is already active. Only allowing Nimbus port ${NIMBUS_PORT}...${NC}"
+    ufw allow ${NIMBUS_PORT}/tcp
+else
+    echo -e "${YELLOW}Configuring firewall...${NC}"
+    apt-get install -y ufw
+    ufw --force reset
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow ssh
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    ufw allow ${NIMBUS_PORT}/tcp
+    ufw --force enable
+fi
 
 # Get server IP
 SERVER_IP=$(hostname -I | awk '{print $1}')
