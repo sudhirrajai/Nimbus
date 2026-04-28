@@ -515,38 +515,4 @@ watch(showBlacklistModal, (val) => {
 })
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-}
 
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-}
-
-.btn-link {
-  text-decoration: none;
-}
-
-.btn-link:hover i {
-  transform: scale(1.1);
-  transition: transform 0.2s;
-}
-
-code {
-  background: rgba(0, 0, 0, 0.06);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-</style>

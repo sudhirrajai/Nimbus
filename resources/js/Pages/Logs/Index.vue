@@ -238,29 +238,4 @@ const notify = (message, type = 'success') => {
 }
 </script>
 
-<style scoped>
-.log-viewer {
-    background-color: #1e1e2e;
-    color: #cdd6f4;
-    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    padding: 16px;
-    border-radius: 8px;
-    height: 500px;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin: 0;
-}
 
-.list-group-item.active {
-    background-color: #e91e63 !important;
-    border-color: #e91e63 !important;
-}
-
-.btn-xs {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-}
-</style>

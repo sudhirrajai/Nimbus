@@ -273,18 +273,4 @@ const notify = (message, type = 'success') => {
 }
 </script>
 
-<style scoped>
-.update-log {
-    background-color: #1e1e2e;
-    color: #a6e3a1;
-    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    padding: 16px;
-    border-radius: 8px;
-    height: 300px;
-    overflow: auto;
-    white-space: pre-wrap;
-    margin: 0;
-}
-</style>
+

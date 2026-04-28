@@ -390,39 +390,4 @@ const reloadAfterTest = async () => {
 }
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-  position: fixed;
-  z-index: 20050;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
 
-.modal-backdrop {
-  position: fixed;
-  z-index: 20040;
-}
-
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-  z-index: 20060;
-}
-
-.gap-2 {
-  gap: 0.5rem;
-}
-
-textarea.font-monospace {
-  font-family: 'Courier New', monospace;
-  line-height: 1.5;
-}
-
-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-</style>

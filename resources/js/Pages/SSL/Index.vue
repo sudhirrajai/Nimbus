@@ -648,42 +648,4 @@ const removeSsl = async () => {
 }
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-  position: fixed;
-  z-index: 20050;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
 
-.modal-backdrop {
-  position: fixed;
-  z-index: 20040;
-}
-
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-  z-index: 20060;
-}
-
-.icon-shape {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gap-2 {
-  gap: 0.5rem;
-}
-
-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-</style>

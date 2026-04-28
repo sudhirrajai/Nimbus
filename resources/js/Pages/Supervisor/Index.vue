@@ -227,7 +227,8 @@
             </template>
 
             <!-- Create Process Modal -->
-            <div class="modal fade" :class="{ show: showCreateModal }" :style="showCreateModal ? 'display: block;' : ''"
+            <Teleport to="body">
+            <div class="modal fade" :class="{ show: showCreateModal }" :style="{ display: showCreateModal ? 'block' : 'none' }"
                 tabindex="-1">
                 <div class="modal-dialog modal-xl modal-dialog-centered">
                     <div class="modal-content">
@@ -403,6 +404,7 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
                 </div>
             </div>
             <div v-if="showCreateModal" class="modal-backdrop fade show"></div>
+            </Teleport>
 
             <!-- Toast Notification -->
             <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
@@ -423,7 +425,8 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
             </div>
 
             <!-- Logs Modal -->
-            <div class="modal fade" :class="{ show: showLogsModal }" :style="showLogsModal ? 'display: block;' : ''"
+            <Teleport to="body">
+            <div class="modal fade" :class="{ show: showLogsModal }" :style="{ display: showLogsModal ? 'block' : 'none' }"
                 tabindex="-1">
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content">
@@ -460,10 +463,12 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
                 </div>
             </div>
             <div v-if="showLogsModal" class="modal-backdrop fade show"></div>
+            </Teleport>
 
             <!-- Terminal Modal for Install -->
+            <Teleport to="body">
             <div class="modal fade" :class="{ show: showTerminalModal }"
-                :style="showTerminalModal ? 'display: block;' : ''" tabindex="-1">
+                :style="{ display: showTerminalModal ? 'block' : 'none' }" tabindex="-1">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header bg-dark text-white">
@@ -488,6 +493,7 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
                 </div>
             </div>
             <div v-if="showTerminalModal" class="modal-backdrop fade show"></div>
+            </Teleport>
         </div>
     </MainLayout>
 </template>
@@ -847,96 +853,4 @@ const getStatusBadge = (status) => {
 }
 </script>
 
-<style scoped>
-.terminal-output {
-    background-color: #1e1e2e;
-    color: #a6e3a1;
-    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    padding: 16px;
-    margin: 0;
-    height: 400px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
 
-.avatar {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Form input styling */
-.form-control {
-    background-color: #fff !important;
-    border: 1px solid #d2d6da !important;
-    border-radius: 0.5rem !important;
-    padding: 0.625rem 0.75rem !important;
-    font-size: 0.875rem !important;
-    color: #495057 !important;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
-}
-
-.form-control:focus {
-    border-color: #e91e63 !important;
-    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
-    outline: none !important;
-}
-
-.form-control::placeholder {
-    color: #adb5bd !important;
-    opacity: 1 !important;
-}
-
-.form-check-input {
-    width: 1.25rem;
-    height: 1.25rem;
-    border: 1px solid #d2d6da;
-}
-
-.form-check-input:checked {
-    background-color: #e91e63;
-    border-color: #e91e63;
-}
-
-.form-label {
-    color: #344767;
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-}
-
-/* Config preview */
-.config-preview {
-    background-color: #1e1e2e;
-    color: #a6e3a1;
-    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    padding: 16px;
-    border-radius: 8px;
-    height: 350px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    margin: 0;
-}
-
-.config-editor {
-    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 13px;
-    background-color: #f8f9fa !important;
-}
-
-/* Nav tabs */
-.nav-tabs .nav-link {
-    color: #495057;
-}
-
-.nav-tabs .nav-link.active {
-    color: #e91e63;
-    font-weight: 600;
-}
-</style>

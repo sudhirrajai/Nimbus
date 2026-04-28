@@ -407,32 +407,3 @@ const closeModal = () => {
 }
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-}
-
-.is-invalid {
-  border-color: #f44335 !important;
-}
-
-.invalid-feedback {
-  color: #f44335;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
-.btn-link {
-  text-decoration: none;
-}
-
-.btn-link:hover i {
-  transform: scale(1.1);
-  transition: transform 0.2s;
-}
-</style>
