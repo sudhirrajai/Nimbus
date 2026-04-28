@@ -69,7 +69,7 @@ class DatabaseController extends Controller
             $scriptLockFile   = $lockFile;
             $scriptLogFile    = $logFile;
             $scriptStatusFile = $statusFile;
-            $script = <<<BASH
+$script = <<<BASH
 #!/bin/bash
 LOG_FILE="{$scriptLogFile}"
 STATUS_FILE="{$scriptStatusFile}"
@@ -79,17 +79,21 @@ trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"
 ADMINER_VERSION="4.8.1"
 GH_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
-ALT_URL="https://www.adminer.org/static/download/4.8.1/adminer-4.8.1.php"
+ALT_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
 echo "Creating Database Viewer directory..."; sudo mkdir -p "\$ADMINER_STORE"
 echo "Downloading Database Viewer \${ADMINER_VERSION}..."
-sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+sudo curl -fsSLk "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
-    echo "Primary failed, trying vmcore.in..."
-    sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+    echo "Primary failed, trying alternative..."
+    sudo curl -fsSLk "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 fi
 if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
     echo "ERROR: Failed to download Database Viewer!"; echo "error" > "\$STATUS_FILE"; exit 1
 fi
+BASH;
+            $script = str_replace("\r", '', $script);
+            
+            $script .= <<<BASH
 echo "Setting permissions..."
 sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 755 "\$ADMINER_STORE"; sudo chmod 644 "\$ADMINER_STORE/adminer.php"
 echo "Creating MySQL admin user..."
