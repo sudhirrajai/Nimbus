@@ -52,6 +52,9 @@ ob_start(function($buffer) {
     // Replace text branding safely without breaking file paths (like adminer.css)
     $buffer = str_replace('Adminer', 'System', $buffer);
     $buffer = str_replace('<title>System', '<title>Database', $buffer);
+    // Remove donation message
+    $buffer = preg_replace('/<i[^>]*>\s*Thanks for using.*?donating.*?<\/i>/is', '', $buffer);
+    $buffer = preg_replace('/Thanks for using.*?donating.*?<\/a>\./is', '', $buffer);
     return $buffer;
 });
 
