@@ -3,10 +3,10 @@
 
 /* Modal z-index fix to appear over sidenav */
 .modal-backdrop {
-    z-index: 10000 !important;
+    z-index: 999998 !important;
 }
 .modal {
-    z-index: 10005 !important;
+    z-index: 999999 !important;
 }
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
