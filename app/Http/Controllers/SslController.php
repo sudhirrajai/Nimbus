@@ -593,16 +593,30 @@ class SslController extends Controller
             $returnCode = 0;
 
             // Determine if we should include the www. prefix
-            // Only include it if it actually resolves to an IP, avoiding NXDOMAIN errors
             $includeWww = false;
             $wwwDomain = "www.{$domain}";
+
+            // Heuristic to detect if it's a root domain (e.g., example.com) or a ccTLD (example.co.uk)
+            $parts = explode('.', $domain);
+            $isRootDomain = false;
             
-            // Temporary silence errors from dns_get_record
-            $dnsA = @dns_get_record($wwwDomain, DNS_A);
-            $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
+            if (count($parts) === 2) {
+                $isRootDomain = true;
+            } elseif (count($parts) === 3) {
+                $commonSecondLevel = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
+                if (in_array($parts[1], $commonSecondLevel)) {
+                    $isRootDomain = true;
+                }
+            }
             
-            if (!empty($dnsA) || !empty($dnsAAAA)) {
-                $includeWww = true;
+            // Only attempt to add www. for root domains, and ONLY if they actually resolve
+            if ($isRootDomain) {
+                $dnsA = @dns_get_record($wwwDomain, DNS_A);
+                $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
+                
+                if (!empty($dnsA) || !empty($dnsAAAA)) {
+                    $includeWww = true;
+                }
             }
 
             // Build the certbot command dynamically based on DNS resolution
