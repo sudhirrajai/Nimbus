@@ -111,6 +111,67 @@ body {
     padding: 0.5rem !important;
 }
 
+/* --- Sidebar Tables List --- */
+#tables {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+#tables li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0.5rem;
+    margin: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+}
+
+#tables li:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+#tables li a {
+    margin: 0 !important;
+    padding: 0.4rem 0.5rem !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#tables li a:first-child {
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#tables li a.select {
+    flex-shrink: 0;
+    font-size: 0.75rem !important;
+    opacity: 0.7;
+    background: rgba(0,0,0,0.05) !important;
+    border-radius: 0.25rem !important;
+    padding: 0.25rem 0.5rem !important;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+#tables li a.select:hover {
+    opacity: 1;
+    background: var(--bs-primary) !important;
+    color: white !important;
+}
+
+/* Active state for tables */
+#tables li:has(a.active) {
+    background-image: var(--gradient-dark) !important;
+}
+#tables li:has(a.active) a {
+    color: white !important;
+}
+#tables li:has(a.active) a.select {
+    background: rgba(255,255,255,0.2) !important;
+}
+
 /* --- Content Area --- */
 #content {
     margin-left: 250px !important;
