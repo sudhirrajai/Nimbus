@@ -699,7 +699,40 @@ class SslController extends Controller
             $output = [];
             $returnCode = 0;
 
-            $cmd = "sudo {$certbotPath} renew --cert-name " . escapeshellarg($domain) . " --force-renewal 2>&1";
+            // Determine if we should include the www. prefix
+            $includeWww = false;
+            $wwwDomain = "www.{$domain}";
+
+            // Heuristic to detect if it's a root domain (e.g., example.com) or a ccTLD (example.co.uk)
+            $parts = explode('.', $domain);
+            $isRootDomain = false;
+            
+            if (count($parts) === 2) {
+                $isRootDomain = true;
+            } elseif (count($parts) === 3) {
+                $commonSecondLevel = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
+                if (in_array($parts[1], $commonSecondLevel)) {
+                    $isRootDomain = true;
+                }
+            }
+            
+            // Only attempt to add www. for root domains, and ONLY if they actually resolve
+            if ($isRootDomain) {
+                $dnsA = @dns_get_record($wwwDomain, DNS_A);
+                $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
+                
+                if (!empty($dnsA) || !empty($dnsAAAA)) {
+                    $includeWww = true;
+                }
+            }
+
+            // By using --nginx -d instead of --cert-name, we bypass cert name mismatch issues
+            // and force reissue the certificate using the current active DNS resolution layout.
+            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain);
+            if ($includeWww) {
+                $cmd .= " -d " . escapeshellarg($wwwDomain);
+            }
+            $cmd .= " --force-renewal --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
 
             \Log::info("Running certbot renew: " . $cmd);
             exec($cmd, $output, $returnCode);

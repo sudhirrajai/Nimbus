@@ -496,7 +496,7 @@ const availablePrivileges = [
   'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP',
   'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES',
   'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE',
-  'ALTER ROUTINE', 'EVENT', 'TRIGGER'
+  'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'
 ]
 
 const alert = ref({ show: false, type: 'success', message: '' })
