@@ -624,6 +624,11 @@ class GitDeploymentService
                 }
             }
 
+            // Fix for Node.js: ensure binaries in node_modules/.bin are executable
+            if (is_dir("{$domainPath}/node_modules/.bin")) {
+                $this->executeCommand("sudo chmod -R +x {$domainPath}/node_modules/.bin");
+            }
+
             $duration = (int)(microtime(true) - $startTime);
             $log->update([
                 'status' => 'success',
