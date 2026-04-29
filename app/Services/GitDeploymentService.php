@@ -523,6 +523,10 @@ class GitDeploymentService
         $log = $this->createLog($deployment, 'supervisor_setup', 'running');
 
         try {
+            // Ensure logs directory exists - Supervisor will fail to spawn if the log path is invalid
+            $this->executeCommand("sudo mkdir -p {$domainPath}/logs");
+            $this->executeCommand("sudo chown www-data:www-data {$domainPath}/logs");
+
             // Generate safe program name
             $programName = "nimbus_app_" . preg_replace('/[^a-zA-Z0-9_]/', '_', $domain);
             $confPath = "/etc/supervisor/conf.d/{$programName}.conf";
