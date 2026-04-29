@@ -1054,15 +1054,15 @@ function adminer_object() {
         
         function credentials() {
             // If the user submitted the login form, use their credentials
-            if (isset($_POST['auth']['driver'])) {
-                return [$_POST['auth']['server'], $_POST['auth']['username'], $_POST['auth']['password']];
+            if (isset($_POST['auth']['username'])) {
+                return [$_POST['auth']['server'] ?? 'localhost', $_POST['auth']['username'], $_POST['auth']['password'] ?? ''];
             }
             // Otherwise, attempt SSO
             return [$_SESSION['adminer_server'] ?? 'localhost', $_SESSION['adminer_username'], $_SESSION['adminer_password']];
         }
         
         function database() {
-            if (isset($_POST['auth']['driver'])) {
+            if (isset($_POST['auth']['db'])) {
                 return $_POST['auth']['db'];
             }
             return $_SESSION['adminer_db'] ?? '';
@@ -1077,7 +1077,7 @@ function adminer_object() {
 
 ob_start(function($buffer) {
     // Replace text branding safely
-    $buffer = str_replace('<h2>Login</h2>', '<h2>Nimbus DB Login</h2>', $buffer);
+    $buffer = preg_replace('/<h2[^>]*>Login<\/h2>/i', '<h2>Nimbus DB Login</h2>', $buffer);
     $buffer = str_replace('<title>Login - Adminer</title>', '<title>Login - Nimbus DB</title>', $buffer);
     $buffer = str_replace('<title>Adminer</title>', '<title>Nimbus DB</title>', $buffer);
     $buffer = str_replace('Adminer', 'System', $buffer);
