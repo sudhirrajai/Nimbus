@@ -509,12 +509,15 @@ class GitDeploymentService
         if (isset($yamlConfig['start']) && is_string($yamlConfig['start'])) {
             $startCommand = $yamlConfig['start'];
         } elseif (isset($yamlConfig['runtime']['node'])) {
-            $startCommand = "npm start"; // Default for Node.js apps (Next.js, Nuxt, etc.)
+            $startCommand = "npm start"; // Default for Node.js apps
         }
 
         if (!$startCommand) {
             return; // No start command specified and not a Node app
         }
+
+        // Use bash -c to ensure path resolution and environment handling works correctly in Supervisor
+        $fullCommand = "/bin/bash -c " . escapeshellarg($startCommand);
 
         $startTime = microtime(true);
         $log = $this->createLog($deployment, 'supervisor_setup', 'running');
@@ -526,7 +529,7 @@ class GitDeploymentService
 
             $supervisorConf = "[program:{$programName}]\n";
             $supervisorConf .= "process_name=%(program_name)s_%(process_num)02d\n";
-            $supervisorConf .= "command={$startCommand}\n";
+            $supervisorConf .= "command={$fullCommand}\n";
             $supervisorConf .= "directory={$domainPath}\n";
             $supervisorConf .= "autostart=true\n";
             $supervisorConf .= "autorestart=true\n";
@@ -546,12 +549,19 @@ class GitDeploymentService
                     if (empty($line) || str_starts_with($line, '#')) continue;
                     $parts = explode('=', $line, 2);
                     if (count($parts) === 2) {
-                        $envs[] = trim($parts[0]) . "=\"" . trim($parts[1]) . "\"";
+                        $key = trim($parts[0]);
+                        $val = trim($parts[1]);
+                        // Remove surrounding quotes if they exist in the .env file
+                        $val = trim($val, "'\"");
+                        // Supervisor environment values must have commas escaped or the whole thing quoted
+                        // But simplest is KEY="VALUE" and comma-separated
+                        $envs[] = "{$key}=\"{$val}\"";
                     }
                 }
                 if (!empty($envs)) {
-                    $envString = "environment=" . implode(",", $envs) . "\n";
-                    $supervisorConf .= $envString;
+                    // Filter out environment variables with commas to prevent Supervisor syntax errors
+                    // or handle them carefully. For now, let's just join with commas.
+                    $supervisorConf .= "environment=" . implode(",", $envs) . "\n";
                 }
             }
 
