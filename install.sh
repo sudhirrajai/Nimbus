@@ -592,6 +592,25 @@ sed -i 's/;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=20000/
 
 systemctl restart php${PHP_VERSION}-fpm
 
+# Configure Supervisor for Nimbus Queue Worker
+echo -e "${YELLOW}Configuring Nimbus Queue Worker...${NC}"
+cat << EOF > /etc/supervisor/conf.d/nimbus-worker.conf
+[program:nimbus-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php ${NIMBUS_DIR}/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+user=${NIMBUS_USER}
+numprocs=1
+redirect_stderr=true
+stdout_logfile=${NIMBUS_DIR}/storage/logs/worker.log
+EOF
+
+supervisorctl reread
+supervisorctl update
+supervisorctl start nimbus-worker:*
+
+
 # Configure firewall
 if [ "$SKIP_EXISTING" = true ] && command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
     echo -e "${YELLOW}Firewall is already active. Only allowing Nimbus port ${NIMBUS_PORT}...${NC}"

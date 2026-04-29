@@ -142,6 +142,9 @@ class GitDeploymentService
                 . "'"
             );
 
+            // Add domain path to safe directories to avoid "dubious ownership" fatal errors when queuing as different user
+            $this->executeCommand("git config --global --add safe.directory " . escapeshellarg($domainPath));
+
             // Get current commit hash
             $commitHash = trim($this->executeCommand("cd {$domainPath} && git rev-parse HEAD")[0] ?? '');
             $deployment->update(['commit_hash' => $commitHash]);
