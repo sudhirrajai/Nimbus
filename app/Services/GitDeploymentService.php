@@ -547,7 +547,9 @@ class GitDeploymentService
             $envFile = "{$domainPath}/.env";
             if (file_exists($envFile)) {
                 $lines = explode("\n", file_get_contents($envFile));
-                $envs = [];
+                $envs = [
+                    'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"'
+                ];
                 foreach ($lines as $line) {
                     $line = trim($line);
                     if (empty($line) || str_starts_with($line, '#')) continue;
@@ -557,8 +559,8 @@ class GitDeploymentService
                         $val = trim($parts[1]);
                         // Remove surrounding quotes if they exist in the .env file
                         $val = trim($val, "'\"");
-                        // Supervisor environment values must have commas escaped or the whole thing quoted
-                        // But simplest is KEY="VALUE" and comma-separated
+                        // Supervisor environment values must have commas escaped with \,
+                        $val = str_replace(',', '\,', $val);
                         $envs[] = "{$key}=\"{$val}\"";
                     }
                 }
