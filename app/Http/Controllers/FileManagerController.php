@@ -1021,7 +1021,12 @@ class FileManagerController extends Controller
         $escapedRepoPath = escapeshellarg($repoPath);
         $escapedSafeDirectory = escapeshellarg("safe.directory={$repoPath}");
         $escapedArguments = implode(' ', array_map('escapeshellarg', $arguments));
-        $command = "sudo -u {$gitUser} env GIT_TERMINAL_PROMPT=0 git -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
+
+        // Use root's SSH key and HOME for authentication so www-data can access private repos
+        // that were originally configured with root's credentials
+        $sshCommand = 'GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no"';
+        $homeEnv = 'HOME=/root';
+        $command = "sudo -u root env {$homeEnv} {$sshCommand} GIT_TERMINAL_PROMPT=0 git -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
 
         \Log::debug("Executing git command: {$command}");
         exec("{$command} 2>&1", $output, $returnCode);
