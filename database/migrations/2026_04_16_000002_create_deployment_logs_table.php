@@ -14,16 +14,7 @@ return new class extends Migration
         Schema::create('deployment_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('git_deployment_id')->constrained('git_deployments')->cascadeOnDelete();
-            $table->enum('step', [
-                'clone',
-                'yaml_parse',
-                'runtime_check',
-                'install',
-                'build',
-                'env_setup',
-                'permissions',
-                'nginx_update'
-            ]);
+            $table->string('step');
             $table->enum('status', ['running', 'success', 'failed', 'skipped']);
             $table->text('output')->nullable();
             $table->text('command')->nullable();
