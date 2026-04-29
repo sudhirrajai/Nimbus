@@ -130,8 +130,8 @@ class GitDeploymentService
                 $domainPath
             );
 
-            // Clone the repository
-            $cloneCommand = "git clone {$cloneUrl} --branch {$deployment->branch} --single-branch --depth 1 {$domainPath}/repo_temp";
+            // Clone the repository - use -c safe.directory='*' to bypass ownership checks
+            $cloneCommand = "git -c safe.directory='*' clone {$cloneUrl} --branch {$deployment->branch} --single-branch --depth 1 {$domainPath}/repo_temp";
             $output = $this->executeCommand($cloneCommand);
 
             // Move contents from repo_temp to the domain root, preserving dotfiles without cp -a metadata issues.
@@ -146,10 +146,11 @@ class GitDeploymentService
             );
 
             // Add domain path to safe directories to avoid "dubious ownership" fatal errors when queuing as different user
+            // We'll also use -c safe.directory='*' in commands below for extra safety
             $this->executeCommand("git config --global --add safe.directory " . escapeshellarg($domainPath));
 
             // Get current commit hash
-            $commitHash = trim($this->executeCommand("cd {$domainPath} && git rev-parse HEAD")[0] ?? '');
+            $commitHash = trim($this->executeCommand("cd {$domainPath} && git -c safe.directory='*' rev-parse HEAD")[0] ?? '');
             $deployment->update(['commit_hash' => $commitHash]);
 
             // Remove .git directory to save space (optional, keeps it cleaner)
@@ -763,7 +764,7 @@ NGINX;
             $escapedUrl = escapeshellarg($checkUrl);
             $output = [];
             $returnCode = 0;
-            exec("git ls-remote {$escapedUrl} HEAD 2>&1", $output, $returnCode);
+            exec("export HOME=/tmp && git -c safe.directory='*' ls-remote {$escapedUrl} HEAD 2>&1", $output, $returnCode);
 
             if ($returnCode === 0) {
                 return ['valid' => true, 'message' => 'Repository is accessible'];
@@ -790,7 +791,7 @@ NGINX;
             $escapedUrl = escapeshellarg($checkUrl);
             $output = [];
             $returnCode = 0;
-            exec("git ls-remote --heads {$escapedUrl} 2>&1", $output, $returnCode);
+            exec("export HOME=/tmp && git -c safe.directory='*' ls-remote --heads {$escapedUrl} 2>&1", $output, $returnCode);
 
             if ($returnCode !== 0) {
                 return ['success' => false, 'branches' => [], 'error' => implode("\n", $output)];
@@ -819,9 +820,11 @@ NGINX;
         $output = [];
         $returnCode = 0;
 
-        $fullCommand = $command;
+        // Ensure HOME is set so Git doesn't fail with "fatal: $HOME not set"
+        // We use /tmp as it is always writable and safe for temporary git config access
+        $fullCommand = "export HOME=/tmp && " . $command;
         if ($cwd) {
-            $fullCommand = "cd {$cwd} && {$command}";
+            $fullCommand = "export HOME=/tmp && cd {$cwd} && {$command}";
         }
 
         Log::debug("Deployment command: {$fullCommand}");
