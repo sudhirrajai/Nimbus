@@ -80,7 +80,10 @@ class GitDeploymentService
             // Step 7: Set proper permissions
             $this->setPermissions($deployment);
 
-            // Step 8: Update Nginx if yaml has nginx config
+            // Step 8: Setup Supervisor (if needed)
+            $this->setupSupervisor($deployment, $yamlConfig);
+
+            // Step 9: Update Nginx if yaml has nginx config
             if ($yamlConfig && isset($yamlConfig['nginx'])) {
                 $this->updateNginxConfig($deployment, $yamlConfig['nginx']);
             }
@@ -492,6 +495,96 @@ class GitDeploymentService
     }
 
     /**
+     * Setup Supervisor to keep the app running in the background.
+     */
+    private function setupSupervisor(GitDeployment $deployment, ?array $yamlConfig): void
+    {
+        if (!$yamlConfig) return;
+
+        $domainPath = $deployment->getDomainPath();
+        $domain = $deployment->domain;
+        
+        // Determine the start command
+        $startCommand = null;
+        if (isset($yamlConfig['start']) && is_string($yamlConfig['start'])) {
+            $startCommand = $yamlConfig['start'];
+        } elseif (isset($yamlConfig['runtime']['node'])) {
+            $startCommand = "npm start"; // Default for Node.js apps (Next.js, Nuxt, etc.)
+        }
+
+        if (!$startCommand) {
+            return; // No start command specified and not a Node app
+        }
+
+        $startTime = microtime(true);
+        $log = $this->createLog($deployment, 'supervisor_setup', 'running');
+
+        try {
+            // Generate safe program name
+            $programName = "nimbus_app_" . preg_replace('/[^a-zA-Z0-9_]/', '_', $domain);
+            $confPath = "/etc/supervisor/conf.d/{$programName}.conf";
+
+            $supervisorConf = "[program:{$programName}]\n";
+            $supervisorConf .= "process_name=%(program_name)s_%(process_num)02d\n";
+            $supervisorConf .= "command={$startCommand}\n";
+            $supervisorConf .= "directory={$domainPath}\n";
+            $supervisorConf .= "autostart=true\n";
+            $supervisorConf .= "autorestart=true\n";
+            $supervisorConf .= "user=www-data\n";
+            $supervisorConf .= "numprocs=1\n";
+            $supervisorConf .= "redirect_stderr=true\n";
+            $supervisorConf .= "stdout_logfile={$domainPath}/logs/supervisor.log\n";
+            
+            // Read environment variables to pass to Supervisor
+            $envString = "";
+            $envFile = "{$domainPath}/.env";
+            if (file_exists($envFile)) {
+                $lines = explode("\n", file_get_contents($envFile));
+                $envs = [];
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (empty($line) || str_starts_with($line, '#')) continue;
+                    $parts = explode('=', $line, 2);
+                    if (count($parts) === 2) {
+                        $envs[] = trim($parts[0]) . "=\"" . trim($parts[1]) . "\"";
+                    }
+                }
+                if (!empty($envs)) {
+                    $envString = "environment=" . implode(",", $envs) . "\n";
+                    $supervisorConf .= $envString;
+                }
+            }
+
+            // Write config using sudo
+            $tempFile = "/tmp/supervisor_conf_" . time();
+            file_put_contents($tempFile, $supervisorConf);
+            $this->executeCommand("sudo mv {$tempFile} {$confPath}");
+            $this->executeCommand("sudo chown root:root {$confPath}");
+            
+            // Apply changes
+            $this->executeCommand("sudo supervisorctl reread");
+            $this->executeCommand("sudo supervisorctl update");
+            
+            // Restart the app
+            $this->executeCommand("sudo supervisorctl restart {$programName}:*");
+
+            $duration = (int)(microtime(true) - $startTime);
+            $log->update([
+                'status' => 'success',
+                'output' => "Supervisor configured for {$domain}.\nProgram name: {$programName}\nCommand: {$startCommand}",
+                'duration_seconds' => $duration,
+            ]);
+        } catch (\Exception $e) {
+            $duration = (int)(microtime(true) - $startTime);
+            $log->update([
+                'status' => 'failed',
+                'output' => 'Failed to setup Supervisor: ' . $e->getMessage(),
+                'duration_seconds' => $duration,
+            ]);
+        }
+    }
+
+    /**
      * Set proper file permissions on the deployed project.
      */
     private function setPermissions(GitDeployment $deployment): void
@@ -558,6 +651,11 @@ class GitDeploymentService
             if (!file_exists($symlinkPath)) {
                 $this->executeCommand("sudo ln -s {$configPath} {$symlinkPath}");
             }
+
+            // Ensure logs directory exists before testing Nginx to prevent emerg failures
+            $this->executeCommand("sudo mkdir -p {$domainPath}/logs");
+            $this->executeCommand("sudo touch {$domainPath}/logs/access.log {$domainPath}/logs/error.log");
+            $this->executeCommand("sudo chown -R www-data:www-data {$domainPath}/logs");
 
             // Test and reload nginx
             $this->executeCommand("sudo nginx -t");
