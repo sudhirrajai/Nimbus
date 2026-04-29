@@ -251,6 +251,45 @@
         </div>
       </div>
 
+      <!-- Quick Actions Bar -->
+      <div class="row mb-3">
+        <div class="col-12">
+          <div class="quick-actions-bar d-flex flex-wrap align-items-center gap-3">
+            <span class="text-xs text-secondary fw-bold text-uppercase me-1">Quick Actions</span>
+            <button class="quick-action-btn" @click="toggleSelectAll" :title="'Ctrl+A'">
+              <i class="material-symbols-rounded text-sm">{{ allSelected ? 'deselect' : 'select_all' }}</i>
+              <span>{{ allSelected ? 'Deselect All' : 'Select All' }}</span>
+              <kbd>Ctrl+A</kbd>
+            </button>
+            <button class="quick-action-btn" @click="bulkCopyMove('copy')" :disabled="!hasSelected" title="Ctrl+C">
+              <i class="material-symbols-rounded text-sm">content_copy</i>
+              <span>Copy</span>
+              <kbd>Ctrl+C</kbd>
+            </button>
+            <button class="quick-action-btn" @click="bulkCopyMove('move')" :disabled="!hasSelected" title="Ctrl+X">
+              <i class="material-symbols-rounded text-sm">drive_file_move</i>
+              <span>Move</span>
+              <kbd>Ctrl+X</kbd>
+            </button>
+            <button class="quick-action-btn" @click="bulkDelete" :disabled="!hasSelected" title="Delete">
+              <i class="material-symbols-rounded text-sm">delete</i>
+              <span>Delete</span>
+              <kbd>Del</kbd>
+            </button>
+            <button class="quick-action-btn" @click="loadFiles" title="F5">
+              <i class="material-symbols-rounded text-sm">refresh</i>
+              <span>Refresh</span>
+              <kbd>F5</kbd>
+            </button>
+            <button class="quick-action-btn" @click="goUpOneLevel" :disabled="!currentPath" title="Backspace">
+              <i class="material-symbols-rounded text-sm">arrow_upward</i>
+              <span>Up</span>
+              <kbd>Backspace</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- File List -->
       <div class="row">
         <div class="col-12">
@@ -760,7 +799,7 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import { router } from '@inertiajs/vue3'
 
@@ -887,7 +926,60 @@ const contextMenuStyle = computed(() => {
 
 onMounted(() => {
   loadFiles()
+  window.addEventListener('keydown', handleKeyboardShortcuts)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcuts)
+})
+
+const handleKeyboardShortcuts = (e) => {
+  // Don't trigger shortcuts when typing in inputs, textareas, or selects
+  const tag = e.target.tagName.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+
+  // Ctrl+A — Select All / Deselect All
+  if (e.ctrlKey && e.key === 'a') {
+    e.preventDefault()
+    toggleSelectAll()
+    return
+  }
+
+  // Ctrl+C — Copy Selected
+  if (e.ctrlKey && e.key === 'c' && hasSelected.value) {
+    e.preventDefault()
+    bulkCopyMove('copy')
+    return
+  }
+
+  // Ctrl+X — Move Selected
+  if (e.ctrlKey && e.key === 'x' && hasSelected.value) {
+    e.preventDefault()
+    bulkCopyMove('move')
+    return
+  }
+
+  // Delete — Delete Selected
+  if (e.key === 'Delete' && hasSelected.value) {
+    e.preventDefault()
+    bulkDelete()
+    return
+  }
+
+  // F5 — Refresh
+  if (e.key === 'F5') {
+    e.preventDefault()
+    loadFiles()
+    return
+  }
+
+  // Backspace — Go Up One Level
+  if (e.key === 'Backspace' && currentPath.value) {
+    e.preventDefault()
+    goUpOneLevel()
+    return
+  }
+}
 
 const showAlert = (type, message) => {
   alert.value = { show: true, type, message }
@@ -1552,6 +1644,53 @@ const executeCopyMove = async () => {
 /* Cursor pointer utility */
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* Quick Actions Bar */
+.quick-actions-bar {
+  background: #f1f3f5;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed #dee2e6;
+}
+
+.quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  color: #495057;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.quick-action-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  color: #212529;
+}
+
+.quick-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.quick-action-btn kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: inherit;
+  color: #6c757d;
+  background: #f1f3f5;
+  border: 1px solid #dee2e6;
+  border-radius: 3px;
+  line-height: 1.4;
+  margin-left: 2px;
 }
 </style>
 
