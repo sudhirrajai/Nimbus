@@ -60,6 +60,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/', [GitDeploymentController::class, 'store'])->name('store');
         Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
         Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
+        Route::get('/ssh-key', [GitDeploymentController::class, 'getServerSshKey'])->name('ssh-key');
         Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
         Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
         Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');

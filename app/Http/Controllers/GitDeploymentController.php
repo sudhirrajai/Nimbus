@@ -444,4 +444,49 @@ class GitDeploymentController extends Controller
             return response()->json(['error' => 'Failed to update blacklist: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Get or generate the server's public SSH key for deployments.
+     */
+    public function getServerSshKey()
+    {
+        try {
+            $sshDir = '/var/www/.ssh';
+            $keyPath = "{$sshDir}/id_ed25519";
+            $pubKeyPath = "{$keyPath}.pub";
+
+            if (!File::exists($pubKeyPath)) {
+                if (!File::exists($sshDir)) {
+                    exec("sudo mkdir -p {$sshDir} 2>&1");
+                    exec("sudo chown www-data:www-data {$sshDir} 2>&1");
+                    exec("sudo chmod 700 {$sshDir} 2>&1");
+                }
+
+                // Generate ED25519 key for www-data
+                exec("sudo -u www-data ssh-keygen -t ed25519 -f {$keyPath} -N '' -C 'nimbus-deploy@server' 2>&1", $output, $returnCode);
+                
+                if ($returnCode !== 0) {
+                    throw new \Exception("Failed to generate SSH key: " . implode("\n", $output));
+                }
+
+                // Add github.com and others to known_hosts to prevent interactive prompts
+                exec("sudo -u www-data ssh-keyscan -H github.com >> {$sshDir}/known_hosts 2>&1");
+                exec("sudo -u www-data ssh-keyscan -H gitlab.com >> {$sshDir}/known_hosts 2>&1");
+                exec("sudo -u www-data ssh-keyscan -H bitbucket.org >> {$sshDir}/known_hosts 2>&1");
+            }
+
+            $pubKey = File::get($pubKeyPath);
+
+            return response()->json([
+                'success' => true,
+                'public_key' => trim($pubKey)
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to get server SSH key: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to retrieve SSH key: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

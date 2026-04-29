@@ -146,37 +146,13 @@
                   </div>
                 </div>
 
-                <!-- Token input for private repos -->
-                <div v-if="form.repo_type === 'private'" class="mt-4">
-                  <div class="form-group">
-                    <label class="form-control-label font-weight-bold">
-                      <i class="material-symbols-rounded text-sm me-1">key</i>
-                      GitHub Personal Access Token
-                    </label>
-                    <div class="input-group input-group-outline">
-                      <input
-                        :type="showToken ? 'text' : 'password'"
-                        v-model="form.access_token"
-                        class="form-control"
-                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      >
-                      <button class="btn btn-outline-dark mb-0" @click="showToken = !showToken" type="button">
-                        <i class="material-symbols-rounded text-sm">{{ showToken ? 'visibility_off' : 'visibility' }}</i>
-                      </button>
-                    </div>
-                    <small class="text-muted d-block mt-1">
-                      Generate a token at
-                      <a href="https://github.com/settings/tokens" target="_blank" class="text-dark">github.com/settings/tokens</a>
-                      with <code>repo</code> scope.
-                    </small>
-                  </div>
-                </div>
+                <!-- Removed Token input from here, moved to Step 3 -->
               </div>
 
               <!-- Step 3: Repository URL -->
               <div v-if="currentStep === 2">
-                <h5 class="font-weight-bolder mb-1">Repository URL</h5>
-                <p class="text-sm text-secondary mb-4">Enter the Git repository URL</p>
+                <h5 class="font-weight-bolder mb-1">Repository Details</h5>
+                <p class="text-sm text-secondary mb-4">Provide the URL and authentication for your repository</p>
 
                 <!-- URL Type Toggle -->
                 <div class="d-flex gap-2 mb-3">
@@ -188,6 +164,50 @@
                     @click="form.url_type = 'ssh'">
                     SSH
                   </button>
+                </div>
+
+                <!-- Token input for private HTTPS repos -->
+                <div v-if="form.repo_type === 'private' && form.url_type === 'https'" class="form-group mb-4">
+                  <label class="form-control-label font-weight-bold">
+                    <i class="material-symbols-rounded text-sm me-1">key</i>
+                    GitHub Personal Access Token
+                  </label>
+                  <div class="input-group input-group-outline">
+                    <input
+                      :type="showToken ? 'text' : 'password'"
+                      v-model="form.access_token"
+                      class="form-control"
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    >
+                    <button class="btn btn-outline-dark mb-0" @click="showToken = !showToken" type="button">
+                      <i class="material-symbols-rounded text-sm">{{ showToken ? 'visibility_off' : 'visibility' }}</i>
+                    </button>
+                  </div>
+                  <small class="text-muted d-block mt-1">
+                    Required for private repositories. Generate at <a href="https://github.com/settings/tokens" target="_blank" class="text-dark">github.com/settings/tokens</a> (needs <code>repo</code> scope).
+                  </small>
+                </div>
+
+                <!-- SSH Key Display for SSH repos -->
+                <div v-if="form.url_type === 'ssh'" class="alert alert-light border mb-4">
+                   <div class="d-flex justify-content-between align-items-center mb-1">
+                     <h6 class="text-sm mb-0"><i class="material-symbols-rounded text-sm me-1 align-middle">key</i>Server SSH Key</h6>
+                     <span v-if="copiedSshKey" class="badge bg-gradient-success">Copied!</span>
+                   </div>
+                   <p class="text-xs text-secondary mb-2">Add this public key to your repository's Deploy Keys or your Git provider account to allow Nimbus to clone it.</p>
+                   
+                   <div v-if="loadingSshKey" class="text-center py-3">
+                     <span class="spinner-border spinner-border-sm text-dark" role="status"></span>
+                   </div>
+                   <div v-else-if="sshKeyError" class="text-danger text-xs py-2">
+                     <i class="material-symbols-rounded text-xs me-1">error</i> {{ sshKeyError }}
+                   </div>
+                   <div v-else class="position-relative">
+                     <textarea readonly class="form-control text-xs bg-gray-100 p-2 border-radius-sm font-monospace" rows="4" style="resize: none;" :value="sshKey" @click="$event.target.select()"></textarea>
+                     <button class="btn btn-sm btn-dark position-absolute bottom-0 end-0 m-2 px-2 py-1 mb-2" @click="copySshKey">
+                       <i class="material-symbols-rounded text-sm">{{ copiedSshKey ? 'check' : 'content_copy' }}</i>
+                     </button>
+                   </div>
                 </div>
 
                 <div class="form-group">
@@ -423,6 +443,11 @@ const availableDomains = ref([])
 const branches = ref([])
 const repoValidation = ref(null)
 
+const sshKey = ref('')
+const loadingSshKey = ref(false)
+const sshKeyError = ref('')
+const copiedSshKey = ref(false)
+
 const steps = [
   { label: 'Domain' },
   { label: 'Repo Type' },
@@ -458,12 +483,12 @@ const showAlert = (type, message) => {
 const canProceed = computed(() => {
   switch (currentStep.value) {
     case 0: return !!form.value.domain
-    case 1:
+    case 1: return true
+    case 2:
       if (form.value.repo_type === 'private' && form.value.url_type === 'https') {
-        return !!form.value.access_token.trim()
+        if (!form.value.access_token.trim()) return false
       }
-      return true
-    case 2: return !!form.value.repo_url.trim()
+      return !!form.value.repo_url.trim()
     case 3: return !!form.value.branch.trim()
     case 4: return true
     default: return false
@@ -550,7 +575,7 @@ const createDeployment = async () => {
       repo_url: form.value.repo_url,
       repo_type: form.value.repo_type,
       url_type: form.value.url_type,
-      access_token: form.value.repo_type === 'private' ? form.value.access_token : null,
+      access_token: (form.value.repo_type === 'private' && form.value.url_type === 'https') ? form.value.access_token : null,
       branch: form.value.branch,
     })
     showAlert('success', res.data.message)
@@ -566,6 +591,37 @@ const createDeployment = async () => {
 const goBack = () => {
   router.visit('/deployments')
 }
+
+const loadSshKey = async () => {
+  if (sshKey.value) return; // Already loaded
+  try {
+    loadingSshKey.value = true;
+    sshKeyError.value = '';
+    const res = await axios.get('/deployments/ssh-key');
+    if (res.data.success) {
+      sshKey.value = res.data.public_key;
+    } else {
+      sshKeyError.value = res.data.error || 'Failed to load SSH key';
+    }
+  } catch (error) {
+    sshKeyError.value = 'Failed to fetch SSH key.';
+  } finally {
+    loadingSshKey.value = false;
+  }
+}
+
+const copySshKey = () => {
+  navigator.clipboard.writeText(sshKey.value);
+  copiedSshKey.value = true;
+  setTimeout(() => copiedSshKey.value = false, 2000);
+}
+
+import { watch } from 'vue'
+watch(() => form.value.url_type, (newVal) => {
+  if (newVal === 'ssh') {
+    loadSshKey();
+  }
+})
 
 const downloadExampleYaml = () => {
   const content = `version: 1
