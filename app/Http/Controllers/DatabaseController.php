@@ -1053,16 +1053,20 @@ function adminer_object() {
         function name() { return 'Nimbus DB'; }
         
         function credentials() {
-            // If the user submitted the login form or is navigating, use normal Adminer behavior
-            if (isset($_GET['username']) || isset($_POST['auth'])) {
+            if (isset($_POST['auth']['username'])) {
+                return [$_POST['auth']['server'] ?? 'localhost', $_POST['auth']['username'], $_POST['auth']['password'] ?? ''];
+            }
+            if (isset($_GET['username'])) {
                 return parent::credentials();
             }
-            // Otherwise, attempt SSO auto-login
             return [$_SESSION['adminer_server'] ?? 'localhost', $_SESSION['adminer_username'], $_SESSION['adminer_password']];
         }
         
         function database() {
-            if (isset($_GET['username']) || isset($_GET['db']) || isset($_POST['auth'])) {
+            if (isset($_POST['auth']['db'])) {
+                return $_POST['auth']['db'];
+            }
+            if (isset($_GET['username']) || isset($_GET['db'])) {
                 return parent::database();
             }
             return $_SESSION['adminer_db'] ?? '';
