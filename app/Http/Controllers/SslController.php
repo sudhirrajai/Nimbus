@@ -592,7 +592,25 @@ class SslController extends Controller
             $output = [];
             $returnCode = 0;
 
-            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain) . " -d " . escapeshellarg("www.{$domain}") . " --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
+            // Determine if we should include the www. prefix
+            // Only include it if it actually resolves to an IP, avoiding NXDOMAIN errors
+            $includeWww = false;
+            $wwwDomain = "www.{$domain}";
+            
+            // Temporary silence errors from dns_get_record
+            $dnsA = @dns_get_record($wwwDomain, DNS_A);
+            $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
+            
+            if (!empty($dnsA) || !empty($dnsAAAA)) {
+                $includeWww = true;
+            }
+
+            // Build the certbot command dynamically based on DNS resolution
+            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain);
+            if ($includeWww) {
+                $cmd .= " -d " . escapeshellarg($wwwDomain);
+            }
+            $cmd .= " --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
 
             \Log::info("Running certbot: " . $cmd);
             exec($cmd, $output, $returnCode);
