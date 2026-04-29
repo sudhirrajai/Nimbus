@@ -740,18 +740,42 @@
       <div class="modal-backdrop fade show" v-if="showDeleteModal" @click="showDeleteModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showDeleteModal">
         <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title text-danger">Confirm Deletion</h5>
+          <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div class="modal-icon bg-gradient-danger">
+                  <i class="material-symbols-rounded">delete_forever</i>
+                </div>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">Confirm Deletion</h5>
+                  <p class="text-sm text-secondary mb-0">This action cannot be undone</p>
+                </div>
+              </div>
               <button type="button" class="btn-close" @click="showDeleteModal = false"></button>
             </div>
-            <div class="modal-body">
-              <p>Are you sure you want to delete <strong>{{ selectedItem?.name }}</strong>?</p>
-              <p class="text-sm text-danger mb-0">This action cannot be undone.</p>
+            <div class="modal-body pt-4">
+              <div v-if="isBulkDelete" class="alert alert-light border-0 mb-0 py-3">
+                <p class="mb-0 text-dark">
+                  Are you sure you want to delete <span class="fw-bold text-danger">{{ selectedItems.length }}
+                    items</span>?
+                </p>
+              </div>
+              <div v-else class="alert alert-light border-0 mb-0 py-3">
+                <p class="mb-0 text-dark text-break">
+                  Are you sure you want to delete <span class="fw-bold text-danger">{{ selectedItem?.name }}</span>?
+                </p>
+              </div>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="showDeleteModal = false">Cancel</button>
-              <button class="btn bg-gradient-danger" @click="deleteItem">Delete</button>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary" @click="showDeleteModal = false" :disabled="deleteProcessing">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Cancel
+              </button>
+              <button class="btn bg-gradient-danger" @click="executeDelete" :disabled="deleteProcessing">
+                <span v-if="deleteProcessing" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">delete</i>
+                {{ isBulkDelete ? 'Delete All' : 'Delete Item' }}
+              </button>
             </div>
           </div>
         </div>
@@ -884,6 +908,8 @@ const showCreateFileModal = ref(false)
 const showCreateDirModal = ref(false)
 const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
+const isBulkDelete = ref(false)
+const deleteProcessing = ref(false)
 const showEditorModal = ref(false)
 const showPermissionsModal = ref(false)
 const showCopyMoveModal = ref(false)
@@ -1268,21 +1294,36 @@ const renameItem = async () => {
 }
 
 const confirmDelete = (item) => {
+  isBulkDelete.value = false
   selectedItem.value = item
   showDeleteModal.value = true
 }
 
-const deleteItem = async () => {
+const executeDelete = async () => {
   try {
-    await axios.post(`/file-manager/${props.domain}/delete`, {
-      path: currentPath.value || '',
-      name: selectedItem.value.name
-    })
-    showAlert('success', 'Deleted successfully')
+    deleteProcessing.value = true
+    if (isBulkDelete.value) {
+      // Bulk delete logic
+      await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
+        path: currentPath.value || '',
+        items: getSelectedItems()
+      })
+      showAlert('success', 'Selected items deleted successfully')
+      selectedItems.value = []
+    } else {
+      // Single delete logic
+      await axios.post(`/file-manager/${props.domain}/delete`, {
+        path: currentPath.value || '',
+        name: selectedItem.value.name
+      })
+      showAlert('success', `${selectedItem.value.name} deleted successfully`)
+    }
     showDeleteModal.value = false
     loadFiles()
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to delete')
+    showAlert('danger', error.response?.data?.error || 'Failed to delete item(s)')
+  } finally {
+    deleteProcessing.value = false
   }
 }
 
@@ -1427,22 +1468,11 @@ const toggleSelectAll = () => {
 
 const getSelectedItems = () => selectedItems.value.map(i => i.name)
 
-// Bulk delete using existing delete-multiple endpoint
-const bulkDelete = async () => {
+// Bulk delete opens the premium confirmation modal
+const bulkDelete = () => {
   if (!hasSelected.value) return
-  if (!confirm(`Delete ${selectedItems.value.length} items? This cannot be undone.`)) return
-
-  try {
-    await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
-      path: currentPath.value || '',
-      items: getSelectedItems()
-    })
-    showAlert('success', 'Selected items deleted')
-    selectedItems.value = []
-    loadFiles()
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to delete selected items')
-  }
+  isBulkDelete.value = true
+  showDeleteModal.value = true
 }
 
 // Bulk ZIP
