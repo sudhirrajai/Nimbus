@@ -512,7 +512,7 @@ NGINX;
     /**
      * Ensure all managed domain folders contain the structure expected by nginx configs.
      */
-    private function repairManagedDomainStructures()
+    public function repairManagedDomainStructures()
     {
         if (!File::exists($this->basePath)) {
             return;

@@ -588,6 +588,10 @@ class SslController extends Controller
             // Ensure certbot is available (auto-install if needed)
             $certbotPath = $this->ensureCertbot();
 
+            // Ensure all managed domain directories and log files exist before running certbot
+            // This prevents nginx -t from throwing [emerg] file not found errors
+            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
+
             // Run certbot with nginx plugin
             $output = [];
             $returnCode = 0;
@@ -695,6 +699,9 @@ class SslController extends Controller
             // Ensure certbot is available
             $certbotPath = $this->ensureCertbot();
 
+            // Ensure all managed domain directories and log files exist before running certbot
+            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
+
             // Run certbot renew for specific domain
             $output = [];
             $returnCode = 0;
@@ -770,6 +777,9 @@ class SslController extends Controller
         try {
             // Ensure certbot is available
             $certbotPath = $this->ensureCertbot();
+
+            // Ensure all managed domain directories and log files exist before running certbot
+            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
 
             $output = [];
             $returnCode = 0;
