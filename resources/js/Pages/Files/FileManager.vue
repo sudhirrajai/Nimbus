@@ -34,62 +34,81 @@
       <!-- Toolbar -->
       <div class="row mb-3">
         <div class="col-12">
-          <div class="card">
+          <div class="card toolbar-card">
             <div class="card-body p-3">
-              <div class="d-flex flex-wrap gap-2 align-items-center">
-                <button class="btn btn-sm bg-gradient-primary mb-0" @click="showCreateFileModal = true">
-                  <i class="material-symbols-rounded text-sm me-1">note_add</i>
-                  New File
-                </button>
-                <button class="btn btn-sm bg-gradient-info mb-0" @click="showCreateDirModal = true">
-                  <i class="material-symbols-rounded text-sm me-1">create_new_folder</i>
-                  New Folder
-                </button>
-                <button class="btn btn-sm bg-gradient-success mb-0" @click="triggerUpload">
+              <!-- Row 1: Primary Actions + Search -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Create group -->
+                <div class="btn-group" role="group">
+                  <button class="btn btn-sm bg-gradient-dark mb-0" @click="showCreateFileModal = true" title="New File">
+                    <i class="material-symbols-rounded text-sm me-1">note_add</i>
+                    New File
+                  </button>
+                  <button class="btn btn-sm bg-gradient-dark mb-0" @click="showCreateDirModal = true" title="New Folder">
+                    <i class="material-symbols-rounded text-sm me-1">create_new_folder</i>
+                    New Folder
+                  </button>
+                </div>
+
+                <!-- Upload -->
+                <button class="btn btn-sm bg-gradient-primary mb-0" @click="triggerUpload">
                   <i class="material-symbols-rounded text-sm me-1">upload</i>
-                  Upload File
+                  Upload
                 </button>
                 <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" />
-                <button v-if="currentPath" class="btn btn-sm bg-gradient-warning mb-0" @click="goUpOneLevel">
+
+                <!-- Navigation -->
+                <div class="toolbar-divider"></div>
+                <button v-if="currentPath" class="btn btn-sm btn-outline-dark mb-0" @click="goUpOneLevel">
                   <i class="material-symbols-rounded text-sm me-1">arrow_upward</i>
-                  Up One Level
+                  Up
                 </button>
-                <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadFiles" :disabled="loading">
-                  <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                <button class="btn btn-sm btn-outline-dark mb-0" @click="loadFiles" :disabled="loading">
+                  <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loading }">refresh</i>
                   Refresh
                 </button>
 
-                <!-- Bulk actions -->
-                <div class="btn-group ms-2" role="group">
-                  <button class="btn btn-sm btn-outline-primary" @click="toggleSelectAll">
-                    <i class="material-symbols-rounded text-sm me-1">select_all</i>
-                    {{ allSelected ? 'Unselect All' : 'Select All' }}
-                  </button>
-                  <button class="btn btn-sm btn-outline-danger" :disabled="!hasSelected" @click="bulkDelete">
-                    <i class="material-symbols-rounded text-sm me-1">delete</i>
-                    Delete Selected
-                  </button>
-                  <button class="btn btn-sm btn-outline-secondary" :disabled="!hasSelected" @click="bulkZip">
-                    <i class="material-symbols-rounded text-sm me-1">folder_zip</i>
-                    Zip Selected
-                  </button>
-                  <button class="btn btn-sm btn-outline-info" :disabled="!hasSelected" @click="bulkCopyMove('copy')">
-                    <i class="material-symbols-rounded text-sm me-1">content_copy</i>
-                    Copy Selected
-                  </button>
-                  <button class="btn btn-sm btn-outline-warning" :disabled="!hasSelected" @click="bulkCopyMove('move')">
-                    <i class="material-symbols-rounded text-sm me-1">drive_file_move</i>
-                    Move Selected
-                  </button>
+                <!-- Search -->
+                <div class="ms-auto d-flex align-items-center gap-2">
+                  <div class="input-group input-group-sm toolbar-search">
+                    <span class="input-group-text bg-transparent border-end-0">
+                      <i class="material-symbols-rounded text-sm text-secondary">search</i>
+                    </span>
+                    <input v-model="searchQuery" type="text" class="form-control border-start-0 ps-0"
+                      placeholder="Filter files..." />
+                  </div>
+                  <div class="form-check form-switch mb-0 ms-1">
+                    <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden"
+                      @change="loadFiles">
+                    <label class="form-check-label text-xs text-nowrap" for="showHiddenToggle">
+                      Hidden
+                    </label>
+                  </div>
                 </div>
+              </div>
 
-                <div class="ms-auto form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden"
-                    @change="loadFiles">
-                  <label class="form-check-label text-sm" for="showHiddenToggle">
-                    Show Hidden Files
-                  </label>
-                </div>
+              <!-- Row 2: Bulk actions (only shown when items are selected) -->
+              <div v-if="hasSelected" class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 bulk-actions-bar">
+                <span class="badge bg-gradient-primary me-1">{{ selectedItems.length }} selected</span>
+                <button class="btn btn-sm btn-outline-danger mb-0" @click="bulkDelete">
+                  <i class="material-symbols-rounded text-sm me-1">delete</i>
+                  Delete
+                </button>
+                <button class="btn btn-sm btn-outline-secondary mb-0" @click="bulkZip">
+                  <i class="material-symbols-rounded text-sm me-1">folder_zip</i>
+                  Zip
+                </button>
+                <button class="btn btn-sm btn-outline-info mb-0" @click="bulkCopyMove('copy')">
+                  <i class="material-symbols-rounded text-sm me-1">content_copy</i>
+                  Copy
+                </button>
+                <button class="btn btn-sm btn-outline-warning mb-0" @click="bulkCopyMove('move')">
+                  <i class="material-symbols-rounded text-sm me-1">drive_file_move</i>
+                  Move
+                </button>
+                <button class="btn btn-sm btn-link text-secondary mb-0 ms-auto" @click="selectedItems = []; allSelected = false">
+                  Clear selection
+                </button>
               </div>
             </div>
           </div>
@@ -99,18 +118,24 @@
       <!-- Breadcrumbs -->
       <div class="row mb-3">
         <div class="col-12">
-          <nav aria-label="breadcrumb">
-            <ol class="breadcrumb bg-transparent mb-0 pb-0">
-              <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item"
-                :class="{ active: index === breadcrumbs.length - 1 }">
-                <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)"
-                  class="text-dark">
-                  {{ crumb.name }}
-                </a>
-                <span v-else>{{ crumb.name }}</span>
-              </li>
-            </ol>
-          </nav>
+          <div class="breadcrumb-bar d-flex align-items-center">
+            <i class="material-symbols-rounded text-sm text-secondary me-2">folder_open</i>
+            <nav aria-label="breadcrumb" class="flex-grow-1">
+              <ol class="breadcrumb bg-transparent mb-0 pb-0 pt-0">
+                <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item"
+                  :class="{ active: index === breadcrumbs.length - 1 }">
+                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)"
+                    class="text-dark">
+                    {{ crumb.name }}
+                  </a>
+                  <span v-else>{{ crumb.name }}</span>
+                </li>
+              </ol>
+            </nav>
+            <button class="btn btn-sm btn-link text-secondary mb-0 p-0" @click="toggleSelectAll" title="Select All">
+              <i class="material-symbols-rounded text-sm">{{ allSelected ? 'deselect' : 'select_all' }}</i>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -248,7 +273,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="item in items" :key="item.name + item.type"
+                    <tr v-for="item in filteredItems" :key="item.name + item.type"
                       @contextmenu.prevent="openContextMenu($event, item)" class="file-row"
                       :class="{ 'text-muted': item.hidden }">
                       <td>
@@ -745,6 +770,7 @@ const props = defineProps({
 })
 
 const items = ref([])
+const searchQuery = ref('')
 const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
@@ -828,6 +854,12 @@ const alert = ref({
 
 // Computed
 const hasSelected = computed(() => selectedItems.value.length > 0)
+
+const filteredItems = computed(() => {
+  if (!searchQuery.value) return items.value
+  const q = searchQuery.value.toLowerCase()
+  return items.value.filter(item => item.name.toLowerCase().includes(q))
+})
 
 const contextMenuStyle = computed(() => {
   if (!contextMenu.value.show) return {}
@@ -1388,4 +1420,138 @@ const executeCopyMove = async () => {
 
 </script>
 
+<style scoped>
+/* Toolbar card */
+.toolbar-card {
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* Toolbar vertical divider */
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: #dee2e6;
+  margin: 0 4px;
+}
+
+/* Search input */
+.toolbar-search {
+  max-width: 200px;
+  min-width: 140px;
+}
+.toolbar-search .form-control:focus {
+  box-shadow: none;
+}
+.toolbar-search .input-group-text {
+  border-color: #dee2e6;
+}
+.toolbar-search .form-control {
+  border-color: #dee2e6;
+}
+
+/* Bulk actions bar */
+.bulk-actions-bar {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Breadcrumb bar */
+.breadcrumb-bar {
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #eee;
+}
+
+/* Refresh spin animation */
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* File row hover */
+.file-row {
+  transition: background-color 0.15s ease;
+}
+.file-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Git console */
+.git-console {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  padding: 6px 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.1s;
+}
+.context-menu-item:hover {
+  background: #f0f2f5;
+}
+.context-menu-divider {
+  height: 1px;
+  background: #eee;
+  margin: 4px 0;
+}
+
+/* Modal icon */
+.modal-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+}
+
+/* Source info card */
+.source-info-card {
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #eee;
+}
+
+/* Cursor pointer utility */
+.cursor-pointer {
+  cursor: pointer;
+}
+</style>
 
