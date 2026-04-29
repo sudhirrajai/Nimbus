@@ -1086,6 +1086,24 @@ ob_start(function($buffer) {
     // Remove donation message
     $buffer = preg_replace('/<i[^>]*>\s*Thanks for using.*?donating.*?<\/i>/is', '', $buffer);
     $buffer = preg_replace('/Thanks for using.*?donating.*?<\/a>\./is', '', $buffer);
+    
+    // Inject JS to simplify the sidebar tables list
+    $js = <<<JS
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll("#tables li").forEach(function(li) {
+        var links = li.querySelectorAll("a");
+        if (links.length >= 2) {
+            links[0].href = links[1].href; // Make table name go to data directly
+            links[1].style.display = "none"; // Hide 'select' text
+        }
+    });
+});
+</script>
+</head>
+JS;
+    $buffer = str_replace('</head>', $js, $buffer);
+    
     return $buffer;
 });
 
