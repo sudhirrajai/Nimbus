@@ -842,6 +842,59 @@ class FileManagerController extends Controller
         }
     }
 
+    /**
+     * Save a Git personal access token for a domain.
+     * Stored in /var/www/{domain}/.git-token with restricted permissions.
+     */
+    public function saveGitToken(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'token' => 'required|string|max:500',
+            ]);
+
+            $domainPath = $this->basePath . $domain;
+            if (!$this->isValidPath($domainPath)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            $tokenPath = $domainPath . '/.git-token';
+            $token = trim($request->input('token'));
+
+            // Write the token file with sudo for proper permissions
+            $escapedPath = escapeshellarg($tokenPath);
+            $escapedToken = escapeshellarg($token);
+            $this->executeSudoCommand("bash -c 'echo {$escapedToken} > {$escapedPath}'");
+            $this->executeSudoCommand("chmod 600 {$escapedPath}");
+            $this->executeSudoCommand("chown root:root {$escapedPath}");
+
+            return response()->json(['message' => 'Git token saved successfully']);
+        } catch (\Exception $e) {
+            \Log::error("Save git token error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get whether a Git token exists for a domain (never returns the actual token).
+     */
+    public function getGitToken(Request $request, $domain)
+    {
+        $domainPath = $this->basePath . $domain;
+        $tokenPath = $domainPath . '/.git-token';
+
+        // Check if token file exists using sudo since it's owned by root
+        $output = [];
+        $returnCode = 0;
+        exec("sudo test -f " . escapeshellarg($tokenPath) . " && echo 'exists'", $output, $returnCode);
+
+        $exists = !empty($output) && trim($output[0]) === 'exists';
+
+        return response()->json([
+            'hasToken' => $exists,
+        ]);
+    }
+
     // Helper methods
 
     private function getFullPath($domain, $path = '')
@@ -1017,16 +1070,56 @@ class FileManagerController extends Controller
     {
         $output = [];
         $returnCode = 0;
-        $gitUser = escapeshellarg(env('NIMBUS_GIT_USER', $this->gitSystemUser));
         $escapedRepoPath = escapeshellarg($repoPath);
         $escapedSafeDirectory = escapeshellarg("safe.directory={$repoPath}");
         $escapedArguments = implode(' ', array_map('escapeshellarg', $arguments));
 
-        // Use root's SSH key and HOME for authentication so www-data can access private repos
-        // that were originally configured with root's credentials
-        $sshCommand = 'GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no"';
-        $homeEnv = 'HOME=/root';
-        $command = "sudo -u root env {$homeEnv} {$sshCommand} GIT_TERMINAL_PROMPT=0 git -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
+        // Detect the domain from the repo path to find the .git-token file
+        $domainRoot = $repoPath;
+        $domainBase = realpath($this->basePath);
+        if ($domainBase && strpos($repoPath, $domainBase) === 0) {
+            $relative = ltrim(substr($repoPath, strlen($domainBase)), '/');
+            $domainName = explode('/', $relative)[0] ?? '';
+            $domainRoot = $domainBase . '/' . $domainName;
+        }
+
+        $tokenPath = $domainRoot . '/.git-token';
+        $envParts = ['HOME=/tmp', 'GIT_TERMINAL_PROMPT=0'];
+
+        // Check if a .git-token file exists — use it for HTTPS credential auth
+        $tokenExists = false;
+        $checkOutput = [];
+        exec("sudo test -f " . escapeshellarg($tokenPath) . " && echo 'yes'", $checkOutput);
+        if (!empty($checkOutput) && trim($checkOutput[0]) === 'yes') {
+            $tokenExists = true;
+            // Read the token securely
+            $tokenOutput = [];
+            exec("sudo cat " . escapeshellarg($tokenPath), $tokenOutput);
+            $token = trim(implode('', $tokenOutput));
+            if ($token) {
+                // Use a credential helper that returns the token for HTTPS auth
+                $envParts[] = 'GIT_ASKPASS=/bin/echo';
+                // Set up a one-time credential helper
+                $credentialHelper = "credential.helper=!f() { echo username=x-access-token; echo password={$token}; }; f";
+            }
+        }
+
+        // Check if SSH key exists as fallback
+        if (!$tokenExists) {
+            $sshKeyCheck = [];
+            exec("sudo test -f /root/.ssh/id_rsa && echo 'yes'", $sshKeyCheck);
+            if (!empty($sshKeyCheck) && trim($sshKeyCheck[0]) === 'yes') {
+                $envParts[] = 'GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no"';
+            }
+        }
+
+        $envString = implode(' ', $envParts);
+
+        if ($tokenExists && isset($credentialHelper)) {
+            $command = "sudo env {$envString} git -c " . escapeshellarg($credentialHelper) . " -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
+        } else {
+            $command = "sudo env {$envString} git -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
+        }
 
         \Log::debug("Executing git command: {$command}");
         exec("{$command} 2>&1", $output, $returnCode);

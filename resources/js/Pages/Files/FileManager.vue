@@ -151,10 +151,47 @@
                     Manage the nearest Git repository for the current folder.
                   </p>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadGitStatus" :disabled="gitLoading">
-                  <i class="material-symbols-rounded text-sm me-1">refresh</i>
-                  Refresh Git
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                  <span v-if="gitTokenExists" class="badge bg-gradient-success me-1">
+                    <i class="material-symbols-rounded text-xs me-1">key</i> Token Set
+                  </span>
+                  <button class="btn btn-sm btn-outline-dark mb-0" @click="showGitTokenForm = !showGitTokenForm">
+                    <i class="material-symbols-rounded text-sm me-1">key</i>
+                    {{ showGitTokenForm ? 'Hide' : 'Configure Token' }}
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadGitStatus" :disabled="gitLoading">
+                    <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                    Refresh Git
+                  </button>
+                </div>
+              </div>
+
+              <!-- Git Token Configuration -->
+              <div v-if="showGitTokenForm" class="git-token-section mb-3">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="flex-grow-1">
+                    <label class="form-label text-sm mb-1 fw-bold">Personal Access Token</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light">
+                        <i class="material-symbols-rounded text-sm text-secondary">key</i>
+                      </span>
+                      <input v-model="gitTokenInput" :type="showTokenText ? 'text' : 'password'" class="form-control"
+                        placeholder="ghp_xxxx... or gitlab token" />
+                      <button class="btn btn-outline-secondary mb-0" @click="showTokenText = !showTokenText" type="button">
+                        <i class="material-symbols-rounded text-sm">{{ showTokenText ? 'visibility_off' : 'visibility' }}</i>
+                      </button>
+                      <button class="btn bg-gradient-primary mb-0" @click="saveGitToken" :disabled="!gitTokenInput.trim() || gitTokenSaving">
+                        <span v-if="gitTokenSaving" class="spinner-border spinner-border-sm me-1"></span>
+                        Save Token
+                      </button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">
+                      <i class="material-symbols-rounded text-xs align-middle me-1">info</i>
+                      Used for Git Pull/Push over HTTPS. Token is stored securely and never displayed.
+                      <a href="https://github.com/settings/tokens" target="_blank" class="text-primary">Generate on GitHub</a>
+                    </small>
+                  </div>
+                </div>
               </div>
 
               <div v-if="gitLoading" class="text-center py-3">
@@ -832,6 +869,13 @@ const gitInfo = ref({
   dirty: false
 })
 
+// Git token state
+const showGitTokenForm = ref(false)
+const gitTokenInput = ref('')
+const gitTokenSaving = ref(false)
+const gitTokenExists = ref(false)
+const showTokenText = ref(false)
+
 // selection management
 const selectedItems = ref([]) // array of { name, type }
 const allSelected = ref(false)
@@ -926,6 +970,7 @@ const contextMenuStyle = computed(() => {
 
 onMounted(() => {
   loadFiles()
+  checkGitToken()
   window.addEventListener('keydown', handleKeyboardShortcuts)
 })
 
@@ -978,6 +1023,34 @@ const handleKeyboardShortcuts = (e) => {
     e.preventDefault()
     goUpOneLevel()
     return
+  }
+}
+
+// Git Token Management
+const checkGitToken = async () => {
+  try {
+    const response = await axios.get(`/file-manager/${props.domain}/git/token`)
+    gitTokenExists.value = response.data.hasToken
+  } catch (error) {
+    gitTokenExists.value = false
+  }
+}
+
+const saveGitToken = async () => {
+  if (!gitTokenInput.value.trim()) return
+  try {
+    gitTokenSaving.value = true
+    await axios.post(`/file-manager/${props.domain}/git/token`, {
+      token: gitTokenInput.value.trim()
+    })
+    showAlert('success', 'Git token saved successfully. Pull/Push should now work.')
+    gitTokenInput.value = ''
+    gitTokenExists.value = true
+    showGitTokenForm.value = false
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to save git token')
+  } finally {
+    gitTokenSaving.value = false
   }
 }
 
@@ -1691,6 +1764,15 @@ const executeCopyMove = async () => {
   border-radius: 3px;
   line-height: 1.4;
   margin-left: 2px;
+}
+
+/* Git Token Section */
+.git-token-section {
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  animation: slideDown 0.2s ease;
 }
 </style>
 

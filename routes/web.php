@@ -90,6 +90,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
         Route::post('/{domain}/git/status', [FileManagerController::class, 'gitStatus'])->name('git.status');
         Route::post('/{domain}/git/action', [FileManagerController::class, 'gitAction'])->name('git.action');
+        Route::post('/{domain}/git/token', [FileManagerController::class, 'saveGitToken'])->name('git.token.save');
+        Route::get('/{domain}/git/token', [FileManagerController::class, 'getGitToken'])->name('git.token.get');
     });
 
     // PHP Configuration routes
