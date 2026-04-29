@@ -1021,9 +1021,9 @@ PHP;
     }
 
     /**
-     * Create the Database Viewer SSO Wrapper (public/db/index.php)
+     * Create the SSO wrapper for Adminer
      */
-    private function createDatabaseViewerWrapper()
+    public function createDatabaseViewerWrapper()
     {
         // Use sudo to create the directory if it doesn't exist
         $this->executeSudoCommand("mkdir -p {$this->adminerPublicPath}");
@@ -1053,17 +1053,17 @@ function adminer_object() {
         function name() { return 'Nimbus DB'; }
         
         function credentials() {
-            // If the user submitted the login form, use their credentials
-            if (isset($_POST['auth']['username'])) {
-                return [$_POST['auth']['server'] ?? 'localhost', $_POST['auth']['username'], $_POST['auth']['password'] ?? ''];
+            // If the user submitted the login form or is navigating, use normal Adminer behavior
+            if (isset($_GET['username']) || isset($_POST['auth'])) {
+                return parent::credentials();
             }
-            // Otherwise, attempt SSO
+            // Otherwise, attempt SSO auto-login
             return [$_SESSION['adminer_server'] ?? 'localhost', $_SESSION['adminer_username'], $_SESSION['adminer_password']];
         }
         
         function database() {
-            if (isset($_POST['auth']['db'])) {
-                return $_POST['auth']['db'];
+            if (isset($_GET['username']) || isset($_GET['db']) || isset($_POST['auth'])) {
+                return parent::database();
             }
             return $_SESSION['adminer_db'] ?? '';
         }
