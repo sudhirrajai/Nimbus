@@ -611,9 +611,8 @@ BASH;
             $privileges = $request->input('privileges');
 
             // Revoke all existing privileges on this database
-            $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            DB::statement("REVOKE ALL PRIVILEGES ON `{$database}`.* FROM {$escapedUser}@{$escapedHost}");
+            $output = [];
+            exec("sudo mysql -e \"REVOKE ALL PRIVILEGES ON \`{$database}\`.* FROM '{$username}'@'{$host}'\" 2>&1", $output, $code);
 
             // Grant new privileges
             if (!empty($privileges)) {
@@ -622,11 +621,11 @@ BASH;
                 
                 if (!empty($privileges)) {
                     $privilegeStr = implode(', ', $privileges);
-                    DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO {$escapedUser}@{$escapedHost}");
+                    exec("sudo mysql -e \"GRANT {$privilegeStr} ON \`{$database}\`.* TO '{$username}'@'{$host}'\" 2>&1", $output, $code);
                 }
             }
 
-            DB::statement("FLUSH PRIVILEGES");
+            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
 
             return response()->json([
                 'message' => "Permissions updated for user '{$username}' on database '{$database}'"
@@ -654,10 +653,16 @@ BASH;
             $password = $request->input('password');
 
             $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            $escapedPass = $this->escapeString($password);
-            DB::statement("ALTER USER {$escapedUser}@{$escapedHost} IDENTIFIED BY {$escapedPass}");
-            DB::statement("FLUSH PRIVILEGES");
+            $escapedPass = escapeshellarg($password);
+            
+            $output = [];
+            exec("sudo mysql -e \"ALTER USER '{$username}'@'{$host}' IDENTIFIED BY {$escapedPass}\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to update password: " . implode("\n", $output));
+            }
+            
+            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
 
             return response()->json([
                 'message' => "Password updated for user '{$username}'@'{$host}'"
