@@ -204,52 +204,68 @@ class SslController extends Controller
         return null;
     }
 
-    /**
-     * Check if a domain has live SSL by probing with openssl
-     */
     private function checkLiveSsl($domain)
     {
         try {
-            $output = [];
-            $returnCode = 0;
-            $cmd = "echo | timeout 5 openssl s_client -servername " . escapeshellarg($domain)
-                . " -connect " . escapeshellarg($domain) . ":443 2>/dev/null"
-                . " | openssl x509 -noout -dates -issuer 2>&1";
+            $streamContext = stream_context_create([
+                'ssl' => [
+                    'capture_peer_cert' => true,
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'SNI_enabled' => true,
+                    'peer_name' => $domain
+                ]
+            ]);
 
-            exec($cmd, $output, $returnCode);
-
-            if ($returnCode !== 0 || empty($output)) {
+            $client = @stream_socket_client("ssl://{$domain}:443", $errno, $errstr, 5, STREAM_CLIENT_CONNECT, $streamContext);
+            
+            if (!$client) {
                 return null;
             }
 
-            $outputStr = implode("\n", $output);
-
-            // If it contains "unable to load" or "error", there's no valid cert
-            if (stripos($outputStr, 'unable to load') !== false || stripos($outputStr, 'error') !== false) {
+            $params = stream_context_get_params($client);
+            $cert = $params['options']['ssl']['peer_certificate'] ?? null;
+            
+            if (!$cert) {
                 return null;
             }
 
-            $validFrom = null;
-            $validTo = null;
-            $issuer = 'Unknown';
+            $certInfo = openssl_x509_parse($cert);
+            if (!$certInfo) {
+                return null;
+            }
 
-            foreach ($output as $line) {
-                if (strpos($line, 'notBefore=') === 0) {
-                    $validFrom = strtotime(str_replace('notBefore=', '', $line));
-                }
-                if (strpos($line, 'notAfter=') === 0) {
-                    $validTo = strtotime(str_replace('notAfter=', '', $line));
-                }
-                if (strpos($line, 'issuer=') === 0 || strpos($line, 'issuer =') === 0) {
-                    if (preg_match('/CN\s*=\s*([^,\/]+)/', $line, $matches)) {
-                        $issuer = trim($matches[1]);
+            // Verify the certificate actually covers this domain
+            $validForDomain = false;
+            
+            // Check Common Name (CN)
+            $cn = $certInfo['subject']['CN'] ?? '';
+            if ($this->domainMatchesCert($domain, $cn)) {
+                $validForDomain = true;
+            }
+
+            // Check Subject Alternative Names (SAN)
+            if (!$validForDomain && isset($certInfo['extensions']['subjectAltName'])) {
+                $sans = explode(',', $certInfo['extensions']['subjectAltName']);
+                foreach ($sans as $san) {
+                    $san = trim(str_replace('DNS:', '', $san));
+                    if ($this->domainMatchesCert($domain, $san)) {
+                        $validForDomain = true;
+                        break;
                     }
                 }
             }
 
-            if (!$validFrom && !$validTo) {
+            // If the certificate doesn't cover this domain, ignore it (it's likely a server fallback cert)
+            if (!$validForDomain) {
                 return null;
             }
+
+            $validFrom = $certInfo['validFrom_time_t'] ?? null;
+            $validTo = $certInfo['validTo_time_t'] ?? null;
+            
+            // Extract Issuer Organization or CN
+            $issuer = $certInfo['issuer']['O'] ?? $certInfo['issuer']['CN'] ?? 'Unknown';
 
             $daysRemaining = null;
             $status = 'valid';
@@ -274,6 +290,32 @@ class SslController extends Controller
             \Log::warning("Live SSL check failed for {$domain}: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Check if a domain matches a certificate name (handling wildcards)
+     */
+    private function domainMatchesCert($domain, $certName)
+    {
+        $domain = strtolower(trim($domain));
+        $certName = strtolower(trim($certName));
+
+        if ($domain === $certName) {
+            return true;
+        }
+
+        // Handle wildcards (e.g., *.example.com matches test.example.com)
+        if (strpos($certName, '*.') === 0) {
+            $baseDomain = substr($certName, 2);
+            $parts = explode('.', $domain);
+            if (count($parts) > 1) {
+                array_shift($parts); // Remove first part (subdomain)
+                $domainWithoutSub = implode('.', $parts);
+                return $domainWithoutSub === $baseDomain;
+            }
+        }
+
+        return false;
     }
 
     /**
