@@ -364,7 +364,13 @@ BASH;
                     if (preg_match('/GRANT (.+) ON/', $grantStr, $matches)) {
                         $privList = explode(',', $matches[1]);
                         foreach ($privList as $priv) {
-                            $privileges[] = trim($priv);
+                            $priv = trim($priv);
+                            if ($priv === 'ALL PRIVILEGES' || $priv === 'ALL') {
+                                $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'];
+                                $privileges = array_merge($privileges, $allowedPrivileges);
+                            } else {
+                                $privileges[] = $priv;
+                            }
                         }
                     }
                 }
