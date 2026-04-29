@@ -517,8 +517,9 @@ class GitDeploymentService
             return; // No start command specified and not a Node app
         }
 
-        // Use bash -c to ensure path resolution and environment handling works correctly in Supervisor
-        $fullCommand = "/bin/bash -c " . escapeshellarg($startCommand);
+        // Use /usr/bin/env to resolve the command in the provided PATH
+        // This is more reliable than bash -c in some restricted environments
+        $fullCommand = "/usr/bin/env {$startCommand}";
 
         $startTime = microtime(true);
         $log = $this->createLog($deployment, 'supervisor_setup', 'running');
