@@ -16,7 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             SetPanelAuthCookie::class,
-            \App\Http\Middleware\SecurityMiddleware::class,
+            // \App\Http\Middleware\SecurityMiddleware::class,
         ]);
         
         // Redirect unauthenticated users to login
