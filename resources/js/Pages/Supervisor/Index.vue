@@ -63,7 +63,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <p class="text-sm mb-0 text-capitalize">Total Processes</p>
-                                        <h4 class="mb-0">{{ processes.length }}</h4>
+                                        <h4 class="mb-0">{{ totalProcessesCount }}</h4>
                                     </div>
                                     <div
                                         class="icon icon-md icon-shape bg-gradient-primary shadow-primary text-center rounded-circle">
@@ -112,20 +112,16 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header pb-0 d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">Supervisor Processes</h6>
+                                <h6 class="mb-0">Supervisor Configurations</h6>
                                 <div class="d-flex gap-2">
-                                    <!-- Bulk Actions -->
-                                    <div class="btn-group" v-if="processes.length > 0">
-                                        <button class="btn btn-sm btn-outline-success" @click="startAll"
-                                            title="Start All">
+                                    <div class="btn-group" v-if="groups.length > 0">
+                                        <button class="btn btn-sm btn-outline-success" @click="startAll" title="Start All">
                                             <i class="material-symbols-rounded text-sm">play_arrow</i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-warning" @click="stopAll"
-                                            title="Stop All">
+                                        <button class="btn btn-sm btn-outline-warning" @click="stopAll" title="Stop All">
                                             <i class="material-symbols-rounded text-sm">stop</i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-info" @click="restartAll"
-                                            title="Restart All">
+                                        <button class="btn btn-sm btn-outline-info" @click="restartAll" title="Restart All">
                                             <i class="material-symbols-rounded text-sm">refresh</i>
                                         </button>
                                     </div>
@@ -140,7 +136,7 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div v-if="processes.length === 0" class="text-center py-4 text-muted">
+                                <div v-if="groups.length === 0" class="text-center py-4 text-muted">
                                     <i class="material-symbols-rounded mb-2" style="font-size: 48px;">memory</i>
                                     <p>No processes configured. Create one to get started.</p>
                                 </div>
@@ -149,74 +145,96 @@
                                     <table class="table align-items-center mb-0">
                                         <thead>
                                             <tr>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Process</th>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Status</th>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    PID</th>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Uptime</th>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Actions</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2" width="40"></th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Configuration Group</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Status</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Workers</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2 text-end pe-4">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="process in processes" :key="process.name">
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div
-                                                            class="avatar avatar-sm bg-gradient-dark rounded-circle me-2">
-                                                            <i
-                                                                class="material-symbols-rounded text-white text-sm">terminal</i>
+                                            <template v-for="group in groups" :key="group.name">
+                                                <!-- Group Row -->
+                                                <tr class="bg-light-gray">
+                                                    <td>
+                                                        <button class="btn btn-link btn-icon-only btn-sm text-dark mb-0" @click="toggleGroup(group.name)">
+                                                            <i class="material-symbols-rounded text-sm transform-transition" :style="expandedGroups.includes(group.name) ? 'transform: rotate(90deg)' : ''">chevron_right</i>
+                                                        </button>
+                                                    </td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="avatar avatar-sm bg-gradient-info rounded-circle me-2">
+                                                                <i class="material-symbols-rounded text-white text-sm">settings_suggest</i>
+                                                            </div>
+                                                            <div>
+                                                                <h6 class="mb-0 text-sm">{{ group.name }}</h6>
+                                                                <small class="text-xs text-muted">{{ group.name }}.conf</small>
+                                                            </div>
                                                         </div>
-                                                        <h6 class="mb-0 text-sm">{{ process.name }}</h6>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span :class="getStatusBadge(process.status)">{{ process.status
-                                                    }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-sm">{{ process.pid || '-' }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-sm">{{ process.uptime || '-' }}</span>
-                                                </td>
-                                                <td>
-                                                    <button v-if="process.status !== 'RUNNING'"
-                                                        class="btn btn-link text-success p-1" title="Start"
-                                                        @click="startProcess(process.name)">
-                                                        <i class="material-symbols-rounded">play_arrow</i>
-                                                    </button>
-                                                    <button v-if="process.status === 'RUNNING'"
-                                                        class="btn btn-link text-warning p-1" title="Stop"
-                                                        @click="stopProcess(process.name)">
-                                                        <i class="material-symbols-rounded">stop</i>
-                                                    </button>
-                                                    <button class="btn btn-link text-info p-1" title="Restart"
-                                                        @click="restartProcess(process.name)">
-                                                        <i class="material-symbols-rounded">refresh</i>
-                                                    </button>
-                                                    <button class="btn btn-link text-primary p-1" title="View Logs"
-                                                        @click="openLogs(process.name)">
-                                                        <i class="material-symbols-rounded">description</i>
-                                                    </button>
-                                                    <button class="btn btn-link text-secondary p-1" title="Edit"
-                                                        @click="editProcess(process.name)">
-                                                        <i class="material-symbols-rounded">edit</i>
-                                                    </button>
-                                                    <button class="btn btn-link text-danger p-1" title="Delete"
-                                                        @click="confirmDelete(process.name)">
-                                                        <i class="material-symbols-rounded">delete</i>
-                                                    </button>
-                                                </td>
-                                            </tr>
+                                                    </td>
+                                                    <td>
+                                                        <span :class="getStatusBadge(group.status)">{{ group.status }}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge badge-sm bg-gradient-secondary">{{ group.count }} processes</span>
+                                                    </td>
+                                                    <td class="text-end pe-4">
+                                                        <button class="btn btn-link text-success p-1" title="Start All in Group" @click="startProcess(group.name + ':*')">
+                                                            <i class="material-symbols-rounded">play_arrow</i>
+                                                        </button>
+                                                        <button class="btn btn-link text-warning p-1" title="Stop All in Group" @click="stopProcess(group.name + ':*')">
+                                                            <i class="material-symbols-rounded">stop</i>
+                                                        </button>
+                                                        <button class="btn btn-link text-info p-1" title="Restart All in Group" @click="restartProcess(group.name + ':*')">
+                                                            <i class="material-symbols-rounded">refresh</i>
+                                                        </button>
+                                                        <div class="d-inline-block ms-2 border-start ps-2">
+                                                            <button class="btn btn-link text-primary p-1" title="Edit Config" @click="editProcess(group.name)">
+                                                                <i class="material-symbols-rounded">edit</i>
+                                                            </button>
+                                                            <button class="btn btn-link text-danger p-1" title="Delete Config" @click="confirmDelete(group.name)">
+                                                                <i class="material-symbols-rounded">delete</i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+
+                                                <!-- Child Processes (Expanded) -->
+                                                <template v-if="expandedGroups.includes(group.name)">
+                                                    <tr v-for="process in group.processes" :key="process.fullName" class="bg-white">
+                                                        <td></td>
+                                                        <td class="ps-4">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="material-symbols-rounded text-xs text-secondary me-2">subdirectory_arrow_right</i>
+                                                                <span class="text-xs font-weight-bold">{{ process.name }}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span :class="getStatusBadge(process.status, true)">{{ process.status }}</span>
+                                                        </td>
+                                                        <td>
+                                                            <div class="d-flex flex-column">
+                                                                <span class="text-xxs">PID: {{ process.pid || '-' }}</span>
+                                                                <span class="text-xxs">UP: {{ process.uptime || '-' }}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-end pe-4">
+                                                            <button v-if="process.status !== 'RUNNING'" class="btn btn-link text-success p-1" title="Start" @click="startProcess(process.fullName)">
+                                                                <i class="material-symbols-rounded text-sm">play_arrow</i>
+                                                            </button>
+                                                            <button v-if="process.status === 'RUNNING'" class="btn btn-link text-warning p-1" title="Stop" @click="stopProcess(process.fullName)">
+                                                                <i class="material-symbols-rounded text-sm">stop</i>
+                                                            </button>
+                                                            <button class="btn btn-link text-info p-1" title="Restart" @click="restartProcess(process.fullName)">
+                                                                <i class="material-symbols-rounded text-sm">refresh</i>
+                                                            </button>
+                                                            <button class="btn btn-link text-primary p-1" title="View Logs" @click="openLogs(process.fullName)">
+                                                                <i class="material-symbols-rounded text-sm">description</i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </template>
                                         </tbody>
                                     </table>
                                 </div>
@@ -508,7 +526,8 @@ const installing = ref(false)
 const creating = ref(false)
 const isEditing = ref(false)
 const status = ref({ installed: false, running: false })
-const processes = ref([])
+const groups = ref([])
+const expandedGroups = ref([])
 
 // Modals
 const showCreateModal = ref(false)
@@ -551,8 +570,25 @@ const newProcess = ref({
 // System users for dropdown - not needed, always www-data
 const systemUsers = ref([])
 
-const runningCount = computed(() => processes.value.filter(p => p.status === 'RUNNING').length)
-const stoppedCount = computed(() => processes.value.filter(p => p.status !== 'RUNNING').length)
+const totalProcessesCount = computed(() => {
+    return groups.value.reduce((total, group) => total + group.processes.length, 0)
+})
+
+const runningCount = computed(() => {
+    let count = 0
+    groups.value.forEach(group => {
+        count += group.processes.filter(p => p.status === 'RUNNING').length
+    })
+    return count
+})
+
+const stoppedCount = computed(() => {
+    let count = 0
+    groups.value.forEach(group => {
+        count += group.processes.filter(p => p.status !== 'RUNNING').length
+    })
+    return count
+})
 
 // Live config preview
 const generatedConfig = computed(() => {
@@ -618,9 +654,17 @@ const loadSystemUsers = async () => {
 const loadProcesses = async () => {
     try {
         const response = await axios.get('/supervisor/processes')
-        processes.value = response.data.processes || []
+        groups.value = response.data.groups || []
     } catch (error) {
         console.error('Failed to load processes:', error)
+    }
+}
+
+const toggleGroup = (groupName) => {
+    if (expandedGroups.value.includes(groupName)) {
+        expandedGroups.value = expandedGroups.value.filter(g => g !== groupName)
+    } else {
+        expandedGroups.value.push(groupName)
     }
 }
 
@@ -839,18 +883,51 @@ const showNotification = (message, type = 'success') => {
     }, 4000)
 }
 
-const getStatusBadge = (status) => {
+const getStatusBadge = (status, isSmall = false) => {
+    const base = isSmall ? 'badge badge-sm border' : 'badge';
     const badges = {
-        'RUNNING': 'badge bg-gradient-success',
-        'STOPPED': 'badge bg-gradient-secondary',
-        'STARTING': 'badge bg-gradient-info',
-        'STOPPING': 'badge bg-gradient-warning',
-        'EXITED': 'badge bg-gradient-danger',
-        'FATAL': 'badge bg-gradient-danger',
-        'BACKOFF': 'badge bg-gradient-warning'
+        'RUNNING': isSmall ? 'border-success text-success' : 'bg-gradient-success',
+        'STOPPED': isSmall ? 'border-secondary text-secondary' : 'bg-gradient-secondary',
+        'STARTING': isSmall ? 'border-info text-info' : 'bg-gradient-info',
+        'STOPPING': isSmall ? 'border-warning text-warning' : 'bg-gradient-warning',
+        'EXITED': isSmall ? 'border-danger text-danger' : 'bg-gradient-danger',
+        'FATAL': isSmall ? 'border-danger text-danger' : 'bg-gradient-danger',
+        'BACKOFF': isSmall ? 'border-warning text-warning' : 'bg-gradient-warning'
     }
-    return badges[status] || 'badge bg-gradient-secondary'
+    return `${base} ${badges[status] || (isSmall ? 'border-secondary text-secondary' : 'bg-gradient-secondary')}`
 }
 </script>
+
+<style scoped>
+.transform-transition {
+    transition: transform 0.2s ease-in-out;
+}
+.bg-light-gray {
+    background-color: rgba(0, 0, 0, 0.02) !important;
+}
+.terminal-output {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    font-family: 'Fira Code', 'Roboto Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    max-height: 500px;
+    overflow-y: auto;
+    border-radius: 0 0 4px 4px;
+    margin: 0;
+}
+.config-preview, .config-editor {
+    font-family: 'Fira Code', 'Roboto Mono', monospace;
+    font-size: 12px;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+.config-editor {
+    width: 100%;
+}
+</style>
 
 

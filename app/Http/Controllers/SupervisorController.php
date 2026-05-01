@@ -201,12 +201,12 @@ BASH;
     }
 
     /**
-     * Get all supervisor processes
+     * Get all supervisor processes grouped by their config
      */
     public function getProcesses()
     {
         try {
-            $processes = [];
+            $groups = [];
             
             // Get process status from supervisorctl
             exec('sudo supervisorctl status 2>/dev/null', $output, $code);
@@ -216,10 +216,18 @@ BASH;
                 
                 // Parse line like: "myapp:myapp_00 RUNNING pid 12345, uptime 0:10:00"
                 if (preg_match('/^(\S+)\s+(RUNNING|STOPPED|STARTING|BACKOFF|STOPPING|EXITED|FATAL|UNKNOWN)\s*(.*)$/', $line, $matches)) {
-                    $name = $matches[1];
+                    $fullName = $matches[1];
                     $status = $matches[2];
                     $info = $matches[3];
                     
+                    // Split group and process name
+                    if (str_contains($fullName, ':')) {
+                        [$groupName, $processName] = explode(':', $fullName, 2);
+                    } else {
+                        $groupName = $fullName;
+                        $processName = $fullName;
+                    }
+
                     $pid = null;
                     $uptime = null;
                     
@@ -230,30 +238,53 @@ BASH;
                         $uptime = $uptimeMatch[1];
                     }
                     
-                    $processes[] = [
-                        'name' => $name,
+                    if (!isset($groups[$groupName])) {
+                        $groups[$groupName] = [
+                            'name' => $groupName,
+                            'processes' => [],
+                            'status' => 'STOPPED', // Will be updated
+                            'count' => 0
+                        ];
+                    }
+
+                    $groups[$groupName]['processes'][] = [
+                        'name' => $processName,
+                        'fullName' => $fullName,
                         'status' => $status,
                         'pid' => $pid,
                         'uptime' => $uptime,
                         'info' => $info
                     ];
+                    $groups[$groupName]['count']++;
+
+                    // If any process in group is running, group is considered "active"
+                    if ($status === 'RUNNING') {
+                        $groups[$groupName]['status'] = 'RUNNING';
+                    }
                 }
             }
 
-            // Also get config files
+            // Also get config files to ensure we show configs that might not have running processes
             $configDir = '/etc/supervisor/conf.d';
-            $configs = [];
             if (is_dir($configDir)) {
                 $files = glob("{$configDir}/*.conf");
                 foreach ($files as $file) {
-                    $configs[] = basename($file, '.conf');
+                    $configName = basename($file, '.conf');
+                    if (!isset($groups[$configName])) {
+                        $groups[$configName] = [
+                            'name' => $configName,
+                            'processes' => [],
+                            'status' => 'STOPPED',
+                            'count' => 0
+                        ];
+                    }
                 }
             }
 
             return response()->json([
                 'success' => true,
-                'processes' => $processes,
-                'configs' => $configs
+                'groups' => array_values($groups),
+                'count' => count($groups)
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -462,10 +493,13 @@ CONFIG;
     {
         try {
             $name = $request->input('name');
-            $configPath = "/etc/supervisor/conf.d/{$name}.conf";
+            
+            // If name is like "group:process", we want the "group" part for the config file
+            $configName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+            $configPath = "/etc/supervisor/conf.d/{$configName}.conf";
             
             if (!file_exists($configPath)) {
-                return response()->json(['error' => 'Configuration not found'], 404);
+                return response()->json(['error' => "Configuration not found at {$configPath}"], 404);
             }
             
             $content = file_get_contents($configPath);

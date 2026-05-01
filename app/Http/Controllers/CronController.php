@@ -16,37 +16,41 @@ class CronController extends Controller
     }
 
     /**
-     * Get all cron jobs for www-data user
+     * Get all cron jobs for www-data and root users
      */
     public function getJobs()
     {
         try {
             $jobs = [];
-            
-            // Get crontab for www-data user
-            exec('sudo crontab -u www-data -l 2>/dev/null', $output, $code);
-            
-            if ($code === 0) {
-                $id = 1;
-                foreach ($output as $line) {
-                    $line = trim($line);
-                    
-                    // Skip empty lines and comments
-                    if (empty($line) || str_starts_with($line, '#')) continue;
-                    
-                    // Parse cron line: minute hour day month weekday command
-                    if (preg_match('/^([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+(.+)$/', $line, $matches)) {
-                        $jobs[] = [
-                            'id' => $id++,
-                            'minute' => $matches[1],
-                            'hour' => $matches[2],
-                            'day' => $matches[3],
-                            'month' => $matches[4],
-                            'weekday' => $matches[5],
-                            'command' => $matches[6],
-                            'schedule' => "{$matches[1]} {$matches[2]} {$matches[3]} {$matches[4]} {$matches[5]}",
-                            'raw' => $line
-                        ];
+            $users = ['www-data', 'root'];
+            $id = 1;
+
+            foreach ($users as $user) {
+                $output = [];
+                exec("sudo crontab -u {$user} -l 2>/dev/null", $output, $code);
+                
+                if ($code === 0) {
+                    foreach ($output as $line) {
+                        $line = trim($line);
+                        
+                        // Skip empty lines and comments
+                        if (empty($line) || str_starts_with($line, '#')) continue;
+                        
+                        // Parse cron line: minute hour day month weekday command
+                        if (preg_match('/^([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+(.+)$/', $line, $matches)) {
+                            $jobs[] = [
+                                'id' => $id++,
+                                'user' => $user,
+                                'minute' => $matches[1],
+                                'hour' => $matches[2],
+                                'day' => $matches[3],
+                                'month' => $matches[4],
+                                'weekday' => $matches[5],
+                                'command' => $matches[6],
+                                'schedule' => "{$matches[1]} {$matches[2]} {$matches[3]} {$matches[4]} {$matches[5]}",
+                                'raw' => $line
+                            ];
+                        }
                     }
                 }
             }
@@ -67,6 +71,7 @@ class CronController extends Controller
     {
         try {
             $request->validate([
+                'user' => 'nullable|string|in:www-data,root',
                 'minute' => 'required|string',
                 'hour' => 'required|string',
                 'day' => 'required|string',
@@ -75,6 +80,7 @@ class CronController extends Controller
                 'command' => 'required|string'
             ]);
 
+            $user = $request->input('user', 'www-data');
             $minute = $request->input('minute');
             $hour = $request->input('hour');
             $day = $request->input('day');
@@ -85,7 +91,7 @@ class CronController extends Controller
             $cronLine = "{$minute} {$hour} {$day} {$month} {$weekday} {$command}";
 
             // Get existing crontab
-            exec('sudo crontab -u www-data -l 2>/dev/null', $existing, $code);
+            exec("sudo crontab -u {$user} -l 2>/dev/null", $existing, $code);
             $crontab = $code === 0 ? implode("\n", $existing) : '';
             
             // Add new job
@@ -94,7 +100,7 @@ class CronController extends Controller
             // Write back
             $tempFile = '/tmp/crontab_' . uniqid();
             file_put_contents($tempFile, $crontab);
-            exec("sudo crontab -u www-data {$tempFile} 2>&1", $output, $resultCode);
+            exec("sudo crontab -u {$user} {$tempFile} 2>&1", $output, $resultCode);
             unlink($tempFile);
 
             if ($resultCode !== 0) {
@@ -120,6 +126,7 @@ class CronController extends Controller
     {
         try {
             $request->validate([
+                'user' => 'required|string|in:www-data,root',
                 'old_command' => 'required|string',
                 'minute' => 'required|string',
                 'hour' => 'required|string',
@@ -129,6 +136,7 @@ class CronController extends Controller
                 'command' => 'required|string'
             ]);
 
+            $user = $request->input('user');
             $oldCommand = $request->input('old_command');
             $minute = $request->input('minute');
             $hour = $request->input('hour');
@@ -140,7 +148,7 @@ class CronController extends Controller
             $newCronLine = "{$minute} {$hour} {$day} {$month} {$weekday} {$command}";
 
             // Get existing crontab
-            exec('sudo crontab -u www-data -l 2>/dev/null', $existing, $code);
+            exec("sudo crontab -u {$user} -l 2>/dev/null", $existing, $code);
             
             if ($code !== 0) {
                 return response()->json(['error' => 'No crontab found'], 404);
@@ -165,7 +173,7 @@ class CronController extends Controller
             // Write back
             $tempFile = '/tmp/crontab_' . uniqid();
             file_put_contents($tempFile, implode("\n", $newLines) . "\n");
-            exec("sudo crontab -u www-data {$tempFile} 2>&1", $output, $resultCode);
+            exec("sudo crontab -u {$user} {$tempFile} 2>&1", $output, $resultCode);
             unlink($tempFile);
 
             return response()->json([
@@ -183,10 +191,16 @@ class CronController extends Controller
     public function deleteJob(Request $request)
     {
         try {
+            $request->validate([
+                'user' => 'required|string|in:www-data,root',
+                'command' => 'required|string'
+            ]);
+
+            $user = $request->input('user');
             $command = $request->input('command');
 
             // Get existing crontab
-            exec('sudo crontab -u www-data -l 2>/dev/null', $existing, $code);
+            exec("sudo crontab -u {$user} -l 2>/dev/null", $existing, $code);
             
             if ($code !== 0) {
                 return response()->json(['error' => 'No crontab found'], 404);
@@ -203,7 +217,7 @@ class CronController extends Controller
             // Write back
             $tempFile = '/tmp/crontab_' . uniqid();
             file_put_contents($tempFile, implode("\n", $newLines) . "\n");
-            exec("sudo crontab -u www-data {$tempFile} 2>&1", $output, $resultCode);
+            exec("sudo crontab -u {$user} {$tempFile} 2>&1", $output, $resultCode);
             unlink($tempFile);
 
             return response()->json([
@@ -221,10 +235,16 @@ class CronController extends Controller
     public function runNow(Request $request)
     {
         try {
+            $request->validate([
+                'user' => 'required|string|in:www-data,root',
+                'command' => 'required|string'
+            ]);
+
+            $user = $request->input('user');
             $command = $request->input('command');
             
-            // Run in background
-            exec("cd /usr/local/nimbus && sudo -u www-data {$command} > /tmp/cron_output.log 2>&1 &");
+            // Run in background as the correct user
+            exec("cd /usr/local/nimbus && sudo -u {$user} {$command} > /tmp/cron_output.log 2>&1 &");
             
             // Wait a moment and get output
             sleep(1);
@@ -232,7 +252,7 @@ class CronController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Job executed',
+                'message' => "Job executed as {$user}",
                 'output' => $output
             ]);
         } catch (\Exception $e) {
