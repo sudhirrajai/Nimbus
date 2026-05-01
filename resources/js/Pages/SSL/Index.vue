@@ -15,11 +15,44 @@
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
               </button>
-              <button class="btn bg-gradient-success mb-0" @click="renewAllCerts" :disabled="loading || renewingAll">
+              <button class="btn bg-gradient-success mb-0" @click="renewAllCerts" :disabled="loading || renewingAll || !certbotInstalled">
                 <span v-if="renewingAll" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">autorenew</i>
                 Renew All
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Certbot Not Installed Banner -->
+      <div class="row mb-4" v-if="certbotChecked && !certbotInstalled">
+        <div class="col-12">
+          <div class="card border border-warning">
+            <div class="card-body p-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                  <div class="icon icon-shape bg-gradient-warning shadow text-center border-radius-md me-3">
+                    <i class="material-symbols-rounded opacity-10" style="font-size: 1.5rem;">warning</i>
+                  </div>
+                  <div>
+                    <h6 class="mb-0 text-sm">Certbot Not Installed</h6>
+                    <p class="text-xs text-secondary mb-0">
+                      Certbot is required to issue and manage Let's Encrypt SSL certificates.
+                      Install it to enable SSL management.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  class="btn bg-gradient-warning mb-0 ms-3" 
+                  @click="installCertbot"
+                  :disabled="installingCertbot"
+                >
+                  <span v-if="installingCertbot" class="spinner-border spinner-border-sm me-1"></span>
+                  <i v-else class="material-symbols-rounded text-sm me-1">download</i>
+                  Install Certbot
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -138,10 +171,16 @@
                           </i>
                           <div>
                             <h6 class="mb-0 text-sm">{{ domain.domain }}</h6>
+                            <span v-if="domain.sslSource" class="badge badge-sm" :class="getSourceBadgeClass(domain.sslSource)">
+                              {{ getSourceLabel(domain.sslSource) }}
+                            </span>
                           </div>
                         </div>
                       </td>
                       <td>
+                        <div v-if="!domain.is_active" class="badge badge-sm bg-gradient-danger mb-1" :title="`Point A record to ${domain.server_ip}`">
+                          Inactive DNS
+                        </div>
                         <span class="badge badge-sm" :class="getStatusBadgeClass(domain.status)">
                           {{ getStatusLabel(domain.status) }}
                         </span>
@@ -170,7 +209,8 @@
                           v-if="!domain.hasSsl"
                           class="btn btn-sm bg-gradient-success mb-0"
                           @click="installSsl(domain)"
-                          :disabled="installing === domain.domain"
+                          :disabled="installing === domain.domain || !certbotInstalled || !domain.is_active"
+                          :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate')"
                         >
                           <span v-if="installing === domain.domain" class="spinner-border spinner-border-sm me-1"></span>
                           <i v-else class="material-symbols-rounded text-xs me-1">add_circle</i>
@@ -182,7 +222,7 @@
                           <button 
                             class="btn btn-link text-info mb-0 px-2"
                             @click="renewSsl(domain)"
-                            :disabled="renewing === domain.domain"
+                            :disabled="renewing === domain.domain || !certbotInstalled"
                             title="Renew certificate"
                           >
                             <span v-if="renewing === domain.domain" class="spinner-border spinner-border-sm"></span>
@@ -198,6 +238,7 @@
                           <button 
                             class="btn btn-link text-danger mb-0 px-2"
                             @click="confirmRemove(domain)"
+                            :disabled="!certbotInstalled"
                             title="Remove certificate"
                           >
                             <i class="material-symbols-rounded text-sm">delete</i>
@@ -231,6 +272,14 @@
                 <p class="mb-0 font-weight-bold">{{ selectedDomain.domain }}</p>
               </div>
               <div class="mb-3">
+                <label class="text-xs text-uppercase text-secondary">SSL Source</label>
+                <p class="mb-0">
+                  <span class="badge badge-sm" :class="getSourceBadgeClass(selectedDomain.sslSource)">
+                    {{ getSourceLabel(selectedDomain.sslSource) }}
+                  </span>
+                </p>
+              </div>
+              <div class="mb-3">
                 <label class="text-xs text-uppercase text-secondary">Issuer</label>
                 <p class="mb-0">{{ selectedDomain.issuer }}</p>
               </div>
@@ -259,7 +308,7 @@
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" @click="showDetailsModal = false">Close</button>
-              <button class="btn bg-gradient-info" @click="renewFromDetails">
+              <button class="btn bg-gradient-info" @click="renewFromDetails" :disabled="!certbotInstalled">
                 <i class="material-symbols-rounded text-xs me-1">autorenew</i>
                 Renew Now
               </button>
@@ -335,8 +384,11 @@ const installing = ref(null)
 const renewing = ref(null)
 const renewingAll = ref(false)
 const removing = ref(false)
+const installingCertbot = ref(false)
 
 const domains = ref([])
+const certbotInstalled = ref(true) // Assume true until checked
+const certbotChecked = ref(false)
 
 const showDetailsModal = ref(false)
 const showRemoveModal = ref(false)
@@ -378,10 +430,41 @@ const loadDomains = async () => {
     loading.value = true
     const response = await axios.get('/ssl/domains')
     domains.value = response.data.domains
+    
+    // Update certbot status from the response
+    if (response.data.certbotInstalled !== undefined) {
+      certbotInstalled.value = response.data.certbotInstalled
+      certbotChecked.value = true
+    }
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to load domains')
   } finally {
     loading.value = false
+  }
+}
+
+const installCertbot = async () => {
+  try {
+    installingCertbot.value = true
+    showAlert('info', 'Installing Certbot... This may take a minute.')
+    
+    const response = await axios.post('/ssl/install-certbot')
+    
+    showAlert('success', response.data.message || 'Certbot installed successfully')
+    certbotInstalled.value = true
+    
+    // Reload to refresh status
+    await loadDomains()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to install Certbot')
+    if (error.response?.data?.error) {
+      outputTitle.value = 'Certbot Installation Failed'
+      outputContent.value = error.response.data.error
+      outputSuccess.value = false
+      showOutputModal.value = true
+    }
+  } finally {
+    installingCertbot.value = false
   }
 }
 
@@ -423,6 +506,24 @@ const getStatusLabel = (status) => {
     no_ssl: 'No SSL'
   }
   return labels[status] || 'Unknown'
+}
+
+const getSourceBadgeClass = (source) => {
+  const classes = {
+    letsencrypt: 'bg-gradient-success',
+    nginx_custom: 'bg-gradient-info',
+    detected_live: 'bg-gradient-dark',
+  }
+  return classes[source] || 'bg-gradient-secondary'
+}
+
+const getSourceLabel = (source) => {
+  const labels = {
+    letsencrypt: "Let's Encrypt",
+    nginx_custom: 'Custom SSL',
+    detected_live: 'Detected (Live)',
+  }
+  return labels[source] || source || 'Unknown'
 }
 
 const getExpiryClass = (daysRemaining) => {
@@ -550,42 +651,4 @@ const removeSsl = async () => {
 }
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-  position: fixed;
-  z-index: 20050;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
 
-.modal-backdrop {
-  position: fixed;
-  z-index: 20040;
-}
-
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-  z-index: 20060;
-}
-
-.icon-shape {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gap-2 {
-  gap: 0.5rem;
-}
-
-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-</style>

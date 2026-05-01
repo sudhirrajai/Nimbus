@@ -54,43 +54,4 @@ const openInNewTab = () => {
 }
 </script>
 
-<style scoped>
-.phpmyadmin-wrapper {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 60px);
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-  margin: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
 
-.header-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background: #fff;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.header-bar h5 {
-  display: flex;
-  align-items: center;
-  font-weight: 700;
-  color: #344767;
-}
-
-.controls .btn {
-  text-transform: uppercase;
-  font-weight: 700;
-  font-size: 0.75rem;
-}
-
-.pma-iframe {
-  flex: 1;
-  width: 100%;
-  border: none;
-}
-</style>

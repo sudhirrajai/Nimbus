@@ -219,17 +219,4 @@ const notify = (message, type = 'success') => {
 }
 </script>
 
-<style scoped>
-.avatar {
-    width: 64px;
-    height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
 
-.avatar-xl {
-    width: 80px;
-    height: 80px;
-}
-</style>

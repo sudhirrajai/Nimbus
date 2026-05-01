@@ -40,7 +40,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header pb-0 d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">Scheduled Tasks (www-data user)</h6>
+                                <h6 class="mb-0">System Scheduled Tasks</h6>
                                 <button class="btn btn-sm bg-gradient-primary" @click="openCreateModal">
                                     <i class="material-symbols-rounded text-sm me-1">add</i>
                                     New Cron Job
@@ -51,56 +51,47 @@
                                     <i class="material-symbols-rounded mb-2" style="font-size: 48px;">schedule</i>
                                     <p>No cron jobs configured. Create one to get started.</p>
                                 </div>
-
                                 <div v-else class="table-responsive">
                                     <table class="table align-items-center mb-0">
                                         <thead>
                                             <tr>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Schedule</th>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Command</th>
-                                                <th
-                                                    class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                                                    Actions</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">User</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Schedule</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Command</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr v-for="job in jobs" :key="job.id">
+                                                <td class="ps-4">
+                                                    <span :class="['badge badge-sm', job.user === 'root' ? 'bg-gradient-danger' : 'bg-gradient-info']">
+                                                        {{ job.user }}
+                                                    </span>
+                                                </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        <div
-                                                            class="avatar avatar-sm bg-gradient-info rounded-circle me-2">
-                                                            <i
-                                                                class="material-symbols-rounded text-white text-sm">schedule</i>
+                                                        <div class="avatar avatar-sm bg-gradient-light rounded-circle me-2">
+                                                            <i class="material-symbols-rounded text-dark text-sm">schedule</i>
                                                         </div>
                                                         <div>
-                                                            <code
-                                                                class="text-sm font-weight-bold">{{ job.schedule }}</code>
-                                                            <p class="text-xs text-muted mb-0">{{
-                                                                getScheduleDescription(job) }}</p>
+                                                            <code class="text-sm font-weight-bold">{{ job.schedule }}</code>
+                                                            <p class="text-xs text-muted mb-0">{{ getScheduleDescription(job) }}</p>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <code class="text-sm"
-                                                        style="max-width: 400px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            {{ job.command }}
-                          </code>
+                                                    <code class="text-sm" style="max-width: 400px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                        {{ job.command }}
+                                                    </code>
                                                 </td>
                                                 <td>
-                                                    <button class="btn btn-link text-success p-1" title="Run Now"
-                                                        @click="runNow(job)">
+                                                    <button class="btn btn-link text-success p-1" title="Run Now" @click="runNow(job)">
                                                         <i class="material-symbols-rounded">play_arrow</i>
                                                     </button>
-                                                    <button class="btn btn-link text-primary p-1" title="Edit"
-                                                        @click="editJob(job)">
+                                                    <button class="btn btn-link text-primary p-1" title="Edit" @click="editJob(job)">
                                                         <i class="material-symbols-rounded">edit</i>
                                                     </button>
-                                                    <button class="btn btn-link text-danger p-1" title="Delete"
-                                                        @click="confirmDelete(job)">
+                                                    <button class="btn btn-link text-danger p-1" title="Delete" @click="confirmDelete(job)">
                                                         <i class="material-symbols-rounded">delete</i>
                                                     </button>
                                                 </td>
@@ -163,6 +154,16 @@
                             <button type="button" class="btn-close btn-close-white" @click="showModal = false"></button>
                         </div>
                         <div class="modal-body">
+                            <!-- User Selection -->
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">System User</label>
+                                <select class="form-control form-select" v-model="form.user" :disabled="isEditing">
+                                    <option value="www-data">www-data (Standard Web User)</option>
+                                    <option value="root">root (System Administrator)</option>
+                                </select>
+                                <small class="text-muted">Select which user's crontab to manage</small>
+                            </div>
+
                             <!-- Quick Presets -->
                             <div class="mb-4">
                                 <label class="form-label fw-bold">Quick Presets</label>
@@ -304,6 +305,7 @@ const jobOutput = ref('')
 
 // Form
 const form = ref({
+    user: 'www-data',
     minute: '*',
     hour: '*',
     day: '*',
@@ -329,7 +331,7 @@ const loadJobs = async () => {
 const openCreateModal = () => {
     isEditing.value = false
     editingJob.value = null
-    form.value = { minute: '*', hour: '*', day: '*', month: '*', weekday: '*', command: '' }
+    form.value = { user: 'www-data', minute: '*', hour: '*', day: '*', month: '*', weekday: '*', command: '' }
     showModal.value = true
 }
 
@@ -337,6 +339,7 @@ const editJob = (job) => {
     isEditing.value = true
     editingJob.value = job
     form.value = {
+        user: job.user,
         minute: job.minute,
         hour: job.hour,
         day: job.day,
@@ -384,7 +387,10 @@ const saveJob = async () => {
 const confirmDelete = async (job) => {
     if (!confirm('Delete this cron job?')) return
     try {
-        await axios.post('/cron/delete', { command: job.command })
+        await axios.post('/cron/delete', { 
+            command: job.command,
+            user: job.user
+        })
         await loadJobs()
     } catch (error) {
         alert('Failed: ' + (error.response?.data?.error || error.message))
@@ -395,7 +401,10 @@ const runNow = async (job) => {
     try {
         jobOutput.value = 'Running...'
         showOutputModal.value = true
-        const response = await axios.post('/cron/run', { command: job.command })
+        const response = await axios.post('/cron/run', { 
+            command: job.command,
+            user: job.user
+        })
         jobOutput.value = response.data.output || 'Job completed with no output'
     } catch (error) {
         jobOutput.value = 'Error: ' + (error.response?.data?.error || error.message)
@@ -428,54 +437,4 @@ const getScheduleDescription = (job) => {
 }
 </script>
 
-<style scoped>
-.avatar {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
 
-.terminal-output {
-    background-color: #1e1e2e;
-    color: #a6e3a1;
-    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    padding: 16px;
-    margin: 0;
-    height: 300px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
-
-/* Form input styling */
-.form-control {
-    background-color: #fff !important;
-    border: 1px solid #d2d6da !important;
-    border-radius: 0.5rem !important;
-    padding: 0.625rem 0.75rem !important;
-    font-size: 0.875rem !important;
-    color: #495057 !important;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
-}
-
-.form-control:focus {
-    border-color: #e91e63 !important;
-    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
-    outline: none !important;
-}
-
-.form-control::placeholder {
-    color: #adb5bd !important;
-    opacity: 1 !important;
-}
-
-.form-label {
-    color: #344767;
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-}
-</style>

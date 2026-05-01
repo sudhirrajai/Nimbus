@@ -63,6 +63,22 @@
                 <i class="material-symbols-rounded text-sm me-1">download</i>
                 Install Nimbus DB
               </button>
+
+              <!-- Force Unlock Button -->
+              <div v-if="lockError" class="mt-4">
+                <div class="alert alert-light border-0 py-3 px-4 rounded-3 d-inline-block text-start">
+                  <div class="d-flex align-items-center mb-2">
+                    <i class="material-symbols-rounded text-warning me-2">lock</i>
+                    <span class="text-sm font-weight-bold">Installation Locked</span>
+                  </div>
+                  <p class="text-xs text-secondary mb-3">Another process might be running. If it's stuck, you can force unlock it.</p>
+                  <button class="btn btn-outline-danger btn-sm mb-0" @click="forceUnlockInstallation" :disabled="unlocking">
+                    <span v-if="unlocking" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="material-symbols-rounded text-sm me-1">lock_open</i>
+                    {{ unlocking ? 'Unlocking...' : 'Force Unlock Installation' }}
+                  </button>
+                </div>
+              </div>
             </div>
             <!-- Terminal view during installation -->
             <div class="card-body" v-else>
@@ -450,6 +466,8 @@ const creatingUser = ref(false)
 const assigning = ref(false)
 const deletingDb = ref(false)
 const updatingPassword = ref(false)
+const unlocking = ref(false)
+const lockError = ref(false)
 
 const status = ref({ checked: false, viewerInstalled: false })
 const credentials = ref(null)
@@ -478,7 +496,7 @@ const availablePrivileges = [
   'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP',
   'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES',
   'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE',
-  'ALTER ROUTINE', 'EVENT', 'TRIGGER'
+  'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'
 ]
 
 const alert = ref({ show: false, type: 'success', message: '' })
@@ -550,13 +568,37 @@ const installPhpMyAdmin = async () => {
       status.value.viewerInstalled = true
       installing.value = false
       showAlert('success', response.data.message)
+      lockError.value = false
     }
   } catch (error) {
     const errMsg = error.response?.data?.error || 'Failed to install Nimbus DB'
     const details = error.response?.data?.details || ''
     showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
     console.error('Database Viewer install error:', error.response?.data)
+    
+    if (error.response?.status === 409) {
+      lockError.value = true
+    }
+    
     installing.value = false
+  }
+}
+
+const forceUnlockInstallation = async () => {
+  if (!confirm('Are you sure you want to force unlock? Only do this if you are certain no other installation is running, otherwise system corruption might occur.')) {
+    return
+  }
+
+  try {
+    unlocking.value = true
+    const response = await axios.post('/database/clear-lock')
+    showAlert('success', response.data.message)
+    lockError.value = false
+    await checkStatus()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to clear lock')
+  } finally {
+    unlocking.value = false
   }
 }
 
@@ -793,29 +835,4 @@ const openPhpMyAdmin = async (db) => {
 }
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-  position: fixed;
-  z-index: 20050;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
 
-.modal-backdrop {
-  position: fixed;
-  z-index: 20040;
-}
-
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-  z-index: 20060;
-}
-
-.gap-2 {
-  gap: 0.5rem;
-}
-</style>

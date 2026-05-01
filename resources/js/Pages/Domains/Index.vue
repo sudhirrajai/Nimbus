@@ -52,44 +52,48 @@
                     </tr>
                   </thead>
 
-                  <tbody>
-                    <tr v-for="domain in domains" :key="domain">
+                   <tbody>
+                    <tr v-for="domain in domains" :key="domain.name" :class="{ 'opacity-6': !domain.is_active }">
                       <td>
                         <div class="d-flex px-2 py-1">
                           <div class="d-flex flex-column justify-content-center">
-                            <h6 class="mb-0 text-sm">{{ domain }}</h6>
-                            <p class="text-xs text-secondary mb-0">/var/www/{{ domain }}</p>
+                            <h6 class="mb-0 text-sm">
+                              {{ domain.name }}
+                              <i v-if="!domain.is_active" class="material-symbols-rounded text-xs text-warning ms-1" title="DNS not pointing to this server">warning</i>
+                            </h6>
+                            <p class="text-xs text-secondary mb-0">/var/www/{{ domain.name }}</p>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <span class="badge badge-sm bg-gradient-success">Active</span>
+                        <span v-if="domain.is_active" class="badge badge-sm bg-gradient-success">Active</span>
+                        <span v-else class="badge badge-sm bg-gradient-warning" :title="`Point A record to ${domain.server_ip}`">Configuring</span>
                       </td>
                       <td class="align-middle text-center">
                         <button 
                           class="btn btn-link text-info mb-0 px-2" 
-                          @click="viewWebsite(domain)"
+                          @click="viewWebsite(domain.name)"
                           title="View website"
                         >
                           <i class="material-symbols-rounded text-sm">visibility</i>
                         </button>
                         <button 
                           class="btn btn-link text-primary mb-0 px-2" 
-                          @click="openFileManager(domain)"
+                          @click="openFileManager(domain.name)"
                           title="File Manager"
                         >
                           <i class="material-symbols-rounded text-sm">folder</i>
                         </button>
                         <button 
                           class="btn btn-link text-secondary mb-0 px-2" 
-                          @click="openEditModal(domain)"
+                          @click="openEditModal(domain.name)"
                           title="Edit domain"
                         >
                           <i class="material-symbols-rounded text-sm">edit</i>
                         </button>
                         <button 
                           class="btn btn-link text-danger mb-0 px-2" 
-                          @click="confirmDelete(domain)"
+                          @click="confirmDelete(domain.name)"
                           title="Delete domain"
                         >
                           <i class="material-symbols-rounded text-sm">delete</i>
@@ -132,6 +136,18 @@
             </div>
 
             <div class="modal-body">
+              <!-- DNS Tip -->
+              <div v-if="!isEdit" class="alert alert-info py-2 mb-3 text-white">
+                <div class="d-flex align-items-center">
+                  <i class="material-symbols-rounded me-2 text-sm">info</i>
+                  <small>
+                    <strong>Tip:</strong> Point your domain's <strong>A record</strong> to 
+                    <code class="text-white bg-dark px-1 rounded">{{ serverIp || 'fetching...' }}</code> 
+                    before adding it here.
+                  </small>
+                </div>
+              </div>
+
               <div class="form-group">
                 <label class="form-control-label">Domain Name</label>
                 <div class="input-group input-group-outline" :class="{ 'is-invalid': validationError }">
@@ -234,6 +250,7 @@ import axios from 'axios'
 import { router } from '@inertiajs/vue3'
 
 const domains = ref([])
+const serverIp = ref("")
 const showModal = ref(false)
 const showDeleteModal = ref(false)
 const isEdit = ref(false)
@@ -290,7 +307,8 @@ const loadDomains = async () => {
   try {
     loading.value = true
     const res = await axios.get('/domains/api')
-    domains.value = res.data
+    domains.value = res.data.domains
+    serverIp.value = res.data.server_ip
   } catch (error) {
     showAlert('danger', 'Failed to load domains')
     console.error(error)
@@ -407,32 +425,3 @@ const closeModal = () => {
 }
 </script>
 
-<style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.modal-content {
-  border: none;
-  border-radius: 1rem;
-}
-
-.is-invalid {
-  border-color: #f44335 !important;
-}
-
-.invalid-feedback {
-  color: #f44335;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
-.btn-link {
-  text-decoration: none;
-}
-
-.btn-link:hover i {
-  transform: scale(1.1);
-  transition: transform 0.2s;
-}
-</style>

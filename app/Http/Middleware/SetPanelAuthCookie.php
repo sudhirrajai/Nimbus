@@ -16,7 +16,7 @@ class SetPanelAuthCookie
     {
         $response = $next($request);
 
-        if (auth()->check()) {
+        if (auth()->check() && method_exists($response, 'cookie')) {
             // Set a cookie that nginx can verify
             // This cookie indicates the user is logged into the panel
             $response->cookie(

@@ -335,17 +335,4 @@ const loadUsage = async () => {
 }
 </script>
 
-<style scoped>
-.icon-shape {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
 
-.progress {
-    background-color: #e9ecef;
-    border-radius: 0.5rem;
-}
-</style>

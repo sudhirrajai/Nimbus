@@ -69,7 +69,7 @@ class DatabaseController extends Controller
             $scriptLockFile   = $lockFile;
             $scriptLogFile    = $logFile;
             $scriptStatusFile = $statusFile;
-            $script = <<<BASH
+$script = <<<BASH
 #!/bin/bash
 LOG_FILE="{$scriptLogFile}"
 STATUS_FILE="{$scriptStatusFile}"
@@ -78,18 +78,22 @@ cleanup() { rm -f "\$LOCK_FILE"; }
 trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"
 ADMINER_VERSION="4.8.1"
-GH_URL="#"
-ALT_URL="https://www.vmcore.in"
+GH_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
+ALT_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
 echo "Creating Database Viewer directory..."; sudo mkdir -p "\$ADMINER_STORE"
 echo "Downloading Database Viewer \${ADMINER_VERSION}..."
-sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+sudo curl -fsSLk "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
-    echo "Primary failed, trying vmcore.in..."
-    sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+    echo "Primary failed, trying alternative..."
+    sudo curl -fsSLk "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
 fi
 if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then
     echo "ERROR: Failed to download Database Viewer!"; echo "error" > "\$STATUS_FILE"; exit 1
 fi
+BASH;
+            $script = str_replace("\r", '', $script);
+            
+            $script .= <<<BASH
 echo "Setting permissions..."
 sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 755 "\$ADMINER_STORE"; sudo chmod 644 "\$ADMINER_STORE/adminer.php"
 echo "Creating MySQL admin user..."
@@ -318,7 +322,8 @@ BASH;
                     $user = $parts[0];
                     $host = $parts[1];
                     
-                    if ($user === 'root' || $user === '' || $user === 'nimbus_admin') continue;
+                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
+                    if ($user === '' || in_array($user, $systemUsers)) continue;
                     
                     $privileges = $this->getUserPrivileges($user, $host, $dbName);
                     $result[] = [
@@ -359,7 +364,13 @@ BASH;
                     if (preg_match('/GRANT (.+) ON/', $grantStr, $matches)) {
                         $privList = explode(',', $matches[1]);
                         foreach ($privList as $priv) {
-                            $privileges[] = trim($priv);
+                            $priv = trim($priv);
+                            if ($priv === 'ALL PRIVILEGES' || $priv === 'ALL') {
+                                $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'];
+                                $privileges = array_merge($privileges, $allowedPrivileges);
+                            } else {
+                                $privileges[] = $priv;
+                            }
                         }
                     }
                 }
@@ -559,7 +570,7 @@ BASH;
             $privileges = $request->input('privileges');
 
             // Validate privileges
-            $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER'];
+            $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'];
             $privileges = array_intersect($privileges, $allowedPrivileges);
             
             if (empty($privileges)) {
@@ -606,22 +617,21 @@ BASH;
             $privileges = $request->input('privileges');
 
             // Revoke all existing privileges on this database
-            $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            DB::statement("REVOKE ALL PRIVILEGES ON `{$database}`.* FROM {$escapedUser}@{$escapedHost}");
+            $output = [];
+            exec("sudo mysql -e \"REVOKE ALL PRIVILEGES ON \`{$database}\`.* FROM '{$username}'@'{$host}'\" 2>&1", $output, $code);
 
             // Grant new privileges
             if (!empty($privileges)) {
-                $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER'];
+                $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'];
                 $privileges = array_intersect($privileges, $allowedPrivileges);
                 
                 if (!empty($privileges)) {
                     $privilegeStr = implode(', ', $privileges);
-                    DB::statement("GRANT {$privilegeStr} ON `{$database}`.* TO {$escapedUser}@{$escapedHost}");
+                    exec("sudo mysql -e \"GRANT {$privilegeStr} ON \`{$database}\`.* TO '{$username}'@'{$host}'\" 2>&1", $output, $code);
                 }
             }
 
-            DB::statement("FLUSH PRIVILEGES");
+            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
 
             return response()->json([
                 'message' => "Permissions updated for user '{$username}' on database '{$database}'"
@@ -649,10 +659,16 @@ BASH;
             $password = $request->input('password');
 
             $escapedUser = $this->escapeIdentifier($username);
-            $escapedHost = $this->escapeString($host);
-            $escapedPass = $this->escapeString($password);
-            DB::statement("ALTER USER {$escapedUser}@{$escapedHost} IDENTIFIED BY {$escapedPass}");
-            DB::statement("FLUSH PRIVILEGES");
+            $escapedPass = escapeshellarg($password);
+            
+            $output = [];
+            exec("sudo mysql -e \"ALTER USER '{$username}'@'{$host}' IDENTIFIED BY {$escapedPass}\" 2>&1", $output, $code);
+            
+            if ($code !== 0) {
+                throw new \Exception("Failed to update password: " . implode("\n", $output));
+            }
+            
+            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
 
             return response()->json([
                 'message' => "Password updated for user '{$username}'@'{$host}'"
@@ -811,7 +827,7 @@ BASH;
                     $host = $parts[1];
                     
                     // Skip system users and nimbus internal users
-                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube'];
+                    $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
                     if (in_array($username, $systemUsers)) continue;
                     
                     $result[] = [
@@ -990,13 +1006,38 @@ PHP;
     }
 
     /**
-     * Create the Database Viewer SSO Wrapper (public/db/index.php)
+     * Forcefully clear the installation lock file
      */
-    private function createDatabaseViewerWrapper()
+    public function clearInstallLock()
     {
-        if (!file_exists($this->adminerPublicPath)) {
-            mkdir($this->adminerPublicPath, 0755, true);
+        try {
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            
+            if (file_exists($lockFile)) {
+                $this->executeSudoCommand("rm -f {$lockFile}");
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Installation lock cleared successfully. You can now start new processes.'
+                ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'No active lock file found.'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to clear install lock: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Create the SSO wrapper for Adminer
+     */
+    public function createDatabaseViewerWrapper()
+    {
+        // Use sudo to create the directory if it doesn't exist
+        $this->executeSudoCommand("mkdir -p {$this->adminerPublicPath}");
 
         $wrapperPath = $this->adminerPublicPath . '/index.php';
         
@@ -1020,13 +1061,28 @@ if (isset($_SESSION['adminer_created']) && (time() - $_SESSION['adminer_created'
 
 function adminer_object() {
     class NimbusDB extends Adminer {
-        function name() { return ''; }
+        function name() { return 'Nimbus DB'; }
+        
         function credentials() {
+            if (isset($_POST['auth']['username'])) {
+                return [$_POST['auth']['server'] ?? 'localhost', $_POST['auth']['username'], $_POST['auth']['password'] ?? ''];
+            }
+            if (isset($_GET['username'])) {
+                return parent::credentials();
+            }
             return [$_SESSION['adminer_server'] ?? 'localhost', $_SESSION['adminer_username'], $_SESSION['adminer_password']];
         }
+        
         function database() {
+            if (isset($_POST['auth']['db'])) {
+                return $_POST['auth']['db'];
+            }
+            if (isset($_GET['username']) || isset($_GET['db'])) {
+                return parent::database();
+            }
             return $_SESSION['adminer_db'] ?? '';
         }
+        
         function login($login, $password) {
             return true;
         }
@@ -1035,10 +1091,34 @@ function adminer_object() {
 }
 
 ob_start(function($buffer) {
-    // Replace text branding safely without breaking file paths (like adminer.css)
+    // Replace text branding safely
+    $buffer = preg_replace('/<h2[^>]*>Login<\/h2>/i', '<h2>Nimbus DB Login</h2>', $buffer);
+    $buffer = str_replace('<title>Login - Adminer</title>', '<title>Login - Nimbus DB</title>', $buffer);
+    $buffer = str_replace('<title>Adminer</title>', '<title>Nimbus DB</title>', $buffer);
     $buffer = str_replace('Adminer', 'System', $buffer);
-    $buffer = str_replace('<title>System', '<title>Database', $buffer);
-    $buffer = str_replace('Logout successful.', 'Logged out successfully.', $buffer);
+    $buffer = str_replace('<title>System', '<title>Nimbus DB', $buffer);
+    
+    // Remove donation message
+    $buffer = preg_replace('/<i[^>]*>\s*Thanks for using.*?donating.*?<\/i>/is', '', $buffer);
+    $buffer = preg_replace('/Thanks for using.*?donating.*?<\/a>\./is', '', $buffer);
+    
+    // Inject JS to simplify the sidebar tables list
+    $js = <<<JS
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll("#tables li").forEach(function(li) {
+        var links = li.querySelectorAll("a");
+        if (links.length >= 2) {
+            links[0].href = links[1].href; // Make table name go to data directly
+            links[1].style.display = "none"; // Hide 'select' text
+        }
+    });
+});
+</script>
+</head>
+JS;
+    $buffer = str_replace('</head>', $js, $buffer);
+    
     return $buffer;
 });
 
@@ -1046,8 +1126,16 @@ include '/usr/share/adminer/adminer.php';
 ob_end_flush();
 PHP;
 
-        file_put_contents($wrapperPath, $content);
-        chmod($wrapperPath, 0644);
+        // Write to a temporary file first
+        $tempPath = '/tmp/nimbus_db_wrapper_' . time() . '.php';
+        file_put_contents($tempPath, $content);
+
+        // Move to public path using sudo
+        $this->executeSudoCommand("mv {$tempPath} {$wrapperPath}");
+        $this->executeSudoCommand("chmod 644 {$wrapperPath}");
+        
+        // Ensure it's owned by the web user
+        $this->executeSudoCommand("chown -R www-data:www-data " . dirname($wrapperPath));
     }
 
     /**

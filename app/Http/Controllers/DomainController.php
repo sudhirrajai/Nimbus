@@ -5,13 +5,14 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Storage;
 
 class DomainController extends Controller
 {
     private $basePath = '/var/www/';
 
     /**
-     * Return all domain folders
+     * Return all domain folders with DNS status
      */
     public function index()
     {
@@ -22,13 +23,21 @@ class DomainController extends Controller
                 ], 500);
             }
 
+            $serverIp = $this->getServerIp();
+
             $directories = collect(File::directories($this->basePath))
-                ->map(function ($path) {
-                    return basename($path);
+                ->map(function ($path) use ($serverIp) {
+                    $domain = basename($path);
+                    return [
+                        'name' => $domain,
+                        'path' => $path,
+                        'is_active' => $this->checkDomainDns($domain, $serverIp),
+                        'server_ip' => $serverIp
+                    ];
                 })
-                ->filter(function ($name) {
+                ->filter(function ($item) {
                     // Ignore system directories and the Nimbus control panel itself
-                    return !in_array(strtolower($name), [
+                    return !in_array(strtolower($item['name']), [
                         'html', 
                         'default', 
                         'public', 
@@ -38,12 +47,64 @@ class DomainController extends Controller
                 })
                 ->values();
 
-            return response()->json($directories);
+            return response()->json([
+                'domains' => $directories,
+                'server_ip' => $serverIp
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Failed to load domains: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get the server's public IP
+     */
+    private function getServerIp()
+    {
+        return cache()->remember('server_public_ip', 3600, function () {
+            try {
+                // Try multiple services in case one is down
+                $services = [
+                    'https://api.ipify.org',
+                    'https://icanhazip.com',
+                    'https://ifconfig.me/ip'
+                ];
+
+                foreach ($services as $service) {
+                    $ip = @file_get_contents($service);
+                    if ($ip && filter_var(trim($ip), FILTER_VALIDATE_IP)) {
+                        return trim($ip);
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to fetch server public IP: " . $e->getMessage());
+            }
+
+            // Fallback to server IP if available
+            return request()->server('SERVER_ADDR') ?: '127.0.0.1';
+        });
+    }
+
+    /**
+     * Check if a domain points to the server IP
+     */
+    private function checkDomainDns($domain, $serverIp)
+    {
+        try {
+            $records = @dns_get_record($domain, DNS_A);
+            if (!$records) return false;
+
+            foreach ($records as $record) {
+                if (isset($record['ip']) && $record['ip'] === $serverIp) {
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("DNS check failed for $domain: " . $e->getMessage());
+        }
+        return false;
     }
 
     /**
@@ -97,7 +158,8 @@ class DomainController extends Controller
             // Create folder structure using sudo for proper permissions
             $this->executeSudoCommand("mkdir -p {$path}/public {$path}/logs");
             $this->executeSudoCommand("chown -R www-data:www-data {$path}");
-            $this->executeSudoCommand("chmod -R 755 {$path}");
+            $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
+            $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
             $createdDirs = true;
 
             // Create basic index file
@@ -110,6 +172,9 @@ class DomainController extends Controller
             // Create Nginx configuration
             $this->createNginxConfig($domain);
             $createdNginx = true;
+
+            // Ensure all managed domains have the directories/files their nginx configs expect
+            $this->repairManagedDomainStructures();
 
             // Test Nginx configuration before reloading
             $this->executeSudoCommand("nginx -t");
@@ -206,6 +271,9 @@ class DomainController extends Controller
             $this->createNginxConfig($newDomain);
             $newConfigCreated = true;
 
+            // Ensure all managed domains have the directories/files their nginx configs expect
+            $this->repairManagedDomainStructures();
+
             // Test and reload Nginx
             $this->executeSudoCommand("nginx -t");
             $this->executeSudoCommand("systemctl reload nginx");
@@ -283,6 +351,9 @@ class DomainController extends Controller
                 \Log::info("Removing Nginx config: $configPath");
                 $this->executeSudoCommand("rm -f {$configPath}");
             }
+
+            // Ensure remaining managed domains still have the directories/files their nginx configs expect
+            $this->repairManagedDomainStructures();
 
             // Step 3: Test and reload Nginx configuration
             \Log::info("Testing Nginx configuration...");
@@ -496,6 +567,68 @@ NGINX;
             \Log::info("Deleting Nginx config: $configPath");
             $this->executeSudoCommand("rm -f {$configPath}");
         }
+    }
+
+    /**
+     * Ensure all managed domain folders contain the structure expected by nginx configs.
+     */
+    public function repairManagedDomainStructures()
+    {
+        if (!File::exists($this->basePath)) {
+            return;
+        }
+
+        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
+
+        foreach (File::directories($this->basePath) as $directory) {
+            $name = basename($directory);
+
+            if (in_array(strtolower($name), $protectedDirs, true)) {
+                continue;
+            }
+
+            $this->ensureDomainStructure($directory);
+        }
+    }
+
+    /**
+     * Create the directories and log files referenced by the nginx template.
+     */
+    private function ensureDomainStructure($domainPath)
+    {
+        $publicPath = $domainPath . '/public';
+        $logsPath = $domainPath . '/logs';
+        $accessLogPath = $logsPath . '/access.log';
+        $errorLogPath = $logsPath . '/error.log';
+
+        $this->executeSudoCommand(
+            'mkdir -p '
+            . escapeshellarg($publicPath)
+            . ' '
+            . escapeshellarg($logsPath)
+        );
+
+        $this->executeSudoCommand(
+            'touch '
+            . escapeshellarg($accessLogPath)
+            . ' '
+            . escapeshellarg($errorLogPath)
+        );
+
+        $this->executeSudoCommand(
+            'chown -R www-data:www-data ' . escapeshellarg($domainPath)
+        );
+        $this->executeSudoCommand(
+            'chmod 2775 '
+            . escapeshellarg($domainPath)
+            . ' '
+            . escapeshellarg($publicPath)
+            . ' '
+            . escapeshellarg($logsPath)
+        );
+        $this->executeSudoCommand(
+            'chmod 664 ' . escapeshellarg($accessLogPath) . ' ' . escapeshellarg($errorLogPath)
+        );
     }
 
     /**

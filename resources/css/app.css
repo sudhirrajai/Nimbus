@@ -1,15 +1,29 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* Modal z-index fix to appear over sidenav */
+.modal-backdrop {
+    z-index: 999998 !important;
+}
+.modal {
+    z-index: 999999 !important;
+}
+
+/* Darker borders for form inputs */
+.form-control, .form-select {
+    border: 1px solid #9ca3af !important;
+}
+.form-control:focus, .form-select:focus {
+    border-color: #e91e63 !important;
+}
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
-
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
-
 .sidebar-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1040;
   }
@@ -18,3 +32,1319 @@
     .show-sidebar .left-sidebar { transform: translateX(0); }
     .body-wrapper { margin-left: 0 !important; }
   }
+/* --- Extracted from Vue Components --- */
+/* From: resources\js\Pages\Auth\Login.vue */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  font-family: 'Inter', sans-serif;
+}
+.login-container {
+  display: flex;
+  width: 100%;
+  max-width: 1000px;
+  min-height: 600px;
+  margin: 20px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+}
+/* Left Branding Section */
+.branding-section {
+  flex: 1;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  padding: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.branding-section::before {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  top: -100px;
+  right: -100px;
+}
+.branding-section::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  bottom: -50px;
+  left: -50px;
+}
+.brand-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: white;
+}
+.logo-wrapper {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 25px;
+  backdrop-filter: blur(10px);
+}
+.logo-icon {
+  font-size: 56px;
+  color: white;
+}
+.brand-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+.brand-subtitle {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 0 0 40px;
+}
+.features-list {
+  text-align: left;
+  margin-top: 30px;
+}
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+.feature-item i {
+  font-size: 22px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 8px;
+  border-radius: 10px;
+}
+/* Right Form Section */
+.form-section {
+  flex: 1;
+  background: #1e1e2f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 50px;
+}
+.form-card {
+  width: 100%;
+  max-width: 380px;
+}
+.form-header {
+  margin-bottom: 35px;
+}
+.form-header h2 {
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.form-header p {
+  color: #8b8b9a;
+  font-size: 0.95rem;
+  margin: 0;
+}
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.form-group label {
+  display: block;
+  color: #a0a0b0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+.input-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-field i {
+  position: absolute;
+  left: 16px;
+  color: #6c6c7e;
+  font-size: 20px;
+}
+.input-field input {
+  width: 100%;
+  padding: 16px 16px 16px 52px;
+  background: #252536;
+  border: 2px solid #2d2d44;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+.input-field input::placeholder {
+  color: #5c5c6e;
+}
+.input-field input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: #2a2a3f;
+}
+.toggle-password {
+  position: absolute;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.toggle-password i {
+  position: static;
+  color: #6c6c7e;
+  font-size: 20px;
+  transition: color 0.2s;
+}
+.toggle-password:hover i {
+  color: #a0a0b0;
+}
+.form-options {
+  display: flex;
+  align-items: center;
+}
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #8b8b9a;
+  font-size: 0.9rem;
+}
+.checkbox-wrapper input {
+  display: none;
+}
+.checkmark {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #3d3d55;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.checkbox-wrapper input:checked + .checkmark {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+}
+.checkbox-wrapper input:checked + .checkmark::after {
+  content: '✓';
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+.btn-submit {
+  width: 100%;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 14px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+.btn-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+.btn-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.btn-submit i {
+  font-size: 20px;
+  transition: transform 0.2s;
+}
+.btn-submit:hover:not(:disabled) i {
+  transform: translateX(4px);
+}
+.loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+.alert-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.alert i {
+  font-size: 20px;
+}
+.form-footer {
+  margin-top: 40px;
+  text-align: center;
+}
+.form-footer p {
+  color: #5c5c6e;
+  font-size: 0.8rem;
+  margin: 0;
+}
+/* Responsive */
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+    max-width: 440px;
+  }
+  .branding-section {
+    padding: 40px 30px;
+  }
+  .features-list {
+    display: none;
+  }
+  .form-section {
+    padding: 40px 30px;
+  }
+}
+/* From: resources\js\Pages\Auth\Setup.vue */
+.setup-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  font-family: 'Inter', sans-serif;
+}
+.setup-container {
+  display: flex;
+  width: 100%;
+  max-width: 1000px;
+  min-height: 650px;
+  margin: 20px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+}
+/* Left Branding Section */
+.branding-section {
+  flex: 1;
+  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+  padding: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.branding-section::before {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  top: -100px;
+  right: -100px;
+}
+.branding-section::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  bottom: -50px;
+  left: -50px;
+}
+.brand-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: white;
+}
+.logo-wrapper {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 25px;
+  backdrop-filter: blur(10px);
+}
+.logo-icon {
+  font-size: 56px;
+  color: white;
+}
+.brand-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+.brand-subtitle {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 0 0 40px;
+}
+.steps-list {
+  text-align: left;
+  margin-top: 40px;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 16px 0;
+  opacity: 0.6;
+  font-size: 1rem;
+}
+.step-item.active {
+  opacity: 1;
+}
+.step-number {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.step-item.active .step-number {
+  background: white;
+  color: #059669;
+}
+/* Right Form Section */
+.form-section {
+  flex: 1;
+  background: #1e1e2f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 50px;
+}
+.form-card {
+  width: 100%;
+  max-width: 400px;
+}
+.form-header {
+  margin-bottom: 30px;
+}
+.form-header h2 {
+  color: #fff;
+  font-size: 1.7rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.form-header p {
+  color: #8b8b9a;
+  font-size: 0.95rem;
+  margin: 0;
+}
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.form-group label {
+  display: block;
+  color: #a0a0b0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.input-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-field i {
+  position: absolute;
+  left: 16px;
+  color: #6c6c7e;
+  font-size: 20px;
+}
+.input-field input {
+  width: 100%;
+  padding: 14px 14px 14px 52px;
+  background: #252536;
+  border: 2px solid #2d2d44;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+.input-field input::placeholder {
+  color: #5c5c6e;
+}
+.input-field input:focus {
+  outline: none;
+  border-color: #10b981;
+  background: #2a2a3f;
+}
+.toggle-password {
+  position: absolute;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.toggle-password i {
+  position: static;
+  color: #6c6c7e;
+  font-size: 20px;
+}
+.password-mismatch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: #f59e0b;
+  font-size: 0.8rem;
+}
+.password-mismatch i {
+  font-size: 16px;
+}
+.btn-submit {
+  width: 100%;
+  padding: 15px 24px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  margin-top: 8px;
+}
+.btn-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+}
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-submit i {
+  font-size: 20px;
+}
+.loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+.alert-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.alert i {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.security-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #2d2d44;
+  color: #5c5c6e;
+  font-size: 0.8rem;
+}
+.security-notice i {
+  font-size: 18px;
+  color: #10b981;
+}
+/* Responsive */
+@media (max-width: 768px) {
+  .setup-container {
+    flex-direction: column;
+    max-width: 440px;
+  }
+  .branding-section {
+    padding: 40px 30px;
+  }
+  .steps-list {
+    display: none;
+  }
+  .form-section {
+    padding: 40px 30px;
+  }
+}
+/* From: resources\js\Pages\Cron\Index.vue */
+.avatar {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.terminal-output {
+    background-color: #1e1e2e;
+    color: #a6e3a1;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 16px;
+    margin: 0;
+    height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+/* Form input styling */
+.form-control {
+    background-color: #fff !important;
+    border: 1px solid #d2d6da !important;
+    border-radius: 0.5rem !important;
+    padding: 0.625rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    color: #495057 !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+.form-control:focus {
+    border-color: #e91e63 !important;
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
+    outline: none !important;
+}
+.form-control::placeholder {
+    color: #adb5bd !important;
+    opacity: 1 !important;
+}
+.form-label {
+    color: #344767;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+/* From: resources\js\Pages\Database\Index.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  z-index: 20050;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.modal-backdrop {
+  position: fixed;
+  z-index: 20040;
+}
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+  z-index: 20060;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+/* From: resources\js\Pages\Database\PhpMyAdmin.vue */
+.phpmyadmin-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px);
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #f0f2f5;
+}
+.header-bar h5 {
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  color: #344767;
+}
+.controls .btn {
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+.pma-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+/* From: resources\js\Pages\Deployments\Create.vue */
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+.step-circle.active {
+  background: #344767;
+  color: white;
+  box-shadow: 0 4px 12px rgba(52, 71, 103, 0.3);
+}
+.step-circle.completed {
+  background: #2dce89;
+  color: white;
+}
+.step-circle.pending {
+  background: #e9ecef;
+  color: #8898aa;
+}
+.step-line {
+  height: 2px;
+  background: #e9ecef;
+  transition: background 0.3s ease;
+}
+.step-line.completed {
+  background: #2dce89;
+}
+.step-item {
+  white-space: nowrap;
+}
+.repo-type-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+.repo-type-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+.active-domain {
+  background-color: rgba(52, 71, 103, 0.05) !important;
+  border-left: 3px solid #344767 !important;
+}
+.list-group-item {
+  transition: all 0.2s ease;
+}
+.list-group-item:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+.cursor-pointer {
+  cursor: pointer;
+}
+code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.bg-gray-100 {
+  background-color: #f8f9fa;
+}
+/* From: resources\js\Pages\Deployments\Index.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+}
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+}
+.btn-link {
+  text-decoration: none;
+}
+.btn-link:hover i {
+  transform: scale(1.1);
+  transition: transform 0.2s;
+}
+code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+/* From: resources\js\Pages\Deployments\Logs.vue */
+.step-status-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bg-success { background-color: #2dce89 !important; }
+.bg-danger { background-color: #f5365c !important; }
+.bg-warning { background-color: #fb6340 !important; }
+.bg-secondary { background-color: #8898aa !important; }
+.terminal-output {
+  background: #1a1a2e;
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.terminal-output pre {
+  color: #e0e0e0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.command-block {
+  background: #f1f3f5;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.command-block code {
+  color: #344767;
+  font-size: 0.8rem;
+  background: none;
+  padding: 0;
+}
+code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.border-success { border-color: #2dce89 !important; }
+.border-danger { border-color: #f5365c !important; }
+.border-warning { border-color: #fb6340 !important; }
+.border-secondary { border-color: #8898aa !important; }
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.card {
+  transition: all 0.2s ease;
+}
+.timeline-item .card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+/* From: resources\js\Pages\Domains\Index.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+}
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+}
+.is-invalid {
+  border-color: #f44335 !important;
+}
+.invalid-feedback {
+  color: #f44335;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+.btn-link {
+  text-decoration: none;
+}
+.btn-link:hover i {
+  transform: scale(1.1);
+  transition: transform 0.2s;
+}
+/* From: resources\js\Pages\Files\FileManager.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  z-index: 20050;
+  /* ensure above sidebar */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.modal-backdrop {
+  position: fixed;
+  z-index: 20040;
+  /* slightly below modal but above everything else */
+}
+/* Keep the modal-content style */
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+  z-index: 20060;
+}
+/* make sure context menu still appears on top of everything */
+.context-menu {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 30000;
+  min-width: 180px;
+  padding: 4px 0;
+}
+/* rest of CSS mostly unchanged */
+.gap-2 {
+  gap: 0.5rem;
+}
+.breadcrumb-item+.breadcrumb-item::before {
+  content: "/";
+}
+.breadcrumb-item a {
+  text-decoration: none;
+}
+.breadcrumb-item a:hover {
+  text-decoration: underline;
+}
+.btn-link {
+  text-decoration: none;
+}
+.btn-link:hover i {
+  transform: scale(1.1);
+  transition: transform 0.2s;
+}
+textarea.font-monospace {
+  font-family: 'Courier New', monospace;
+  line-height: 1.5;
+}
+.file-row {
+  cursor: pointer;
+}
+.file-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+.cursor-pointer {
+  cursor: pointer;
+}
+.context-menu-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+.context-menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+.context-menu-divider {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+  margin: 4px 0;
+}
+/* Modal Icon Styles */
+.modal-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+.modal-icon i {
+  font-size: 24px;
+}
+/* Create Modal Styles */
+.create-modal .modal-header {
+  padding: 24px 24px 0 24px;
+}
+.create-modal .modal-body {
+  padding: 24px;
+}
+.create-modal .modal-footer {
+  padding: 0 24px 24px 24px;
+}
+.create-modal .input-group-text {
+  border-radius: 12px 0 0 12px;
+}
+.create-modal .form-control {
+  border-radius: 0 12px 12px 0;
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  transition: all 0.3s ease;
+}
+.create-modal .form-control:focus {
+  background-color: #fff;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
+}
+/* Copy/Move Modal */
+.copy-move-modal .modal-header {
+  padding: 24px 24px 0 24px;
+}
+.copy-move-modal .modal-body {
+  padding: 24px;
+}
+.copy-move-modal .modal-footer {
+  padding: 0 24px 24px 24px;
+}
+.source-info-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px dashed #dee2e6;
+}
+.copy-move-modal .input-group-text {
+  border-radius: 12px 0 0 12px;
+}
+.copy-move-modal .form-control {
+  border-radius: 0 12px 12px 0;
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  transition: all 0.3s ease;
+}
+.copy-move-modal .form-control:focus {
+  background-color: #fff;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
+}
+/* Text utilities */
+.text-lg {
+  font-size: 32px !important;
+}
+.git-console {
+  background: #1f2235;
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 1rem;
+  min-height: 120px;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+}
+/* Animation for modal appearance */
+.modal.fade.show {
+  animation: modalFadeIn 0.2s ease-out;
+}
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.modal-dialog-centered {
+  animation: modalSlideIn 0.25s ease-out;
+}
+@keyframes modalSlideIn {
+  from {
+    transform: translate(0, -20px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+}
+/* From: resources\js\Pages\Logs\Index.vue */
+.log-viewer {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 16px;
+    border-radius: 8px;
+    height: 500px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+}
+.list-group-item.active {
+    background-color: #e91e63 !important;
+    border-color: #e91e63 !important;
+}
+.btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+/* From: resources\js\Pages\Nginx\Index.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  z-index: 20050;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.modal-backdrop {
+  position: fixed;
+  z-index: 20040;
+}
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+  z-index: 20060;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+textarea.font-monospace {
+  font-family: 'Courier New', monospace;
+  line-height: 1.5;
+}
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+/* From: resources\js\Pages\PHPINI\Index.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  z-index: 20050;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.modal-backdrop {
+  position: fixed;
+  z-index: 20040;
+}
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+  z-index: 20060;
+}
+.icon-shape {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.quick-setting-item {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+}
+.quick-setting-item .form-control {
+  font-family: monospace;
+  font-size: 14px;
+}
+textarea.font-monospace {
+  font-family: 'Courier New', monospace;
+  line-height: 1.5;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+/* From: resources\js\Pages\Profile\Index.vue */
+.avatar {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.avatar-xl {
+    width: 80px;
+    height: 80px;
+}
+/* From: resources\js\Pages\Resources\Index.vue */
+.icon-shape {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.progress {
+    background-color: #e9ecef;
+    border-radius: 0.5rem;
+}
+/* From: resources\js\Pages\SSL\Index.vue */
+.modal {
+  background: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  z-index: 20050;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.modal-backdrop {
+  position: fixed;
+  z-index: 20040;
+}
+.modal-content {
+  border: none;
+  border-radius: 1rem;
+  z-index: 20060;
+}
+.icon-shape {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+/* From: resources\js\Pages\Supervisor\Index.vue */
+.terminal-output {
+    background-color: #1e1e2e;
+    color: #a6e3a1;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 16px;
+    margin: 0;
+    height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.avatar {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* Form input styling */
+.form-control {
+    background-color: #fff !important;
+    border: 1px solid #d2d6da !important;
+    border-radius: 0.5rem !important;
+    padding: 0.625rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    color: #495057 !important;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+.form-control:focus {
+    border-color: #e91e63 !important;
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
+    outline: none !important;
+}
+.form-control::placeholder {
+    color: #adb5bd !important;
+    opacity: 1 !important;
+}
+.form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid #d2d6da;
+}
+.form-check-input:checked {
+    background-color: #e91e63;
+    border-color: #e91e63;
+}
+.form-label {
+    color: #344767;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+/* Config preview */
+.config-preview {
+    background-color: #1e1e2e;
+    color: #a6e3a1;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 16px;
+    border-radius: 8px;
+    height: 350px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    margin: 0;
+}
+.config-editor {
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    background-color: #f8f9fa !important;
+}
+/* Nav tabs */
+.nav-tabs .nav-link {
+    color: #495057;
+}
+.nav-tabs .nav-link.active {
+    color: #e91e63;
+    font-weight: 600;
+}
+/* From: resources\js\Pages\Updates\Index.vue */
+.update-log {
+    background-color: #1e1e2e;
+    color: #a6e3a1;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 16px;
+    border-radius: 8px;
+    height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    margin: 0;
+}

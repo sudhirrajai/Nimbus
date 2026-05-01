@@ -1,6 +1,7 @@
 <template>
   <MainLayout>
-    <div class="container-fluid py-4" @click="closeContextMenu">
+    <div class="container-fluid py-4" @click="closeContextMenu" @dragenter.prevent="handleDragEnter"
+      @dragover.prevent="handleDragOver" @dragleave.prevent="handleDragLeave" @drop.prevent="handleDrop">
 
       <!-- Header -->
       <div class="row mb-4">
@@ -34,62 +35,81 @@
       <!-- Toolbar -->
       <div class="row mb-3">
         <div class="col-12">
-          <div class="card">
+          <div class="card toolbar-card">
             <div class="card-body p-3">
-              <div class="d-flex flex-wrap gap-2 align-items-center">
-                <button class="btn btn-sm bg-gradient-primary mb-0" @click="showCreateFileModal = true">
-                  <i class="material-symbols-rounded text-sm me-1">note_add</i>
-                  New File
-                </button>
-                <button class="btn btn-sm bg-gradient-info mb-0" @click="showCreateDirModal = true">
-                  <i class="material-symbols-rounded text-sm me-1">create_new_folder</i>
-                  New Folder
-                </button>
-                <button class="btn btn-sm bg-gradient-success mb-0" @click="triggerUpload">
+              <!-- Row 1: Primary Actions + Search -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Create group -->
+                <div class="btn-group" role="group">
+                  <button class="btn btn-sm bg-gradient-dark mb-0" @click="showCreateFileModal = true" title="New File">
+                    <i class="material-symbols-rounded text-sm me-1">note_add</i>
+                    New File
+                  </button>
+                  <button class="btn btn-sm bg-gradient-dark mb-0" @click="showCreateDirModal = true" title="New Folder">
+                    <i class="material-symbols-rounded text-sm me-1">create_new_folder</i>
+                    New Folder
+                  </button>
+                </div>
+
+                <!-- Upload -->
+                <button class="btn btn-sm bg-gradient-primary mb-0" @click="triggerUpload">
                   <i class="material-symbols-rounded text-sm me-1">upload</i>
-                  Upload File
+                  Upload
                 </button>
                 <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" />
-                <button v-if="currentPath" class="btn btn-sm bg-gradient-warning mb-0" @click="goUpOneLevel">
+
+                <!-- Navigation -->
+                <div class="toolbar-divider"></div>
+                <button v-if="currentPath" class="btn btn-sm btn-outline-dark mb-0" @click="goUpOneLevel">
                   <i class="material-symbols-rounded text-sm me-1">arrow_upward</i>
-                  Up One Level
+                  Up
                 </button>
-                <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadFiles" :disabled="loading">
-                  <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                <button class="btn btn-sm btn-outline-dark mb-0" @click="loadFiles" :disabled="loading">
+                  <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loading }">refresh</i>
                   Refresh
                 </button>
 
-                <!-- Bulk actions -->
-                <div class="btn-group ms-2" role="group">
-                  <button class="btn btn-sm btn-outline-primary" @click="toggleSelectAll">
-                    <i class="material-symbols-rounded text-sm me-1">select_all</i>
-                    {{ allSelected ? 'Unselect All' : 'Select All' }}
-                  </button>
-                  <button class="btn btn-sm btn-outline-danger" :disabled="!hasSelected" @click="bulkDelete">
-                    <i class="material-symbols-rounded text-sm me-1">delete</i>
-                    Delete Selected
-                  </button>
-                  <button class="btn btn-sm btn-outline-secondary" :disabled="!hasSelected" @click="bulkZip">
-                    <i class="material-symbols-rounded text-sm me-1">folder_zip</i>
-                    Zip Selected
-                  </button>
-                  <button class="btn btn-sm btn-outline-info" :disabled="!hasSelected" @click="bulkCopyMove('copy')">
-                    <i class="material-symbols-rounded text-sm me-1">content_copy</i>
-                    Copy Selected
-                  </button>
-                  <button class="btn btn-sm btn-outline-warning" :disabled="!hasSelected" @click="bulkCopyMove('move')">
-                    <i class="material-symbols-rounded text-sm me-1">drive_file_move</i>
-                    Move Selected
-                  </button>
+                <!-- Search -->
+                <div class="ms-auto d-flex align-items-center gap-2">
+                  <div class="input-group input-group-sm toolbar-search">
+                    <span class="input-group-text bg-transparent border-end-0">
+                      <i class="material-symbols-rounded text-sm text-secondary">search</i>
+                    </span>
+                    <input v-model="searchQuery" type="text" class="form-control border-start-0 ps-0"
+                      placeholder="Filter files..." />
+                  </div>
+                  <div class="form-check form-switch mb-0 ms-1">
+                    <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden"
+                      @change="loadFiles">
+                    <label class="form-check-label text-xs text-nowrap" for="showHiddenToggle">
+                      Hidden
+                    </label>
+                  </div>
                 </div>
+              </div>
 
-                <div class="ms-auto form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden"
-                    @change="loadFiles">
-                  <label class="form-check-label text-sm" for="showHiddenToggle">
-                    Show Hidden Files
-                  </label>
-                </div>
+              <!-- Row 2: Bulk actions (only shown when items are selected) -->
+              <div v-if="hasSelected" class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 bulk-actions-bar">
+                <span class="badge bg-gradient-primary me-1">{{ selectedItems.length }} selected</span>
+                <button class="btn btn-sm btn-outline-danger mb-0" @click="bulkDelete">
+                  <i class="material-symbols-rounded text-sm me-1">delete</i>
+                  Delete
+                </button>
+                <button class="btn btn-sm btn-outline-secondary mb-0" @click="bulkZip">
+                  <i class="material-symbols-rounded text-sm me-1">folder_zip</i>
+                  Zip
+                </button>
+                <button class="btn btn-sm btn-outline-info mb-0" @click="bulkCopyMove('copy')">
+                  <i class="material-symbols-rounded text-sm me-1">content_copy</i>
+                  Copy
+                </button>
+                <button class="btn btn-sm btn-outline-warning mb-0" @click="bulkCopyMove('move')">
+                  <i class="material-symbols-rounded text-sm me-1">drive_file_move</i>
+                  Move
+                </button>
+                <button class="btn btn-sm btn-link text-secondary mb-0 ms-auto" @click="selectedItems = []; allSelected = false">
+                  Clear selection
+                </button>
               </div>
             </div>
           </div>
@@ -99,18 +119,212 @@
       <!-- Breadcrumbs -->
       <div class="row mb-3">
         <div class="col-12">
-          <nav aria-label="breadcrumb">
-            <ol class="breadcrumb bg-transparent mb-0 pb-0">
-              <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item"
-                :class="{ active: index === breadcrumbs.length - 1 }">
-                <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)"
-                  class="text-dark">
-                  {{ crumb.name }}
-                </a>
-                <span v-else>{{ crumb.name }}</span>
-              </li>
-            </ol>
-          </nav>
+          <div class="breadcrumb-bar d-flex align-items-center">
+            <i class="material-symbols-rounded text-sm text-secondary me-2">folder_open</i>
+            <nav aria-label="breadcrumb" class="flex-grow-1">
+              <ol class="breadcrumb bg-transparent mb-0 pb-0 pt-0">
+                <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item"
+                  :class="{ active: index === breadcrumbs.length - 1 }">
+                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)"
+                    class="text-dark">
+                    {{ crumb.name }}
+                  </a>
+                  <span v-else>{{ crumb.name }}</span>
+                </li>
+              </ol>
+            </nav>
+            <button class="btn btn-sm btn-link text-secondary mb-0 p-0" @click="toggleSelectAll" title="Select All">
+              <i class="material-symbols-rounded text-sm">{{ allSelected ? 'deselect' : 'select_all' }}</i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Git Panel -->
+      <div class="row mb-3">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-body p-3">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h6 class="mb-1">Git Repository</h6>
+                  <p class="text-sm text-secondary mb-0">
+                    Manage the nearest Git repository for the current folder.
+                  </p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                  <span v-if="gitTokenExists" class="badge bg-gradient-success me-1">
+                    <i class="material-symbols-rounded text-xs me-1">key</i> Token Set
+                  </span>
+                  <button class="btn btn-sm btn-outline-dark mb-0" @click="showGitTokenForm = !showGitTokenForm">
+                    <i class="material-symbols-rounded text-sm me-1">key</i>
+                    {{ showGitTokenForm ? 'Hide' : 'Configure Token' }}
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary mb-0" @click="loadGitStatus" :disabled="gitLoading">
+                    <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                    Refresh Git
+                  </button>
+                </div>
+              </div>
+
+              <!-- Git Token Configuration -->
+              <div v-if="showGitTokenForm" class="git-token-section mb-3">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="flex-grow-1">
+                    <label class="form-label text-sm mb-1 fw-bold">Personal Access Token</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light">
+                        <i class="material-symbols-rounded text-sm text-secondary">key</i>
+                      </span>
+                      <input v-model="gitTokenInput" :type="showTokenText ? 'text' : 'password'" class="form-control"
+                        placeholder="ghp_xxxx... or gitlab token" />
+                      <button class="btn btn-outline-secondary mb-0" @click="showTokenText = !showTokenText" type="button">
+                        <i class="material-symbols-rounded text-sm">{{ showTokenText ? 'visibility_off' : 'visibility' }}</i>
+                      </button>
+                      <button class="btn bg-gradient-primary mb-0" @click="saveGitToken" :disabled="!gitTokenInput.trim() || gitTokenSaving">
+                        <span v-if="gitTokenSaving" class="spinner-border spinner-border-sm me-1"></span>
+                        Save Token
+                      </button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">
+                      <i class="material-symbols-rounded text-xs align-middle me-1">info</i>
+                      Used for Git Pull/Push over HTTPS. Token is stored securely and never displayed.
+                      <a href="https://github.com/settings/tokens" target="_blank" class="text-primary">Generate on GitHub</a>
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="gitLoading" class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+              </div>
+
+              <div v-else-if="gitInfo.available">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                  <span class="badge bg-gradient-dark">Branch: {{ gitInfo.branch || 'detached' }}</span>
+                  <span class="badge" :class="gitInfo.dirty ? 'bg-gradient-warning' : 'bg-gradient-success'">
+                    {{ gitInfo.dirty ? 'Working Tree Dirty' : 'Working Tree Clean' }}
+                  </span>
+                  <span class="text-sm text-secondary">
+                    Repo Root: /var/www/{{ domain }}{{ gitInfo.repoRoot ? '/' + gitInfo.repoRoot : '' }}
+                  </span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-lg-4">
+                    <label class="form-label text-sm mb-1">Commit Message</label>
+                    <div class="input-group">
+                      <input v-model="gitCommitMessage" type="text" class="form-control" placeholder="Describe your changes">
+                      <button class="btn bg-gradient-primary mb-0" @click="runGitCommit" :disabled="gitActionLoading || !gitCommitMessage.trim()">
+                        Commit
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-lg-4">
+                    <label class="form-label text-sm mb-1">Switch Branch</label>
+                    <div class="input-group">
+                      <select v-model="gitSelectedBranch" class="form-select">
+                        <option value="">Select branch</option>
+                        <option v-for="branch in gitInfo.branches" :key="branch" :value="branch">
+                          {{ branch }}
+                        </option>
+                      </select>
+                      <button class="btn bg-gradient-info mb-0" @click="runGitSwitchBranch" :disabled="gitActionLoading || !gitSelectedBranch">
+                        Switch
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-lg-4">
+                    <label class="form-label text-sm mb-1">Create Stash</label>
+                    <div class="input-group">
+                      <input v-model="gitStashMessage" type="text" class="form-control" placeholder="Optional stash message">
+                      <button class="btn bg-gradient-secondary mb-0" @click="runGitStash" :disabled="gitActionLoading">
+                        Stash
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                  <button class="btn btn-sm btn-outline-success mb-0" @click="performGitAction('pull')" :disabled="gitActionLoading">
+                    <i class="material-symbols-rounded text-sm me-1">south</i>
+                    Pull
+                  </button>
+                  <button class="btn btn-sm btn-outline-primary mb-0" @click="performGitAction('push')" :disabled="gitActionLoading">
+                    <i class="material-symbols-rounded text-sm me-1">north</i>
+                    Push
+                  </button>
+                  <button class="btn btn-sm btn-outline-dark mb-0" @click="performGitAction('stash_pop')" :disabled="gitActionLoading || gitInfo.stashes.length === 0">
+                    <i class="material-symbols-rounded text-sm me-1">inventory_2</i>
+                    Stash Pop Latest
+                  </button>
+                  <span v-if="gitActionLoading" class="text-sm text-secondary d-inline-flex align-items-center">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Running Git action...
+                  </span>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-lg-6">
+                    <label class="form-label text-sm mb-1">Git Status</label>
+                    <pre class="git-console mb-0">{{ gitInfo.statusLines.length ? gitInfo.statusLines.join('\n') : 'Working tree clean' }}</pre>
+                  </div>
+                  <div class="col-lg-6">
+                    <label class="form-label text-sm mb-1">Stashes</label>
+                    <pre class="git-console mb-0">{{ gitInfo.stashes.length ? gitInfo.stashes.map(stash => `${stash.ref} ${stash.message}`).join('\n') : 'No stashes found' }}</pre>
+                  </div>
+                </div>
+
+                <div v-if="gitLastOutput" class="mt-3">
+                  <label class="form-label text-sm mb-1">Last Git Output</label>
+                  <pre class="git-console mb-0">{{ gitLastOutput }}</pre>
+                </div>
+              </div>
+
+              <div v-else class="text-sm text-secondary">
+                {{ gitInfo.message || 'No Git repository found in this folder or its parent folders.' }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions Bar -->
+      <div class="row mb-3">
+        <div class="col-12">
+          <div class="quick-actions-bar d-flex flex-wrap align-items-center gap-3">
+            <span class="text-xs text-secondary fw-bold text-uppercase me-1">Quick Actions</span>
+            <button class="quick-action-btn" @click="toggleSelectAll" :title="'Ctrl+A'">
+              <i class="material-symbols-rounded text-sm">{{ allSelected ? 'deselect' : 'select_all' }}</i>
+              <span>{{ allSelected ? 'Deselect All' : 'Select All' }}</span>
+              <kbd>Ctrl+A</kbd>
+            </button>
+            <button class="quick-action-btn" @click="bulkCopyMove('copy')" :disabled="!hasSelected" title="Ctrl+C">
+              <i class="material-symbols-rounded text-sm">content_copy</i>
+              <span>Copy</span>
+              <kbd>Ctrl+C</kbd>
+            </button>
+            <button class="quick-action-btn" @click="bulkCopyMove('move')" :disabled="!hasSelected" title="Ctrl+X">
+              <i class="material-symbols-rounded text-sm">drive_file_move</i>
+              <span>Move</span>
+              <kbd>Ctrl+X</kbd>
+            </button>
+            <button class="quick-action-btn" @click="bulkDelete" :disabled="!hasSelected" title="Delete">
+              <i class="material-symbols-rounded text-sm">delete</i>
+              <span>Delete</span>
+              <kbd>Del</kbd>
+            </button>
+            <button class="quick-action-btn" @click="loadFiles" title="F5">
+              <i class="material-symbols-rounded text-sm">refresh</i>
+              <span>Refresh</span>
+              <kbd>F5</kbd>
+            </button>
+            <button class="quick-action-btn" @click="goUpOneLevel" :disabled="!currentPath" title="Backspace">
+              <i class="material-symbols-rounded text-sm">arrow_upward</i>
+              <span>Up</span>
+              <kbd>Backspace</kbd>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -136,7 +350,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="item in items" :key="item.name + item.type"
+                    <tr v-for="item in filteredItems" :key="item.name + item.type"
                       @contextmenu.prevent="openContextMenu($event, item)" class="file-row"
                       :class="{ 'text-muted': item.hidden }">
                       <td>
@@ -527,18 +741,42 @@
       <div class="modal-backdrop fade show" v-if="showDeleteModal" @click="showDeleteModal = false"></div>
       <div class="modal fade show" style="display:block" v-if="showDeleteModal">
         <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title text-danger">Confirm Deletion</h5>
+          <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center">
+                <div class="modal-icon bg-gradient-danger">
+                  <i class="material-symbols-rounded">delete_forever</i>
+                </div>
+                <div class="ms-3">
+                  <h5 class="modal-title mb-0">Confirm Deletion</h5>
+                  <p class="text-sm text-secondary mb-0">This action cannot be undone</p>
+                </div>
+              </div>
               <button type="button" class="btn-close" @click="showDeleteModal = false"></button>
             </div>
-            <div class="modal-body">
-              <p>Are you sure you want to delete <strong>{{ selectedItem?.name }}</strong>?</p>
-              <p class="text-sm text-danger mb-0">This action cannot be undone.</p>
+            <div class="modal-body pt-4">
+              <div v-if="isBulkDelete" class="alert alert-light border-0 mb-0 py-3">
+                <p class="mb-0 text-dark">
+                  Are you sure you want to delete <span class="fw-bold text-danger">{{ selectedItems.length }}
+                    items</span>?
+                </p>
+              </div>
+              <div v-else class="alert alert-light border-0 mb-0 py-3">
+                <p class="mb-0 text-dark text-break">
+                  Are you sure you want to delete <span class="fw-bold text-danger">{{ selectedItem?.name }}</span>?
+                </p>
+              </div>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="showDeleteModal = false">Cancel</button>
-              <button class="btn bg-gradient-danger" @click="deleteItem">Delete</button>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary" @click="showDeleteModal = false" :disabled="deleteProcessing">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Cancel
+              </button>
+              <button class="btn bg-gradient-danger" @click="executeDelete" :disabled="deleteProcessing">
+                <span v-if="deleteProcessing" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">delete</i>
+                {{ isBulkDelete ? 'Delete All' : 'Delete Item' }}
+              </button>
             </div>
           </div>
         </div>
@@ -617,13 +855,25 @@
         </div>
       </div>
 
+      <!-- Upload Drop Zone Overlay -->
+      <div v-if="isDragging" class="upload-drop-zone-overlay">
+        <div class="drop-zone-content">
+          <div class="drop-zone-icon-box mb-3">
+            <i class="material-symbols-rounded">upload_file</i>
+          </div>
+          <h3 class="text-white mb-2">Drop files to upload</h3>
+          <p class="text-white opacity-8">Uploading to: <span class="fw-bold">/var/www/{{ domain }}{{ currentPath ? '/' +
+              currentPath : '' }}</span></p>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import { router } from '@inertiajs/vue3'
 
@@ -633,13 +883,40 @@ const props = defineProps({
 })
 
 const items = ref([])
+const searchQuery = ref('')
 const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const showHidden = ref(false)
+const gitLoading = ref(false)
+const gitActionLoading = ref(false)
+const gitCommitMessage = ref('')
+const gitStashMessage = ref('')
+const gitSelectedBranch = ref('')
+const gitLastOutput = ref('')
+const gitInfo = ref({
+  available: false,
+  message: '',
+  repoRoot: '',
+  branch: '',
+  branches: [],
+  statusLines: [],
+  stashes: [],
+  dirty: false
+})
 
-// selection management
+// Git token state
+const showGitTokenForm = ref(false)
+const gitTokenInput = ref('')
+const gitTokenSaving = ref(false)
+const gitTokenExists = ref(false)
+const showTokenText = ref(false)
+
+// drag and drop state
+const isDragging = ref(false)
+const dragCounter = ref(0) // Used to handle drag enter/leave events correctly on nested elements
+
 const selectedItems = ref([]) // array of { name, type }
 const allSelected = ref(false)
 
@@ -647,6 +924,8 @@ const showCreateFileModal = ref(false)
 const showCreateDirModal = ref(false)
 const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
+const isBulkDelete = ref(false)
+const deleteProcessing = ref(false)
 const showEditorModal = ref(false)
 const showPermissionsModal = ref(false)
 const showCopyMoveModal = ref(false)
@@ -701,6 +980,12 @@ const alert = ref({
 // Computed
 const hasSelected = computed(() => selectedItems.value.length > 0)
 
+const filteredItems = computed(() => {
+  if (!searchQuery.value) return items.value
+  const q = searchQuery.value.toLowerCase()
+  return items.value.filter(item => item.name.toLowerCase().includes(q))
+})
+
 const contextMenuStyle = computed(() => {
   if (!contextMenu.value.show) return {}
 
@@ -727,7 +1012,89 @@ const contextMenuStyle = computed(() => {
 
 onMounted(() => {
   loadFiles()
+  checkGitToken()
+  window.addEventListener('keydown', handleKeyboardShortcuts)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcuts)
+})
+
+const handleKeyboardShortcuts = (e) => {
+  // Don't trigger shortcuts when typing in inputs, textareas, or selects
+  const tag = e.target.tagName.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+
+  // Ctrl+A — Select All / Deselect All
+  if (e.ctrlKey && e.key === 'a') {
+    e.preventDefault()
+    toggleSelectAll()
+    return
+  }
+
+  // Ctrl+C — Copy Selected
+  if (e.ctrlKey && e.key === 'c' && hasSelected.value) {
+    e.preventDefault()
+    bulkCopyMove('copy')
+    return
+  }
+
+  // Ctrl+X — Move Selected
+  if (e.ctrlKey && e.key === 'x' && hasSelected.value) {
+    e.preventDefault()
+    bulkCopyMove('move')
+    return
+  }
+
+  // Delete — Delete Selected
+  if (e.key === 'Delete' && hasSelected.value) {
+    e.preventDefault()
+    bulkDelete()
+    return
+  }
+
+  // F5 — Refresh
+  if (e.key === 'F5') {
+    e.preventDefault()
+    loadFiles()
+    return
+  }
+
+  // Backspace — Go Up One Level
+  if (e.key === 'Backspace' && currentPath.value) {
+    e.preventDefault()
+    goUpOneLevel()
+    return
+  }
+}
+
+// Git Token Management
+const checkGitToken = async () => {
+  try {
+    const response = await axios.get(`/file-manager/${props.domain}/git/token`)
+    gitTokenExists.value = response.data.hasToken
+  } catch (error) {
+    gitTokenExists.value = false
+  }
+}
+
+const saveGitToken = async () => {
+  if (!gitTokenInput.value.trim()) return
+  try {
+    gitTokenSaving.value = true
+    await axios.post(`/file-manager/${props.domain}/git/token`, {
+      token: gitTokenInput.value.trim()
+    })
+    showAlert('success', 'Git token saved successfully. Pull/Push should now work.')
+    gitTokenInput.value = ''
+    gitTokenExists.value = true
+    showGitTokenForm.value = false
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to save git token')
+  } finally {
+    gitTokenSaving.value = false
+  }
+}
 
 const showAlert = (type, message) => {
   alert.value = { show: true, type, message }
@@ -782,12 +1149,91 @@ const loadFiles = async () => {
     // reset selection because list changed
     selectedItems.value = []
     allSelected.value = false
+    await loadGitStatus()
   } catch (error) {
     showAlert('danger', 'Failed to load files')
     console.error(error)
   } finally {
     loading.value = false
   }
+}
+
+const loadGitStatus = async () => {
+  try {
+    gitLoading.value = true
+    const response = await axios.post(`/file-manager/${props.domain}/git/status`, {
+      path: currentPath.value || ''
+    })
+    gitInfo.value = {
+      available: response.data.available ?? false,
+      message: response.data.message || '',
+      repoRoot: response.data.repoRoot || '',
+      branch: response.data.branch || '',
+      branches: response.data.branches || [],
+      statusLines: response.data.statusLines || [],
+      stashes: response.data.stashes || [],
+      dirty: response.data.dirty || false
+    }
+
+    if (gitInfo.value.branch && !gitSelectedBranch.value) {
+      gitSelectedBranch.value = gitInfo.value.branch
+    }
+  } catch (error) {
+    gitInfo.value = {
+      available: false,
+      message: error.response?.data?.error || 'Failed to load Git status.',
+      repoRoot: '',
+      branch: '',
+      branches: [],
+      statusLines: [],
+      stashes: [],
+      dirty: false
+    }
+  } finally {
+    gitLoading.value = false
+  }
+}
+
+const performGitAction = async (action, payload = {}) => {
+  try {
+    gitActionLoading.value = true
+    const response = await axios.post(`/file-manager/${props.domain}/git/action`, {
+      path: currentPath.value || '',
+      action,
+      ...payload
+    })
+
+    gitLastOutput.value = response.data.output || response.data.message || 'Git action completed successfully.'
+    showAlert('success', response.data.message || 'Git action completed successfully.')
+
+    if (action === 'commit') {
+      gitCommitMessage.value = ''
+    }
+    if (action === 'stash') {
+      gitStashMessage.value = ''
+    }
+
+    await loadFiles()
+  } catch (error) {
+    gitLastOutput.value = error.response?.data?.error || 'Git action failed.'
+    showAlert('danger', gitLastOutput.value)
+  } finally {
+    gitActionLoading.value = false
+  }
+}
+
+const runGitCommit = async () => {
+  if (!gitCommitMessage.value.trim()) return
+  await performGitAction('commit', { message: gitCommitMessage.value.trim() })
+}
+
+const runGitSwitchBranch = async () => {
+  if (!gitSelectedBranch.value) return
+  await performGitAction('switch_branch', { branch: gitSelectedBranch.value })
+}
+
+const runGitStash = async () => {
+  await performGitAction('stash', { message: gitStashMessage.value.trim() })
 }
 
 const navigateTo = (path) => {
@@ -864,21 +1310,36 @@ const renameItem = async () => {
 }
 
 const confirmDelete = (item) => {
+  isBulkDelete.value = false
   selectedItem.value = item
   showDeleteModal.value = true
 }
 
-const deleteItem = async () => {
+const executeDelete = async () => {
   try {
-    await axios.post(`/file-manager/${props.domain}/delete`, {
-      path: currentPath.value || '',
-      name: selectedItem.value.name
-    })
-    showAlert('success', 'Deleted successfully')
+    deleteProcessing.value = true
+    if (isBulkDelete.value) {
+      // Bulk delete logic
+      await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
+        path: currentPath.value || '',
+        items: getSelectedItems()
+      })
+      showAlert('success', 'Selected items deleted successfully')
+      selectedItems.value = []
+    } else {
+      // Single delete logic
+      await axios.post(`/file-manager/${props.domain}/delete`, {
+        path: currentPath.value || '',
+        name: selectedItem.value.name
+      })
+      showAlert('success', `${selectedItem.value.name} deleted successfully`)
+    }
     showDeleteModal.value = false
     loadFiles()
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to delete')
+    showAlert('danger', error.response?.data?.error || 'Failed to delete item(s)')
+  } finally {
+    deleteProcessing.value = false
   }
 }
 
@@ -924,63 +1385,101 @@ const triggerUpload = () => {
   fileInput.value.click()
 }
 
-const handleFileUpload = async (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-
-  // Check file size client-side (500MB limit)
-  const maxSize = 500 * 1024 * 1024 // 500MB in bytes
-  if (file.size > maxSize) {
-    showAlert('danger', `File too large. Maximum size is 500MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB`)
-    event.target.value = ''
-    return
+const handleDragEnter = (e) => {
+  dragCounter.value++
+  if (e.dataTransfer.types.includes('Files')) {
+    isDragging.value = true
   }
+}
 
-  // Initialize upload progress state
-  uploading.value = true
-  uploadProgress.value = 0
-  uploadFileName.value = file.name
+const handleDragOver = (e) => {
+  // Required to allow drop
+  if (e.dataTransfer.types.includes('Files')) {
+    isDragging.value = true
+  }
+}
 
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('path', currentPath.value || '')
+const handleDragLeave = (e) => {
+  dragCounter.value--
+  if (dragCounter.value === 0) {
+    isDragging.value = false
+  }
+}
 
-    await axios.post(`/file-manager/${props.domain}/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 600000, // 10 minute timeout for large files
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-        uploadProgress.value = percentCompleted
-      }
-    })
+const handleDrop = async (e) => {
+  isDragging.value = false
+  dragCounter.value = 0
+  
+  const files = e.dataTransfer.files
+  if (files.length > 0) {
+    await processFilesUpload(files)
+  }
+}
 
-    showAlert('success', 'File uploaded successfully')
-    loadFiles()
-  } catch (error) {
-    let errorMessage = 'Failed to upload file'
+const handleFileUpload = async (event) => {
+  const files = event.target.files
+  if (!files || files.length === 0) return
+  
+  await processFilesUpload(files)
+  event.target.value = ''
+}
 
-    if (error.response) {
-      // Server responded with an error
-      if (error.response.status === 413) {
-        errorMessage = 'File too large. Please check server upload limits (php.ini: upload_max_filesize, post_max_size)'
-      } else if (error.response.status === 422) {
-        errorMessage = error.response.data?.message || 'Validation failed - file may be too large'
-      } else {
-        errorMessage = error.response.data?.error || errorMessage
-      }
-    } else if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Upload timed out. The file may be too large or the connection is slow.'
-    } else if (error.message) {
-      errorMessage = error.message
+const processFilesUpload = async (files) => {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    
+    // Check file size client-side (500MB limit)
+    const maxSize = 500 * 1024 * 1024 // 500MB in bytes
+    if (file.size > maxSize) {
+      showAlert('danger', `File "${file.name}" too large. Maximum size is 500MB.`)
+      continue
     }
 
-    showAlert('danger', errorMessage)
-  } finally {
-    uploading.value = false
+    // Initialize upload progress state
+    uploading.value = true
     uploadProgress.value = 0
-    uploadFileName.value = ''
-    event.target.value = ''
+    uploadFileName.value = file.name
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('path', currentPath.value || '')
+
+      await axios.post(`/file-manager/${props.domain}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 600000, // 10 minute timeout for large files
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          uploadProgress.value = percentCompleted
+        }
+      })
+
+      if (i === files.length - 1) {
+        showAlert('success', files.length > 1 ? `Successfully uploaded ${files.length} files` : 'File uploaded successfully')
+        loadFiles()
+      }
+    } catch (error) {
+      let errorMessage = `Failed to upload "${file.name}"`
+
+      if (error.response) {
+        if (error.response.status === 413) {
+          errorMessage = 'File too large. Please check server upload limits.'
+        } else if (error.response.status === 422) {
+          errorMessage = error.response.data?.message || 'Validation failed'
+        } else {
+          errorMessage = error.response.data?.error || errorMessage
+        }
+      }
+      
+      showAlert('danger', errorMessage)
+      break // Stop processing further files on error
+    } finally {
+      if (i === files.length - 1) {
+        uploading.value = false
+        uploadProgress.value = 0
+        uploadFileName.value = ''
+      }
+    }
   }
 }
 
@@ -1023,22 +1522,11 @@ const toggleSelectAll = () => {
 
 const getSelectedItems = () => selectedItems.value.map(i => i.name)
 
-// Bulk delete using existing delete-multiple endpoint
-const bulkDelete = async () => {
+// Bulk delete opens the premium confirmation modal
+const bulkDelete = () => {
   if (!hasSelected.value) return
-  if (!confirm(`Delete ${selectedItems.value.length} items? This cannot be undone.`)) return
-
-  try {
-    await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
-      path: currentPath.value || '',
-      items: getSelectedItems()
-    })
-    showAlert('success', 'Selected items deleted')
-    selectedItems.value = []
-    loadFiles()
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to delete selected items')
-  }
+  isBulkDelete.value = true
+  showDeleteModal.value = true
 }
 
 // Bulk ZIP
@@ -1182,218 +1670,249 @@ const executeCopyMove = async () => {
 </script>
 
 <style scoped>
-.modal {
-  background: rgba(0, 0, 0, 0.5);
-  position: fixed;
-  z-index: 20050;
-  /* ensure above sidebar */
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.modal-backdrop {
-  position: fixed;
-  z-index: 20040;
-  /* slightly below modal but above everything else */
-}
-
-/* Keep the modal-content style */
-.modal-content {
+/* Toolbar card */
+.toolbar-card {
   border: none;
-  border-radius: 1rem;
-  z-index: 20060;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-/* make sure context menu still appears on top of everything */
-.context-menu {
-  position: fixed;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 30000;
-  min-width: 180px;
-  padding: 4px 0;
+/* Toolbar vertical divider */
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: #dee2e6;
+  margin: 0 4px;
 }
 
-/* rest of CSS mostly unchanged */
-.gap-2 {
-  gap: 0.5rem;
+/* Search input */
+.toolbar-search {
+  max-width: 200px;
+  min-width: 140px;
+}
+.toolbar-search .form-control:focus {
+  box-shadow: none;
+}
+.toolbar-search .input-group-text {
+  border-color: #dee2e6;
+}
+.toolbar-search .form-control {
+  border-color: #dee2e6;
 }
 
-.breadcrumb-item+.breadcrumb-item::before {
-  content: "/";
+/* Bulk actions bar */
+.bulk-actions-bar {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  animation: slideDown 0.2s ease;
 }
 
-.breadcrumb-item a {
-  text-decoration: none;
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.breadcrumb-item a:hover {
-  text-decoration: underline;
+/* Breadcrumb bar */
+.breadcrumb-bar {
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #eee;
 }
 
-.btn-link {
-  text-decoration: none;
+/* Refresh spin animation */
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-.btn-link:hover i {
-  transform: scale(1.1);
-  transition: transform 0.2s;
-}
-
-textarea.font-monospace {
-  font-family: 'Courier New', monospace;
-  line-height: 1.5;
-}
-
+/* File row hover */
 .file-row {
-  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
-
 .file-row:hover {
   background-color: rgba(0, 0, 0, 0.02);
 }
 
-.cursor-pointer {
-  cursor: pointer;
-}
-
-.context-menu-item {
-  padding: 10px 16px;
-  cursor: pointer;
+/* Upload Drop Zone */
+.upload-drop-zone-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
   display: flex;
   align-items: center;
-  font-size: 14px;
-  transition: background-color 0.2s;
+  justify-content: center;
+  pointer-events: none;
+  animation: fadeIn 0.2s ease-out;
 }
 
+.drop-zone-content {
+  text-align: center;
+  transform: scale(0.9);
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.drop-zone-icon-box {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 4px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.drop-zone-icon-box i {
+  font-size: 64px;
+  color: white;
+  animation: bounce 2s infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  to { transform: scale(1); }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+  40% {transform: translateY(-20px);}
+  60% {transform: translateY(-10px);}
+}
+
+/* Git console */
+.git-console {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  padding: 6px 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.1s;
+}
 .context-menu-item:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background: #f0f2f5;
 }
-
 .context-menu-divider {
   height: 1px;
-  background-color: rgba(0, 0, 0, 0.1);
+  background: #eee;
   margin: 4px 0;
 }
 
-/* Modal Icon Styles */
+/* Modal icon */
 .modal-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  font-size: 20px;
 }
 
-.modal-icon i {
-  font-size: 24px;
-}
-
-/* Create Modal Styles */
-.create-modal .modal-header {
-  padding: 24px 24px 0 24px;
-}
-
-.create-modal .modal-body {
-  padding: 24px;
-}
-
-.create-modal .modal-footer {
-  padding: 0 24px 24px 24px;
-}
-
-.create-modal .input-group-text {
-  border-radius: 12px 0 0 12px;
-}
-
-.create-modal .form-control {
-  border-radius: 0 12px 12px 0;
-  background-color: #f8f9fa;
-  border-color: #e9ecef;
-  transition: all 0.3s ease;
-}
-
-.create-modal .form-control:focus {
-  background-color: #fff;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
-}
-
-/* Copy/Move Modal */
-.copy-move-modal .modal-header {
-  padding: 24px 24px 0 24px;
-}
-
-.copy-move-modal .modal-body {
-  padding: 24px;
-}
-
-.copy-move-modal .modal-footer {
-  padding: 0 24px 24px 24px;
-}
-
+/* Source info card */
 .source-info-card {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 12px;
-  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #eee;
+}
+
+/* Cursor pointer utility */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Quick Actions Bar */
+.quick-actions-bar {
+  background: #f1f3f5;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
   border: 1px dashed #dee2e6;
 }
 
-.copy-move-modal .input-group-text {
-  border-radius: 12px 0 0 12px;
+.quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  color: #495057;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
-.copy-move-modal .form-control {
-  border-radius: 0 12px 12px 0;
-  background-color: #f8f9fa;
-  border-color: #e9ecef;
-  transition: all 0.3s ease;
+.quick-action-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  color: #212529;
 }
 
-.copy-move-modal .form-control:focus {
-  background-color: #fff;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
+.quick-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-/* Text utilities */
-.text-lg {
-  font-size: 32px !important;
+.quick-action-btn kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: inherit;
+  color: #6c757d;
+  background: #f1f3f5;
+  border: 1px solid #dee2e6;
+  border-radius: 3px;
+  line-height: 1.4;
+  margin-left: 2px;
 }
 
-/* Animation for modal appearance */
-.modal.fade.show {
-  animation: modalFadeIn 0.2s ease-out;
-}
-
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-.modal-dialog-centered {
-  animation: modalSlideIn 0.25s ease-out;
-}
-
-@keyframes modalSlideIn {
-  from {
-    transform: translate(0, -20px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translate(0, 0);
-    opacity: 1;
-  }
+/* Git Token Section */
+.git-token-section {
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #e9ecef;
+  animation: slideDown 0.2s ease;
 }
 </style>
+

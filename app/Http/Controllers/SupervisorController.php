@@ -8,6 +8,11 @@ use Inertia\Inertia;
 
 class SupervisorController extends Controller
 {
+    private function getDefaultProcessUser(): string
+    {
+        return env('NIMBUS_GIT_USER', 'www-data');
+    }
+
     /**
      * Display supervisor management page
      */
@@ -196,12 +201,12 @@ BASH;
     }
 
     /**
-     * Get all supervisor processes
+     * Get all supervisor processes grouped by their config
      */
     public function getProcesses()
     {
         try {
-            $processes = [];
+            $groups = [];
             
             // Get process status from supervisorctl
             exec('sudo supervisorctl status 2>/dev/null', $output, $code);
@@ -211,10 +216,18 @@ BASH;
                 
                 // Parse line like: "myapp:myapp_00 RUNNING pid 12345, uptime 0:10:00"
                 if (preg_match('/^(\S+)\s+(RUNNING|STOPPED|STARTING|BACKOFF|STOPPING|EXITED|FATAL|UNKNOWN)\s*(.*)$/', $line, $matches)) {
-                    $name = $matches[1];
+                    $fullName = $matches[1];
                     $status = $matches[2];
                     $info = $matches[3];
                     
+                    // Split group and process name
+                    if (str_contains($fullName, ':')) {
+                        [$groupName, $processName] = explode(':', $fullName, 2);
+                    } else {
+                        $groupName = $fullName;
+                        $processName = $fullName;
+                    }
+
                     $pid = null;
                     $uptime = null;
                     
@@ -225,30 +238,53 @@ BASH;
                         $uptime = $uptimeMatch[1];
                     }
                     
-                    $processes[] = [
-                        'name' => $name,
+                    if (!isset($groups[$groupName])) {
+                        $groups[$groupName] = [
+                            'name' => $groupName,
+                            'processes' => [],
+                            'status' => 'STOPPED', // Will be updated
+                            'count' => 0
+                        ];
+                    }
+
+                    $groups[$groupName]['processes'][] = [
+                        'name' => $processName,
+                        'fullName' => $fullName,
                         'status' => $status,
                         'pid' => $pid,
                         'uptime' => $uptime,
                         'info' => $info
                     ];
+                    $groups[$groupName]['count']++;
+
+                    // If any process in group is running, group is considered "active"
+                    if ($status === 'RUNNING') {
+                        $groups[$groupName]['status'] = 'RUNNING';
+                    }
                 }
             }
 
-            // Also get config files
+            // Also get config files to ensure we show configs that might not have running processes
             $configDir = '/etc/supervisor/conf.d';
-            $configs = [];
             if (is_dir($configDir)) {
                 $files = glob("{$configDir}/*.conf");
                 foreach ($files as $file) {
-                    $configs[] = basename($file, '.conf');
+                    $configName = basename($file, '.conf');
+                    if (!isset($groups[$configName])) {
+                        $groups[$configName] = [
+                            'name' => $configName,
+                            'processes' => [],
+                            'status' => 'STOPPED',
+                            'count' => 0
+                        ];
+                    }
                 }
             }
 
             return response()->json([
                 'success' => true,
-                'processes' => $processes,
-                'configs' => $configs
+                'groups' => array_values($groups),
+                'count' => count($groups)
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -317,42 +353,54 @@ BASH;
         try {
             $request->validate([
                 'name' => 'required|string|alpha_dash',
-                'project' => 'required|string',
+                'project' => 'nullable|string',
+                'command' => 'required|string',
+                'directory' => 'nullable|string',
+                'environment' => 'nullable|string',
+                'user' => 'nullable|string',
                 'numprocs' => 'nullable|integer|min:1|max:10',
                 'autostart' => 'nullable|boolean',
                 'autorestart' => 'nullable|boolean',
-                'sleep' => 'nullable|integer|min:1|max:60',
-                'tries' => 'nullable|integer|min:1|max:10',
-                'timeout' => 'nullable|integer|min:30|max:3600',
                 'logfile' => 'nullable|string'
             ]);
 
             $name = $request->input('name');
             $project = $request->input('project');
+            $command = $request->input('command');
+            $directory = $request->input('directory') ?: ($project ? "/var/www/{$project}" : "");
+            $environment = $request->input('environment');
             $numprocs = $request->input('numprocs', 1);
             $autostart = $request->input('autostart', true) ? 'true' : 'false';
             $autorestart = $request->input('autorestart', true) ? 'true' : 'false';
-            $sleep = $request->input('sleep', 3);
-            $tries = $request->input('tries', 3);
-            $timeout = $request->input('timeout', 120);
             $logfile = $request->input('logfile', 'worker.log');
+            $processUser = $request->input('user', $this->getDefaultProcessUser());
             
-            $directory = "/var/www/{$project}";
-            $command = "/usr/bin/php {$directory}/artisan queue:work --sleep={$sleep} --tries={$tries} --timeout={$timeout}";
-            $stdout = "{$directory}/{$logfile}";
+            $stdout = $project ? "/var/www/{$project}/{$logfile}" : "/var/log/supervisor/{$name}.log";
 
             $config = <<<CONFIG
 [program:{$name}]
 process_name=%(program_name)s_%(process_num)02d
 command={$command}
+CONFIG;
+
+            if ($directory) {
+                $config .= "\ndirectory={$directory}";
+            }
+            
+            $config .= <<<CONFIG
+
 autostart={$autostart}
 autorestart={$autorestart}
-user=www-data
+user={$processUser}
 numprocs={$numprocs}
 redirect_stderr=true
 stdout_logfile={$stdout}
 stopwaitsecs=3600
 CONFIG;
+
+            if ($environment) {
+                $config .= "\nenvironment={$environment}";
+            }
 
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             $tempFile = "/tmp/{$name}.conf";
@@ -363,7 +411,7 @@ CONFIG;
 
             return response()->json([
                 'success' => true,
-                'message' => "Worker {$name} created successfully"
+                'message' => "Process {$name} created successfully"
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -455,10 +503,13 @@ CONFIG;
     {
         try {
             $name = $request->input('name');
-            $configPath = "/etc/supervisor/conf.d/{$name}.conf";
+            
+            // If name is like "group:process", we want the "group" part for the config file
+            $configName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+            $configPath = "/etc/supervisor/conf.d/{$configName}.conf";
             
             if (!file_exists($configPath)) {
-                return response()->json(['error' => 'Configuration not found'], 404);
+                return response()->json(['error' => "Configuration not found at {$configPath}"], 404);
             }
             
             $content = file_get_contents($configPath);
@@ -467,6 +518,10 @@ CONFIG;
             $config = [
                 'name' => $name,
                 'project' => '',
+                'command' => '',
+                'directory' => '',
+                'environment' => '',
+                'user' => 'www-data',
                 'numprocs' => 1,
                 'autostart' => true,
                 'autorestart' => true,
@@ -476,27 +531,39 @@ CONFIG;
                 'logfile' => 'worker.log'
             ];
             
-            // Parse command to extract project and options
+            // Parse command
             if (preg_match('/command\s*=\s*(.+)$/m', $content, $m)) {
-                $command = trim($m[1]);
-                // Extract project from path like /var/www/project/artisan
-                if (preg_match('#/var/www/([^/]+)/#', $command, $pm)) {
-                    $config['project'] = $pm[1];
-                }
-                // Extract --sleep, --tries, --timeout
-                if (preg_match('/--sleep=(\d+)/', $command, $sm)) {
-                    $config['sleep'] = (int)$sm[1];
-                }
-                if (preg_match('/--tries=(\d+)/', $command, $tm)) {
-                    $config['tries'] = (int)$tm[1];
-                }
-                if (preg_match('/--timeout=(\d+)/', $command, $tom)) {
-                    $config['timeout'] = (int)$tom[1];
+                $config['command'] = trim($m[1]);
+                $command = $config['command'];
+                
+                // Try to extract Laravel options if it looks like one
+                if (str_contains($command, 'artisan queue:work')) {
+                    if (preg_match('#/var/www/([^/]+)/#', $command, $pm)) {
+                        $config['project'] = $pm[1];
+                    }
+                    if (preg_match('/--sleep=(\d+)/', $command, $sm)) {
+                        $config['sleep'] = (int)$sm[1];
+                    }
+                    if (preg_match('/--tries=(\d+)/', $command, $tm)) {
+                        $config['tries'] = (int)$tm[1];
+                    }
+                    if (preg_match('/--timeout=(\d+)/', $command, $tom)) {
+                        $config['timeout'] = (int)$tom[1];
+                    }
                 }
             }
             
+            if (preg_match('/directory\s*=\s*(.+)$/m', $content, $m)) {
+                $config['directory'] = trim($m[1]);
+            }
+            if (preg_match('/environment\s*=\s*(.+)$/m', $content, $m)) {
+                $config['environment'] = trim($m[1]);
+            }
             if (preg_match('/numprocs\s*=\s*(\d+)/m', $content, $m)) {
                 $config['numprocs'] = (int)$m[1];
+            }
+            if (preg_match('/user\s*=\s*(.+)$/m', $content, $m)) {
+                $config['user'] = trim($m[1]);
             }
             if (preg_match('/autostart\s*=\s*(true|false)/m', $content, $m)) {
                 $config['autostart'] = $m[1] === 'true';
@@ -506,7 +573,6 @@ CONFIG;
             }
             if (preg_match('/stdout_logfile\s*=\s*(.+)$/m', $content, $m)) {
                 $logPath = trim($m[1]);
-                // Extract just the filename from path
                 $config['logfile'] = basename($logPath);
             }
             
@@ -528,30 +594,41 @@ CONFIG;
         try {
             $name = $request->input('name');
             $project = $request->input('project');
+            $command = $request->input('command');
+            $directory = $request->input('directory') ?: ($project ? "/var/www/{$project}" : "");
+            $environment = $request->input('environment');
+            $processUser = $request->input('user', $this->getDefaultProcessUser());
             $numprocs = $request->input('numprocs', 1);
             $autostart = $request->input('autostart', true) ? 'true' : 'false';
             $autorestart = $request->input('autorestart', true) ? 'true' : 'false';
-            $sleep = $request->input('sleep', 3);
-            $tries = $request->input('tries', 3);
-            $timeout = $request->input('timeout', 120);
             $logfile = $request->input('logfile', 'worker.log');
             
-            $directory = "/var/www/{$project}";
-            $command = "/usr/bin/php {$directory}/artisan queue:work --sleep={$sleep} --tries={$tries} --timeout={$timeout}";
-            $stdout = "{$directory}/{$logfile}";
+            $stdout = $project ? "/var/www/{$project}/{$logfile}" : "/var/log/supervisor/{$name}.log";
 
             $config = <<<CONFIG
 [program:{$name}]
 process_name=%(program_name)s_%(process_num)02d
 command={$command}
+CONFIG;
+
+            if ($directory) {
+                $config .= "\ndirectory={$directory}";
+            }
+            
+            $config .= <<<CONFIG
+
 autostart={$autostart}
 autorestart={$autorestart}
-user=www-data
+user={$processUser}
 numprocs={$numprocs}
 redirect_stderr=true
 stdout_logfile={$stdout}
 stopwaitsecs=3600
 CONFIG;
+
+            if ($environment) {
+                $config .= "\nenvironment={$environment}";
+            }
 
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             $tempFile = "/tmp/{$name}.conf";
@@ -563,11 +640,33 @@ CONFIG;
 
             return response()->json([
                 'success' => true,
-                'message' => "Worker {$name} updated successfully"
+                'message' => "Process {$name} updated successfully"
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Get projects list for dropdown
+     */
+    public function getProjects()
+    {
+        $projects = [];
+        $dirs = glob('/var/www/*', GLOB_ONLYDIR);
+        
+        foreach ($dirs as $dir) {
+            $name = basename($dir);
+            if ($name === 'html') continue;
+            
+            $projects[] = [
+                'name' => $name,
+                'path' => $dir,
+                'isLaravel' => file_exists("{$dir}/artisan")
+            ];
+        }
+        
+        return response()->json(['projects' => $projects]);
     }
 
     /**
