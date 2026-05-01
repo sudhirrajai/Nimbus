@@ -48,7 +48,7 @@ class SecurityMiddleware
                 }
                 
                 if (!$allowed) {
-                    abort(403, 'Your IP address (' . $ip . ') is not authorized to access this panel.');
+                    return response()->view('errors.ip-blocked', ['ip' => $ip], 403);
                 }
             } elseif ($mode === 'blacklist') {
                 $rules = \App\Models\SecurityRule::where('type', 'block')
@@ -57,7 +57,7 @@ class SecurityMiddleware
                 
                 foreach ($rules as $rule) {
                     if ($this->ipMatches($ip, $rule->ip_address)) {
-                        abort(403, 'Your IP address (' . $ip . ') has been blocked.');
+                        return response()->view('errors.ip-blocked', ['ip' => $ip], 403);
                     }
                 }
             }
