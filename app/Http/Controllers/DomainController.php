@@ -12,7 +12,7 @@ class DomainController extends Controller
     private $basePath = '/var/www/';
 
     /**
-     * Return all domain folders
+     * Return all domain folders with DNS status
      */
     public function index()
     {
@@ -23,13 +23,21 @@ class DomainController extends Controller
                 ], 500);
             }
 
+            $serverIp = $this->getServerIp();
+
             $directories = collect(File::directories($this->basePath))
-                ->map(function ($path) {
-                    return basename($path);
+                ->map(function ($path) use ($serverIp) {
+                    $domain = basename($path);
+                    return [
+                        'name' => $domain,
+                        'path' => $path,
+                        'is_active' => $this->checkDomainDns($domain, $serverIp),
+                        'server_ip' => $serverIp
+                    ];
                 })
-                ->filter(function ($name) {
+                ->filter(function ($item) {
                     // Ignore system directories and the Nimbus control panel itself
-                    return !in_array(strtolower($name), [
+                    return !in_array(strtolower($item['name']), [
                         'html', 
                         'default', 
                         'public', 
@@ -39,12 +47,64 @@ class DomainController extends Controller
                 })
                 ->values();
 
-            return response()->json($directories);
+            return response()->json([
+                'domains' => $directories,
+                'server_ip' => $serverIp
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Failed to load domains: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get the server's public IP
+     */
+    private function getServerIp()
+    {
+        return cache()->remember('server_public_ip', 3600, function () {
+            try {
+                // Try multiple services in case one is down
+                $services = [
+                    'https://api.ipify.org',
+                    'https://icanhazip.com',
+                    'https://ifconfig.me/ip'
+                ];
+
+                foreach ($services as $service) {
+                    $ip = @file_get_contents($service);
+                    if ($ip && filter_var(trim($ip), FILTER_VALIDATE_IP)) {
+                        return trim($ip);
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to fetch server public IP: " . $e->getMessage());
+            }
+
+            // Fallback to server IP if available
+            return request()->server('SERVER_ADDR') ?: '127.0.0.1';
+        });
+    }
+
+    /**
+     * Check if a domain points to the server IP
+     */
+    private function checkDomainDns($domain, $serverIp)
+    {
+        try {
+            $records = @dns_get_record($domain, DNS_A);
+            if (!$records) return false;
+
+            foreach ($records as $record) {
+                if (isset($record['ip']) && $record['ip'] === $serverIp) {
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("DNS check failed for $domain: " . $e->getMessage());
+        }
+        return false;
     }
 
     /**

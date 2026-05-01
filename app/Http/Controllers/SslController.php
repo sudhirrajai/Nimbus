@@ -31,6 +31,8 @@ class SslController extends Controller
                 ], 500);
             }
 
+            $serverIp = $this->getServerIp();
+
             $directories = collect(File::directories($this->basePath))
                 ->map(function ($path) {
                     return basename($path);
@@ -40,14 +42,18 @@ class SslController extends Controller
                         'html', 'default', 'public', 'cgi-bin', 'nimbus'
                     ]);
                 })
-                ->map(function ($domain) {
-                    return $this->getDomainSslInfo($domain);
+                ->map(function ($domain) use ($serverIp) {
+                    $info = $this->getDomainSslInfo($domain);
+                    $info['is_active'] = $this->checkDomainDns($domain, $serverIp);
+                    $info['server_ip'] = $serverIp;
+                    return $info;
                 })
                 ->values();
 
             return response()->json([
                 'domains' => $directories,
                 'certbotInstalled' => $this->isCertbotInstalled(),
+                'server_ip' => $serverIp
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get SSL domains: " . $e->getMessage());
@@ -855,10 +861,57 @@ class SslController extends Controller
     }
 
     /**
+     * Get the server's public IP
+     */
+    private function getServerIp()
+    {
+        return cache()->remember('server_public_ip', 3600, function () {
+            try {
+                $services = [
+                    'https://api.ipify.org',
+                    'https://icanhazip.com',
+                    'https://ifconfig.me/ip'
+                ];
+
+                foreach ($services as $service) {
+                    $ip = @file_get_contents($service);
+                    if ($ip && filter_var(trim($ip), FILTER_VALIDATE_IP)) {
+                        return trim($ip);
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to fetch server public IP: " . $e->getMessage());
+            }
+
+            return request()->server('SERVER_ADDR') ?: '127.0.0.1';
+        });
+    }
+
+    /**
+     * Check if a domain points to the server IP
+     */
+    private function checkDomainDns($domain, $serverIp)
+    {
+        try {
+            $records = @dns_get_record($domain, DNS_A);
+            if (!$records) return false;
+
+            foreach ($records as $record) {
+                if (isset($record['ip']) && $record['ip'] === $serverIp) {
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("DNS check failed for $domain: " . $e->getMessage());
+        }
+        return false;
+    }
+
+    /**
      * Validate domain name format
      */
     private function isValidDomain($domain)
     {
-        return preg_match('/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/', $domain) && strlen($domain) <= 253;
+        return preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i', $domain) && strlen($domain) <= 253;
     }
 }

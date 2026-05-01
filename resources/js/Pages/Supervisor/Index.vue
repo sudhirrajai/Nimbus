@@ -557,6 +557,8 @@ const manualMode = ref(false)
 const newProcess = ref({
     name: '',
     project: '',
+    command: '',
+    user: 'www-data',
     numprocs: 1,
     autostart: true,
     autorestart: true,
@@ -593,18 +595,17 @@ const stoppedCount = computed(() => {
 // Live config preview
 const generatedConfig = computed(() => {
     const p = newProcess.value
-    const project = p.project || 'mysite.com'
-    const name = p.name || 'worker'
-    const directory = `/var/www/${project}`
-    const command = `/usr/bin/php ${directory}/artisan queue:work --sleep=${p.sleep} --tries=${p.tries} --timeout=${p.timeout}`
-    const logfile = `${directory}/${p.logfile || 'worker.log'}`
+    const name = p.name || 'process'
+    const command = p.command || (p.project ? `/usr/bin/php /var/www/${p.project}/artisan queue:work` : '')
+    const user = p.user || 'www-data'
+    const logfile = p.project ? `/var/www/${p.project}/${p.logfile || 'worker.log'}` : `/var/log/supervisor/${name}.log`
 
     return `[program:${name}]
 process_name=%(program_name)s_%(process_num)02d
 command=${command}
 autostart=${p.autostart ? 'true' : 'false'}
 autorestart=${p.autorestart ? 'true' : 'false'}
-user=www-data
+user=${user}
 numprocs=${p.numprocs}
 redirect_stderr=true
 stdout_logfile=${logfile}
@@ -725,6 +726,7 @@ const startProcess = async (name) => {
 }
 
 const stopProcess = async (name) => {
+    if (name.toLowerCase().includes('nimbus') && !confirm('Warning: Stopping the Nimbus process will make the control panel unreachable. Are you absolutely sure?')) return
     try {
         await axios.post('/supervisor/stop', { name })
         await loadProcesses()
@@ -735,6 +737,7 @@ const stopProcess = async (name) => {
 }
 
 const restartProcess = async (name) => {
+    if (name.toLowerCase().includes('nimbus') && !confirm('Warning: Restarting the Nimbus process may temporarily disconnect your session. Continue?')) return
     try {
         await axios.post('/supervisor/restart', { name })
         await loadProcesses()

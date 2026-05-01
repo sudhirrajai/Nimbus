@@ -178,6 +178,9 @@
                         </div>
                       </td>
                       <td>
+                        <div v-if="!domain.is_active" class="badge badge-sm bg-gradient-danger mb-1" :title="`Point A record to ${domain.server_ip}`">
+                          Inactive DNS
+                        </div>
                         <span class="badge badge-sm" :class="getStatusBadgeClass(domain.status)">
                           {{ getStatusLabel(domain.status) }}
                         </span>
@@ -206,8 +209,8 @@
                           v-if="!domain.hasSsl"
                           class="btn btn-sm bg-gradient-success mb-0"
                           @click="installSsl(domain)"
-                          :disabled="installing === domain.domain || !certbotInstalled"
-                          :title="!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate'"
+                          :disabled="installing === domain.domain || !certbotInstalled || !domain.is_active"
+                          :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate')"
                         >
                           <span v-if="installing === domain.domain" class="spinner-border spinner-border-sm me-1"></span>
                           <i v-else class="material-symbols-rounded text-xs me-1">add_circle</i>
