@@ -355,6 +355,8 @@ BASH;
                 'name' => 'required|string|alpha_dash',
                 'project' => 'nullable|string',
                 'command' => 'required|string',
+                'directory' => 'nullable|string',
+                'environment' => 'nullable|string',
                 'user' => 'nullable|string',
                 'numprocs' => 'nullable|integer|min:1|max:10',
                 'autostart' => 'nullable|boolean',
@@ -365,6 +367,8 @@ BASH;
             $name = $request->input('name');
             $project = $request->input('project');
             $command = $request->input('command');
+            $directory = $request->input('directory') ?: ($project ? "/var/www/{$project}" : "");
+            $environment = $request->input('environment');
             $numprocs = $request->input('numprocs', 1);
             $autostart = $request->input('autostart', true) ? 'true' : 'false';
             $autorestart = $request->input('autorestart', true) ? 'true' : 'false';
@@ -377,6 +381,14 @@ BASH;
 [program:{$name}]
 process_name=%(program_name)s_%(process_num)02d
 command={$command}
+CONFIG;
+
+            if ($directory) {
+                $config .= "\ndirectory={$directory}";
+            }
+            
+            $config .= <<<CONFIG
+
 autostart={$autostart}
 autorestart={$autorestart}
 user={$processUser}
@@ -385,6 +397,10 @@ redirect_stderr=true
 stdout_logfile={$stdout}
 stopwaitsecs=3600
 CONFIG;
+
+            if ($environment) {
+                $config .= "\nenvironment={$environment}";
+            }
 
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             $tempFile = "/tmp/{$name}.conf";
@@ -503,6 +519,8 @@ CONFIG;
                 'name' => $name,
                 'project' => '',
                 'command' => '',
+                'directory' => '',
+                'environment' => '',
                 'user' => 'www-data',
                 'numprocs' => 1,
                 'autostart' => true,
@@ -535,6 +553,12 @@ CONFIG;
                 }
             }
             
+            if (preg_match('/directory\s*=\s*(.+)$/m', $content, $m)) {
+                $config['directory'] = trim($m[1]);
+            }
+            if (preg_match('/environment\s*=\s*(.+)$/m', $content, $m)) {
+                $config['environment'] = trim($m[1]);
+            }
             if (preg_match('/numprocs\s*=\s*(\d+)/m', $content, $m)) {
                 $config['numprocs'] = (int)$m[1];
             }
@@ -571,6 +595,8 @@ CONFIG;
             $name = $request->input('name');
             $project = $request->input('project');
             $command = $request->input('command');
+            $directory = $request->input('directory') ?: ($project ? "/var/www/{$project}" : "");
+            $environment = $request->input('environment');
             $processUser = $request->input('user', $this->getDefaultProcessUser());
             $numprocs = $request->input('numprocs', 1);
             $autostart = $request->input('autostart', true) ? 'true' : 'false';
@@ -583,6 +609,14 @@ CONFIG;
 [program:{$name}]
 process_name=%(program_name)s_%(process_num)02d
 command={$command}
+CONFIG;
+
+            if ($directory) {
+                $config .= "\ndirectory={$directory}";
+            }
+            
+            $config .= <<<CONFIG
+
 autostart={$autostart}
 autorestart={$autorestart}
 user={$processUser}
@@ -591,6 +625,10 @@ redirect_stderr=true
 stdout_logfile={$stdout}
 stopwaitsecs=3600
 CONFIG;
+
+            if ($environment) {
+                $config .= "\nenvironment={$environment}";
+            }
 
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             $tempFile = "/tmp/{$name}.conf";

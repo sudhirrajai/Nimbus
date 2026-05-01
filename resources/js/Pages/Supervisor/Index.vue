@@ -297,7 +297,7 @@
                                     <div class="mb-3">
                                         <label class="form-label fw-bold">Project</label>
                                         <select class="form-control form-select" v-model="newProcess.project">
-                                            <option value="">-- Select a project --</option>
+                                            <option value="">-- Select a project (Optional) --</option>
                                             <option v-for="proj in projects" :key="proj.name" :value="proj.name">
                                                 {{ proj.name }} {{ proj.isLaravel ? '(Laravel)' : '' }}
                                             </option>
@@ -305,6 +305,34 @@
                                         <small class="text-muted">Or type a custom path:</small>
                                         <input type="text" class="form-control mt-1" v-model="newProcess.project"
                                             placeholder="mysite.com">
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Command</label>
+                                        <input type="text" class="form-control" v-model="newProcess.command"
+                                            placeholder="/usr/bin/php /var/www/mysite/artisan queue:work">
+                                        <small class="text-muted">Full command to execute</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Execution Directory</label>
+                                        <input type="text" class="form-control" v-model="newProcess.directory"
+                                            placeholder="/var/www/mysite">
+                                        <small class="text-muted">Leave blank to use system default</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">User</label>
+                                        <input type="text" class="form-control" v-model="newProcess.user"
+                                            placeholder="www-data">
+                                        <small class="text-muted">Run process as this user</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Environment Variables</label>
+                                        <input type="text" class="form-control" v-model="newProcess.environment"
+                                            placeholder='PATH="/usr/bin",APP_ENV="production"'>
+                                        <small class="text-muted">Comma-separated key="value" pairs</small>
                                     </div>
 
                                     <div class="row">
@@ -558,6 +586,8 @@ const newProcess = ref({
     name: '',
     project: '',
     command: '',
+    directory: '',
+    environment: '',
     user: 'www-data',
     numprocs: 1,
     autostart: true,
@@ -597,19 +627,31 @@ const generatedConfig = computed(() => {
     const p = newProcess.value
     const name = p.name || 'process'
     const command = p.command || (p.project ? `/usr/bin/php /var/www/${p.project}/artisan queue:work` : '')
+    const directory = p.directory || (p.project ? `/var/www/${p.project}` : '')
     const user = p.user || 'www-data'
     const logfile = p.project ? `/var/www/${p.project}/${p.logfile || 'worker.log'}` : `/var/log/supervisor/${name}.log`
 
-    return `[program:${name}]
+    let config = `[program:${name}]
 process_name=%(program_name)s_%(process_num)02d
-command=${command}
-autostart=${p.autostart ? 'true' : 'false'}
+command=${command}`
+
+    if (directory) {
+        config += `\ndirectory=${directory}`
+    }
+
+    config += `\nautostart=${p.autostart ? 'true' : 'false'}
 autorestart=${p.autorestart ? 'true' : 'false'}
 user=${user}
 numprocs=${p.numprocs}
 redirect_stderr=true
 stdout_logfile=${logfile}
 stopwaitsecs=3600`
+
+    if (p.environment) {
+        config += `\nenvironment=${p.environment}`
+    }
+
+    return config
 })
 
 onMounted(async () => {
