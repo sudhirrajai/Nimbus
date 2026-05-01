@@ -1,6 +1,7 @@
 <template>
   <MainLayout>
-    <div class="container-fluid py-4" @click="closeContextMenu">
+    <div class="container-fluid py-4" @click="closeContextMenu" @dragenter.prevent="handleDragEnter"
+      @dragover.prevent="handleDragOver" @dragleave.prevent="handleDragLeave" @drop.prevent="handleDrop">
 
       <!-- Header -->
       <div class="row mb-4">
@@ -854,6 +855,18 @@
         </div>
       </div>
 
+      <!-- Upload Drop Zone Overlay -->
+      <div v-if="isDragging" class="upload-drop-zone-overlay">
+        <div class="drop-zone-content">
+          <div class="drop-zone-icon-box mb-3">
+            <i class="material-symbols-rounded">upload_file</i>
+          </div>
+          <h3 class="text-white mb-2">Drop files to upload</h3>
+          <p class="text-white opacity-8">Uploading to: <span class="fw-bold">/var/www/{{ domain }}{{ currentPath ? '/' +
+              currentPath : '' }}</span></p>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
@@ -900,7 +913,10 @@ const gitTokenSaving = ref(false)
 const gitTokenExists = ref(false)
 const showTokenText = ref(false)
 
-// selection management
+// drag and drop state
+const isDragging = ref(false)
+const dragCounter = ref(0) // Used to handle drag enter/leave events correctly on nested elements
+
 const selectedItems = ref([]) // array of { name, type }
 const allSelected = ref(false)
 
@@ -1369,63 +1385,101 @@ const triggerUpload = () => {
   fileInput.value.click()
 }
 
-const handleFileUpload = async (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-
-  // Check file size client-side (500MB limit)
-  const maxSize = 500 * 1024 * 1024 // 500MB in bytes
-  if (file.size > maxSize) {
-    showAlert('danger', `File too large. Maximum size is 500MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB`)
-    event.target.value = ''
-    return
+const handleDragEnter = (e) => {
+  dragCounter.value++
+  if (e.dataTransfer.types.includes('Files')) {
+    isDragging.value = true
   }
+}
 
-  // Initialize upload progress state
-  uploading.value = true
-  uploadProgress.value = 0
-  uploadFileName.value = file.name
+const handleDragOver = (e) => {
+  // Required to allow drop
+  if (e.dataTransfer.types.includes('Files')) {
+    isDragging.value = true
+  }
+}
 
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('path', currentPath.value || '')
+const handleDragLeave = (e) => {
+  dragCounter.value--
+  if (dragCounter.value === 0) {
+    isDragging.value = false
+  }
+}
 
-    await axios.post(`/file-manager/${props.domain}/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 600000, // 10 minute timeout for large files
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-        uploadProgress.value = percentCompleted
-      }
-    })
+const handleDrop = async (e) => {
+  isDragging.value = false
+  dragCounter.value = 0
+  
+  const files = e.dataTransfer.files
+  if (files.length > 0) {
+    await processFilesUpload(files)
+  }
+}
 
-    showAlert('success', 'File uploaded successfully')
-    loadFiles()
-  } catch (error) {
-    let errorMessage = 'Failed to upload file'
+const handleFileUpload = async (event) => {
+  const files = event.target.files
+  if (!files || files.length === 0) return
+  
+  await processFilesUpload(files)
+  event.target.value = ''
+}
 
-    if (error.response) {
-      // Server responded with an error
-      if (error.response.status === 413) {
-        errorMessage = 'File too large. Please check server upload limits (php.ini: upload_max_filesize, post_max_size)'
-      } else if (error.response.status === 422) {
-        errorMessage = error.response.data?.message || 'Validation failed - file may be too large'
-      } else {
-        errorMessage = error.response.data?.error || errorMessage
-      }
-    } else if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Upload timed out. The file may be too large or the connection is slow.'
-    } else if (error.message) {
-      errorMessage = error.message
+const processFilesUpload = async (files) => {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    
+    // Check file size client-side (500MB limit)
+    const maxSize = 500 * 1024 * 1024 // 500MB in bytes
+    if (file.size > maxSize) {
+      showAlert('danger', `File "${file.name}" too large. Maximum size is 500MB.`)
+      continue
     }
 
-    showAlert('danger', errorMessage)
-  } finally {
-    uploading.value = false
+    // Initialize upload progress state
+    uploading.value = true
     uploadProgress.value = 0
-    uploadFileName.value = ''
-    event.target.value = ''
+    uploadFileName.value = file.name
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('path', currentPath.value || '')
+
+      await axios.post(`/file-manager/${props.domain}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 600000, // 10 minute timeout for large files
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          uploadProgress.value = percentCompleted
+        }
+      })
+
+      if (i === files.length - 1) {
+        showAlert('success', files.length > 1 ? `Successfully uploaded ${files.length} files` : 'File uploaded successfully')
+        loadFiles()
+      }
+    } catch (error) {
+      let errorMessage = `Failed to upload "${file.name}"`
+
+      if (error.response) {
+        if (error.response.status === 413) {
+          errorMessage = 'File too large. Please check server upload limits.'
+        } else if (error.response.status === 422) {
+          errorMessage = error.response.data?.message || 'Validation failed'
+        } else {
+          errorMessage = error.response.data?.error || errorMessage
+        }
+      }
+      
+      showAlert('danger', errorMessage)
+      break // Stop processing further files on error
+    } finally {
+      if (i === files.length - 1) {
+        uploading.value = false
+        uploadProgress.value = 0
+        uploadFileName.value = ''
+      }
+    }
   }
 }
 
@@ -1679,6 +1733,62 @@ const executeCopyMove = async () => {
 }
 .file-row:hover {
   background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Upload Drop Zone */
+.upload-drop-zone-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.drop-zone-content {
+  text-align: center;
+  transform: scale(0.9);
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.drop-zone-icon-box {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 4px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.drop-zone-icon-box i {
+  font-size: 64px;
+  color: white;
+  animation: bounce 2s infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  to { transform: scale(1); }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+  40% {transform: translateY(-20px);}
+  60% {transform: translateY(-10px);}
 }
 
 /* Git console */
