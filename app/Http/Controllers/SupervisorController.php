@@ -648,6 +648,28 @@ CONFIG;
     }
 
     /**
+     * Get projects list for dropdown
+     */
+    public function getProjects()
+    {
+        $projects = [];
+        $dirs = glob('/var/www/*', GLOB_ONLYDIR);
+        
+        foreach ($dirs as $dir) {
+            $name = basename($dir);
+            if ($name === 'html') continue;
+            
+            $projects[] = [
+                'name' => $name,
+                'path' => $dir,
+                'isLaravel' => file_exists("{$dir}/artisan")
+            ];
+        }
+        
+        return response()->json(['projects' => $projects]);
+    }
+
+    /**
      * Start all processes
      */
     public function startAll()
