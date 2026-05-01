@@ -235,6 +235,13 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/', [\App\Http\Controllers\ProfileController::class, 'settings'])->name('index');
         Route::get('/data', [\App\Http\Controllers\ProfileController::class, 'getSettings'])->name('data');
         Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateSettings'])->name('update');
+        
+        // Security Settings
+        Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'index'])->name('security.index');
+        Route::post('/security/rules', [\App\Http\Controllers\SecurityController::class, 'storeRule'])->name('security.rules.store');
+        Route::post('/security/rules/{rule}/toggle', [\App\Http\Controllers\SecurityController::class, 'toggleRule'])->name('security.rules.toggle');
+        Route::delete('/security/rules/{rule}', [\App\Http\Controllers\SecurityController::class, 'deleteRule'])->name('security.rules.delete');
+        Route::post('/security/mode', [\App\Http\Controllers\SecurityController::class, 'updateMode'])->name('security.mode.update');
     });
 
     // Backups (Coming Soon)
