@@ -13,10 +13,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->alias([
+            'security' => \App\Http\Middleware\SecurityMiddleware::class,
+        ]);
+
+        $middleware->web(prepend: [
+            \App\Http\Middleware\SecurityMiddleware::class,
+        ]);
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             SetPanelAuthCookie::class,
-            \App\Http\Middleware\SecurityMiddleware::class,
         ]);
         
         // Redirect unauthenticated users to login

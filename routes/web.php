@@ -87,6 +87,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/zip', [FileManagerController::class, 'zip'])->name('zip');
         Route::post('/{domain}/extract', [FileManagerController::class, 'extract'])->name('extract');
         Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
+        //Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
         Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
         Route::post('/{domain}/git/status', [FileManagerController::class, 'gitStatus'])->name('git.status');
         Route::post('/{domain}/git/action', [FileManagerController::class, 'gitAction'])->name('git.action');
@@ -138,6 +139,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');
         Route::get('/list', [DatabaseController::class, 'getDatabases'])->name('list');
         Route::get('/users', [DatabaseController::class, 'getUsers'])->name('users');
+        //Route::post('/create', [DatabaseController::class, 'createDatabase'])->name('create');
         Route::post('/create', [DatabaseController::class, 'createDatabase'])->name('create');
         Route::post('/delete', [DatabaseController::class, 'deleteDatabase'])->name('delete');
         Route::post('/user/create', [DatabaseController::class, 'createUser'])->name('user.create');
@@ -163,6 +165,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/accounts', [EmailController::class, 'getAccounts'])->name('accounts');
         Route::post('/account/create', [EmailController::class, 'createAccount'])->name('account.create');
         Route::post('/account/delete', [EmailController::class, 'deleteAccount'])->name('account.delete');
+        //Route::post('/account/password', [EmailController::class, 'updatePassword'])->name('account.password');
         Route::post('/account/password', [EmailController::class, 'updatePassword'])->name('account.password');
         Route::post('/account/quota', [EmailController::class, 'updateQuota'])->name('account.quota');
         Route::get('/aliases', [EmailController::class, 'getAliases'])->name('aliases');

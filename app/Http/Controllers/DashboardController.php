@@ -9,6 +9,7 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        \Illuminate\Support\Facades\Log::info("Dashboard index hit");
         $serverStats = $this->getServerStats();
         
         return Inertia::render('Home', [
