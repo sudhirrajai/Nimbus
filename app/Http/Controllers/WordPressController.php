@@ -399,6 +399,82 @@ class WordPressController extends Controller
     }
 
     /**
+     * Generate a one-time auto-login URL for WordPress admin
+     * Creates a temporary PHP script that authenticates and self-destructs
+     */
+    public function autoLogin($id)
+    {
+        $site = WordPressSite::findOrFail($id);
+
+        if ($site->status !== 'active') {
+            return response()->json(['success' => false, 'error' => 'Site is not active.'], 400);
+        }
+
+        $token = Str::random(64);
+        $loginFile = $site->path . '/nimbus-login-' . substr($token, 0, 12) . '.php';
+        $adminUser = $site->admin_user ?? 'admin';
+
+        // Create self-destructing login script
+        $script = <<<PHP
+<?php
+// Nimbus Auto-Login - One-time use, self-destructing
+// Generated: {$token}
+
+// Security: check token and expire after 60 seconds
+\$created = filemtime(__FILE__);
+if (time() - \$created > 60) {
+    @unlink(__FILE__);
+    die('Login link expired.');
+}
+
+// Delete this file immediately on access
+@unlink(__FILE__);
+
+// Load WordPress
+define('ABSPATH', __DIR__ . '/');
+require_once(ABSPATH . 'wp-load.php');
+
+// Find the admin user
+\$user = get_user_by('login', '{$adminUser}');
+if (!\$user) {
+    \$user = get_users(['role' => 'administrator', 'number' => 1]);
+    \$user = !empty(\$user) ? \$user[0] : null;
+}
+
+if (!\$user) {
+    wp_die('Admin user not found.');
+}
+
+// Set auth cookies and redirect
+wp_clear_auth_cookie();
+wp_set_current_user(\$user->ID);
+wp_set_auth_cookie(\$user->ID, true);
+do_action('wp_login', \$user->user_login, \$user);
+
+wp_safe_redirect(admin_url());
+exit;
+PHP;
+
+        try {
+            file_put_contents($loginFile, $script);
+            chmod($loginFile, 0644);
+            // Ensure www-data owns it
+            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy = '');
+
+            $protocol = $site->ssl_enabled ? 'https' : 'http';
+            $url = $protocol . '://' . $site->domain . '/' . basename($loginFile);
+
+            Log::info("WP auto-login generated for {$site->domain} (user: {$adminUser})");
+
+            return response()->json(['success' => true, 'url' => $url]);
+        } catch (\Exception $e) {
+            @unlink($loginFile);
+            Log::error("WP auto-login error for {$site->domain}: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Execute a shell command and append output
      */
     private function execCmd($command, &$output)
