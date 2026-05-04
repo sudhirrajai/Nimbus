@@ -58,6 +58,12 @@
                 </button>
                 <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" />
 
+                <!-- Terminal -->
+                <button class="btn btn-sm bg-gradient-success mb-0" @click="showTerminal = true" title="Open Web Terminal">
+                  <i class="material-symbols-rounded text-sm me-1">terminal</i>
+                  Terminal
+                </button>
+
                 <!-- Navigation -->
                 <div class="toolbar-divider"></div>
                 <button v-if="currentPath" class="btn btn-sm btn-outline-dark mb-0" @click="goUpOneLevel">
@@ -868,11 +874,19 @@
       </div>
 
     </div>
+
+    <!-- Web Terminal -->
+    <WebTerminal
+      :domain="domain"
+      :currentPath="currentPath"
+      @refresh-files="loadFiles"
+    />
   </MainLayout>
 </template>
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
+import WebTerminal from '@/Components/WebTerminal.vue'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import { router } from '@inertiajs/vue3'
@@ -929,6 +943,7 @@ const deleteProcessing = ref(false)
 const showEditorModal = ref(false)
 const showPermissionsModal = ref(false)
 const showCopyMoveModal = ref(false)
+const showTerminal = ref(false)
 
 const newFileName = ref('')
 const newDirName = ref('')
