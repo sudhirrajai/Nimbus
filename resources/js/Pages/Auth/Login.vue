@@ -1,4 +1,5 @@
-<template>
+﻿<template>
+  <Head title="Login" />
   <div class="login-page">
     <div class="login-container">
       <!-- Left side - Branding -->
@@ -104,7 +105,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useForm, usePage } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 
 const page = usePage()
 const errors = page.props.errors || {}

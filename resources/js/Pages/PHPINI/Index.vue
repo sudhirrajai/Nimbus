@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="PHP Configuration" />
     <div class="container-fluid py-4">
 
       <!-- Header -->
@@ -262,6 +263,7 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted, reactive } from 'vue'
 import axios from 'axios'

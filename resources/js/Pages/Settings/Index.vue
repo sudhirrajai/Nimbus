@@ -1,5 +1,6 @@
 <template>
     <MainLayout>
+        <Head title="Settings" />
         <div class="container-fluid py-4">
             <!-- Header -->
             <div class="row mb-4">
@@ -290,6 +291,49 @@
                 </div>
             </div>
 
+            <!-- Delete Rule Confirmation Modal -->
+            <div class="modal-backdrop fade show" v-if="showDeleteRuleModal" @click="showDeleteRuleModal = false"></div>
+            <div class="modal fade show" style="display:block" v-if="showDeleteRuleModal">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-0">
+                            <div class="d-flex align-items-center">
+                                <div style="width:42px;height:42px;border-radius:0.75rem;display:flex;align-items:center;justify-content:center;color:white;font-size:20px" class="bg-gradient-danger">
+                                    <i class="material-symbols-rounded">delete_forever</i>
+                                </div>
+                                <div class="ms-3">
+                                    <h5 class="modal-title mb-0">Delete Security Rule</h5>
+                                    <p class="text-sm text-secondary mb-0">This action cannot be undone</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" @click="showDeleteRuleModal = false"></button>
+                        </div>
+                        <div class="modal-body pt-4">
+                            <div class="alert alert-light border-0 mb-0 py-3">
+                                <p class="mb-0 text-dark">
+                                    Are you sure you want to delete the security rule for
+                                    <span class="fw-bold text-danger">{{ deleteRuleTarget?.ip_address }}</span>?
+                                </p>
+                                <p class="text-sm text-secondary mb-0 mt-1" v-if="deleteRuleTarget?.description">
+                                    {{ deleteRuleTarget.description }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button class="btn btn-outline-secondary" @click="showDeleteRuleModal = false" :disabled="deletingRule">
+                                <i class="material-symbols-rounded text-sm me-1">close</i>
+                                Cancel
+                            </button>
+                            <button class="btn bg-gradient-danger" @click="executeDeleteRule" :disabled="deletingRule">
+                                <span v-if="deletingRule" class="spinner-border spinner-border-sm me-2"></span>
+                                <i v-else class="material-symbols-rounded text-sm me-1">delete</i>
+                                Delete Rule
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Toast -->
             <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
                 <div class="toast align-items-center border-0"
@@ -308,6 +352,7 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
+import { Head } from '@inertiajs/vue3'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
@@ -336,6 +381,11 @@ const newRule = ref({
 })
 
 const saving = ref(false)
+
+// Delete rule modal
+const showDeleteRuleModal = ref(false)
+const deleteRuleTarget = ref(null)
+const deletingRule = ref(false)
 
 // Toast
 const showToast = ref(false)
@@ -421,14 +471,24 @@ const toggleRule = async (rule) => {
     }
 }
 
-const deleteRule = async (rule) => {
-    if (!confirm('Are you sure you want to delete this security rule?')) return
+const deleteRule = (rule) => {
+    deleteRuleTarget.value = rule
+    showDeleteRuleModal.value = true
+}
+
+const executeDeleteRule = async () => {
+    if (!deleteRuleTarget.value) return
+    deletingRule.value = true
     try {
-        await axios.delete(`/settings/security/rules/${rule.id}`)
+        await axios.delete(`/settings/security/rules/${deleteRuleTarget.value.id}`)
         notify('Rule deleted', 'success')
+        showDeleteRuleModal.value = false
+        deleteRuleTarget.value = null
         await loadSecurityData()
     } catch (error) {
         notify('Failed to delete rule', 'error')
+    } finally {
+        deletingRule.value = false
     }
 }
 

@@ -96,6 +96,19 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/terminal/execute', [\App\Http\Controllers\TerminalController::class, 'execute'])->name('terminal.execute');
     });
 
+    // WordPress Management routes
+    Route::prefix('wordpress')->name('wordpress.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\WordPressController::class, 'index'])->name('index');
+        Route::get('/list', [\App\Http\Controllers\WordPressController::class, 'list'])->name('list');
+        Route::post('/scan', [\App\Http\Controllers\WordPressController::class, 'scan'])->name('scan');
+        Route::post('/install', [\App\Http\Controllers\WordPressController::class, 'install'])->name('install');
+        Route::get('/{id}/details', [\App\Http\Controllers\WordPressController::class, 'details'])->name('details');
+        Route::post('/{id}/password', [\App\Http\Controllers\WordPressController::class, 'changePassword'])->name('password');
+        Route::post('/{id}/update-core', [\App\Http\Controllers\WordPressController::class, 'updateCore'])->name('update-core');
+        Route::post('/{id}/update-plugins', [\App\Http\Controllers\WordPressController::class, 'updatePlugins'])->name('update-plugins');
+        Route::post('/{id}/toggle-plugin', [\App\Http\Controllers\WordPressController::class, 'togglePlugin'])->name('toggle-plugin');
+        Route::delete('/{id}', [\App\Http\Controllers\WordPressController::class, 'delete'])->name('delete');
+    });
 
     // PHP Configuration routes
     Route::prefix('php')->name('php.')->group(function () {

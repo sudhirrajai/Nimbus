@@ -85,6 +85,13 @@
           </Link>
         </li>
 
+        <li class="nav-item">
+          <Link href="/wordpress" class="nav-link" :class="isActive('/wordpress')">
+            <i class="material-symbols-rounded opacity-5">web</i>
+            <span class="nav-link-text ms-1">WordPress</span>
+          </Link>
+        </li>
+
         <!-- Files & Resources Section -->
         <li class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">

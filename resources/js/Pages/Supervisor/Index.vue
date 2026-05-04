@@ -1,5 +1,6 @@
-<template>
+﻿<template>
     <MainLayout>
+    <Head title="Supervisor" />
         <div class="container-fluid py-2">
             <!-- Header -->
             <div class="row mb-4">
@@ -545,6 +546,7 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'

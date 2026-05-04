@@ -1,5 +1,6 @@
 <template>
   <MainLayout>
+    <Head title="Dashboard" />
     <div class="row">
       <div class="ms-3">
         <h3 class="mb-0 h4 font-weight-bolder">Server Dashboard</h3>
@@ -400,6 +401,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import MainLayout from '@/Layouts/MainLayout.vue'
+import { Head } from '@inertiajs/vue3'
 import axios from 'axios'
 
 const props = defineProps({

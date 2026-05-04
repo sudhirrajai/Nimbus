@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="Domains" />
     <div class="container-fluid py-4">
 
       <div class="row mb-4">
@@ -247,7 +248,7 @@
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { router } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 
 const domains = ref([])
 const serverIp = ref("")
