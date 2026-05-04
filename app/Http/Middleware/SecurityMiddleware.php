@@ -21,14 +21,17 @@ class SecurityMiddleware
         }
 
         $ip = $request->ip();
+        \Illuminate\Support\Facades\Log::info("SecurityMiddleware checking IP: {$ip}");
         
         // Always allow local access for safety (optional, but recommended for panel management)
         if ($ip === '127.0.0.1' || $ip === '::1') {
+            \Illuminate\Support\Facades\Log::info("SecurityMiddleware allowing local access");
             return $next($request);
         }
 
         try {
             $mode = \App\Models\Setting::where('key', 'ip_restriction_mode')->first()?->value ?? 'off';
+            \Illuminate\Support\Facades\Log::info("SecurityMiddleware mode: {$mode}");
 
             if ($mode === 'off') {
                 return $next($request);
@@ -38,25 +41,30 @@ class SecurityMiddleware
                 $rules = \App\Models\SecurityRule::where('type', 'allow')
                     ->where('is_active', true)
                     ->get();
+                \Illuminate\Support\Facades\Log::info("SecurityMiddleware whitelist rules count: " . $rules->count());
                 
                 $allowed = false;
                 foreach ($rules as $rule) {
                     if ($this->ipMatches($ip, $rule->ip_address)) {
+                        \Illuminate\Support\Facades\Log::info("SecurityMiddleware IP matched whitelist rule: {$rule->ip_address}");
                         $allowed = true;
                         break;
                     }
                 }
                 
                 if (!$allowed) {
+                    \Illuminate\Support\Facades\Log::info("SecurityMiddleware blocking IP: {$ip} (not in whitelist)");
                     return response()->view('errors.ip-blocked', ['ip' => $ip], 403);
                 }
             } elseif ($mode === 'blacklist') {
                 $rules = \App\Models\SecurityRule::where('type', 'block')
                     ->where('is_active', true)
                     ->get();
+                \Illuminate\Support\Facades\Log::info("SecurityMiddleware blacklist rules count: " . $rules->count());
                 
                 foreach ($rules as $rule) {
                     if ($this->ipMatches($ip, $rule->ip_address)) {
+                        \Illuminate\Support\Facades\Log::info("SecurityMiddleware blocking IP: {$ip} (matched blacklist rule: {$rule->ip_address})");
                         return response()->view('errors.ip-blocked', ['ip' => $ip], 403);
                     }
                 }
