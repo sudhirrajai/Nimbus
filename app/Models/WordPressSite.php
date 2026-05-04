@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class WordPressSite extends Model
 {
+    protected $table = 'wordpress_sites';
+
     protected $fillable = [
         'domain',
         'path',
