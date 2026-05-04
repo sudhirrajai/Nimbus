@@ -495,12 +495,14 @@ onUnmounted(() => {
 .terminal-panel {
   position: fixed;
   bottom: 0;
-  left: 0;
+  left: calc(14rem + 1rem);
   right: 0;
   display: flex;
   flex-direction: column;
   background: #0d1117;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
   box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1050;
@@ -508,8 +510,21 @@ onUnmounted(() => {
 
 .terminal-maximized .terminal-panel {
   top: 0;
+  left: calc(14rem + 1rem);
   height: 100vh !important;
   border-radius: 0;
+}
+
+/* On mobile / smaller screens where sidebar collapses */
+@media (max-width: 1199.98px) {
+  .terminal-panel {
+    left: 0;
+    border-top-left-radius: 12px;
+  }
+
+  .terminal-maximized .terminal-panel {
+    left: 0;
+  }
 }
 
 @keyframes slideUp {
