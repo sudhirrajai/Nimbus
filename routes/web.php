@@ -107,6 +107,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{id}/update-core', [\App\Http\Controllers\WordPressController::class, 'updateCore'])->name('update-core');
         Route::post('/{id}/update-plugins', [\App\Http\Controllers\WordPressController::class, 'updatePlugins'])->name('update-plugins');
         Route::post('/{id}/toggle-plugin', [\App\Http\Controllers\WordPressController::class, 'togglePlugin'])->name('toggle-plugin');
+        Route::post('/{id}/auto-login', [\App\Http\Controllers\WordPressController::class, 'autoLogin'])->name('auto-login');
         Route::delete('/{id}', [\App\Http\Controllers\WordPressController::class, 'delete'])->name('delete');
     });
 
