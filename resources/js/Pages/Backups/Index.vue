@@ -1,5 +1,6 @@
-<template>
+﻿<template>
     <MainLayout>
+    <Head title="Backups" />
         <div class="container-fluid py-4">
             <div class="row justify-content-center">
                 <div class="col-md-8">
@@ -47,5 +48,6 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 </script>

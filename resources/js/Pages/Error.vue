@@ -1,6 +1,6 @@
-<script setup>
+﻿<script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { Link } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 
 defineOptions({
     layout: MainLayout
@@ -23,6 +23,7 @@ defineProps({
 </script>
 
 <template>
+  <Head title="Error" />
     <div class="row">
         <div class="col-12">
             <div class="card">

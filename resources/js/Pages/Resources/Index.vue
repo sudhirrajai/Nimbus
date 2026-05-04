@@ -1,5 +1,6 @@
-<template>
+﻿<template>
     <MainLayout>
+    <Head title="Resources" />
         <div class="container-fluid py-4">
             <!-- Header -->
             <div class="row mb-4">
@@ -294,6 +295,7 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'

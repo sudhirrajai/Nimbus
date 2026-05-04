@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="Databases" />
     <div class="container-fluid py-4">
 
       <!-- Header -->
@@ -453,6 +454,7 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'

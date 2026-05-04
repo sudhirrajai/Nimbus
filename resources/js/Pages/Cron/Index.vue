@@ -1,5 +1,6 @@
-<template>
+﻿<template>
     <MainLayout>
+    <Head title="Cron Jobs" />
         <div class="container-fluid py-2">
             <!-- Header -->
             <div class="row mb-4">
@@ -288,6 +289,7 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'

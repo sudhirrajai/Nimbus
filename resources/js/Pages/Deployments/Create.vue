@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="New Deployment" />
     <div class="container-fluid py-4">
 
       <div class="row mb-4">
@@ -430,7 +431,7 @@
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { router } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 
 const currentStep = ref(0)
 const submitting = ref(false)

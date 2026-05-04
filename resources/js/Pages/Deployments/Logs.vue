@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="Deployment Logs" />
     <div class="container-fluid py-4">
 
       <div class="row mb-4">
@@ -133,7 +134,7 @@
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted, reactive } from 'vue'
 import axios from 'axios'
-import { router, usePage } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 
 const props = defineProps({
   deploymentId: Number,

@@ -1,4 +1,5 @@
-<template>
+﻿<template>
+  <Head title="Setup" />
   <div class="setup-page">
     <div class="setup-container">
       <!-- Left side - Branding -->
@@ -128,7 +129,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useForm, usePage } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 
 const page = usePage()
 const errors = page.props.errors || {}

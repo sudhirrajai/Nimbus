@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="File Manager" />
     <div class="container-fluid py-4" @click="closeContextMenu" @dragenter.prevent="handleDragEnter"
       @dragover.prevent="handleDragOver" @dragleave.prevent="handleDragLeave" @drop.prevent="handleDrop">
 
@@ -889,7 +890,7 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import WebTerminal from '@/Components/WebTerminal.vue'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
-import { router } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 
 const props = defineProps({
   domain: String,

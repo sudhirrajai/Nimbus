@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="SSL Certificates" />
     <div class="container-fluid py-4">
 
       <!-- Header -->
@@ -375,6 +376,7 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'

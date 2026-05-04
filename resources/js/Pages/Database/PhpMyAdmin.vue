@@ -1,5 +1,6 @@
-<template>
+﻿<template>
   <MainLayout>
+    <Head title="phpMyAdmin" />
     <div class="phpmyadmin-wrapper">
       <div class="header-bar border-bottom">
         <h5 class="mb-0 text-dark font-weight-bolder">
@@ -23,6 +24,7 @@
 </template>
 
 <script setup>
+import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted } from 'vue'
 
