@@ -459,7 +459,8 @@ PHP;
             file_put_contents($loginFile, $script);
             chmod($loginFile, 0644);
             // Ensure www-data owns it
-            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy = '');
+            $dummy = '';
+            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
 
             $protocol = $site->ssl_enabled ? 'https' : 'http';
             $url = $protocol . '://' . $site->domain . '/' . basename($loginFile);
