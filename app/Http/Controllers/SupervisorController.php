@@ -105,7 +105,7 @@ class SupervisorController extends Controller
             if (is_dir($wwwPath)) {
                 $dirs = scandir($wwwPath);
                 foreach ($dirs as $dir) {
-                    if ($dir === '.' || $dir === '..') continue;
+                    if ($dir === '.' || $dir === '..' || $dir === 'html') continue;
                     $fullPath = "{$wwwPath}/{$dir}";
                     if (is_dir($fullPath)) {
                         // Check if it's a Laravel project (has artisan file)
@@ -647,27 +647,7 @@ CONFIG;
         }
     }
 
-    /**
-     * Get projects list for dropdown
-     */
-    public function getProjects()
-    {
-        $projects = [];
-        $dirs = glob('/var/www/*', GLOB_ONLYDIR);
-        
-        foreach ($dirs as $dir) {
-            $name = basename($dir);
-            if ($name === 'html') continue;
-            
-            $projects[] = [
-                'name' => $name,
-                'path' => $dir,
-                'isLaravel' => file_exists("{$dir}/artisan")
-            ];
-        }
-        
-        return response()->json(['projects' => $projects]);
-    }
+
 
     /**
      * Start all processes
