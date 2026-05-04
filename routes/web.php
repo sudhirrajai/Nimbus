@@ -87,13 +87,15 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/zip', [FileManagerController::class, 'zip'])->name('zip');
         Route::post('/{domain}/extract', [FileManagerController::class, 'extract'])->name('extract');
         Route::post('/{domain}/upload', [FileManagerController::class, 'upload'])->name('upload');
-        //Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
         Route::get('/{domain}/download', [FileManagerController::class, 'download'])->name('download');
         Route::post('/{domain}/git/status', [FileManagerController::class, 'gitStatus'])->name('git.status');
         Route::post('/{domain}/git/action', [FileManagerController::class, 'gitAction'])->name('git.action');
         Route::post('/{domain}/git/token', [FileManagerController::class, 'saveGitToken'])->name('git.token.save');
         Route::get('/{domain}/git/token', [FileManagerController::class, 'getGitToken'])->name('git.token.get');
+        // Web Terminal
+        Route::post('/{domain}/terminal/execute', [\App\Http\Controllers\TerminalController::class, 'execute'])->name('terminal.execute');
     });
+
 
     // PHP Configuration routes
     Route::prefix('php')->name('php.')->group(function () {
