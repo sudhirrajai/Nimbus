@@ -2,14 +2,14 @@
   <div class="g-sidenav-show bg-gray-100">
     <Sidebar />
 
-    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg">
+    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg d-flex flex-column min-vh-100">
       <Navbar />
 
-      <div class="container-fluid py-2">
+      <div class="container-fluid py-2 flex-grow-1">
         <slot />
       </div>
 
-      <Footer />
+      <Footer class="mt-auto" />
     </main>
 
     <!-- <SettingsPanel /> -->
