@@ -421,8 +421,8 @@ const stopResize = () => {
 
 // Global keyboard shortcut
 const handleGlobalKeyDown = (e) => {
-  // Ctrl+` to toggle terminal
-  if (e.ctrlKey && e.key === '`') {
+  // Ctrl+` or Ctrl+~ to toggle terminal
+  if (e.ctrlKey && (e.key === '`' || e.key === '~')) {
     e.preventDefault()
     if (isOpen.value) {
       closeTerminal()
@@ -441,6 +441,8 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', doResize)
   document.removeEventListener('mouseup', stopResize)
 })
+
+defineExpose({ openTerminal, closeTerminal })
 </script>
 
 <style scoped>

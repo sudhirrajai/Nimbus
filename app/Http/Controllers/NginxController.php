@@ -43,8 +43,8 @@ class NginxController extends Controller
                     ]);
                 })
                 ->map(function ($domain) {
-                    $configPath = $this->sitesAvailable . $domain;
-                    $enabledPath = $this->sitesEnabled . $domain;
+                    $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
+                    $enabledPath = $this->resolveNginxConfigPath($this->sitesEnabled, $domain);
                     
                     return [
                         'domain' => $domain,
@@ -76,14 +76,14 @@ class NginxController extends Controller
                 'domain' => 'required|string|max:253'
             ]);
 
-            $domain = strtolower(trim($request->input('domain')));
+            $domain = trim($request->input('domain'));
             
             // Security validation
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
-            $configPath = $this->sitesAvailable . $domain;
+            $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
 
             if (!file_exists($configPath)) {
                 return response()->json(['error' => 'Configuration file not found'], 404);
@@ -115,7 +115,7 @@ class NginxController extends Controller
                 'content' => 'required|string'
             ]);
 
-            $domain = strtolower(trim($request->input('domain')));
+            $domain = trim($request->input('domain'));
             $content = $request->input('content');
             
             // Security validation
@@ -123,7 +123,7 @@ class NginxController extends Controller
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
-            $configPath = $this->sitesAvailable . $domain;
+            $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
 
             if (!file_exists($configPath)) {
                 return response()->json(['error' => 'Configuration file not found'], 404);
@@ -254,15 +254,15 @@ BASH;
                 'enabled' => 'required|boolean'
             ]);
 
-            $domain = strtolower(trim($request->input('domain')));
+            $domain = trim($request->input('domain'));
             $enabled = $request->input('enabled');
             
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
-            $configPath = $this->sitesAvailable . $domain;
-            $enabledPath = $this->sitesEnabled . $domain;
+            $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
+            $enabledPath = $this->resolveNginxConfigPath($this->sitesEnabled, $domain);
 
             if (!file_exists($configPath)) {
                 return response()->json(['error' => 'Configuration file not found'], 404);
@@ -307,12 +307,32 @@ BASH;
         }
     }
 
-    /**
-     * Validate domain name format
-     */
     private function isValidDomain($domain)
     {
-        return preg_match('/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/', $domain) && strlen($domain) <= 253;
+        return preg_match('/^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$/', $domain) && strlen($domain) <= 253;
+    }
+
+    /**
+     * Resolve the actual Nginx config path checking various common names
+     */
+    private function resolveNginxConfigPath($baseDir, $domain)
+    {
+        $variations = [
+            $domain,
+            strtolower($domain),
+            $domain . '.conf',
+            strtolower($domain) . '.conf',
+            str_replace('www.', '', strtolower($domain)),
+            str_replace('www.', '', strtolower($domain)) . '.conf',
+        ];
+
+        foreach ($variations as $file) {
+            if (file_exists($baseDir . $file)) {
+                return $baseDir . $file;
+            }
+        }
+
+        return $baseDir . $domain;
     }
 
     /**
