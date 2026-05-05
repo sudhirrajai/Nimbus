@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="File Manager" />
     <div class="container-fluid py-4" @click="closeContextMenu" @dragenter.prevent="handleDragEnter"
@@ -60,7 +60,7 @@
                 <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" />
 
                 <!-- Terminal -->
-                <button class="btn btn-sm bg-gradient-success mb-0" @click="showTerminal = true" title="Open Web Terminal">
+                <button class="btn btn-sm bg-gradient-success mb-0" @click="webTerminalRef?.openTerminal()" title="Open Web Terminal">
                   <i class="material-symbols-rounded text-sm me-1">terminal</i>
                   Terminal
                 </button>
@@ -878,6 +878,7 @@
 
     <!-- Web Terminal -->
     <WebTerminal
+      ref="webTerminalRef"
       :domain="domain"
       :currentPath="currentPath"
       @refresh-files="loadFiles"
@@ -897,6 +898,7 @@ const props = defineProps({
   initialPath: String
 })
 
+const webTerminalRef = ref(null)
 const items = ref([])
 const searchQuery = ref('')
 const currentPath = ref(props.initialPath || '')
