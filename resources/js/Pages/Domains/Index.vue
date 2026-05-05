@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="Domains" />
     <div class="container-fluid py-4">
@@ -10,7 +10,7 @@
               <h4 class="font-weight-bolder mb-0">Domain Management</h4>
               <p class="mb-0 text-sm">Manage your hosted domains and websites</p>
             </div>
-            <button class="btn bg-gradient-dark mb-0" @click="openAddModal">
+            <button v-if="isRootOrAdmin" class="btn bg-gradient-dark mb-0" @click="openAddModal">
               <i class="material-symbols-rounded text-sm me-1">add</i>
               Add Domain
             </button>
@@ -86,6 +86,7 @@
                           <i class="material-symbols-rounded text-sm">folder</i>
                         </button>
                         <button 
+                          v-if="isRootOrAdmin"
                           class="btn btn-link text-secondary mb-0 px-2" 
                           @click="openEditModal(domain.name)"
                           title="Edit domain"
@@ -93,6 +94,7 @@
                           <i class="material-symbols-rounded text-sm">edit</i>
                         </button>
                         <button 
+                          v-if="isRootOrAdmin"
                           class="btn btn-link text-danger mb-0 px-2" 
                           @click="confirmDelete(domain.name)"
                           title="Delete domain"
@@ -246,9 +248,13 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
+
+const page = usePage()
+const userRole = computed(() => page.props.auth?.user?.role || 'user')
+const isRootOrAdmin = computed(() => page.props.auth?.user?.is_root || userRole.value === 'root' || userRole.value === 'admin')
 
 const domains = ref([])
 const serverIp = ref("")

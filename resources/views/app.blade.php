@@ -23,6 +23,16 @@
         @routes
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
+        <style>
+            body {
+                overflow-x: hidden;
+                overflow-y: hidden; /* Prevent double vertical scrollbar */
+            }
+            .main-content {
+                overflow-y: auto;
+                overflow-x: hidden;
+            }
+        </style>
     </head>
     <body class="font-sans antialiased">
         @inertia
