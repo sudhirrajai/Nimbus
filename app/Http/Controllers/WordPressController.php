@@ -99,9 +99,17 @@ class WordPressController extends Controller
                 $sites[] = $site;
             }
 
+            $user = auth()->user();
+            $accessibleDomains = $user->accessibleDomains();
+
+            $query = WordPressSite::orderBy('domain');
+            if (!$user->isRoot()) {
+                $query->whereIn('domain', $accessibleDomains);
+            }
+
             return response()->json([
                 'success' => true,
-                'sites' => WordPressSite::orderBy('domain')->get(),
+                'sites' => $query->get(),
                 'scanned' => count($sites),
             ]);
         } catch (\Exception $e) {
@@ -115,9 +123,17 @@ class WordPressController extends Controller
      */
     public function list()
     {
+        $user = auth()->user();
+        $accessibleDomains = $user->accessibleDomains();
+
+        $query = WordPressSite::orderBy('domain');
+        if (!$user->isRoot()) {
+            $query->whereIn('domain', $accessibleDomains);
+        }
+
         return response()->json([
             'success' => true,
-            'sites' => WordPressSite::orderBy('domain')->get(),
+            'sites' => $query->get(),
         ]);
     }
 

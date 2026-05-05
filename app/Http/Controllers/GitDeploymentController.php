@@ -54,8 +54,15 @@ class GitDeploymentController extends Controller
     public function list()
     {
         try {
-            $deployments = GitDeployment::orderBy('updated_at', 'desc')
-                ->get()
+            $user = auth()->user();
+            $accessibleDomains = $user->accessibleDomains();
+
+            $query = GitDeployment::orderBy('updated_at', 'desc');
+            if (!$user->isRoot()) {
+                $query->whereIn('domain', $accessibleDomains);
+            }
+
+            $deployments = $query->get()
                 ->map(function ($dep) {
                     return [
                         'id' => $dep->id,
@@ -91,16 +98,29 @@ class GitDeploymentController extends Controller
                 return response()->json([]);
             }
 
+            $user = auth()->user();
+            $accessibleDomains = $user->accessibleDomains();
+
             // Get all domain directories
             $allDomains = collect(File::directories($this->basePath))
                 ->map(fn($path) => basename($path))
-                ->filter(fn($name) => !in_array(strtolower($name), [
-                    'html', 'default', 'public', 'cgi-bin', 'nimbus'
-                ]))
+                ->filter(function($name) use ($user, $accessibleDomains) {
+                    if (in_array(strtolower($name), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
+                        return false;
+                    }
+                    if (!$user->isRoot()) {
+                        return in_array($name, $accessibleDomains);
+                    }
+                    return true;
+                })
                 ->values();
 
             // Get domains that already have deployments
-            $deployedDomains = GitDeployment::pluck('domain')->toArray();
+            $deployedQuery = GitDeployment::query();
+            if (!$user->isRoot()) {
+                $deployedQuery->whereIn('domain', $accessibleDomains);
+            }
+            $deployedDomains = $deployedQuery->pluck('domain')->toArray();
 
             // Indicate which domains already have deployments
             $domains = $allDomains->map(function ($domain) use ($deployedDomains) {

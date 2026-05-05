@@ -30,9 +30,11 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-// Protected routes — all users
+// ═══════════════════════════════════════════════════════════════
+// Protected routes — all authenticated users
+// ═══════════════════════════════════════════════════════════════
 Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
-    
+
     // Dashboard — all users can access
     Route::prefix('dashboard')->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -46,130 +48,28 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/password', [\App\Http\Controllers\ProfileController::class, 'changePassword'])->name('password');
     });
 
-    // ─── ROOT + ADMIN ONLY ──────────────────────────────────────
-    // Domains, Deployments, Nginx, SSL, Database, Email
-    Route::middleware(['role:root,admin'])->group(function () {
+    // ─── DOMAIN-SCOPED PAGES ─────────────────────────────────────
+    // These pages are accessible to ALL authenticated users.
+    // Controllers filter data based on user's assigned websites.
+    // Root sees everything, others see only their assigned domains.
 
-        Route::get('/domains', function () {
-            return Inertia::render('Domains/Index');
-        })->name('domains.list');
+    // Domains page & API (controller filters by user assignments)
+    Route::get('/domains', function () {
+        return Inertia::render('Domains/Index');
+    })->name('domains.list');
 
-        Route::prefix('domains')->group(function () {
-            Route::get('/api', [DomainController::class, 'index'])->name('domain.index');
-            Route::post('/', [DomainController::class, 'store'])->name('domain.store');
-            Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
-            Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
-        });
-
-        // Git Deployments routes
-        Route::get('/deployments', [GitDeploymentController::class, 'index'])->name('deployments.index');
-        Route::get('/deployments/create', [GitDeploymentController::class, 'create'])->name('deployments.create');
-        Route::get('/deployments/{id}/view-logs', [GitDeploymentController::class, 'showLogs'])->name('deployments.view-logs');
-
-        Route::prefix('deployments')->name('deployments.')->group(function () {
-            Route::get('/list', [GitDeploymentController::class, 'list'])->name('list');
-            Route::get('/domains', [GitDeploymentController::class, 'getDomains'])->name('domains');
-            Route::post('/', [GitDeploymentController::class, 'store'])->name('store');
-            Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
-            Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
-            Route::get('/ssh-key', [GitDeploymentController::class, 'getServerSshKey'])->name('ssh-key');
-            Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
-            Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
-            Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
-            Route::post('/{id}/redeploy', [GitDeploymentController::class, 'redeploy'])->name('redeploy');
-            Route::delete('/{id}', [GitDeploymentController::class, 'destroy'])->name('destroy');
-            Route::get('/blacklist', [GitDeploymentController::class, 'getBlacklist'])->name('blacklist');
-            Route::post('/blacklist', [GitDeploymentController::class, 'updateBlacklist'])->name('blacklist.update');
-        });
-
-        // Nginx Configuration routes
-        Route::prefix('nginx')->name('nginx.')->group(function () {
-            Route::get('/', [NginxController::class, 'index'])->name('index');
-            Route::get('/domains', [NginxController::class, 'getDomains'])->name('domains');
-            Route::post('/config/read', [NginxController::class, 'getConfig'])->name('config.read');
-            Route::post('/config/save', [NginxController::class, 'saveConfig'])->name('config.save');
-            Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
-            Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
-            Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
-        });
-
-        // SSL Certificate routes
-        Route::prefix('ssl')->name('ssl.')->group(function () {
-            Route::get('/', [SslController::class, 'index'])->name('index');
-            Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
-            Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
-            Route::post('/install-certbot', [SslController::class, 'installCertbotAction'])->name('install-certbot');
-            Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
-            Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
-            Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
-            Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');
-        });
-
-        // Database Management routes
-        Route::prefix('database')->name('database.')->group(function () {
-            Route::get('/', [DatabaseController::class, 'index'])->name('index');
-            Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
-            Route::post('/install-viewer', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-viewer');
-            Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-viewer');
-            Route::post('/clear-lock', [DatabaseController::class, 'clearInstallLock'])->name('clear-lock');
-            Route::get('/install-status', [DatabaseController::class, 'getInstallStatus'])->name('install-status');
-            Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');
-            Route::get('/list', [DatabaseController::class, 'getDatabases'])->name('list');
-            Route::get('/users', [DatabaseController::class, 'getUsers'])->name('users');
-            Route::post('/create', [DatabaseController::class, 'createDatabase'])->name('create');
-            Route::post('/delete', [DatabaseController::class, 'deleteDatabase'])->name('delete');
-            Route::post('/user/create', [DatabaseController::class, 'createUser'])->name('user.create');
-            Route::post('/user/delete', [DatabaseController::class, 'deleteUser'])->name('user.delete');
-            Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
-            Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
-            Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
-            Route::post('/viewer/access', [DatabaseController::class, 'getDatabaseViewerUrl'])->name('viewer.access');
-            Route::get('/viewer/sso', [DatabaseController::class, 'openDatabaseViewerSSO'])->name('viewer.sso');
-            Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
-            Route::get('/viewer-view', [DatabaseController::class, 'DatabaseViewerView'])->name('viewer.view');
-        });
-
-        // Email Management routes
-        Route::prefix('email')->name('email.')->group(function () {
-            Route::get('/', [EmailController::class, 'index'])->name('index');
-            Route::get('/status', [EmailController::class, 'getStatus'])->name('status');
-            Route::post('/install', [EmailController::class, 'installMailServer'])->name('install');
-            Route::get('/install-log', [EmailController::class, 'getInstallLog'])->name('install-log');
-            Route::get('/domains', [EmailController::class, 'getDomains'])->name('domains');
-            Route::post('/domain/enable', [EmailController::class, 'enableDomain'])->name('domain.enable');
-            Route::post('/domain/disable', [EmailController::class, 'disableDomain'])->name('domain.disable');
-            Route::get('/accounts', [EmailController::class, 'getAccounts'])->name('accounts');
-            Route::post('/account/create', [EmailController::class, 'createAccount'])->name('account.create');
-            Route::post('/account/delete', [EmailController::class, 'deleteAccount'])->name('account.delete');
-            Route::post('/account/password', [EmailController::class, 'updatePassword'])->name('account.password');
-            Route::post('/account/quota', [EmailController::class, 'updateQuota'])->name('account.quota');
-            Route::get('/aliases', [EmailController::class, 'getAliases'])->name('aliases');
-            Route::post('/alias/create', [EmailController::class, 'createAlias'])->name('alias.create');
-            Route::post('/alias/delete', [EmailController::class, 'deleteAlias'])->name('alias.delete');
-            Route::get('/webmail', [EmailController::class, 'getWebmailUrl'])->name('webmail');
-            Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
-            Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
-            Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
-        });
-
-        // WordPress Management routes
-        Route::prefix('wordpress')->name('wordpress.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\WordPressController::class, 'index'])->name('index');
-            Route::get('/list', [\App\Http\Controllers\WordPressController::class, 'list'])->name('list');
-            Route::post('/scan', [\App\Http\Controllers\WordPressController::class, 'scan'])->name('scan');
-            Route::post('/install', [\App\Http\Controllers\WordPressController::class, 'install'])->name('install');
-            Route::get('/{id}/details', [\App\Http\Controllers\WordPressController::class, 'details'])->name('details');
-            Route::post('/{id}/password', [\App\Http\Controllers\WordPressController::class, 'changePassword'])->name('password');
-            Route::post('/{id}/update-core', [\App\Http\Controllers\WordPressController::class, 'updateCore'])->name('update-core');
-            Route::post('/{id}/update-plugins', [\App\Http\Controllers\WordPressController::class, 'updatePlugins'])->name('update-plugins');
-            Route::post('/{id}/toggle-plugin', [\App\Http\Controllers\WordPressController::class, 'togglePlugin'])->name('toggle-plugin');
-            Route::post('/{id}/auto-login', [\App\Http\Controllers\WordPressController::class, 'autoLogin'])->name('auto-login');
-            Route::delete('/{id}', [\App\Http\Controllers\WordPressController::class, 'delete'])->name('delete');
-        });
+    Route::prefix('domains')->group(function () {
+        Route::get('/api', [DomainController::class, 'index'])->name('domain.index');
     });
 
-    // ─── FILE MANAGER — domain-scoped access ─────────────────────
-    // All roles can access, but CheckDomainAccess ensures user can only access assigned domains
+    // Domain create/update/delete — root+admin only
+    Route::middleware(['role:root,admin'])->prefix('domains')->group(function () {
+        Route::post('/', [DomainController::class, 'store'])->name('domain.store');
+        Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
+        Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
+    });
+
+    // File Manager — domain-scoped access via middleware
     Route::middleware(['domain.access'])->prefix('file-manager')->name('file-manager.')->group(function () {
         Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
         Route::post('/{domain}/list', [FileManagerController::class, 'list'])->name('list');
@@ -195,6 +95,78 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/terminal/execute', [\App\Http\Controllers\TerminalController::class, 'execute'])->name('terminal.execute');
     });
 
+    // Git Deployments — accessible to users with 'deployments' permission (controller filters)
+    Route::get('/deployments', [GitDeploymentController::class, 'index'])->name('deployments.index');
+    Route::get('/deployments/create', [GitDeploymentController::class, 'create'])->name('deployments.create');
+    Route::get('/deployments/{id}/view-logs', [GitDeploymentController::class, 'showLogs'])->name('deployments.view-logs');
+
+    Route::prefix('deployments')->name('deployments.')->group(function () {
+        Route::get('/list', [GitDeploymentController::class, 'list'])->name('list');
+        Route::get('/domains', [GitDeploymentController::class, 'getDomains'])->name('domains');
+        Route::post('/', [GitDeploymentController::class, 'store'])->name('store');
+        Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
+        Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
+        Route::get('/ssh-key', [GitDeploymentController::class, 'getServerSshKey'])->name('ssh-key');
+        Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
+        Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
+        Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
+        Route::post('/{id}/redeploy', [GitDeploymentController::class, 'redeploy'])->name('redeploy');
+        Route::delete('/{id}', [GitDeploymentController::class, 'destroy'])->name('destroy');
+        Route::get('/blacklist', [GitDeploymentController::class, 'getBlacklist'])->name('blacklist');
+        Route::post('/blacklist', [GitDeploymentController::class, 'updateBlacklist'])->name('blacklist.update');
+    });
+
+    // SSL Certificates — accessible to users with 'ssl' permission (controller filters)
+    Route::prefix('ssl')->name('ssl.')->group(function () {
+        Route::get('/', [SslController::class, 'index'])->name('index');
+        Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
+        Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
+        Route::post('/install-certbot', [SslController::class, 'installCertbotAction'])->name('install-certbot');
+        Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
+        Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
+        Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
+        Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');
+    });
+
+    // Database Management — accessible to users with 'database' permission (controller filters)
+    Route::prefix('database')->name('database.')->group(function () {
+        Route::get('/', [DatabaseController::class, 'index'])->name('index');
+        Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
+        Route::post('/install-viewer', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-viewer');
+        Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-viewer');
+        Route::post('/clear-lock', [DatabaseController::class, 'clearInstallLock'])->name('clear-lock');
+        Route::get('/install-status', [DatabaseController::class, 'getInstallStatus'])->name('install-status');
+        Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');
+        Route::get('/list', [DatabaseController::class, 'getDatabases'])->name('list');
+        Route::get('/users', [DatabaseController::class, 'getUsers'])->name('users');
+        Route::post('/create', [DatabaseController::class, 'createDatabase'])->name('create');
+        Route::post('/delete', [DatabaseController::class, 'deleteDatabase'])->name('delete');
+        Route::post('/user/create', [DatabaseController::class, 'createUser'])->name('user.create');
+        Route::post('/user/delete', [DatabaseController::class, 'deleteUser'])->name('user.delete');
+        Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
+        Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
+        Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
+        Route::post('/viewer/access', [DatabaseController::class, 'getDatabaseViewerUrl'])->name('viewer.access');
+        Route::get('/viewer/sso', [DatabaseController::class, 'openDatabaseViewerSSO'])->name('viewer.sso');
+        Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
+        Route::get('/viewer-view', [DatabaseController::class, 'DatabaseViewerView'])->name('viewer.view');
+    });
+
+    // WordPress Management — accessible to users with 'wordpress' permission (controller filters)
+    Route::prefix('wordpress')->name('wordpress.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\WordPressController::class, 'index'])->name('index');
+        Route::get('/list', [\App\Http\Controllers\WordPressController::class, 'list'])->name('list');
+        Route::post('/scan', [\App\Http\Controllers\WordPressController::class, 'scan'])->name('scan');
+        Route::post('/install', [\App\Http\Controllers\WordPressController::class, 'install'])->name('install');
+        Route::get('/{id}/details', [\App\Http\Controllers\WordPressController::class, 'details'])->name('details');
+        Route::post('/{id}/password', [\App\Http\Controllers\WordPressController::class, 'changePassword'])->name('password');
+        Route::post('/{id}/update-core', [\App\Http\Controllers\WordPressController::class, 'updateCore'])->name('update-core');
+        Route::post('/{id}/update-plugins', [\App\Http\Controllers\WordPressController::class, 'updatePlugins'])->name('update-plugins');
+        Route::post('/{id}/toggle-plugin', [\App\Http\Controllers\WordPressController::class, 'togglePlugin'])->name('toggle-plugin');
+        Route::post('/{id}/auto-login', [\App\Http\Controllers\WordPressController::class, 'autoLogin'])->name('auto-login');
+        Route::delete('/{id}', [\App\Http\Controllers\WordPressController::class, 'delete'])->name('delete');
+    });
+
     // ─── ROOT ONLY — System Administration ───────────────────────
     Route::middleware(['role:root'])->group(function () {
 
@@ -206,6 +178,40 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/save', [PhpController::class, 'saveIni'])->name('save');
             Route::post('/update-setting', [PhpController::class, 'updateSetting'])->name('update-setting');
             Route::post('/restart', [PhpController::class, 'restartPhp'])->name('restart');
+        });
+
+        // Nginx Configuration routes
+        Route::prefix('nginx')->name('nginx.')->group(function () {
+            Route::get('/', [NginxController::class, 'index'])->name('index');
+            Route::get('/domains', [NginxController::class, 'getDomains'])->name('domains');
+            Route::post('/config/read', [NginxController::class, 'getConfig'])->name('config.read');
+            Route::post('/config/save', [NginxController::class, 'saveConfig'])->name('config.save');
+            Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
+            Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
+            Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
+        });
+
+        // Email Management routes
+        Route::prefix('email')->name('email.')->group(function () {
+            Route::get('/', [EmailController::class, 'index'])->name('index');
+            Route::get('/status', [EmailController::class, 'getStatus'])->name('status');
+            Route::post('/install', [EmailController::class, 'installMailServer'])->name('install');
+            Route::get('/install-log', [EmailController::class, 'getInstallLog'])->name('install-log');
+            Route::get('/domains', [EmailController::class, 'getDomains'])->name('domains');
+            Route::post('/domain/enable', [EmailController::class, 'enableDomain'])->name('domain.enable');
+            Route::post('/domain/disable', [EmailController::class, 'disableDomain'])->name('domain.disable');
+            Route::get('/accounts', [EmailController::class, 'getAccounts'])->name('accounts');
+            Route::post('/account/create', [EmailController::class, 'createAccount'])->name('account.create');
+            Route::post('/account/delete', [EmailController::class, 'deleteAccount'])->name('account.delete');
+            Route::post('/account/password', [EmailController::class, 'updatePassword'])->name('account.password');
+            Route::post('/account/quota', [EmailController::class, 'updateQuota'])->name('account.quota');
+            Route::get('/aliases', [EmailController::class, 'getAliases'])->name('aliases');
+            Route::post('/alias/create', [EmailController::class, 'createAlias'])->name('alias.create');
+            Route::post('/alias/delete', [EmailController::class, 'deleteAlias'])->name('alias.delete');
+            Route::get('/webmail', [EmailController::class, 'getWebmailUrl'])->name('webmail');
+            Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
+            Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
+            Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
         });
 
         // Supervisor Management routes
@@ -262,7 +268,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/', [\App\Http\Controllers\ProfileController::class, 'settings'])->name('index');
             Route::get('/data', [\App\Http\Controllers\ProfileController::class, 'getSettings'])->name('data');
             Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateSettings'])->name('update');
-            
+
             // Security Settings
             Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'index'])->name('security.index');
             Route::post('/security/rules', [\App\Http\Controllers\SecurityController::class, 'storeRule'])->name('security.rules.store');

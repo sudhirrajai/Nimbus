@@ -32,15 +32,21 @@ class SslController extends Controller
             }
 
             $serverIp = $this->getServerIp();
+            $user = auth()->user();
+            $accessibleDomains = $user->accessibleDomains();
 
             $directories = collect(File::directories($this->basePath))
                 ->map(function ($path) {
                     return basename($path);
                 })
-                ->filter(function ($name) {
-                    return !in_array(strtolower($name), [
-                        'html', 'default', 'public', 'cgi-bin', 'nimbus'
-                    ]);
+                ->filter(function ($name) use ($user, $accessibleDomains) {
+                    if (in_array(strtolower($name), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
+                        return false;
+                    }
+                    if (!$user->isRoot()) {
+                        return in_array($name, $accessibleDomains);
+                    }
+                    return true;
                 })
                 ->map(function ($domain) use ($serverIp) {
                     $info = $this->getDomainSslInfo($domain);

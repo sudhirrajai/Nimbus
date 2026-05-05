@@ -35,16 +35,35 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $permissions = [];
+        $assignedDomains = [];
+
+        if ($user) {
+            // Gather unique permissions across all assigned websites
+            $websites = $user->websites ?? collect();
+            foreach ($websites as $site) {
+                $assignedDomains[] = $site->domain;
+                foreach (($site->permissions ?? []) as $perm) {
+                    if (!in_array($perm, $permissions)) {
+                        $permissions[] = $perm;
+                    }
+                }
+            }
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user() ? [
-                    'id' => $request->user()->id,
-                    'name' => $request->user()->name,
-                    'email' => $request->user()->email,
-                    'role' => $request->user()->role ?? 'root',
-                    'linux_user' => $request->user()->linux_user,
-                    'is_root' => $request->user()->role === 'root' || $request->user()->id === 1,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role ?? 'root',
+                    'linux_user' => $user->linux_user,
+                    'is_root' => $user->role === 'root' || $user->id === 1,
+                    'permissions' => $user->isRoot() ? ['files','deployments','wordpress','database','ssl'] : $permissions,
+                    'assigned_domains' => $user->isRoot() ? [] : $assignedDomains,
                 ] : null,
             ],
         ];
