@@ -22,30 +22,14 @@
           </Link>
         </li>
 
-        <!-- ═══ MY WEBSITES (non-root users with assigned domains) ═══ -->
-        <template v-if="!isRoot && assignedDomains.length > 0">
-          <li class="nav-item mt-3">
-            <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
-              My Websites
-            </h6>
-          </li>
-
-          <li class="nav-item" v-for="domain in assignedDomains" :key="domain">
-            <Link :href="'/file-manager/' + domain" class="nav-link" :class="isActive('/file-manager/' + domain)">
-              <i class="material-symbols-rounded opacity-5">language</i>
-              <span class="nav-link-text ms-1">{{ domain }}</span>
-            </Link>
-          </li>
-        </template>
-
-        <!-- ═══ SERVER MANAGEMENT (Root & Admin) ═══ -->
-        <li v-if="isRootOrAdmin" class="nav-item mt-3">
+        <!-- ═══ SERVER MANAGEMENT (All Users) ═══ -->
+        <li class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Server Management
           </h6>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li class="nav-item">
           <Link href="/domains" class="nav-link" :class="isActive('/domains')">
             <i class="material-symbols-rounded opacity-5">language</i>
             <span class="nav-link-text ms-1">Domains</span>
