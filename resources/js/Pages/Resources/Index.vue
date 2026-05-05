@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <MainLayout>
     <Head title="Resources" />
         <div class="container-fluid py-4">
@@ -40,7 +40,7 @@
                 <div class="row mb-4">
                     <!-- CPU -->
                     <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-body p-3">
                                 <div class="row">
                                     <div class="col-8">
@@ -69,7 +69,7 @@
 
                     <!-- Memory -->
                     <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-body p-3">
                                 <div class="row">
                                     <div class="col-8">
@@ -99,7 +99,7 @@
 
                     <!-- Load Average -->
                     <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-body p-3">
                                 <div class="row">
                                     <div class="col-8">
@@ -129,7 +129,7 @@
 
                     <!-- Uptime -->
                     <div class="col-xl-3 col-sm-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-body p-3">
                                 <div class="row">
                                     <div class="col-8">

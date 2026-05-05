@@ -59,7 +59,7 @@
                 <!-- Stats Row -->
                 <div class="row mb-4">
                     <div class="col-xl-4 col-sm-6 mb-xl-0 mb-4">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header p-2 ps-3">
                                 <div class="d-flex justify-content-between">
                                     <div>
@@ -75,7 +75,7 @@
                         </div>
                     </div>
                     <div class="col-xl-4 col-sm-6 mb-xl-0 mb-4">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header p-2 ps-3">
                                 <div class="d-flex justify-content-between">
                                     <div>
@@ -91,7 +91,7 @@
                         </div>
                     </div>
                     <div class="col-xl-4 col-sm-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header p-2 ps-3">
                                 <div class="d-flex justify-content-between">
                                     <div>
