@@ -36,6 +36,13 @@
           </Link>
         </li>
 
+        <li class="nav-item">
+          <Link href="/dns" class="nav-link" :class="isActive('/dns')">
+            <i class="material-symbols-rounded opacity-5">dns</i>
+            <span class="nav-link-text ms-1">DNS Management</span>
+          </Link>
+        </li>
+
         <li v-if="isRootOrAdmin || hasPerm('deployments')" class="nav-item">
           <Link href="/deployments" class="nav-link" :class="isActive('/deployments')">
             <i class="material-symbols-rounded opacity-5">rocket_launch</i>
