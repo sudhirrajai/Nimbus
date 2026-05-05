@@ -24,6 +24,8 @@ class DomainController extends Controller
             }
 
             $serverIp = $this->getServerIp();
+            $user = auth()->user();
+            $accessibleDomains = $user->accessibleDomains();
 
             $directories = collect(File::directories($this->basePath))
                 ->map(function ($path) use ($serverIp) {
@@ -35,15 +37,24 @@ class DomainController extends Controller
                         'server_ip' => $serverIp
                     ];
                 })
-                ->filter(function ($item) {
+                ->filter(function ($item) use ($user, $accessibleDomains) {
                     // Ignore system directories and the Nimbus control panel itself
-                    return !in_array(strtolower($item['name']), [
+                    if (in_array(strtolower($item['name']), [
                         'html', 
                         'default', 
                         'public', 
                         'cgi-bin',
                         'nimbus'  // Exclude Nimbus control panel
-                    ]);
+                    ])) {
+                        return false;
+                    }
+
+                    // Non-root users can only see their assigned domains
+                    if (!$user->isRoot()) {
+                        return in_array($item['name'], $accessibleDomains);
+                    }
+
+                    return true;
                 })
                 ->values();
 
