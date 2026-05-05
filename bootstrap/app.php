@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'security' => \App\Http\Middleware\SecurityMiddleware::class,
+            'role' => \App\Http\Middleware\CheckRole::class,
+            'domain.access' => \App\Http\Middleware\CheckDomainAccess::class,
         ]);
 
         $middleware->web(prepend: [

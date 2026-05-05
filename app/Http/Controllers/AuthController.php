@@ -34,6 +34,17 @@ class AuthController extends Controller
         ]);
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
+            $user = Auth::user();
+
+            // Block suspended users
+            if ($user->status === 'suspended') {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Your account has been suspended. Contact the administrator.',
+                ])->onlyInput('email');
+            }
+
+            $user->update(['last_login_at' => now()]);
             $request->session()->regenerate();
             return redirect()->intended('/dashboard');
         }
@@ -88,6 +99,7 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => 'root',
         ]);
 
         Auth::login($user);

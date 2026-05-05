@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <MainLayout>
     <Head title="Supervisor" />
         <div class="container-fluid py-2">
@@ -541,6 +541,41 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
             </div>
             <div v-if="showTerminalModal" class="modal-backdrop fade show"></div>
             </Teleport>
+
+            <!-- Delete Confirmation Modal -->
+            <Teleport to="body">
+            <div class="modal fade" :class="{ show: showDeleteModal }" :style="{ display: showDeleteModal ? 'block' : 'none' }" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-0">
+                            <div class="d-flex align-items-center">
+                                <div style="width:42px;height:42px;border-radius:0.75rem;display:flex;align-items:center;justify-content:center" class="bg-gradient-danger text-white">
+                                    <i class="material-symbols-rounded">delete_forever</i>
+                                </div>
+                                <div class="ms-3">
+                                    <h5 class="mb-0">Delete Worker Config</h5>
+                                    <p class="text-sm text-secondary mb-0">{{ processToDelete }}</p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" @click="showDeleteModal = false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger mb-0 py-2">
+                                <small><strong>Warning:</strong> This will permanently remove the configuration file for this worker process. This action cannot be undone.</small>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-outline-secondary" @click="showDeleteModal = false">Cancel</button>
+                            <button type="button" class="btn bg-gradient-danger" @click="executeDelete" :disabled="deletingProcess">
+                                <span v-if="deletingProcess" class="spinner-border spinner-border-sm me-1"></span>
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-if="showDeleteModal" class="modal-backdrop fade show" @click="showDeleteModal = false"></div>
+            </Teleport>
         </div>
     </MainLayout>
 </template>
@@ -563,6 +598,10 @@ const expandedGroups = ref([])
 const showCreateModal = ref(false)
 const showLogsModal = ref(false)
 const showTerminalModal = ref(false)
+const showDeleteModal = ref(false)
+
+const processToDelete = ref('')
+const deletingProcess = ref(false)
 
 // Terminal
 const terminalLog = ref('')
@@ -791,14 +830,22 @@ const restartProcess = async (name) => {
     }
 }
 
-const confirmDelete = async (name) => {
-    if (!confirm(`Delete worker ${name}? This will remove the configuration.`)) return
+const confirmDelete = (name) => {
+    processToDelete.value = name
+    showDeleteModal.value = true
+}
+
+const executeDelete = async () => {
+    deletingProcess.value = true
     try {
-        await axios.post('/supervisor/delete', { name })
+        await axios.post('/supervisor/delete', { name: processToDelete.value })
         await loadProcesses()
-        showNotification(`Deleted ${name}`, 'success')
+        showNotification(`Deleted ${processToDelete.value}`, 'success')
+        showDeleteModal.value = false
     } catch (error) {
         showNotification('Failed: ' + (error.response?.data?.error || error.message), 'error')
+    } finally {
+        deletingProcess.value = false
     }
 }
 

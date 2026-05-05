@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -21,6 +20,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'linux_user',
+        'status',
+        'last_login_at',
     ];
 
     /**
@@ -43,6 +46,87 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'last_login_at' => 'datetime',
         ];
+    }
+
+    // ─── Relationships ───────────────────────────────────────────
+
+    public function websites()
+    {
+        return $this->hasMany(UserWebsite::class);
+    }
+
+    // ─── Role Helpers ────────────────────────────────────────────
+
+    public function isRoot(): bool
+    {
+        return $this->role === 'root';
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isUser(): bool
+    {
+        return $this->role === 'user';
+    }
+
+    public function isRootOrAdmin(): bool
+    {
+        return in_array($this->role, ['root', 'admin']);
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
+    }
+
+    // ─── Domain Access ───────────────────────────────────────────
+
+    /**
+     * Check if user can access a specific domain
+     */
+    public function canAccessDomain(string $domain): bool
+    {
+        if ($this->isRoot()) return true;
+
+        return $this->websites()->where('domain', $domain)->exists();
+    }
+
+    /**
+     * Check if user has a specific permission for a domain
+     */
+    public function hasDomainPermission(string $domain, string $permission): bool
+    {
+        if ($this->isRoot()) return true;
+
+        $website = $this->websites()->where('domain', $domain)->first();
+        if (!$website) return false;
+
+        return $website->hasPermission($permission);
+    }
+
+    /**
+     * Get all domains this user can access
+     */
+    public function accessibleDomains(): array
+    {
+        if ($this->isRoot()) {
+            // Root sees all domains in /var/www/
+            $domains = [];
+            $dirs = glob('/var/www/*', GLOB_ONLYDIR);
+            foreach ($dirs as $dir) {
+                $name = basename($dir);
+                if ($name !== 'html') {
+                    $domains[] = $name;
+                }
+            }
+            return $domains;
+        }
+
+        return $this->websites()->pluck('domain')->toArray();
     }
 }
