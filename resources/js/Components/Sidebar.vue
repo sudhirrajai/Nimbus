@@ -22,21 +22,21 @@
           </Link>
         </li>
 
-        <!-- Server Management Section -->
-        <li class="nav-item mt-3">
+        <!-- Server Management Section (Root & Admin only) -->
+        <li v-if="isRootOrAdmin" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Server Management
           </h6>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/domains" class="nav-link" :class="isActive('/domains')">
             <i class="material-symbols-rounded opacity-5">language</i>
             <span class="nav-link-text ms-1">Domains</span>
           </Link>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/deployments" class="nav-link" :class="isActive('/deployments')">
             <i class="material-symbols-rounded opacity-5">rocket_launch</i>
             <span class="nav-link-text ms-1">Git Deployments</span>
@@ -127,42 +127,42 @@
           </Link>
         </li>
 
-        <!-- Automation Section -->
-        <li class="nav-item mt-3">
+        <!-- Automation Section (Root only) -->
+        <li v-if="isRoot" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Automation
           </h6>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRoot" class="nav-item">
           <Link href="/supervisor" class="nav-link" :class="isActive('/supervisor')">
             <i class="material-symbols-rounded opacity-5">memory</i>
             <span class="nav-link-text ms-1">Supervisor</span>
           </Link>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRoot" class="nav-item">
           <Link href="/cron" class="nav-link" :class="isActive('/cron')">
             <i class="material-symbols-rounded opacity-5">schedule</i>
             <span class="nav-link-text ms-1">Cron Jobs</span>
           </Link>
         </li>
 
-        <!-- Monitoring Section -->
-        <li class="nav-item mt-3">
+        <!-- Monitoring Section (Root & Admin) -->
+        <li v-if="isRootOrAdmin" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Monitoring
           </h6>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/logs" class="nav-link" :class="isActive('/logs')">
             <i class="material-symbols-rounded opacity-5">description</i>
             <span class="nav-link-text ms-1">Logs</span>
           </Link>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/resources" class="nav-link" :class="isActive('/resources')">
             <i class="material-symbols-rounded opacity-5">monitoring</i>
             <span class="nav-link-text ms-1">Resource Usage</span>
@@ -183,14 +183,21 @@
           </Link>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRoot" class="nav-item">
+          <Link href="/users" class="nav-link" :class="isActive('/users')">
+            <i class="material-symbols-rounded opacity-5">group</i>
+            <span class="nav-link-text ms-1">User Management</span>
+          </Link>
+        </li>
+
+        <li v-if="isRoot" class="nav-item">
           <Link href="/settings" class="nav-link" :class="isActive('/settings')">
             <i class="material-symbols-rounded opacity-5">settings</i>
             <span class="nav-link-text ms-1">Settings</span>
           </Link>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRoot" class="nav-item">
           <Link href="/updates" class="nav-link" :class="isActive('/updates')">
             <i class="material-symbols-rounded opacity-5">system_update</i>
             <span class="nav-link-text ms-1">Updates</span>
@@ -216,6 +223,10 @@ import { Link, usePage, router } from '@inertiajs/vue3'
 import { computed, onMounted, onUnmounted } from 'vue'
 
 const page = usePage()
+
+const userRole = computed(() => page.props.auth?.user?.role || 'user')
+const isRoot = computed(() => page.props.auth?.user?.is_root || userRole.value === 'root')
+const isRootOrAdmin = computed(() => isRoot.value || userRole.value === 'admin')
 
 const isActive = (path) => {
   const currentPath = page.url

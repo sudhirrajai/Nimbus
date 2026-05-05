@@ -281,4 +281,15 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/status', [\App\Http\Controllers\UpdateController::class, 'getUpdateStatus'])->name('status');
         Route::post('/force-check', [\App\Http\Controllers\UpdateController::class, 'forceCheck'])->name('force-check');
     });
+
+    // User Management routes (root only)
+    Route::middleware(['role:root'])->prefix('users')->name('users.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');
+        Route::get('/list', [\App\Http\Controllers\UserController::class, 'list'])->name('list');
+        Route::get('/domains', [\App\Http\Controllers\UserController::class, 'availableDomains'])->name('domains');
+        Route::post('/', [\App\Http\Controllers\UserController::class, 'store'])->name('store');
+        Route::put('/{id}', [\App\Http\Controllers\UserController::class, 'update'])->name('update');
+        Route::put('/{id}/websites', [\App\Http\Controllers\UserController::class, 'updateWebsites'])->name('websites');
+        Route::delete('/{id}', [\App\Http\Controllers\UserController::class, 'destroy'])->name('destroy');
+    });
 });
