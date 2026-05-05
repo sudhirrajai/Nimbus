@@ -167,6 +167,17 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::delete('/{id}', [\App\Http\Controllers\WordPressController::class, 'delete'])->name('delete');
     });
 
+    // DNS Management — domain-scoped access via Cloudflare
+    Route::prefix('dns')->name('dns.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\CloudflareDnsController::class, 'index'])->name('index');
+        Route::get('/domains', [\App\Http\Controllers\CloudflareDnsController::class, 'getDomains'])->name('domains');
+        Route::post('/{domain}/credentials', [\App\Http\Controllers\CloudflareDnsController::class, 'saveCredentials'])->name('credentials');
+        Route::get('/{domain}/records', [\App\Http\Controllers\CloudflareDnsController::class, 'getRecords'])->name('records.list');
+        Route::post('/{domain}/records', [\App\Http\Controllers\CloudflareDnsController::class, 'createRecord'])->name('records.create');
+        Route::put('/{domain}/records/{recordId}', [\App\Http\Controllers\CloudflareDnsController::class, 'updateRecord'])->name('records.update');
+        Route::delete('/{domain}/records/{recordId}', [\App\Http\Controllers\CloudflareDnsController::class, 'deleteRecord'])->name('records.delete');
+    });
+
     // ─── ROOT ONLY — System Administration ───────────────────────
     Route::middleware(['role:root'])->group(function () {
 
