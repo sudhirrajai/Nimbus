@@ -105,15 +105,15 @@
                 </div>
                 <div class="row">
                   <div class="col-md-6">
-                    <div class="input-group input-group-outline mb-3 is-filled">
-                      <label class="form-label">Cloudflare API Token</label>
-                      <input type="password" class="form-control" v-model="credentialsForm.api_token">
+                    <label class="form-label text-xs font-weight-bolder">Cloudflare API Token</label>
+                    <div class="input-group input-group-outline mb-3">
+                      <input type="password" class="form-control" v-model="credentialsForm.api_token" placeholder="Enter API Token">
                     </div>
                   </div>
                   <div class="col-md-6">
-                    <div class="input-group input-group-outline mb-3 is-filled">
-                      <label class="form-label">Zone ID</label>
-                      <input type="text" class="form-control" v-model="credentialsForm.zone_id">
+                    <label class="form-label text-xs font-weight-bolder">Zone ID</label>
+                    <div class="input-group input-group-outline mb-3">
+                      <input type="text" class="form-control" v-model="credentialsForm.zone_id" placeholder="Enter Zone ID">
                     </div>
                   </div>
                 </div>
@@ -182,8 +182,8 @@
               <button type="button" class="btn-close" @click="closeRecordModal"></button>
             </div>
             <div class="modal-body">
-              <div class="input-group input-group-outline mb-3 is-filled">
-                <label class="form-label">Type</label>
+              <label class="form-label text-xs font-weight-bolder">Type</label>
+              <div class="input-group input-group-outline mb-3">
                 <select class="form-control" v-model="recordForm.type">
                   <option value="A">A</option>
                   <option value="AAAA">AAAA</option>
@@ -192,20 +192,22 @@
                   <option value="MX">MX</option>
                 </select>
               </div>
-              <div class="input-group input-group-outline mb-3 is-filled">
-                <label class="form-label">Name (@ for root)</label>
-                <input type="text" class="form-control" v-model="recordForm.name">
+              <label class="form-label text-xs font-weight-bolder">Name (@ for root)</label>
+              <div class="input-group input-group-outline mb-3">
+                <input type="text" class="form-control" v-model="recordForm.name" placeholder="@ or subdomain">
               </div>
-              <div class="input-group input-group-outline mb-3 is-filled">
-                <label class="form-label">Content</label>
-                <input type="text" class="form-control" v-model="recordForm.content">
+              <label class="form-label text-xs font-weight-bolder">Content</label>
+              <div class="input-group input-group-outline mb-3">
+                <input type="text" class="form-control" v-model="recordForm.content" placeholder="IP Address or value">
               </div>
-              <div v-if="recordForm.type === 'MX'" class="input-group input-group-outline mb-3 is-filled">
-                <label class="form-label">Priority</label>
-                <input type="number" class="form-control" v-model="recordForm.priority">
+              <div v-if="recordForm.type === 'MX'">
+                <label class="form-label text-xs font-weight-bolder">Priority</label>
+                <div class="input-group input-group-outline mb-3">
+                  <input type="number" class="form-control" v-model="recordForm.priority" placeholder="10">
+                </div>
               </div>
-              <div class="input-group input-group-outline mb-3 is-filled">
-                <label class="form-label">TTL</label>
+              <label class="form-label text-xs font-weight-bolder">TTL</label>
+              <div class="input-group input-group-outline mb-3">
                 <select class="form-control" v-model="recordForm.ttl">
                   <option :value="1">Auto</option>
                   <option :value="120">2 min</option>
