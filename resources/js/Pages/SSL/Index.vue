@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="SSL Certificates" />
     <div class="container-fluid py-4">
@@ -73,7 +73,7 @@
       <!-- Stats Cards -->
       <div class="row mb-4" v-if="domains.length > 0">
         <div class="col-lg-3 col-md-6 mb-4">
-          <div class="card">
+          <div class="card h-100">
             <div class="card-body p-3">
               <div class="d-flex align-items-center">
                 <div class="icon icon-shape bg-gradient-primary shadow text-center border-radius-md">
@@ -88,7 +88,7 @@
           </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-4">
-          <div class="card">
+          <div class="card h-100">
             <div class="card-body p-3">
               <div class="d-flex align-items-center">
                 <div class="icon icon-shape bg-gradient-success shadow text-center border-radius-md">
@@ -103,7 +103,7 @@
           </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-4">
-          <div class="card">
+          <div class="card h-100">
             <div class="card-body p-3">
               <div class="d-flex align-items-center">
                 <div class="icon icon-shape bg-gradient-warning shadow text-center border-radius-md">
@@ -118,7 +118,7 @@
           </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-4">
-          <div class="card">
+          <div class="card h-100">
             <div class="card-body p-3">
               <div class="d-flex align-items-center">
                 <div class="icon icon-shape bg-gradient-danger shadow text-center border-radius-md">

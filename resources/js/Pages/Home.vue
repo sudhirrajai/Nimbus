@@ -9,7 +9,7 @@
 
       <!-- Server Stats Cards -->
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-        <div class="card">
+        <div class="card h-100">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
@@ -32,7 +32,7 @@
       </div>
 
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-        <div class="card">
+        <div class="card h-100">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
@@ -57,7 +57,7 @@
       </div>
 
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-        <div class="card">
+        <div class="card h-100">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
@@ -82,7 +82,7 @@
       </div>
 
       <div class="col-xl-3 col-sm-6">
-        <div class="card">
+        <div class="card h-100">
           <div class="card-header p-2 ps-3">
             <div class="d-flex justify-content-between">
               <div>
@@ -333,45 +333,45 @@
       <div class="col-lg-4 col-md-6">
         <div class="card h-100">
           <div class="card-header pb-0">
-            <h6>System Information</h6>
-            <p class="text-sm">
-              <i class="fa fa-server text-info" aria-hidden="true"></i>
+            <h6 class="mb-0">System Information</h6>
+            <p class="text-sm mb-0 mt-1 d-flex align-items-center">
+              <i class="material-symbols-rounded text-info text-sm me-1">dns</i>
               <span class="font-weight-bold">Server Status</span>
             </p>
           </div>
-          <div class="card-body p-3">
+          <div class="card-body p-3 mt-2">
             <div class="timeline timeline-one-side">
-              <div class="timeline-block mb-3">
+              <div class="timeline-block mb-4">
                 <span class="timeline-step">
                   <i class="material-symbols-rounded text-success text-gradient">schedule</i>
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">Uptime</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                  <p class="text-secondary font-weight-normal text-xs mt-1 mb-0">
                     {{ liveStats.uptime.formatted }}
                   </p>
                 </div>
               </div>
 
-              <div class="timeline-block mb-3">
+              <div class="timeline-block mb-4">
                 <span class="timeline-step">
                   <i class="material-symbols-rounded text-info text-gradient">apps</i>
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">Active Processes</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                  <p class="text-secondary font-weight-normal text-xs mt-1 mb-0">
                     {{ liveStats.processes }} running
                   </p>
                 </div>
               </div>
 
-              <div class="timeline-block mb-3">
+              <div class="timeline-block mb-4">
                 <span class="timeline-step">
                   <i class="material-symbols-rounded text-warning text-gradient">speed</i>
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">Load Average</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                  <p class="text-secondary font-weight-normal text-xs mt-1 mb-0">
                     1m: {{ liveStats.load['1min'] }} |
                     5m: {{ liveStats.load['5min'] }} |
                     15m: {{ liveStats.load['15min'] }}
@@ -385,7 +385,7 @@
                 </span>
                 <div class="timeline-content">
                   <h6 class="text-dark text-sm font-weight-bold mb-0">CPU Cores</h6>
-                  <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
+                  <p class="text-secondary font-weight-normal text-xs mt-1 mb-0">
                     {{ liveStats.cpu.cores }} cores available
                   </p>
                 </div>

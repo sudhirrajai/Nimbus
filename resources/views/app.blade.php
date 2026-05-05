@@ -32,6 +32,17 @@
                 overflow-y: auto;
                 overflow-x: hidden;
             }
+            /* Universal icon centering fix */
+            .icon-shape, .timeline-step {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .icon-shape i, .timeline-step i {
+                margin: 0 !important;
+                position: static !important;
+                transform: none !important;
+            }
         </style>
     </head>
     <body class="font-sans antialiased">
