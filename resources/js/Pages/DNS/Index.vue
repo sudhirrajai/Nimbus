@@ -12,6 +12,10 @@
               <p class="mb-0 text-sm">Manage DNS records via Cloudflare</p>
             </div>
             <div class="d-flex gap-2">
+              <button class="btn btn-outline-info mb-0" @click="showGuideModal = true">
+                <i class="material-symbols-rounded text-sm me-1">help</i>
+                Guide
+              </button>
               <button class="btn btn-outline-secondary mb-0" @click="loadDomains" :disabled="loading">
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
@@ -172,6 +176,44 @@
         </div>
       </div>
 
+      <!-- Guide Modal -->
+      <div class="modal-backdrop fade show" v-if="showGuideModal"></div>
+      <div class="modal fade show d-block" v-if="showGuideModal">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">How to connect with Cloudflare</h5>
+              <button type="button" class="btn-close" @click="showGuideModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <h6>1. Get your Zone ID</h6>
+              <p class="text-sm">
+                Log into your Cloudflare dashboard and select your domain. Scroll down on the <strong>Overview</strong> page. On the right sidebar, you will find the <strong>Zone ID</strong> under the "API" section.
+              </p>
+              
+              <h6 class="mt-4">2. Create an API Token</h6>
+              <p class="text-sm mb-1">
+                Right below your Zone ID, click on <strong>Get your API token</strong>.
+              </p>
+              <ul class="text-sm">
+                <li>Click <strong>Create Token</strong>.</li>
+                <li>Go to the bottom and click <strong>Create Custom Token</strong> (or select the "Edit zone DNS" template).</li>
+                <li><strong>Token Name:</strong> Nimbus Control Panel</li>
+                <li><strong>Permissions:</strong> Choose <em>Zone</em> > <em>DNS</em> > <em>Edit</em></li>
+                <li><strong>Zone Resources:</strong> Choose <em>Include</em> > <em>Specific zone</em> > <em>(Your Domain)</em></li>
+                <li>Click <strong>Continue to summary</strong>, then <strong>Create Token</strong>.</li>
+              </ul>
+              <p class="text-sm text-danger font-weight-bold">
+                Copy the generated token immediately! Cloudflare will only show it to you once.
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn bg-gradient-info" @click="showGuideModal = false">Understood</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Add/Edit Record Modal -->
       <div class="modal-backdrop fade show" v-if="showAddRecordModal || editingRecord"></div>
       <div class="modal fade show d-block" v-if="showAddRecordModal || editingRecord">
@@ -247,6 +289,8 @@ const selectedDomain = ref(null)
 
 const loadingRecords = ref(false)
 const records = ref([])
+
+const showGuideModal = ref(false)
 
 const savingCredentials = ref(false)
 const credentialsForm = ref({
