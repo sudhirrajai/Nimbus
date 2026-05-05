@@ -350,14 +350,14 @@ class DomainController extends Controller
             }
 
             // Step 1: Delete Nginx symlink first (if it exists)
-            $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
+            $symlinkPath = $this->resolveNginxConfigPath('/etc/nginx/sites-enabled/', $domain);
             if (file_exists($symlinkPath)) {
                 \Log::info("Removing Nginx symlink: $symlinkPath");
                 $this->executeSudoCommand("rm -f {$symlinkPath}");
             }
 
             // Step 2: Delete Nginx config file
-            $configPath = "/etc/nginx/sites-available/{$domain}";
+            $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
             if (file_exists($configPath)) {
                 \Log::info("Removing Nginx config: $configPath");
                 $this->executeSudoCommand("rm -f {$configPath}");
@@ -564,8 +564,8 @@ NGINX;
      */
     private function deleteNginxConfig($domain)
     {
-        $configPath = "/etc/nginx/sites-available/{$domain}";
-        $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
+        $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+        $symlinkPath = $this->resolveNginxConfigPath('/etc/nginx/sites-enabled/', $domain);
 
         // Remove symlink first
         if (file_exists($symlinkPath)) {
@@ -578,6 +578,29 @@ NGINX;
             \Log::info("Deleting Nginx config: $configPath");
             $this->executeSudoCommand("rm -f {$configPath}");
         }
+    }
+
+    /**
+     * Resolve the actual Nginx config path checking various common names
+     */
+    private function resolveNginxConfigPath($baseDir, $domain)
+    {
+        $variations = [
+            $domain,
+            strtolower($domain),
+            $domain . '.conf',
+            strtolower($domain) . '.conf',
+            str_replace('www.', '', strtolower($domain)),
+            str_replace('www.', '', strtolower($domain)) . '.conf',
+        ];
+
+        foreach ($variations as $file) {
+            if (file_exists($baseDir . $file)) {
+                return $baseDir . $file;
+            }
+        }
+
+        return $baseDir . $domain;
     }
 
     /**

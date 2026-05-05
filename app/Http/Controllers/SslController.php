@@ -176,8 +176,8 @@ class SslController extends Controller
     private function checkNginxSslConfig($domain)
     {
         $configPaths = [
-            "/etc/nginx/sites-available/{$domain}",
-            "/etc/nginx/sites-enabled/{$domain}",
+            $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain),
+            $this->resolveNginxConfigPath('/etc/nginx/sites-enabled/', $domain),
         ];
 
         foreach ($configPaths as $configPath) {
@@ -690,6 +690,31 @@ class SslController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Resolve the actual Nginx config path checking various common names
+     */
+    private function resolveNginxConfigPath($baseDir, $domain)
+    {
+        $variations = [
+            $domain,
+            strtolower($domain),
+            $domain . '.conf',
+            strtolower($domain) . '.conf',
+            str_replace('www.', '', strtolower($domain)),
+            str_replace('www.', '', strtolower($domain)) . '.conf',
+        ];
+
+        foreach ($variations as $file) {
+            $output = [];
+            exec("sudo test -f " . escapeshellarg($baseDir . $file) . " && echo 'exists'", $output);
+            if (isset($output[0]) && $output[0] === 'exists') {
+                return $baseDir . $file;
+            }
+        }
+
+        return $baseDir . $domain;
     }
 
     /**
