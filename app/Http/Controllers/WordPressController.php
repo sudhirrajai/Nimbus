@@ -444,11 +444,11 @@ class WordPressController extends Controller
         }
 
         $token = Str::random(64);
-        $loginFile = $site->path . '/nimbus-login-' . substr($token, 0, 12) . '.php';
+        $loginFile = rtrim($site->path, '/') . '/nimbus-login-' . substr($token, 0, 12) . '.php';
         $adminUser = $site->admin_user ?? 'admin';
 
-        // Cleanup old tokens
-        foreach (glob($site->path . '/nimbus-login-*.php') as $oldToken) {
+        // Cleanup any old orphaned tokens immediately just in case
+        foreach (glob(rtrim($site->path, '/') . '/nimbus-login-*.php') as $oldToken) {
             if (time() - filemtime($oldToken) > 60) {
                 @unlink($oldToken);
             }
@@ -460,7 +460,13 @@ class WordPressController extends Controller
 // Nimbus Auto-Login - One-time use, self-destructing
 // Generated: {$token}
 
-// Security: check token and expire after 60 seconds
+// Security: check token
+if (!isset(\$_GET['token']) || \$_GET['token'] !== '{$token}') {
+    @unlink(__FILE__);
+    die('Unauthorized access.');
+}
+
+// Security: expire after 60 seconds
 \$created = filemtime(__FILE__);
 if (time() - \$created > 60) {
     @unlink(__FILE__);
@@ -479,6 +485,7 @@ if (!\$user) {
 }
 
 if (!\$user) {
+    @unlink(__FILE__);
     wp_die('Admin user not found.');
 }
 
@@ -488,6 +495,10 @@ wp_set_current_user(\$user->ID);
 wp_set_auth_cookie(\$user->ID, true);
 do_action('wp_login', \$user->user_login, \$user);
 
+// Self-destruct immediately
+@unlink(__FILE__);
+
+// Redirect safely
 wp_safe_redirect(admin_url());
 exit;
 PHP;
@@ -495,18 +506,26 @@ PHP;
         try {
             file_put_contents($loginFile, $script);
             chmod($loginFile, 0644);
+            
             // Ensure www-data owns it
             $dummy = '';
             $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
 
+            // 🔥 GUARANTEED AUTO-DELETE: 
+            // Spawn a background process that waits 60 seconds and forcefully deletes this exact file
+            // This ensures the file is deleted even if the user never clicks the link!
+            $deleteCmd = "nohup bash -c 'sleep 60; sudo rm -f " . escapeshellarg($loginFile) . "' >/dev/null 2>&1 &";
+            shell_exec($deleteCmd);
+
             $protocol = $site->ssl_enabled ? 'https' : 'http';
             
             $relativePath = basename($loginFile);
-            $url = $protocol . '://' . $site->domain . '/' . $relativePath;
+            $url = $protocol . '://' . $site->domain . '/' . $relativePath . '?token=' . $token;
 
             Log::info("WP auto-login generated for {$site->domain} (user: {$adminUser})");
 
             return response()->json(['success' => true, 'url' => $url]);
+
         } catch (\Exception $e) {
             @unlink($loginFile);
             Log::error("WP auto-login error for {$site->domain}: " . $e->getMessage());
