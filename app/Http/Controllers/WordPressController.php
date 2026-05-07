@@ -30,15 +30,18 @@ class WordPressController extends Controller
                 $domain = basename($domainPath);
                 if ($domain === 'html') continue;
 
+                $publicPath = $domainPath . '/public';
+                $checkPath = is_dir($publicPath) ? $publicPath : $domainPath;
+
                 // Check for wp-config.php
-                $wpConfig = $domainPath . '/wp-config.php';
+                $wpConfig = $checkPath . '/wp-config.php';
                 if (!file_exists($wpConfig)) continue;
 
                 // Parse wp-config for DB info
                 $config = $this->parseWpConfig($wpConfig);
 
                 // Check WordPress version
-                $versionFile = $domainPath . '/wp-includes/version.php';
+                $versionFile = $checkPath . '/wp-includes/version.php';
                 $wpVersion = 'Unknown';
                 if (file_exists($versionFile)) {
                     $versionContent = file_get_contents($versionFile);
@@ -83,7 +86,7 @@ class WordPressController extends Controller
                 $site = WordPressSite::updateOrCreate(
                     ['domain' => $domain],
                     [
-                        'path' => $domainPath,
+                        'path' => $checkPath,
                         'wp_version' => $wpVersion,
                         'db_name' => $config['db_name'] ?? null,
                         'db_user' => $config['db_user'] ?? null,
@@ -151,7 +154,8 @@ class WordPressController extends Controller
         ]);
 
         $domain = $request->input('domain');
-        $domainPath = $this->basePath . $domain;
+        $baseDomainPath = $this->basePath . $domain;
+        $domainPath = is_dir($baseDomainPath . '/public') ? $baseDomainPath . '/public' : $baseDomainPath;
 
         if (!is_dir($domainPath)) {
             return response()->json(['success' => false, 'error' => 'Domain directory does not exist.'], 400);
@@ -486,7 +490,10 @@ PHP;
             $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
 
             $protocol = $site->ssl_enabled ? 'https' : 'http';
-            $url = $protocol . '://' . $site->domain . '/' . basename($loginFile);
+            
+            // If path ends with /public, the URL doesn't need it
+            $relativePath = basename($loginFile);
+            $url = $protocol . '://' . $site->domain . '/' . $relativePath;
 
             Log::info("WP auto-login generated for {$site->domain} (user: {$adminUser})");
 
