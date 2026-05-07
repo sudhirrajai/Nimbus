@@ -154,11 +154,13 @@ class WordPressController extends Controller
         ]);
 
         $domain = $request->input('domain');
-        $baseDomainPath = $this->basePath . $domain;
-        $domainPath = is_dir($baseDomainPath . '/public') ? $baseDomainPath . '/public' : $baseDomainPath;
+        $baseDomainPath = rtrim($this->basePath, '/') . '/' . $domain;
+        $domainPath = $baseDomainPath . '/public';
 
         if (!is_dir($domainPath)) {
-            return response()->json(['success' => false, 'error' => 'Domain directory does not exist.'], 400);
+            $dummy = '';
+            $this->execCmd("sudo mkdir -p " . escapeshellarg($domainPath), $dummy);
+            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($domainPath), $dummy);
         }
 
         // Check if WP already exists
@@ -378,7 +380,9 @@ class WordPressController extends Controller
 
         try {
             if ($request->input('delete_files')) {
-                $this->execCmd("sudo rm -rf {$site->path}/*", $output);
+                // Ensure we only delete the public directory to preserve logs/
+                $targetPath = str_ends_with($site->path, '/public') ? $site->path : $site->path . '/public';
+                $this->execCmd("sudo rm -rf {$targetPath}/*", $output);
             }
             if ($request->input('delete_database') && $site->db_name) {
                 $this->execCmd("sudo mysql -e \"DROP DATABASE IF EXISTS {$site->db_name}\"", $output);
