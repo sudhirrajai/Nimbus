@@ -1,13 +1,11 @@
 <template>
-  <div class="global-search-container" ref="searchRef">
-    <div class="input-group input-group-outline" :class="{ 'is-focused': isFocused || searchQuery }">
-      <label class="form-label" v-if="!searchQuery && !isFocused">Type to search... (Ctrl+K)</label>
-      <span class="input-group-text text-body">
-        <i class="material-symbols-rounded" aria-hidden="true">search</i>
-      </span>
+  <div class="global-search-wrapper" ref="searchRef" :class="{ 'is-expanded': isFocused }">
+    <div class="search-input-group" :class="{ 'is-focused': isFocused || searchQuery }">
+      <i class="material-symbols-rounded search-icon">search</i>
       <input
         type="text"
-        class="form-control"
+        class="search-control"
+        placeholder="Search everything... (Ctrl+K)"
         v-model="searchQuery"
         @focus="isFocused = true"
         @input="handleInput"
@@ -17,43 +15,48 @@
         @keydown.esc="closeSearch"
         ref="searchInput"
       />
+      <div class="search-shortcut" v-if="!isFocused && !searchQuery">
+        <span>Ctrl</span><span>K</span>
+      </div>
+      <div v-if="loading" class="search-loader">
+        <div class="spinner-border spinner-border-sm" role="status"></div>
+      </div>
     </div>
 
-    <!-- Suggestions Dropdown -->
-    <div v-if="isOpen" class="search-suggestions shadow-lg border-radius-lg bg-white">
-      <div v-if="loading" class="p-3 text-center">
-        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-        <span class="ms-2 text-sm">Searching...</span>
-      </div>
-
-      <div v-else-if="results.length > 0">
-        <div v-for="(categoryResults, category) in groupedResults" :key="category">
-          <h6 class="text-xs text-uppercase text-muted ps-3 pt-2 mb-1">{{ category }}</h6>
-          <ul class="list-group list-group-flush">
-            <li
+    <!-- Suggestions Dropdown with Transition -->
+    <transition name="search-fade">
+      <div v-if="isOpen" class="search-suggestions-dropdown shadow-xl border-radius-lg bg-white">
+        <div v-if="results.length > 0">
+          <div v-for="(categoryResults, category) in groupedResults" :key="category" class="category-section">
+            <h6 class="category-header">{{ category }}</h6>
+            <div
               v-for="item in categoryResults"
               :key="item.id || item.url + item.title"
-              class="list-group-item list-group-item-action border-0 d-flex align-items-center py-2 px-3 border-radius-lg cursor-pointer"
-              :class="{ 'bg-gray-100': isSelected(item) }"
+              class="suggestion-item"
+              :class="{ 'is-selected': isSelected(item) }"
               @click="navigateTo(item)"
               @mouseenter="selectedIndex = findIndex(item)"
             >
-              <i class="material-symbols-rounded text-sm me-2 text-secondary">{{ item.icon || 'star' }}</i>
-              <div class="d-flex flex-column">
-                <span class="text-sm font-weight-bold text-dark">{{ item.title }}</span>
-                <span v-if="item.description" class="text-xs text-muted">{{ item.description }}</span>
+              <div class="item-icon-wrapper">
+                <i class="material-symbols-rounded">{{ item.icon || 'star' }}</i>
               </div>
-              <i class="material-symbols-rounded text-xs ms-auto text-secondary">chevron_right</i>
-            </li>
-          </ul>
+              <div class="item-content">
+                <div class="item-title">{{ item.title }}</div>
+                <div v-if="item.description" class="item-desc">{{ item.description }}</div>
+              </div>
+              <div class="item-badge" v-if="isSelected(item)">
+                Enter
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="searchQuery.length >= 2 && !loading" class="no-results p-4 text-center">
+          <i class="material-symbols-rounded d-block mb-2 opacity-3">sentiment_dissatisfied</i>
+          <p class="text-sm text-muted mb-0">No results found for "{{ searchQuery }}"</p>
         </div>
       </div>
-
-      <div v-else-if="searchQuery.length >= 2" class="p-3 text-center text-muted">
-        <i class="material-symbols-rounded d-block mb-2 opacity-5" style="font-size: 40px">search_off</i>
-        <span class="text-sm">No results found for "{{ searchQuery }}"</span>
-      </div>
-    </div>
+    </transition>
   </div>
 </template>
 
@@ -83,6 +86,14 @@ const groupedResults = computed(() => {
   return groups
 })
 
+function debounce(fn, delay) {
+  let timeoutId
+  return function(...args) {
+    if (timeoutId) clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn.apply(this, args), delay)
+  }
+}
+
 const handleInput = debounce(async () => {
   if (searchQuery.value.length < 2) {
     results.value = []
@@ -102,14 +113,6 @@ const handleInput = debounce(async () => {
     loading.value = false
   }
 }, 300)
-
-function debounce(fn, delay) {
-  let timeoutId
-  return function(...args) {
-    if (timeoutId) clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => fn.apply(this, args), delay)
-  }
-}
 
 const moveSelection = (direction) => {
   if (results.value.length === 0) return
@@ -165,47 +168,173 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.global-search-container {
+.global-search-wrapper {
   position: relative;
   width: 100%;
-  max-width: 300px;
+  max-width: 280px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-suggestions {
+.global-search-wrapper.is-expanded {
+  max-width: 400px;
+}
+
+.search-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #f0f2f5;
+  border-radius: 12px;
+  padding: 0 12px;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.search-input-group:hover {
+  background: #e9ecef;
+}
+
+.search-input-group.is-focused {
+  background: #fff;
+  border-color: #344767;
+  box-shadow: 0 4px 20px 0 rgba(0,0,0,0.05);
+}
+
+.search-icon {
+  color: #67748e;
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+.search-control {
+  width: 100%;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: #344767;
+  font-size: 0.875rem;
+  font-weight: 400;
+  outline: none !important;
+}
+
+.search-shortcut {
+  display: flex;
+  gap: 4px;
+  opacity: 0.5;
+}
+
+.search-shortcut span {
+  font-size: 10px;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-weight: bold;
+}
+
+.search-loader {
   position: absolute;
-  top: 100%;
+  right: 12px;
+  color: #344767;
+}
+
+/* Dropdown */
+.search-suggestions-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
   left: 0;
   right: 0;
-  z-index: 1050;
-  margin-top: 5px;
-  max-height: 400px;
+  z-index: 1100;
+  max-height: 450px;
   overflow-y: auto;
-  border: 1px solid #e9ecef;
+  border: 1px solid rgba(0,0,0,0.05);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  transform-origin: top center;
 }
 
-.list-group-item:hover {
-  background-color: #f8f9fa;
+.category-header {
+  padding: 12px 16px 4px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: #67748e;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
-.cursor-pointer {
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  margin: 4px 8px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.input-group.input-group-outline .form-control {
-  background: transparent;
+.suggestion-item:hover, .suggestion-item.is-selected {
+  background: rgba(52, 71, 103, 0.05);
+  transform: translateX(4px);
 }
 
-.input-group-text {
-  padding-left: 12px;
-  border-right: 0;
+.suggestion-item.is-selected {
+  background: rgba(52, 71, 103, 0.1);
 }
 
-.form-control {
-  border-left: 0;
+.item-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 6px;
+  margin-right: 12px;
+  color: #344767;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* Hide default label when focused or has value */
-.is-focused .form-label {
-    display: none;
+.suggestion-item:hover .item-icon-wrapper {
+  background: #344767;
+  color: #fff;
+}
+
+.item-content {
+  flex: 1;
+}
+
+.item-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #344767;
+}
+
+.item-desc {
+  font-size: 0.75rem;
+  color: #67748e;
+}
+
+.item-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  background: #344767;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* Animations */
+.search-fade-enter-active, .search-fade-leave-active {
+  transition: all 0.2s ease-out;
+}
+
+.search-fade-enter-from, .search-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+}
+
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
 }
 </style>
