@@ -59,9 +59,12 @@
         </div>
         <div class="card-body px-0 pb-2">
           <div v-if="loading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
-          <div v-else-if="sites.length === 0" class="text-center py-5">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.52 122.523" width="48" height="48" style="opacity:0.2"><g fill="#666"><path d="M8.708 61.26c0 20.802 12.089 38.779 29.619 47.298L13.258 39.872a52.354 52.354 0 0 0-4.55 21.388z"/><path d="M96.74 58.608c0-6.495-2.333-10.993-4.334-14.494-2.664-4.329-5.161-7.995-5.161-12.324 0-4.831 3.664-9.328 8.825-9.328.233 0 .454.029.681.042-9.35-8.566-21.807-13.796-35.489-13.796-18.36 0-34.513 9.42-43.91 23.688 1.233.037 2.395.063 3.382.063 5.497 0 14.006-.668 14.006-.668 2.833-.166 3.167 3.994.337 4.329 0 0-2.847.335-6.015.501L48.2 93.547l11.501-34.493-8.188-22.434c-2.83-.166-5.511-.501-5.511-.501-2.832-.166-2.5-4.496.332-4.329 0 0 8.679.668 13.843.668 5.496 0 14.006-.668 14.006-.668 2.835-.166 3.168 3.994.337 4.329 0 0-2.853.335-6.015.501l18.992 56.494 5.242-17.517c2.272-7.269 4.001-12.49 4.001-16.989z"/><path d="M62.184 65.857l-15.768 45.819a52.552 52.552 0 0 0 32.29-.84 4.7 4.7 0 0 1-.377-.726L62.184 65.857z"/><path d="M107.376 36.046c.226 1.674.354 3.471.354 5.404 0 5.333-.996 11.328-3.996 18.824l-16.053 46.413C101.291 98.083 113.812 81.18 113.812 61.26c0-9.192-2.39-17.833-6.436-25.214z"/><path d="M61.262 0C27.483 0 0 27.481 0 61.26c0 33.783 27.483 61.263 61.262 61.263 33.778 0 61.258-27.48 61.258-61.263C122.52 27.481 95.04 0 61.262 0zm0 119.715c-32.23 0-58.453-26.223-58.453-58.455 0-32.23 26.222-58.451 58.453-58.451 32.229 0 58.45 26.221 58.45 58.451 0 32.232-26.221 58.455-58.45 58.455z"/></g></svg>
-            <p class="text-secondary mt-2">No WordPress sites found. Click "Scan Server" or install a new site.</p>
+          <div v-else-if="sites.length === 0" class="text-center py-5 d-flex flex-column justify-content-center align-items-center" style="min-height: 300px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.52 122.523" width="64" height="64" style="opacity:0.2"><g fill="#666"><path d="M8.708 61.26c0 20.802 12.089 38.779 29.619 47.298L13.258 39.872a52.354 52.354 0 0 0-4.55 21.388z"/><path d="M96.74 58.608c0-6.495-2.333-10.993-4.334-14.494-2.664-4.329-5.161-7.995-5.161-12.324 0-4.831 3.664-9.328 8.825-9.328.233 0 .454.029.681.042-9.35-8.566-21.807-13.796-35.489-13.796-18.36 0-34.513 9.42-43.91 23.688 1.233.037 2.395.063 3.382.063 5.497 0 14.006-.668 14.006-.668 2.833-.166 3.167 3.994.337 4.329 0 0-2.847.335-6.015.501L48.2 93.547l11.501-34.493-8.188-22.434c-2.83-.166-5.511-.501-5.511-.501-2.832-.166-2.5-4.496.332-4.329 0 0 8.679.668 13.843.668 5.496 0 14.006-.668 14.006-.668 2.835-.166 3.168 3.994.337 4.329 0 0-2.853.335-6.015.501l18.992 56.494 5.242-17.517c2.272-7.269 4.001-12.49 4.001-16.989z"/><path d="M62.184 65.857l-15.768 45.819a52.552 52.552 0 0 0 32.29-.84 4.7 4.7 0 0 1-.377-.726L62.184 65.857z"/><path d="M107.376 36.046c.226 1.674.354 3.471.354 5.404 0 5.333-.996 11.328-3.996 18.824l-16.053 46.413C101.291 98.083 113.812 81.18 113.812 61.26c0-9.192-2.39-17.833-6.436-25.214z"/><path d="M61.262 0C27.483 0 0 27.481 0 61.26c0 33.783 27.483 61.263 61.262 61.263 33.778 0 61.258-27.48 61.258-61.263C122.52 27.481 95.04 0 61.262 0zm0 119.715c-32.23 0-58.453-26.223-58.453-58.455 0-32.23 26.222-58.451 58.453-58.451 32.229 0 58.45 26.221 58.45 58.451 0 32.232-26.221 58.455-58.45 58.455z"/></g></svg>
+            <p class="text-secondary mt-3 text-lg">No WordPress sites found.</p>
+            <button class="btn btn-sm bg-gradient-success mt-2" @click="showInstallModal = true">
+              <i class="material-symbols-rounded text-sm me-1">add</i> Install WordPress
+            </button>
           </div>
           <div v-else class="table-responsive">
             <table class="table align-items-center mb-0">
@@ -152,19 +155,7 @@
                 <label class="form-label">Admin Email *</label>
                 <input type="email" class="form-control" v-model="installForm.admin_email" placeholder="admin@example.com">
               </div>
-              <div class="col-12"><hr><h6 class="text-sm">Database Configuration</h6></div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">DB Name *</label>
-                <input type="text" class="form-control" v-model="installForm.db_name" placeholder="wp_mysite">
-              </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">DB User *</label>
-                <input type="text" class="form-control" v-model="installForm.db_user" placeholder="wp_user">
-              </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">DB Password *</label>
-                <input type="password" class="form-control" v-model="installForm.db_password" placeholder="Min 6 chars">
-              </div>
+
             </div>
           </div>
           <div class="modal-footer border-0">
@@ -364,7 +355,7 @@ const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
 
-const installForm = ref({ domain: '', site_title: '', admin_user: 'admin', admin_password: '', admin_email: '', db_name: '', db_user: '', db_password: '' })
+const installForm = ref({ domain: '', site_title: '', admin_user: 'admin', admin_password: '', admin_email: '' })
 const passwordForm = ref({ username: '', new_password: '' })
 const deleteOptions = ref({ delete_files: false, delete_database: false })
 
@@ -389,9 +380,9 @@ const loadSites = async () => {
 
 const loadDomains = async () => {
   try {
-    const r = await axios.get('/domains/list')
+    const r = await axios.get('/domains/api')
     const existing = sites.value.map(s => s.domain)
-    availableDomains.value = (r.data.domains || []).map(d => d.domain || d).filter(d => !existing.includes(d))
+    availableDomains.value = (r.data.domains || []).map(d => d.name || d.domain || d).filter(d => !existing.includes(d))
   } catch (e) { console.error(e) }
 }
 

@@ -148,9 +148,6 @@ class WordPressController extends Controller
             'admin_user' => 'required|string|max:50',
             'admin_password' => 'required|string|min:8',
             'admin_email' => 'required|email',
-            'db_name' => 'required|string|max:64',
-            'db_user' => 'required|string|max:32',
-            'db_password' => 'required|string|min:6',
         ]);
 
         $domain = $request->input('domain');
@@ -165,6 +162,12 @@ class WordPressController extends Controller
             return response()->json(['success' => false, 'error' => 'WordPress is already installed in this directory.'], 400);
         }
 
+        // Auto-generate DB credentials
+        $sanitizedDomain = preg_replace('/[^a-zA-Z0-9]/', '', strtolower(explode('.', $domain)[0]));
+        $dbName = 'wp_' . substr($sanitizedDomain, 0, 10) . '_' . Str::random(6);
+        $dbUser = 'wp_' . substr($sanitizedDomain, 0, 10) . '_' . Str::random(6);
+        $dbPass = Str::random(16);
+
         // Track in DB
         $site = WordPressSite::create([
             'domain' => $domain,
@@ -172,30 +175,34 @@ class WordPressController extends Controller
             'site_title' => $request->site_title,
             'admin_user' => $request->admin_user,
             'admin_email' => $request->admin_email,
-            'db_name' => $request->db_name,
-            'db_user' => $request->db_user,
-            'db_password' => $request->db_password,
+            'db_name' => $dbName,
+            'db_user' => $dbUser,
+            'db_password' => $dbPass,
             'status' => 'installing',
         ]);
 
         try {
             $output = '';
 
-            // 1. Create database
-            $dbPass = escapeshellarg($request->db_password);
-            $dbName = escapeshellarg($request->db_name);
-            $dbUser = escapeshellarg($request->db_user);
+            // 0. Ensure wp-cli is installed
+            $this->execCmd("if ! command -v wp &> /dev/null; then sudo curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && sudo chmod +x wp-cli.phar && sudo mv wp-cli.phar /usr/local/bin/wp; fi", $output);
 
-            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS {$request->db_name}\"", $output);
-            $this->execCmd("sudo mysql -e \"CREATE USER IF NOT EXISTS '{$request->db_user}'@'localhost' IDENTIFIED BY '{$request->db_password}'\"", $output);
-            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON {$request->db_name}.* TO '{$request->db_user}'@'localhost'\"", $output);
+            // 1. Create database
+            $dbNameArg = escapeshellarg($dbName);
+            $dbUserArg = escapeshellarg($dbUser);
+            $dbPassArg = escapeshellarg($dbPass);
+
+            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS {$dbNameArg}\"", $output);
+            $this->execCmd("sudo mysql -e \"CREATE USER IF NOT EXISTS {$dbUserArg}@'localhost' IDENTIFIED BY {$dbPassArg}\"", $output);
+            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON {$dbNameArg}.* TO {$dbUserArg}@'localhost'\"", $output);
             $this->execCmd("sudo mysql -e \"FLUSH PRIVILEGES\"", $output);
 
             // 2. Download WordPress
-            $this->execCmd("cd {$domainPath} && sudo -u www-data wp core download --allow-root 2>&1", $output);
+            $this->execCmd("cd {$domainPath} && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
+            $this->execCmd("sudo rm -f {$domainPath}/index.html", $output);
 
             // 3. Create wp-config.php
-            $this->execCmd("cd {$domainPath} && sudo -u www-data wp config create --dbname={$request->db_name} --dbuser={$request->db_user} --dbpass={$request->db_password} --dbhost=localhost --allow-root 2>&1", $output);
+            $this->execCmd("cd {$domainPath} && sudo -u www-data wp config create --dbname={$dbNameArg} --dbuser={$dbUserArg} --dbpass={$dbPassArg} --dbhost=localhost --allow-root 2>&1", $output);
 
             // 4. Install WordPress
             $url = 'http://' . $domain;
