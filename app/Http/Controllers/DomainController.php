@@ -608,20 +608,37 @@ NGINX;
      */
     public function repairManagedDomainStructures()
     {
-        if (!File::exists($this->basePath)) {
-            return;
+        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
+        $domainsToRepair = [];
+
+        // 1. Gather all domains from existing directories
+        if (File::exists($this->basePath)) {
+            foreach (File::directories($this->basePath) as $directory) {
+                $name = basename($directory);
+                if (!in_array(strtolower($name), $protectedDirs, true)) {
+                    $domainsToRepair[] = $name;
+                }
+            }
         }
 
-        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
-
-        foreach (File::directories($this->basePath) as $directory) {
-            $name = basename($directory);
-
-            if (in_array(strtolower($name), $protectedDirs, true)) {
-                continue;
+        // 2. Gather all domains from Nginx enabled configs
+        // Even if the directory was deleted, if Nginx expects it, we must recreate it to prevent crashes!
+        $output = [];
+        $returnCode = 0;
+        exec("sudo ls -1 /etc/nginx/sites-enabled/ 2>/dev/null", $output, $returnCode);
+        if ($returnCode === 0 && is_array($output)) {
+            foreach ($output as $file) {
+                $name = str_replace('.conf', '', basename(trim($file)));
+                if ($name !== 'default' && !empty($name) && !in_array(strtolower($name), $protectedDirs, true)) {
+                    $domainsToRepair[] = $name;
+                }
             }
+        }
 
-            $this->ensureDomainStructure($directory);
+        // 3. Repair all unique domains
+        $domainsToRepair = array_unique($domainsToRepair);
+        foreach ($domainsToRepair as $domain) {
+            $this->ensureDomainStructure($this->basePath . $domain);
         }
     }
 

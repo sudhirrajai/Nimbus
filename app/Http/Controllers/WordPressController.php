@@ -154,11 +154,13 @@ class WordPressController extends Controller
         ]);
 
         $domain = $request->input('domain');
-        $baseDomainPath = $this->basePath . $domain;
-        $domainPath = is_dir($baseDomainPath . '/public') ? $baseDomainPath . '/public' : $baseDomainPath;
+        $baseDomainPath = rtrim($this->basePath, '/') . '/' . $domain;
+        $domainPath = $baseDomainPath . '/public';
 
         if (!is_dir($domainPath)) {
-            return response()->json(['success' => false, 'error' => 'Domain directory does not exist.'], 400);
+            $dummy = '';
+            $this->execCmd("sudo mkdir -p " . escapeshellarg($domainPath), $dummy);
+            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($domainPath), $dummy);
         }
 
         // Check if WP already exists
@@ -378,7 +380,9 @@ class WordPressController extends Controller
 
         try {
             if ($request->input('delete_files')) {
-                $this->execCmd("sudo rm -rf {$site->path}/*", $output);
+                // Ensure we only delete the public directory to preserve logs/
+                $targetPath = str_ends_with($site->path, '/public') ? $site->path : $site->path . '/public';
+                $this->execCmd("sudo rm -rf {$targetPath}/*", $output);
             }
             if ($request->input('delete_database') && $site->db_name) {
                 $this->execCmd("sudo mysql -e \"DROP DATABASE IF EXISTS {$site->db_name}\"", $output);
@@ -441,6 +445,13 @@ class WordPressController extends Controller
         $loginFile = $site->path . '/nimbus-login-' . substr($token, 0, 12) . '.php';
         $adminUser = $site->admin_user ?? 'admin';
 
+        // Cleanup old tokens
+        foreach (glob($site->path . '/nimbus-login-*.php') as $oldToken) {
+            if (time() - filemtime($oldToken) > 60) {
+                @unlink($oldToken);
+            }
+        }
+
         // Create self-destructing login script
         $script = <<<PHP
 <?php
@@ -451,11 +462,8 @@ class WordPressController extends Controller
 \$created = filemtime(__FILE__);
 if (time() - \$created > 60) {
     @unlink(__FILE__);
-    die('Login link expired.');
+    die('Login link expired. Please generate a new one from the panel.');
 }
-
-// Delete this file immediately on access
-@unlink(__FILE__);
 
 // Load WordPress
 define('ABSPATH', __DIR__ . '/');
