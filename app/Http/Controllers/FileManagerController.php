@@ -631,38 +631,81 @@ class FileManagerController extends Controller
         }
     }
 
-    /**
-     * Upload file
-     */
     public function upload(Request $request, $domain)
     {
         try {
             $request->validate([
                 'path' => 'nullable|string',
-                'file' => 'required|file|max:512000' // 500MB max
+                'file' => 'required|file',
+                'isChunk' => 'nullable|string',
+                'chunkIndex' => 'nullable|integer',
+                'totalChunks' => 'nullable|integer',
+                'originalName' => 'nullable|string'
             ]);
 
             $path = $request->input('path', '');
             $file = $request->file('file');
             $dirPath = $this->getFullPath($domain, $path);
-            $targetPath = $dirPath . '/' . $file->getClientOriginalName();
-
-            if (!$this->isValidPath($targetPath)) {
-                return response()->json(['error' => 'Access denied'], 403);
-            }
+            
+            $isChunk = filter_var($request->input('isChunk', false), FILTER_VALIDATE_BOOLEAN);
 
             if (!File::exists($dirPath)) {
                 $this->executeSudoCommand("mkdir -p " . escapeshellarg($dirPath));
                 $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
             }
 
-            $file->move($dirPath, $file->getClientOriginalName());
+            if ($isChunk) {
+                $originalName = $request->input('originalName');
+                $chunkIndex = $request->input('chunkIndex');
+                $totalChunks = $request->input('totalChunks');
+                $targetPath = $dirPath . '/' . $originalName;
+                $tempFilePath = $dirPath . '/' . $originalName . '.part';
 
-            $escapedTargetPath = escapeshellarg($targetPath);
-            $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
-            $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
+                if (!$this->isValidPath($targetPath)) {
+                    return response()->json(['error' => 'Access denied'], 403);
+                }
 
-            return response()->json(['message' => 'File uploaded successfully']);
+                // Delete any orphaned part file if this is the start of a new upload
+                if ($chunkIndex == 0 && File::exists($tempFilePath)) {
+                    File::delete($tempFilePath);
+                }
+
+                // Append chunk to temp file
+                $chunkData = file_get_contents($file->getRealPath());
+                file_put_contents($tempFilePath, $chunkData, FILE_APPEND);
+
+                // Ensure ownership of temp file on first chunk
+                if ($chunkIndex == 0) {
+                    $escapedTemp = escapeshellarg($tempFilePath);
+                    $this->executeSudoCommand("chown www-data:www-data {$escapedTemp}");
+                }
+
+                // If last chunk, rename to original file
+                if ($chunkIndex == $totalChunks - 1) {
+                    $escapedTemp = escapeshellarg($tempFilePath);
+                    $escapedTarget = escapeshellarg($targetPath);
+                    $this->executeSudoCommand("mv {$escapedTemp} {$escapedTarget}");
+                    $this->executeSudoCommand("chmod 644 {$escapedTarget}");
+                    return response()->json(['message' => 'File uploaded successfully']);
+                }
+
+                return response()->json(['message' => 'Chunk uploaded successfully']);
+            } else {
+                // Fallback for single non-chunked uploads
+                $targetPath = $dirPath . '/' . $file->getClientOriginalName();
+
+                if (!$this->isValidPath($targetPath)) {
+                    return response()->json(['error' => 'Access denied'], 403);
+                }
+
+                $file->move($dirPath, $file->getClientOriginalName());
+
+                $escapedTargetPath = escapeshellarg($targetPath);
+                $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
+                $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
+
+                return response()->json(['message' => 'File uploaded successfully']);
+            }
         } catch (\Exception $e) {
             \Log::error("Upload error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);

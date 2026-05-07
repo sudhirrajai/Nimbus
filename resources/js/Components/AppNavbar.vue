@@ -16,10 +16,7 @@
         id="navbar"
       >
         <div class="ms-md-auto pe-md-3 d-flex align-items-center">
-          <div class="input-group input-group-outline">
-            <label class="form-label">Type here...</label>
-            <input type="text" class="form-control" />
-          </div>
+          <GlobalSearch />
         </div>
 
         <ul class="navbar-nav d-flex align-items-center justify-content-end">
@@ -76,6 +73,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
+import GlobalSearch from '@/Components/GlobalSearch.vue'
 
 const page = usePage()
 const sidebarOpen = ref(false)
