@@ -1446,10 +1446,10 @@ const processFilesUpload = async (files) => {
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     
-    // Check file size client-side (500MB limit)
-    const maxSize = 500 * 1024 * 1024 // 500MB in bytes
+    // Check file size client-side (unlimited now via chunking, but let's keep a sane max like 5GB)
+    const maxSize = 5000 * 1024 * 1024 // 5GB in bytes
     if (file.size > maxSize) {
-      showAlert('danger', `File "${file.name}" too large. Maximum size is 500MB.`)
+      showAlert('danger', `File "${file.name}" too large. Maximum size is 5GB.`)
       continue
     }
 
@@ -1459,18 +1459,32 @@ const processFilesUpload = async (files) => {
     uploadFileName.value = file.name
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('path', currentPath.value || '')
+      const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+      const totalChunks = Math.ceil(file.size / chunkSize);
 
-      await axios.post(`/file-manager/${props.domain}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 600000, // 10 minute timeout for large files
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          uploadProgress.value = percentCompleted
-        }
-      })
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(start + chunkSize, file.size);
+        const chunk = file.slice(start, end);
+
+        const formData = new FormData()
+        formData.append('file', chunk)
+        formData.append('path', currentPath.value || '')
+        formData.append('isChunk', 'true')
+        formData.append('chunkIndex', chunkIndex)
+        formData.append('totalChunks', totalChunks)
+        formData.append('originalName', file.name)
+
+        await axios.post(`/file-manager/${props.domain}/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 600000, // 10 minute timeout per chunk just in case
+          onUploadProgress: (progressEvent) => {
+            const loadedBytes = (chunkIndex * chunkSize) + progressEvent.loaded;
+            const percentCompleted = Math.round((loadedBytes * 100) / file.size);
+            uploadProgress.value = Math.min(percentCompleted, 100);
+          }
+        })
+      }
 
       if (i === files.length - 1) {
         showAlert('success', files.length > 1 ? `Successfully uploaded ${files.length} files` : 'File uploaded successfully')
@@ -1481,7 +1495,7 @@ const processFilesUpload = async (files) => {
 
       if (error.response) {
         if (error.response.status === 413) {
-          errorMessage = 'File too large. Please check server upload limits.'
+          errorMessage = 'Chunk too large. Please check server upload limits.'
         } else if (error.response.status === 422) {
           errorMessage = error.response.data?.message || 'Validation failed'
         } else {
