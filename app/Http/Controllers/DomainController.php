@@ -623,12 +623,11 @@ NGINX;
 
         // 2. Gather all domains from Nginx enabled configs
         // Even if the directory was deleted, if Nginx expects it, we must recreate it to prevent crashes!
-        $output = [];
-        $returnCode = 0;
-        exec("sudo ls -1 /etc/nginx/sites-enabled/ 2>/dev/null", $output, $returnCode);
-        if ($returnCode === 0 && is_array($output)) {
-            foreach ($output as $file) {
-                $name = str_replace('.conf', '', basename(trim($file)));
+        $sitesPath = '/etc/nginx/sites-enabled/';
+        if (is_dir($sitesPath)) {
+            foreach (scandir($sitesPath) as $file) {
+                if ($file === '.' || $file === '..') continue;
+                $name = str_replace('.conf', '', basename($file));
                 if ($name !== 'default' && !empty($name) && !in_array(strtolower($name), $protectedDirs, true)) {
                     $domainsToRepair[] = $name;
                 }
