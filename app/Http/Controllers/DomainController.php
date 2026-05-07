@@ -30,9 +30,20 @@ class DomainController extends Controller
             $directories = collect(File::directories($this->basePath))
                 ->map(function ($path) use ($serverIp) {
                     $domain = basename($path);
+                    
+                    $documentRoot = $path;
+                    $nginxConfig = '/etc/nginx/sites-enabled/' . $domain;
+                    if (File::exists($nginxConfig)) {
+                        $configContent = File::get($nginxConfig);
+                        if (preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
+                            $documentRoot = trim($matches[1]);
+                        }
+                    }
+
                     return [
                         'name' => $domain,
                         'path' => $path,
+                        'document_root' => $documentRoot,
                         'is_active' => $this->checkDomainDns($domain, $serverIp),
                         'server_ip' => $serverIp
                     ];
@@ -309,6 +320,64 @@ class DomainController extends Controller
             
             return response()->json([
                 'error' => 'Failed to update domain: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update domain document root
+     */
+    public function updateRoot(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'document_root' => 'required|string|max:255'
+            ]);
+
+            $newRoot = rtrim(trim($request->document_root), '/');
+            $domainPath = $this->basePath . $domain;
+            
+            // Basic security checks:
+            if (!str_starts_with($newRoot, $domainPath)) {
+                return response()->json([
+                    'error' => 'Document root must be inside the domain directory (' . $domainPath . ')'
+                ], 403);
+            }
+
+            // Create directory if it doesn't exist
+            if (!File::exists($newRoot)) {
+                $this->executeSudoCommand("mkdir -p " . escapeshellarg($newRoot));
+                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($newRoot));
+                $this->executeSudoCommand("chmod 2775 " . escapeshellarg($newRoot));
+            }
+
+            // Update Nginx config
+            $nginxConfig = '/etc/nginx/sites-available/' . $domain;
+            if (!File::exists($nginxConfig)) {
+                return response()->json(['error' => 'Nginx config not found'], 404);
+            }
+
+            // Use sudo sed to replace the root line
+            $escapedConfig = escapeshellarg($nginxConfig);
+            // Replace root /var/www/domain.com[/...]; with root $newRoot;
+            $sedCmd = "sed -i -E 's|root\s+[^;]+;|root {$newRoot};|g' {$escapedConfig}";
+            $this->executeSudoCommand($sedCmd);
+
+            // Test and reload Nginx
+            $this->executeSudoCommand("nginx -t");
+            $this->executeSudoCommand("systemctl reload nginx");
+
+            \Log::info("Domain document root updated: $domain to $newRoot by user " . auth()->id());
+
+            return response()->json([
+                'message' => 'Document root updated successfully',
+                'document_root' => $newRoot
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to update domain root: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to update document root: ' . $e->getMessage()
             ], 500);
         }
     }
