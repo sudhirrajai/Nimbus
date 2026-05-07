@@ -443,88 +443,92 @@ class WordPressController extends Controller
             return response()->json(['success' => false, 'error' => 'Site is not active.'], 400);
         }
 
-        $domainPath = escapeshellarg($site->path);
-        $adminUser = escapeshellarg($site->admin_user ?? 'admin');
-        $output = '';
+        $token = Str::random(64);
+        $loginFile = rtrim($site->path, '/') . '/nimbus-login-' . substr($token, 0, 12) . '.php';
+        $adminUser = $site->admin_user ?? 'admin';
 
-        try {
-            // 1. Ensure Nimbus SSO MU-Plugin exists
-            $muPluginsDir = $site->path . '/wp-content/mu-plugins';
-            $ssoPluginPath = $muPluginsDir . '/nimbus-sso.php';
-            
-            if (!file_exists($ssoPluginPath)) {
-                $this->execCmd("sudo mkdir -p " . escapeshellarg($muPluginsDir), $output);
-                
-                $ssoPlugin = <<<'PHP'
-<?php
-/*
-Plugin Name: Nimbus SSO
-Description: Seamless secure login for Nimbus Control Panel
-Version: 1.0
-Author: Nimbus
-*/
-if (!defined('ABSPATH')) exit;
-
-add_action('init', function() {
-    if (isset($_GET['nimbus_sso_token']) && !empty($_GET['nimbus_sso_token'])) {
-        $token = sanitize_text_field($_GET['nimbus_sso_token']);
-        $stored_user_id = get_transient('nimbus_sso_' . $token);
-        
-        if ($stored_user_id) {
-            delete_transient('nimbus_sso_' . $token); // Single use
-            $user = get_userdata($stored_user_id);
-            if ($user) {
-                wp_clear_auth_cookie();
-                wp_set_current_user($user->ID);
-                wp_set_auth_cookie($user->ID, true);
-                do_action('wp_login', $user->user_login, $user);
-                wp_safe_redirect(admin_url());
-                exit;
+        // Cleanup any old orphaned tokens immediately just in case
+        foreach (glob(rtrim($site->path, '/') . '/nimbus-login-*.php') as $oldToken) {
+            if (time() - filemtime($oldToken) > 60) {
+                @unlink($oldToken);
             }
         }
-        
-        wp_die('Invalid or expired login token. Please generate a new one from the Nimbus Panel.', 'Nimbus SSO Error', ['response' => 403]);
-    }
-});
+
+        // Create self-destructing login script
+        $script = <<<PHP
+<?php
+// Nimbus Auto-Login - One-time use, self-destructing
+// Generated: {$token}
+
+// Security: check token
+if (!isset(\$_GET['token']) || \$_GET['token'] !== '{$token}') {
+    @unlink(__FILE__);
+    die('Unauthorized access.');
+}
+
+// Security: expire after 60 seconds
+\$created = filemtime(__FILE__);
+if (time() - \$created > 60) {
+    @unlink(__FILE__);
+    die('Login link expired. Please generate a new one from the panel.');
+}
+
+// Load WordPress
+define('ABSPATH', __DIR__ . '/');
+require_once(ABSPATH . 'wp-load.php');
+
+// Find the admin user
+\$user = get_user_by('login', '{$adminUser}');
+if (!\$user) {
+    \$user = get_users(['role' => 'administrator', 'number' => 1]);
+    \$user = !empty(\$user) ? \$user[0] : null;
+}
+
+if (!\$user) {
+    @unlink(__FILE__);
+    wp_die('Admin user not found.');
+}
+
+// Set auth cookies and redirect
+wp_clear_auth_cookie();
+wp_set_current_user(\$user->ID);
+wp_set_auth_cookie(\$user->ID, true);
+do_action('wp_login', \$user->user_login, \$user);
+
+// Self-destruct immediately
+@unlink(__FILE__);
+
+// Redirect safely
+wp_safe_redirect(admin_url());
+exit;
 PHP;
-                $tempPlugin = '/tmp/nimbus-sso-' . uniqid() . '.php';
-                file_put_contents($tempPlugin, $ssoPlugin);
-                $this->execCmd("sudo mv " . escapeshellarg($tempPlugin) . " " . escapeshellarg($ssoPluginPath), $output);
-                $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($ssoPluginPath), $output);
-                $this->execCmd("sudo chmod 644 " . escapeshellarg($ssoPluginPath), $output);
-            }
 
-            // 2. Get the Admin User ID via WP-CLI
-            $userIdCmd = "cd {$domainPath} && sudo -u www-data wp user get {$adminUser} --field=ID 2>/dev/null";
-            $userId = trim(shell_exec($userIdCmd));
-
-            if (!$userId) {
-                // Fallback to first administrator
-                $userIdCmd = "cd {$domainPath} && sudo -u www-data wp user list --role=administrator --field=ID 2>/dev/null | head -n 1";
-                $userId = trim(shell_exec($userIdCmd));
-            }
-
-            if (!$userId) {
-                return response()->json(['success' => false, 'error' => 'Could not find a valid administrator user on this WordPress site.'], 404);
-            }
-
-            // 3. Generate Token and Save to Database via WP-CLI Transient (Expires in 60s)
-            $token = Str::random(64);
-            $tokenSafe = escapeshellarg('nimbus_sso_' . $token);
-            $userIdSafe = escapeshellarg($userId);
+        try {
+            file_put_contents($loginFile, $script);
+            chmod($loginFile, 0644);
             
-            $this->execCmd("cd {$domainPath} && sudo -u www-data wp transient set {$tokenSafe} {$userIdSafe} 60", $output);
+            // Ensure www-data owns it
+            $dummy = '';
+            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
 
-            // 4. Return the Magic Login URL
+            // 🔥 GUARANTEED AUTO-DELETE: 
+            // Spawn a background process that waits 60 seconds and forcefully deletes this exact file
+            // This ensures the file is deleted even if the user never clicks the link!
+            $deleteCmd = "nohup bash -c 'sleep 60; sudo rm -f " . escapeshellarg($loginFile) . "' >/dev/null 2>&1 &";
+            shell_exec($deleteCmd);
+
             $protocol = $site->ssl_enabled ? 'https' : 'http';
-            $url = $protocol . '://' . $site->domain . '/wp-login.php?nimbus_sso_token=' . $token;
+            
+            $relativePath = basename($loginFile);
+            $url = $protocol . '://' . $site->domain . '/' . $relativePath . '?token=' . $token;
 
-            Log::info("WP auto-login token generated for {$site->domain} (user ID: {$userId})");
+            Log::info("WP auto-login generated for {$site->domain} (user: {$adminUser})");
 
             return response()->json(['success' => true, 'url' => $url]);
 
         } catch (\Exception $e) {
-            Log::error("WP auto-login error for {$site->domain}: " . $e->getMessage() . "\nOutput: " . $output);
+            @unlink($loginFile);
+            Log::error("WP auto-login error for {$site->domain}: " . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
