@@ -40,10 +40,24 @@ class DomainController extends Controller
                         }
                     }
 
+                    // Get storage usage
+                    $storage = '0B';
+                    try {
+                        $escapedPath = escapeshellarg($path);
+                        $output = $this->executeSudoCommand("du -sh {$escapedPath}");
+                        if (!empty($output) && isset($output[0])) {
+                            // du output format: "size\tpath"
+                            $storage = trim(explode("\t", $output[0])[0]);
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning("Failed to get storage for $domain: " . $e->getMessage());
+                    }
+
                     return [
                         'name' => $domain,
                         'path' => $path,
                         'document_root' => $documentRoot,
+                        'storage' => $storage,
                         'is_active' => $this->checkDomainDns($domain, $serverIp),
                         'server_ip' => $serverIp
                     ];
