@@ -30,8 +30,7 @@ class WordPressController extends Controller
                 $domain = basename($domainPath);
                 if ($domain === 'html') continue;
 
-                $publicPath = $domainPath . '/public';
-                $checkPath = is_dir($publicPath) ? $publicPath : $domainPath;
+                $checkPath = $domainPath;
 
                 // Check for wp-config.php
                 $wpConfig = $checkPath . '/wp-config.php';
@@ -154,8 +153,7 @@ class WordPressController extends Controller
         ]);
 
         $domain = $request->input('domain');
-        $baseDomainPath = rtrim($this->basePath, '/') . '/' . $domain;
-        $domainPath = $baseDomainPath . '/public';
+        $domainPath = rtrim($this->basePath, '/') . '/' . $domain;
 
         if (!is_dir($domainPath)) {
             $dummy = '';
@@ -193,21 +191,20 @@ class WordPressController extends Controller
             // 0. Ensure wp-cli is installed
             $this->execCmd("if ! command -v wp &> /dev/null; then sudo curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && sudo chmod +x wp-cli.phar && sudo mv wp-cli.phar /usr/local/bin/wp; fi", $output);
 
-            // 1. Create database
-            $dbNameArg = escapeshellarg($dbName);
-            $dbUserArg = escapeshellarg($dbUser);
-            $dbPassArg = escapeshellarg($dbPass);
-
-            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS {$dbNameArg}\"", $output);
-            $this->execCmd("sudo mysql -e \"CREATE USER IF NOT EXISTS {$dbUserArg}@'localhost' IDENTIFIED BY {$dbPassArg}\"", $output);
-            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON {$dbNameArg}.* TO {$dbUserArg}@'localhost'\"", $output);
-            $this->execCmd("sudo mysql -e \"FLUSH PRIVILEGES\"", $output);
+            // 1. Create database using DB facade
+            \Illuminate\Support\Facades\DB::statement("CREATE DATABASE IF NOT EXISTS `{$dbName}`");
+            \Illuminate\Support\Facades\DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
+            \Illuminate\Support\Facades\DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'localhost'");
+            \Illuminate\Support\Facades\DB::statement("FLUSH PRIVILEGES");
 
             // 2. Download WordPress
             $this->execCmd("cd {$domainPath} && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
             $this->execCmd("sudo rm -f {$domainPath}/index.html", $output);
 
             // 3. Create wp-config.php
+            $dbNameArg = escapeshellarg($dbName);
+            $dbUserArg = escapeshellarg($dbUser);
+            $dbPassArg = escapeshellarg($dbPass);
             $this->execCmd("cd {$domainPath} && sudo -u www-data wp config create --dbname={$dbNameArg} --dbuser={$dbUserArg} --dbpass={$dbPassArg} --dbhost=localhost --allow-root 2>&1", $output);
 
             // 4. Install WordPress
@@ -380,14 +377,13 @@ class WordPressController extends Controller
 
         try {
             if ($request->input('delete_files')) {
-                // Ensure we only delete the public directory to preserve logs/
-                $targetPath = str_ends_with($site->path, '/public') ? $site->path : $site->path . '/public';
-                $this->execCmd("sudo rm -rf {$targetPath}/*", $output);
+                // Wipe the whole directory minus logs, or let's be safer and just empty it except logs
+                $this->execCmd("sudo find {$site->path} -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +", $output);
             }
             if ($request->input('delete_database') && $site->db_name) {
-                $this->execCmd("sudo mysql -e \"DROP DATABASE IF EXISTS {$site->db_name}\"", $output);
+                \Illuminate\Support\Facades\DB::statement("DROP DATABASE IF EXISTS `{$site->db_name}`");
                 if ($site->db_user) {
-                    $this->execCmd("sudo mysql -e \"DROP USER IF EXISTS '{$site->db_user}'@'localhost'\"", $output);
+                    \Illuminate\Support\Facades\DB::statement("DROP USER IF EXISTS '{$site->db_user}'@'localhost'");
                 }
             }
 
@@ -499,7 +495,6 @@ PHP;
 
             $protocol = $site->ssl_enabled ? 'https' : 'http';
             
-            // If path ends with /public, the URL doesn't need it
             $relativePath = basename($loginFile);
             $url = $protocol . '://' . $site->domain . '/' . $relativePath;
 

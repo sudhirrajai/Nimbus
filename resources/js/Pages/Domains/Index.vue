@@ -47,6 +47,9 @@
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                         Status
                       </th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
+                        Document Root
+                      </th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                         Actions
                       </th>
@@ -69,6 +72,14 @@
                       <td>
                         <span v-if="domain.is_active" class="badge badge-sm bg-gradient-success">Active</span>
                         <span v-else class="badge badge-sm bg-gradient-warning" :title="`Point A record to ${domain.server_ip}`">Configuring</span>
+                      </td>
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <span class="text-xs text-secondary mb-0 me-2">{{ domain.document_root || ('/var/www/' + domain.name) }}</span>
+                          <button v-if="isRootOrAdmin" class="btn btn-link text-secondary p-0 mb-0" @click="openRootModal(domain)" title="Change document root">
+                            <i class="material-symbols-rounded text-xs">edit</i>
+                          </button>
+                        </div>
                       </td>
                       <td class="align-middle text-center">
                         <button 
@@ -195,7 +206,69 @@
           </div>
         </div>
       </div>
+      <!-- Document Root Modal -->
+      <div class="modal fade show" tabindex="-1" style="display:block" v-if="showRootModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
 
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder">
+                Change Document Root
+              </h5>
+              <button type="button" class="btn-close" @click="closeRootModal" :disabled="submitting"></button>
+            </div>
+
+            <div class="modal-body">
+              <div class="alert alert-info py-2 mb-3 text-white">
+                <div class="d-flex align-items-center">
+                  <i class="material-symbols-rounded me-2 text-sm">info</i>
+                  <small>
+                    This changes where Nginx looks for your website files. It must be inside your domain's folder.
+                  </small>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-control-label">Document Root Path</label>
+                <div class="input-group input-group-outline" :class="{ 'is-invalid': rootValidationError }">
+                  <input 
+                    type="text" 
+                    v-model="rootInput" 
+                    class="form-control"
+                    :class="{ 'is-invalid': rootValidationError }"
+                    placeholder="/var/www/example.com/public"
+                    @input="rootValidationError = ''"
+                    @keyup.enter="updateDocumentRoot()"
+                    :disabled="submitting"
+                  >
+                </div>
+                <div class="invalid-feedback d-block" v-if="rootValidationError">
+                  {{ rootValidationError }}
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button 
+                class="btn btn-outline-secondary mb-0" 
+                @click="closeRootModal"
+                :disabled="submitting"
+              >
+                Cancel
+              </button>
+              <button 
+                class="btn bg-gradient-dark mb-0" 
+                @click="updateDocumentRoot()"
+                :disabled="submitting || !rootInput.trim()"
+              >
+                <span v-if="submitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                Save
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
       <!-- Delete Confirmation Modal -->
       <div class="modal fade show" tabindex="-1" style="display:block" v-if="showDeleteModal">
         <div class="modal-dialog modal-dialog-centered">
@@ -260,13 +333,16 @@ const domains = ref([])
 const serverIp = ref("")
 const showModal = ref(false)
 const showDeleteModal = ref(false)
+const showRootModal = ref(false)
 const isEdit = ref(false)
 const domainInput = ref("")
+const rootInput = ref("")
 const oldDomain = ref("")
 const domainToDelete = ref("")
 const loading = ref(false)
 const submitting = ref(false)
 const validationError = ref("")
+const rootValidationError = ref("")
 
 const alert = ref({
   show: false,
@@ -423,6 +499,44 @@ const deleteDomain = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const updateDocumentRoot = async () => {
+  if (!rootInput.value.trim()) {
+    rootValidationError.value = "Document root is required"
+    return
+  }
+
+  try {
+    submitting.value = true
+    await axios.put(`/domains/${oldDomain.value}/root`, { 
+      document_root: rootInput.value.trim()
+    })
+    showAlert('success', `Document root has been updated successfully`)
+    closeRootModal()
+    loadDomains()
+  } catch (error) {
+    if (error.response?.data?.error) {
+      rootValidationError.value = error.response.data.error
+    } else {
+      showAlert('danger', 'Failed to update document root. Please try again.')
+    }
+  } finally {
+    submitting.value = false
+  }
+}
+
+const openRootModal = (domain) => {
+  oldDomain.value = domain.name
+  rootInput.value = domain.document_root || `/var/www/${domain.name}`
+  rootValidationError.value = ""
+  showRootModal.value = true
+}
+
+const closeRootModal = () => {
+  showRootModal.value = false
+  rootInput.value = ""
+  rootValidationError.value = ""
 }
 
 const closeModal = () => {

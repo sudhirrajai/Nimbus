@@ -66,6 +66,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
     Route::middleware(['role:root,admin'])->prefix('domains')->group(function () {
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
         Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
+        Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
     });
 
