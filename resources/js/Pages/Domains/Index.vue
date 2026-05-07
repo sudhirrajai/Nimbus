@@ -48,6 +48,9 @@
                         Status
                       </th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
+                        Storage
+                      </th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                         Document Root
                       </th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
@@ -57,74 +60,87 @@
                   </thead>
 
                    <tbody>
-                    <tr v-for="domain in domains" :key="domain.name" :class="{ 'opacity-6': !domain.is_active }">
+                    <tr v-for="domain in domains" :key="domain.name" :class="{ 'opacity-6': !domain.is_active }" class="domain-row">
                       <td>
-                        <div class="d-flex px-2 py-1">
+                        <div class="d-flex px-3 py-2">
                           <div class="d-flex flex-column justify-content-center">
-                            <h6 class="mb-0 text-sm">
+                            <h6 class="mb-0 text-sm font-weight-bold">
                               {{ domain.name }}
                               <i v-if="!domain.is_active" class="material-symbols-rounded text-xs text-warning ms-1" title="DNS not pointing to this server">warning</i>
                             </h6>
-                            <p class="text-xs text-secondary mb-0">/var/www/{{ domain.name }}</p>
+                            <p class="text-xs text-secondary mb-0 opacity-7">/var/www/{{ domain.name }}</p>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <span v-if="domain.is_active" class="badge badge-sm bg-gradient-success">Active</span>
-                        <span v-else class="badge badge-sm bg-gradient-warning" :title="`Point A record to ${domain.server_ip}`">Configuring</span>
+                        <span v-if="domain.is_active" class="status-pill status-active">
+                          <span class="pill-dot"></span>
+                          Active
+                        </span>
+                        <span v-else class="status-pill status-configuring" :title="`Point A record to ${domain.server_ip}`">
+                          <span class="pill-dot"></span>
+                          Configuring
+                        </span>
+                      </td>
+                      <td>
+                        <span class="text-xs font-weight-bold text-dark">{{ domain.storage || '0B' }}</span>
                       </td>
                       <td>
                         <div class="d-flex align-items-center">
                           <span class="text-xs text-secondary mb-0 me-2">{{ domain.document_root || ('/var/www/' + domain.name) }}</span>
-                          <button v-if="isRootOrAdmin" class="btn btn-link text-secondary p-0 mb-0" @click="openRootModal(domain)" title="Change document root">
+                          <button v-if="isRootOrAdmin" class="btn btn-link text-secondary p-0 mb-0 btn-edit-root" @click="openRootModal(domain)" title="Change document root">
                             <i class="material-symbols-rounded text-xs">edit</i>
                           </button>
                         </div>
                       </td>
                       <td class="align-middle text-center">
-                        <button 
-                          class="btn btn-link text-info mb-0 px-2" 
-                          @click="viewWebsite(domain.name)"
-                          title="View website"
-                        >
-                          <i class="material-symbols-rounded text-sm">visibility</i>
-                        </button>
-                        <button 
-                          class="btn btn-link text-primary mb-0 px-2" 
-                          @click="openFileManager(domain.name)"
-                          title="File Manager"
-                        >
-                          <i class="material-symbols-rounded text-sm">folder</i>
-                        </button>
-                        <button 
-                          v-if="isRootOrAdmin"
-                          class="btn btn-link text-secondary mb-0 px-2" 
-                          @click="openEditModal(domain.name)"
-                          title="Edit domain"
-                        >
-                          <i class="material-symbols-rounded text-sm">edit</i>
-                        </button>
-                        <button 
-                          v-if="isRootOrAdmin"
-                          class="btn btn-link text-danger mb-0 px-2" 
-                          @click="confirmDelete(domain.name)"
-                          title="Delete domain"
-                        >
-                          <i class="material-symbols-rounded text-sm">delete</i>
-                        </button>
+                        <div class="d-flex justify-content-center gap-2">
+                          <button 
+                            class="action-btn btn-view" 
+                            @click="viewWebsite(domain.name)"
+                            title="View website"
+                          >
+                            <i class="material-symbols-rounded">visibility</i>
+                          </button>
+                          <button 
+                            class="action-btn btn-folder" 
+                            @click="openFileManager(domain.name)"
+                            title="File Manager"
+                          >
+                            <i class="material-symbols-rounded">folder</i>
+                          </button>
+                          <button 
+                            v-if="isRootOrAdmin"
+                            class="action-btn btn-edit" 
+                            @click="openEditModal(domain.name)"
+                            title="Edit domain"
+                          >
+                            <i class="material-symbols-rounded">edit</i>
+                          </button>
+                          <button 
+                            v-if="isRootOrAdmin"
+                            class="action-btn btn-delete" 
+                            @click="confirmDelete(domain.name)"
+                            title="Delete domain"
+                          >
+                            <i class="material-symbols-rounded">delete</i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
 
                     <tr v-if="domains.length === 0 && !loading">
-                      <td colspan="3" class="text-center py-4">
-                        <i class="material-symbols-rounded text-secondary" style="font-size: 48px;">language</i>
-                        <p class="text-secondary mb-0">No domains found. Add your first domain to get started.</p>
+                      <td colspan="5" class="text-center py-5">
+                        <div class="empty-state">
+                          <i class="material-symbols-rounded text-secondary opacity-3" style="font-size: 64px;">language</i>
+                          <p class="text-secondary mt-3">No domains found. Add your first domain to get started.</p>
+                        </div>
                       </td>
                     </tr>
 
                     <tr v-if="loading">
-                      <td colspan="3" class="text-center py-4">
-                        <div class="spinner-border text-primary" role="status">
+                      <td colspan="5" class="text-center py-5">
+                        <div class="spinner-border text-dark" role="status" style="width: 3rem; height: 3rem;">
                           <span class="visually-hidden">Loading...</span>
                         </div>
                       </td>
@@ -545,4 +561,106 @@ const closeModal = () => {
   validationError.value = ""
 }
 </script>
+
+<style scoped>
+.domain-row {
+  transition: all 0.2s ease;
+}
+.domain-row:hover {
+  background-color: rgba(0, 0, 0, 0.015);
+}
+
+/* Status Pill Design */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-active {
+  background-color: #e6fffa;
+  color: #047857;
+}
+.status-active .pill-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.status-configuring {
+  background-color: #fffbeb;
+  color: #92400e;
+}
+.status-configuring .pill-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+/* Action Buttons */
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  color: #67748e;
+}
+
+.action-btn i {
+  font-size: 1.25rem !important;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-view:hover {
+  background-color: #e0f2fe;
+  color: #0ea5e9;
+}
+
+.btn-folder:hover {
+  background-color: #f0fdf4;
+  color: #22c55e;
+}
+
+.btn-edit:hover {
+  background-color: #f8fafc;
+  color: #64748b;
+}
+
+.btn-delete:hover {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+.btn-edit-root {
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+.domain-row:hover .btn-edit-root {
+  opacity: 1;
+}
+
+.empty-state {
+  padding: 40px 0;
+}
+</style>
 
