@@ -167,7 +167,7 @@ class DomainController extends Controller
             }
 
             // Create folder structure using sudo for proper permissions
-            $this->executeSudoCommand("mkdir -p {$path}/public {$path}/logs");
+            $this->executeSudoCommand("mkdir -p {$path}/logs");
             $this->executeSudoCommand("chown -R www-data:www-data {$path}");
             $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
             $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
@@ -175,7 +175,7 @@ class DomainController extends Controller
 
             // Create basic index file
             $indexContent = $this->getDefaultIndexContent($domain);
-            file_put_contents("$path/public/index.php", $indexContent);
+            file_put_contents("$path/index.html", $indexContent);
 
             // Create .env file placeholder
             file_put_contents("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n");
@@ -502,7 +502,7 @@ server {
     listen [::]:80;
     
     server_name {$domain} www.{$domain};
-    root {$domainPath}/public;
+    root {$domainPath};
     
     index index.php index.html index.htm;
     
@@ -646,15 +646,12 @@ NGINX;
      */
     private function ensureDomainStructure($domainPath)
     {
-        $publicPath = $domainPath . '/public';
         $logsPath = $domainPath . '/logs';
         $accessLogPath = $logsPath . '/access.log';
         $errorLogPath = $logsPath . '/error.log';
 
         $this->executeSudoCommand(
             'mkdir -p '
-            . escapeshellarg($publicPath)
-            . ' '
             . escapeshellarg($logsPath)
         );
 
@@ -671,8 +668,6 @@ NGINX;
         $this->executeSudoCommand(
             'chmod 2775 '
             . escapeshellarg($domainPath)
-            . ' '
-            . escapeshellarg($publicPath)
             . ' '
             . escapeshellarg($logsPath)
         );
