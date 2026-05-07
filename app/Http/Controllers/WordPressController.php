@@ -191,11 +191,15 @@ class WordPressController extends Controller
             // 0. Ensure wp-cli is installed
             $this->execCmd("if ! command -v wp &> /dev/null; then sudo curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && sudo chmod +x wp-cli.phar && sudo mv wp-cli.phar /usr/local/bin/wp; fi", $output);
 
-            // 1. Create database using DB facade
-            \Illuminate\Support\Facades\DB::statement("CREATE DATABASE IF NOT EXISTS `{$dbName}`");
-            \Illuminate\Support\Facades\DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
-            \Illuminate\Support\Facades\DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'localhost'");
-            \Illuminate\Support\Facades\DB::statement("FLUSH PRIVILEGES");
+            // 1. Create database using sudo mysql (Laravel user might not have global privileges)
+            $dbUserSafe = escapeshellarg($dbUser);
+            $dbPassSafe = escapeshellarg($dbPass);
+            $dbNameSafe = escapeshellarg($dbName); // For shell
+
+            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS \`{$dbName}\`\" 2>&1", $output);
+            $this->execCmd("sudo mysql -e \"CREATE USER IF NOT EXISTS {$dbUserSafe}@'localhost' IDENTIFIED BY {$dbPassSafe}\" 2>&1", $output);
+            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON \`{$dbName}\`.* TO {$dbUserSafe}@'localhost'\" 2>&1", $output);
+            $this->execCmd("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output);
 
             // 2. Download WordPress
             $this->execCmd("cd {$domainPath} && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
@@ -381,9 +385,11 @@ class WordPressController extends Controller
                 $this->execCmd("sudo find {$site->path} -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +", $output);
             }
             if ($request->input('delete_database') && $site->db_name) {
-                \Illuminate\Support\Facades\DB::statement("DROP DATABASE IF EXISTS `{$site->db_name}`");
+                // Must use sudo mysql instead of DB facade because nimbus DB user lacks DROP privileges
+                $this->execCmd("sudo mysql -e \"DROP DATABASE IF EXISTS \`{$site->db_name}\`\" 2>&1", $output);
                 if ($site->db_user) {
-                    \Illuminate\Support\Facades\DB::statement("DROP USER IF EXISTS '{$site->db_user}'@'localhost'");
+                    $userSafe = escapeshellarg($site->db_user);
+                    $this->execCmd("sudo mysql -e \"DROP USER IF EXISTS {$userSafe}@'localhost'\" 2>&1", $output);
                 }
             }
 
