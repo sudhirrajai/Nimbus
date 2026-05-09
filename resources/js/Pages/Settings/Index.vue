@@ -141,7 +141,7 @@
                         <div class="modal-body">
                             <div class="alert alert-info border-0 text-white text-xs">
                                 <i class="material-symbols-rounded me-2">info</i>
-                                Before continuing, ensure your subdomain is pointing (A Record) to this server IP: <strong>{{ currentIp }}</strong>
+                                Before continuing, ensure your subdomain is pointing (A Record) to this server IP: <strong>{{ serverIp }}</strong>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Panel Subdomain / Domain</label>
@@ -430,6 +430,7 @@ const settings = ref({
 const securityRules = ref([])
 const securityMode = ref('off')
 const currentIp = ref('')
+const serverIp = ref('')
 const showAddRule = ref(false)
 const savingRule = ref(false)
 const newRule = ref({
@@ -479,6 +480,7 @@ const loadSecurityData = async () => {
             securityRules.value = response.data.rules
             securityMode.value = response.data.mode
             currentIp.value = response.data.current_ip
+            serverIp.value = response.data.server_ip
         }
     } catch (error) {
         console.error('Failed to load security data:', error)
