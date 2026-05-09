@@ -167,7 +167,6 @@
                     </div>
                 </div>
             </div>
-            </div>
 
             <!-- IP Rules Table -->
             <div class="row mb-4">
