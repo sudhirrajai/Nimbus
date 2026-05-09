@@ -119,12 +119,18 @@ class ShieldController extends Controller
                 // 2. Scan for common PHP shell patterns
                 $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
                 foreach ($shellPatterns as $pattern) {
-                    $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage 2>/dev/null";
+                    // Exclude vendor, node_modules, storage, AND the Nimbus panel itself to avoid false positives
+                    $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage --exclude-dir=nimbus 2>/dev/null";
                     $files = $this->executeSudoCommand($cmd);
                     foreach ($files as $file) {
                         if (empty($file) || !is_string($file)) continue;
+                        $filePath = trim($file);
+                        
+                        // Additional check to skip if it's inside the nimbus directory (backup safety)
+                        if (str_contains($filePath, '/usr/local/nimbus')) continue;
+
                         $findings[] = [
-                            'file_path' => trim($file),
+                            'file_path' => $filePath,
                             'type' => 'Potential Web Shell',
                             'details' => "Contains suspicious function: $pattern"
                         ];
