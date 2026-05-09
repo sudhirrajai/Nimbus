@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="Databases" />
     <div class="container-fluid py-4">
@@ -241,40 +241,48 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="db in databases" :key="db.name">
-                        <td>
-                          <div class="d-flex align-items-center">
-                            <i class="material-symbols-rounded text-info me-2">database</i>
-                            <h6 class="mb-0 text-sm">{{ db.name }}</h6>
+                    <tr v-for="db in databases" :key="db.name" class="domain-row">
+                      <td>
+                        <div class="d-flex align-items-center px-3 py-2">
+                          <div class="icon-box-db me-3">
+                            <i class="material-symbols-rounded text-info">database</i>
                           </div>
-                        </td>
-                        <td>
-                          <span class="text-sm">{{ db.size }}</span>
-                        </td>
-                        <td>
-                          <div v-if="db.users.length > 0">
-                            <span v-for="(user, index) in db.users" :key="user.username"
-                              class="badge bg-gradient-secondary me-1 mb-1">
-                              {{ user.username }}
-                            </span>
-                          </div>
-                          <span v-else class="text-xs text-secondary">No users assigned</span>
-                        </td>
-                        <td class="text-center">
-                          <button class="btn btn-link text-info mb-0 px-2" @click="openPhpMyAdmin(db)"
+                          <h6 class="mb-0 text-sm font-weight-bold">{{ db.name }}</h6>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <i class="material-symbols-rounded text-secondary text-sm me-1">analytics</i>
+                          <span class="text-sm font-weight-bold">{{ db.size }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div v-if="db.users.length > 0" class="d-flex flex-wrap gap-1">
+                          <span v-for="user in db.users" :key="user.username"
+                            class="badge-db-user">
+                            <i class="material-symbols-rounded text-xxs me-1">person</i>
+                            {{ user.username }}
+                          </span>
+                        </div>
+                        <span v-else class="text-xs text-secondary opacity-7">No users assigned</span>
+                      </td>
+                      <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1">
+                          <button class="action-btn btn-sso" @click="openPhpMyAdmin(db)"
                             title="Open in Nimbus DB">
-                            <i class="material-symbols-rounded text-sm">open_in_new</i>
+                            <i class="material-symbols-rounded">open_in_new</i>
                           </button>
-                          <button class="btn btn-link text-primary mb-0 px-2" @click="manageDatabase(db)"
+                          <button class="action-btn btn-settings" @click="manageDatabase(db)"
                             title="Manage">
-                            <i class="material-symbols-rounded text-sm">settings</i>
+                            <i class="material-symbols-rounded">settings</i>
                           </button>
-                          <button class="btn btn-link text-danger mb-0 px-2" @click="confirmDeleteDb(db)"
+                          <button class="action-btn btn-delete" @click="confirmDeleteDb(db)"
                             title="Delete">
-                            <i class="material-symbols-rounded text-sm">delete</i>
+                            <i class="material-symbols-rounded">delete</i>
                           </button>
-                        </td>
-                      </tr>
+                        </div>
+                      </td>
+                    </tr>
                       <tr v-if="databases.length === 0">
                         <td colspan="4" class="text-center py-4 text-secondary">
                           No databases found. Create one above.
@@ -836,5 +844,84 @@ const openPhpMyAdmin = async (db) => {
   }
 }
 </script>
+
+<style scoped>
+.domain-row {
+  transition: all 0.2s ease;
+}
+.domain-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.icon-box-db {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9f2ff;
+  box-shadow: 0 4px 6px -1px rgba(17, 113, 239, 0.1);
+}
+
+.badge-db-user {
+  background: #f8f9fa;
+  color: #344767;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e9ecef;
+}
+
+.action-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: #67748e;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.action-btn i {
+  font-size: 1.25rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-sso:hover { background: #1171ef; color: #fff; }
+.btn-settings:hover { background: #5e72e4; color: #fff; }
+.btn-delete:hover { background: #f5365c; color: #fff; }
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.terminal-output::-webkit-scrollbar {
+  width: 8px;
+}
+.terminal-output::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+.terminal-output::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+</style>
 
 

@@ -73,43 +73,73 @@
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Site</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Version</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Database</th>
-                  <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Status</th>
                   <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="site in sites" :key="site.id">
+                <tr v-for="site in sites" :key="site.id" class="domain-row">
                   <td>
-                    <div class="d-flex px-2 py-1">
-                      <div class="icon icon-sm icon-shape shadow text-center border-radius-md me-3 d-flex align-items-center justify-content-center" style="background:#21759b">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.52 122.523" width="18" height="18"><g fill="#fff"><path d="M8.708 61.26c0 20.802 12.089 38.779 29.619 47.298L13.258 39.872a52.354 52.354 0 0 0-4.55 21.388z"/><path d="M96.74 58.608c0-6.495-2.333-10.993-4.334-14.494-2.664-4.329-5.161-7.995-5.161-12.324 0-4.831 3.664-9.328 8.825-9.328.233 0 .454.029.681.042-9.35-8.566-21.807-13.796-35.489-13.796-18.36 0-34.513 9.42-43.91 23.688 1.233.037 2.395.063 3.382.063 5.497 0 14.006-.668 14.006-.668 2.833-.166 3.167 3.994.337 4.329 0 0-2.847.335-6.015.501L48.2 93.547l11.501-34.493-8.188-22.434c-2.83-.166-5.511-.501-5.511-.501-2.832-.166-2.5-4.496.332-4.329 0 0 8.679.668 13.843.668 5.496 0 14.006-.668 14.006-.668 2.835-.166 3.168 3.994.337 4.329 0 0-2.853.335-6.015.501l18.992 56.494 5.242-17.517c2.272-7.269 4.001-12.49 4.001-16.989z"/><path d="M62.184 65.857l-15.768 45.819a52.552 52.552 0 0 0 32.29-.84 4.7 4.7 0 0 1-.377-.726L62.184 65.857z"/><path d="M107.376 36.046c.226 1.674.354 3.471.354 5.404 0 5.333-.996 11.328-3.996 18.824l-16.053 46.413C101.291 98.083 113.812 81.18 113.812 61.26c0-9.192-2.39-17.833-6.436-25.214z"/><path d="M61.262 0C27.483 0 0 27.481 0 61.26c0 33.783 27.483 61.263 61.262 61.263 33.778 0 61.258-27.48 61.258-61.263C122.52 27.481 95.04 0 61.262 0zm0 119.715c-32.23 0-58.453-26.223-58.453-58.455 0-32.23 26.222-58.451 58.453-58.451 32.229 0 58.45 26.221 58.45 58.451 0 32.232-26.221 58.455-58.45 58.455z"/></g></svg>
+                    <div class="d-flex px-3 py-2">
+                      <div class="icon-box-wp me-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.52 122.523" width="20" height="20"><g fill="#fff"><path d="M8.708 61.26c0 20.802 12.089 38.779 29.619 47.298L13.258 39.872a52.354 52.354 0 0 0-4.55 21.388z"/><path d="M96.74 58.608c0-6.495-2.333-10.993-4.334-14.494-2.664-4.329-5.161-7.995-5.161-12.324 0-4.831 3.664-9.328 8.825-9.328.233 0 .454.029.681.042-9.35-8.566-21.807-13.796-35.489-13.796-18.36 0-34.513 9.42-43.91 23.688 1.233.037 2.395.063 3.382.063 5.497 0 14.006-.668 14.006-.668 2.833-.166 3.167 3.994.337 4.329 0 0-2.847.335-6.015.501L48.2 93.547l11.501-34.493-8.188-22.434c-2.83-.166-5.511-.501-5.511-.501-2.832-.166-2.5-4.496.332-4.329 0 0 8.679.668 13.843.668 5.496 0 14.006-.668 14.006-.668 2.835-.166 3.168 3.994.337 4.329 0 0-2.853.335-6.015.501l18.992 56.494 5.242-17.517c2.272-7.269 4.001-12.49 4.001-16.989z"/><path d="M62.184 65.857l-15.768 45.819a52.552 52.552 0 0 0 32.29-.84 4.7 4.7 0 0 1-.377-.726L62.184 65.857z"/><path d="M107.376 36.046c.226 1.674.354 3.471.354 5.404 0 5.333-.996 11.328-3.996 18.824l-16.053 46.413C101.291 98.083 113.812 81.18 113.812 61.26c0-9.192-2.39-17.833-6.436-25.214z"/><path d="M61.262 0C27.483 0 0 27.481 0 61.26c0 33.783 27.483 61.263 61.262 61.263 33.778 0 61.258-27.48 61.258-61.263C122.52 27.481 95.04 0 61.262 0zm0 119.715c-32.23 0-58.453-26.223-58.453-58.455 0-32.23 26.222-58.451 58.453-58.451 32.229 0 58.45 26.221 58.45 58.451 0 32.232-26.221 58.455-58.45 58.455z"/></g></svg>
                       </div>
                       <div class="d-flex flex-column justify-content-center">
-                        <h6 class="mb-0 text-sm">{{ site.site_title || site.domain }}</h6>
-                        <p class="text-xs text-secondary mb-0">
+                        <h6 class="mb-0 text-sm font-weight-bold">{{ site.site_title || site.domain }}</h6>
+                        <p class="text-xs text-secondary mb-0 opacity-7">
                           <a :href="(site.ssl_enabled ? 'https://' : 'http://') + site.domain" target="_blank" class="text-primary">{{ site.domain }}</a>
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td><span class="badge bg-gradient-secondary">WP {{ site.wp_version || '?' }}</span></td>
-                  <td><span class="text-xs">{{ site.db_name || '-' }}</span></td>
-                  <td class="align-middle text-center">
-                    <span class="badge badge-sm" :class="site.status === 'active' ? 'bg-gradient-success' : site.status === 'installing' ? 'bg-gradient-warning' : 'bg-gradient-danger'">
+                  <td>
+                    <span class="badge-version">
+                      <i class="material-symbols-rounded text-xs me-1">hotel_class</i>
+                      v{{ site.wp_version || '?' }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <i class="material-symbols-rounded text-secondary text-sm me-1">database</i>
+                      <span class="text-xs font-weight-bold text-dark">{{ site.db_name || '-' }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span v-if="site.status === 'active'" class="status-pill status-active">
+                      <span class="pill-dot"></span>
+                      Active
+                    </span>
+                    <span v-else-if="site.status === 'installing'" class="status-pill status-configuring">
+                      <span class="pill-dot"></span>
+                      Installing
+                    </span>
+                    <span v-else class="status-pill status-error">
+                      <span class="pill-dot"></span>
                       {{ site.status }}
                     </span>
                   </td>
                   <td class="align-middle text-center">
-                    <button class="btn btn-sm mb-0 px-2 py-1 me-1" style="background:#21759b;color:#fff;font-size:11px" @click="adminLogin(site)" :disabled="site._logging" title="Login to WP Admin">
-                      <span v-if="site._logging" class="spinner-border spinner-border-sm me-1" style="width:10px;height:10px"></span>
-                      <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.52 122.523" width="12" height="12" class="me-1" style="vertical-align:-1px"><g fill="#fff"><path d="M8.708 61.26c0 20.802 12.089 38.779 29.619 47.298L13.258 39.872a52.354 52.354 0 0 0-4.55 21.388z"/><path d="M96.74 58.608c0-6.495-2.333-10.993-4.334-14.494-2.664-4.329-5.161-7.995-5.161-12.324 0-4.831 3.664-9.328 8.825-9.328.233 0 .454.029.681.042-9.35-8.566-21.807-13.796-35.489-13.796-18.36 0-34.513 9.42-43.91 23.688 1.233.037 2.395.063 3.382.063 5.497 0 14.006-.668 14.006-.668 2.833-.166 3.167 3.994.337 4.329 0 0-2.847.335-6.015.501L48.2 93.547l11.501-34.493-8.188-22.434c-2.83-.166-5.511-.501-5.511-.501-2.832-.166-2.5-4.496.332-4.329 0 0 8.679.668 13.843.668 5.496 0 14.006-.668 14.006-.668 2.835-.166 3.168 3.994.337 4.329 0 0-2.853.335-6.015.501l18.992 56.494 5.242-17.517c2.272-7.269 4.001-12.49 4.001-16.989z"/><path d="M62.184 65.857l-15.768 45.819a52.552 52.552 0 0 0 32.29-.84 4.7 4.7 0 0 1-.377-.726L62.184 65.857z"/><path d="M107.376 36.046c.226 1.674.354 3.471.354 5.404 0 5.333-.996 11.328-3.996 18.824l-16.053 46.413C101.291 98.083 113.812 81.18 113.812 61.26c0-9.192-2.39-17.833-6.436-25.214z"/><path d="M61.262 0C27.483 0 0 27.481 0 61.26c0 33.783 27.483 61.263 61.262 61.263 33.778 0 61.258-27.48 61.258-61.263C122.52 27.481 95.04 0 61.262 0zm0 119.715c-32.23 0-58.453-26.223-58.453-58.455 0-32.23 26.222-58.451 58.453-58.451 32.229 0 58.45 26.221 58.45 58.451 0 32.232-26.221 58.455-58.45 58.455z"/></g></svg>
-                      Admin
-                    </button>
-                    <button class="btn btn-link text-info p-1" title="Details" @click="loadDetails(site)"><i class="material-symbols-rounded text-sm">info</i></button>
-                    <button class="btn btn-link text-warning p-1" title="Change Password" @click="openChangePassword(site)"><i class="material-symbols-rounded text-sm">key</i></button>
-                    <button class="btn btn-link text-success p-1" title="Update Core" @click="updateCore(site)"><i class="material-symbols-rounded text-sm">system_update</i></button>
-                    <a :href="'/file-manager/' + site.domain" class="btn btn-link text-primary p-1" title="File Manager"><i class="material-symbols-rounded text-sm">folder</i></a>
-                    <button class="btn btn-link text-danger p-1" title="Delete" @click="confirmDelete(site)"><i class="material-symbols-rounded text-sm">delete</i></button>
+                    <div class="d-flex justify-content-center gap-1">
+                      <button class="action-btn btn-wp-admin" @click="adminLogin(site)" :disabled="site._logging" title="Login to WP Admin">
+                        <span v-if="site._logging" class="spinner-border spinner-border-sm" style="width:14px;height:14px"></span>
+                        <i v-else class="material-symbols-rounded">login</i>
+                      </button>
+                      <button class="action-btn btn-info" title="Details" @click="loadDetails(site)">
+                        <i class="material-symbols-rounded">info</i>
+                      </button>
+                      <button class="action-btn btn-password" title="Change Password" @click="openChangePassword(site)">
+                        <i class="material-symbols-rounded">key</i>
+                      </button>
+                      <button class="action-btn btn-update" title="Update Core" @click="updateCore(site)">
+                        <i class="material-symbols-rounded">system_update</i>
+                      </button>
+                      <a :href="'/file-manager/' + site.domain" class="action-btn btn-folder" title="File Manager">
+                        <i class="material-symbols-rounded">folder</i>
+                      </a>
+                      <button class="action-btn btn-delete" title="Delete" @click="confirmDelete(site)">
+                        <i class="material-symbols-rounded">delete</i>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -440,3 +470,117 @@ const adminLogin = async (site) => {
   } catch (e) { notify(e.response?.data?.error || 'Auto-login failed', 'error') } finally { site._logging = false }
 }
 </script>
+
+<style scoped>
+.domain-row {
+  transition: all 0.2s ease;
+}
+.domain-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.icon-box-wp {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #21759b 0%, #135e82 100%);
+  box-shadow: 0 4px 6px -1px rgba(33, 117, 155, 0.2), 0 2px 4px -1px rgba(33, 117, 155, 0.1);
+}
+
+.badge-version {
+  background: #f8f9fa;
+  color: #344767;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e9ecef;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.status-active {
+  background: #e6f6ec;
+  color: #0c6b36;
+}
+.status-active .pill-dot {
+  background: #2dce89;
+  box-shadow: 0 0 0 2px rgba(45, 206, 137, 0.2);
+}
+
+.status-configuring {
+  background: #fff5e9;
+  color: #8a5a00;
+}
+.status-configuring .pill-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.2);
+}
+
+.status-error {
+  background: #feeef2;
+  color: #9d174d;
+}
+.status-error .pill-dot {
+  background: #f5365c;
+  box-shadow: 0 0 0 2px rgba(245, 54, 92, 0.2);
+}
+
+.action-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: #67748e;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.action-btn i {
+  font-size: 1.25rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-wp-admin:hover { background: #21759b; color: #fff; }
+.btn-info:hover { background: #1171ef; color: #fff; }
+.btn-password:hover { background: #fb6340; color: #fff; }
+.btn-update:hover { background: #2dce89; color: #fff; }
+.btn-folder:hover { background: #5e72e4; color: #fff; }
+.btn-delete:hover { background: #f5365c; color: #fff; }
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+</style>

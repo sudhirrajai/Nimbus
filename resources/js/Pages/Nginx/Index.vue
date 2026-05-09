@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="Nginx Configuration" />
     <div class="container-fluid py-4">
@@ -67,65 +67,76 @@
                   <thead>
                     <tr>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Domain</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Config File</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Config File</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Status</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="domain in domains" :key="domain.domain">
+                    <tr v-for="domain in domains" :key="domain.domain" class="domain-row">
                       <td>
-                        <div class="d-flex align-items-center">
-                          <i class="material-symbols-rounded text-info me-2">language</i>
+                        <div class="d-flex align-items-center px-3 py-2">
+                          <div class="icon-box-nginx me-3">
+                            <i class="material-symbols-rounded text-info">language</i>
+                          </div>
                           <div>
-                            <h6 class="mb-0 text-sm">{{ domain.domain }}</h6>
+                            <h6 class="mb-0 text-sm font-weight-bold">{{ domain.domain }}</h6>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <span class="text-xs font-monospace text-secondary">{{ domain.configPath }}</span>
+                        <div class="d-flex align-items-center">
+                          <i class="material-symbols-rounded text-secondary text-xs me-1">description</i>
+                          <span class="text-xs font-monospace text-secondary">{{ domain.configPath }}</span>
+                        </div>
                       </td>
                       <td>
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="badge badge-sm bg-gradient-success" v-if="domain.hasConfig">
-                            <i class="material-symbols-rounded text-xs me-1">check</i> Config exists
-                          </span>
-                          <span class="badge badge-sm bg-gradient-danger" v-else>
-                            <i class="material-symbols-rounded text-xs me-1">close</i> No config
-                          </span>
-                          <span class="badge badge-sm bg-gradient-info" v-if="domain.isEnabled">
+                        <div class="d-flex flex-column gap-1">
+                          <div v-if="domain.hasConfig" class="status-pill status-active">
+                            <span class="pill-dot"></span>
+                            Config Exists
+                          </div>
+                          <div v-else class="status-pill status-error">
+                            <span class="pill-dot"></span>
+                            No Config
+                          </div>
+                          
+                          <div v-if="domain.isEnabled" class="status-pill status-info" style="font-size: 9px; padding: 2px 8px;">
                             Enabled
-                          </span>
-                          <span class="badge badge-sm bg-gradient-secondary" v-else>
+                          </div>
+                          <div v-else class="status-pill status-secondary" style="font-size: 9px; padding: 2px 8px;">
                             Disabled
-                          </span>
+                          </div>
                         </div>
                       </td>
                       <td class="text-center">
-                        <button 
-                          class="btn btn-link text-primary mb-0 px-2" 
-                          @click="openEditor(domain)"
-                          title="Edit configuration"
-                          :disabled="!domain.hasConfig"
-                        >
-                          <i class="material-symbols-rounded text-sm">edit</i>
-                        </button>
-                        <button 
-                          class="btn btn-link mb-0 px-2"
-                          :class="domain.isEnabled ? 'text-warning' : 'text-success'"
-                          @click="toggleDomain(domain)"
-                          :title="domain.isEnabled ? 'Disable domain' : 'Enable domain'"
-                          :disabled="!domain.hasConfig || toggling === domain.domain"
-                        >
-                          <span v-if="toggling === domain.domain" class="spinner-border spinner-border-sm"></span>
-                          <i v-else class="material-symbols-rounded text-sm">
-                            {{ domain.isEnabled ? 'toggle_on' : 'toggle_off' }}
-                          </i>
-                        </button>
+                        <div class="d-flex justify-content-center gap-1">
+                          <button 
+                            class="action-btn btn-edit" 
+                            @click="openEditor(domain)"
+                            title="Edit configuration"
+                            :disabled="!domain.hasConfig"
+                          >
+                            <i class="material-symbols-rounded">edit</i>
+                          </button>
+                          <button 
+                            class="action-btn"
+                            :class="domain.isEnabled ? 'btn-toggle-on' : 'btn-toggle-off'"
+                            @click="toggleDomain(domain)"
+                            :title="domain.isEnabled ? 'Disable domain' : 'Enable domain'"
+                            :disabled="!domain.hasConfig || toggling === domain.domain"
+                          >
+                            <span v-if="toggling === domain.domain" class="spinner-border spinner-border-sm" style="width:14px;height:14px"></span>
+                            <i v-else class="material-symbols-rounded">
+                              {{ domain.isEnabled ? 'toggle_on' : 'toggle_off' }}
+                            </i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     <tr v-if="domains.length === 0">
-                      <td colspan="4" class="text-center py-4 text-secondary">
+                      <td colspan="4" class="text-center py-4 text-secondary opacity-6">
+                        <i class="material-symbols-rounded d-block mb-2" style="font-size: 2rem;">folder_off</i>
                         No domains found
                       </td>
                     </tr>
@@ -391,5 +402,107 @@ const reloadAfterTest = async () => {
   await reloadNginx()
 }
 </script>
+
+<style scoped>
+.domain-row {
+  transition: all 0.2s ease;
+}
+.domain-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.icon-box-nginx {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.status-active {
+  background: #e6f6ec;
+  color: #0c6b36;
+}
+.status-active .pill-dot {
+  background: #2dce89;
+  box-shadow: 0 0 0 2px rgba(45, 206, 137, 0.2);
+}
+
+.status-info {
+  background: #e9f2ff;
+  color: #1171ef;
+}
+
+.status-error {
+  background: #feeef2;
+  color: #9d174d;
+}
+.status-error .pill-dot {
+  background: #f5365c;
+  box-shadow: 0 0 0 2px rgba(245, 54, 92, 0.2);
+}
+
+.status-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.action-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: #67748e;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.action-btn i {
+  font-size: 1.25rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-edit:hover { background: #1171ef; color: #fff; }
+.btn-toggle-on { color: #2dce89; }
+.btn-toggle-on:hover { background: #2dce89; color: #fff; }
+.btn-toggle-off { color: #f5365c; }
+.btn-toggle-off:hover { background: #f5365c; color: #fff; }
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+</style>
 
 

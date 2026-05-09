@@ -157,94 +157,113 @@
                   <thead>
                     <tr>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Domain</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Issuer</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Expiry</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Status</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Issuer</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Expiry</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="domain in domains" :key="domain.domain">
+                    <tr v-for="domain in domains" :key="domain.domain" class="domain-row">
                       <td>
-                        <div class="d-flex align-items-center">
-                          <i class="material-symbols-rounded me-2" :class="getStatusIconClass(domain.status)">
-                            {{ getStatusIcon(domain.status) }}
-                          </i>
+                        <div class="d-flex align-items-center px-3 py-2">
+                          <div class="icon-box-ssl me-3" :class="getStatusIconClass(domain.status)">
+                            <i class="material-symbols-rounded">{{ getStatusIcon(domain.status) }}</i>
+                          </div>
                           <div>
-                            <h6 class="mb-0 text-sm">{{ domain.domain }}</h6>
-                            <span v-if="domain.sslSource" class="badge badge-sm" :class="getSourceBadgeClass(domain.sslSource)">
+                            <h6 class="mb-0 text-sm font-weight-bold">{{ domain.domain }}</h6>
+                            <span v-if="domain.sslSource" class="badge-source">
                               {{ getSourceLabel(domain.sslSource) }}
                             </span>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <div v-if="!domain.is_active" class="badge badge-sm bg-gradient-danger mb-1" :title="`Point A record to ${domain.server_ip}`">
-                          Inactive DNS
+                        <div class="d-flex flex-column gap-1">
+                          <div v-if="!domain.is_active" class="status-pill status-error" style="font-size: 9px; padding: 2px 8px;">
+                            <span class="pill-dot"></span>
+                            Inactive DNS
+                          </div>
+                          <span v-if="domain.status === 'valid'" class="status-pill status-active">
+                            <span class="pill-dot"></span>
+                            Secured
+                          </span>
+                          <span v-else-if="domain.status === 'expiring_soon'" class="status-pill status-configuring">
+                            <span class="pill-dot"></span>
+                            Expiring Soon
+                          </span>
+                          <span v-else-if="domain.status === 'expired'" class="status-pill status-error">
+                            <span class="pill-dot"></span>
+                            Expired
+                          </span>
+                          <span v-else class="status-pill status-secondary">
+                            <span class="pill-dot"></span>
+                            No SSL
+                          </span>
                         </div>
-                        <span class="badge badge-sm" :class="getStatusBadgeClass(domain.status)">
-                          {{ getStatusLabel(domain.status) }}
-                        </span>
-                        <span v-if="domain.autoRenew" class="badge badge-sm bg-gradient-info ms-1" title="Auto-renew enabled">
-                          <i class="material-symbols-rounded text-xs">autorenew</i>
-                        </span>
                       </td>
                       <td>
-                        <span class="text-sm text-secondary">{{ domain.issuer || '-' }}</span>
+                        <div class="d-flex align-items-center">
+                          <i class="material-symbols-rounded text-secondary text-sm me-1">verified_user</i>
+                          <span class="text-xs font-weight-bold">{{ domain.issuer || '-' }}</span>
+                        </div>
                       </td>
                       <td>
                         <div v-if="domain.hasSsl">
-                          <span class="text-sm" :class="getExpiryClass(domain.daysRemaining)">
-                            {{ formatDate(domain.validTo) }}
-                          </span>
-                          <br>
-                          <small :class="getExpiryClass(domain.daysRemaining)">
+                          <div class="d-flex align-items-center mb-1">
+                            <i class="material-symbols-rounded text-sm me-1" :class="getExpiryClass(domain.daysRemaining)">event</i>
+                            <span class="text-xs font-weight-bold" :class="getExpiryClass(domain.daysRemaining)">
+                              {{ formatDate(domain.validTo) }}
+                            </span>
+                          </div>
+                          <span class="text-xxs opacity-7 d-block ps-4" :class="getExpiryClass(domain.daysRemaining)">
                             {{ getDaysRemainingText(domain.daysRemaining) }}
-                          </small>
+                          </span>
                         </div>
-                        <span v-else class="text-sm text-secondary">-</span>
+                        <span v-else class="text-xs text-secondary">-</span>
                       </td>
                       <td class="text-center">
-                        <!-- Install SSL button (for domains without SSL) -->
-                        <button 
-                          v-if="!domain.hasSsl"
-                          class="btn btn-sm bg-gradient-success mb-0"
-                          @click="installSsl(domain)"
-                          :disabled="installing === domain.domain || !certbotInstalled || !domain.is_active"
-                          :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate')"
-                        >
-                          <span v-if="installing === domain.domain" class="spinner-border spinner-border-sm me-1"></span>
-                          <i v-else class="material-symbols-rounded text-xs me-1">add_circle</i>
-                          Install SSL
-                        </button>
-                        
-                        <!-- Actions for domains with SSL -->
-                        <template v-else>
+                        <div class="d-flex justify-content-center gap-1">
+                          <!-- Install SSL button -->
                           <button 
-                            class="btn btn-link text-info mb-0 px-2"
-                            @click="renewSsl(domain)"
-                            :disabled="renewing === domain.domain || !certbotInstalled"
-                            title="Renew certificate"
+                            v-if="!domain.hasSsl"
+                            class="action-btn btn-install-ssl"
+                            @click="installSsl(domain)"
+                            :disabled="installing === domain.domain || !certbotInstalled || !domain.is_active"
+                            :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate')"
                           >
-                            <span v-if="renewing === domain.domain" class="spinner-border spinner-border-sm"></span>
-                            <i v-else class="material-symbols-rounded text-sm">autorenew</i>
+                            <span v-if="installing === domain.domain" class="spinner-border spinner-border-sm" style="width:14px;height:14px"></span>
+                            <i v-else class="material-symbols-rounded">add_moderator</i>
                           </button>
-                          <button 
-                            class="btn btn-link text-primary mb-0 px-2"
-                            @click="viewDetails(domain)"
-                            title="View details"
-                          >
-                            <i class="material-symbols-rounded text-sm">info</i>
-                          </button>
-                          <button 
-                            class="btn btn-link text-danger mb-0 px-2"
-                            @click="confirmRemove(domain)"
-                            :disabled="!certbotInstalled"
-                            title="Remove certificate"
-                          >
-                            <i class="material-symbols-rounded text-sm">delete</i>
-                          </button>
-                        </template>
+                          
+                          <!-- Actions for domains with SSL -->
+                          <template v-else>
+                            <button 
+                              class="action-btn btn-update"
+                              @click="renewSsl(domain)"
+                              :disabled="renewing === domain.domain || !certbotInstalled"
+                              title="Renew certificate"
+                            >
+                              <span v-if="renewing === domain.domain" class="spinner-border spinner-border-sm" style="width:14px;height:14px"></span>
+                              <i v-else class="material-symbols-rounded">autorenew</i>
+                            </button>
+                            <button 
+                              class="action-btn btn-info"
+                              @click="viewDetails(domain)"
+                              title="View details"
+                            >
+                              <i class="material-symbols-rounded">info</i>
+                            </button>
+                            <button 
+                              class="action-btn btn-delete"
+                              @click="confirmRemove(domain)"
+                              :disabled="!certbotInstalled"
+                              title="Remove certificate"
+                            >
+                              <i class="material-symbols-rounded">delete</i>
+                            </button>
+                          </template>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -652,5 +671,127 @@ const removeSsl = async () => {
   }
 }
 </script>
+
+<style scoped>
+.domain-row {
+  transition: all 0.2s ease;
+}
+.domain-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.icon-box-ssl {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.icon-box-ssl.text-success { background: #e6f6ec; }
+.icon-box-ssl.text-warning { background: #fff5e9; }
+.icon-box-ssl.text-danger { background: #feeef2; }
+
+.badge-source {
+  background: #f0f2f5;
+  color: #4b5563;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.status-active {
+  background: #e6f6ec;
+  color: #0c6b36;
+}
+.status-active .pill-dot {
+  background: #2dce89;
+  box-shadow: 0 0 0 2px rgba(45, 206, 137, 0.2);
+}
+
+.status-configuring {
+  background: #fff5e9;
+  color: #8a5a00;
+}
+.status-configuring .pill-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.2);
+}
+
+.status-error {
+  background: #feeef2;
+  color: #9d174d;
+}
+.status-error .pill-dot {
+  background: #f5365c;
+  box-shadow: 0 0 0 2px rgba(245, 54, 92, 0.2);
+}
+
+.status-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+.status-secondary .pill-dot {
+  background: #94a3b8;
+}
+
+.action-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: #67748e;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.action-btn i {
+  font-size: 1.25rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-install-ssl:hover { background: #2dce89; color: #fff; }
+.btn-update:hover { background: #1171ef; color: #fff; }
+.btn-info:hover { background: #5e72e4; color: #fff; }
+.btn-delete:hover { background: #f5365c; color: #fff; }
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+</style>
 
 
