@@ -37,11 +37,21 @@ class ShieldController extends Controller
                 'quarantined' => SecurityThreat::where('status', 'quarantined')->count(),
                 'last_scan' => $lastScan ? \Illuminate\Support\Carbon::parse($lastScan)->diffForHumans() : 'Never',
                 'firewall_status' => $this->getFirewallStatus(),
-                'scan_status' => 'idle'
+                'scan_status' => 'idle',
+                'tools_installed' => $this->checkToolsInstalled(),
+                'install_status' => Setting::where('key', 'shield_install_status')->value('value') ?: 'idle'
             ];
 
             try {
                 $stats['scan_status'] = Setting::where('key', 'shield_scan_status')->value('value') ?: 'idle';
+                
+                // Check if installation finished
+                if ($stats['install_status'] === 'installing' && file_exists('/tmp/nimbus_shield_install_done')) {
+                    Setting::updateOrCreate(['key' => 'shield_install_status'], ['value' => 'idle']);
+                    unlink('/tmp/nimbus_shield_install_done');
+                    $stats['install_status'] = 'idle';
+                    $stats['tools_installed'] = $this->checkToolsInstalled();
+                }
             } catch (\Exception $e) {
                 // Settings table might not exist yet
                 \Log::warning("Settings table check failed: " . $e->getMessage());
@@ -462,6 +472,56 @@ class ShieldController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Check if security tools are installed
+     */
+    private function checkToolsInstalled()
+    {
+        $clamav = shell_exec('which clamscan');
+        $ufw = shell_exec('which ufw');
+        $maldet = shell_exec('which maldet');
+        
+        return [
+            'clamav' => !empty($clamav),
+            'ufw' => !empty($ufw),
+            'maldet' => !empty($maldet),
+            'all' => (!empty($clamav) && !empty($ufw) && !empty($maldet))
+        ];
+    }
+
+    /**
+     * Start background installation of security tools
+     */
+    public function installTools()
+    {
+        try {
+            $status = Setting::where('key', 'shield_install_status')->value('value');
+            if ($status === 'installing') {
+                return response()->json(['error' => 'Installation already in progress'], 409);
+            }
+
+            Setting::updateOrCreate(['key' => 'shield_install_status'], ['value' => 'installing']);
+
+            // Build the install script
+            $installCmd = "sudo apt-get update && sudo apt-get install -y clamav clamav-daemon ufw && " .
+                         "wget http://www.rfxn.com/downloads/maldetect-current.tar.gz && " .
+                         "tar -xzf maldetect-current.tar.gz && " .
+                         "cd maldetect-* && sudo ./install.sh && " .
+                         "cd .. && rm -rf maldetect-* && " .
+                         "echo 'done' > /tmp/nimbus_shield_install_done";
+
+            // Run in background
+            exec("nohup sh -c \"$installCmd\" > /dev/null 2>&1 &");
+
+            // Start a watcher to reset status when done
+            // We'll check the /tmp file in getStatus
+            
+            return response()->json(['success' => true, 'message' => 'Installation started in background']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     private function executeSudoCommand($command)

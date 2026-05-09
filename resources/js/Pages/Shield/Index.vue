@@ -16,6 +16,20 @@
                                     <p class="text-white opacity-8 mb-4">
                                         Active protection for your server. Scan for threats, manage firewall rules, and monitor system integrity.
                                     </p>
+
+                                    <!-- Installation Banner -->
+                                    <div v-if="!stats.tools_installed.all && stats.install_status === 'idle'" class="alert alert-warning border-0 d-flex align-items-center mb-4 py-2 px-3" style="background: rgba(255,184,0,0.2)">
+                                        <i class="material-symbols-rounded text-warning me-2">warning</i>
+                                        <span class="text-white text-sm me-3">Some security tools (ClamAV, Maldet) are not installed.</span>
+                                        <button @click="installTools" class="btn btn-sm btn-warning mb-0 py-1">Install Now</button>
+                                    </div>
+
+                                    <!-- Installing Status -->
+                                    <div v-if="stats.install_status === 'installing'" class="alert alert-info border-0 d-flex align-items-center mb-4 py-2 px-3" style="background: rgba(0,184,255,0.2)">
+                                        <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
+                                        <span class="text-white text-sm">Installing security tools in background... This may take a few minutes.</span>
+                                    </div>
+
                                     <div class="d-flex gap-2">
                                         <button v-if="!scanning" @click="startScan('/var/www')" class="btn btn-primary mb-0">
                                             <i class="material-symbols-rounded text-sm me-1">search</i>
@@ -304,7 +318,9 @@ const stats = ref({
     quarantined: 0,
     last_scan: 'Never',
     firewall_status: 'Checking...',
-    scan_status: 'idle'
+    scan_status: 'idle',
+    tools_installed: { all: true }, // Default to true to avoid flicker
+    install_status: 'idle'
 })
 
 const activeTab = ref('threats')
@@ -417,6 +433,19 @@ watch(activeTab, (newTab) => {
 const startPolling = () => {
     if (statusInterval) return
     statusInterval = setInterval(loadStatus, 5000) // Poll every 5 seconds
+}
+
+const installTools = async () => {
+    try {
+        const response = await axios.post('/shield/install-tools')
+        if (response.data.success) {
+            showNotification('Installation started. You can close this page; it will continue in the background.', 'success')
+            stats.value.install_status = 'installing'
+            startPolling()
+        }
+    } catch (error) {
+        showNotification('Failed to start installation', 'danger')
+    }
 }
 
 const stopPolling = () => {

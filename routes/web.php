@@ -326,6 +326,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/firewall/add', [\App\Http\Controllers\ShieldController::class, 'addFirewallRule'])->name('firewall.add');
             Route::post('/firewall/delete', [\App\Http\Controllers\ShieldController::class, 'deleteFirewallRule'])->name('firewall.delete');
             Route::post('/firewall/toggle', [\App\Http\Controllers\ShieldController::class, 'toggleFirewall'])->name('firewall.toggle');
+            Route::post('/install-tools', [\App\Http\Controllers\ShieldController::class, 'installTools'])->name('install-tools');
         });
 
         // User Management routes
