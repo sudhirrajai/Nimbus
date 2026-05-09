@@ -37,11 +37,21 @@ class ShieldController extends Controller
                 'quarantined' => SecurityThreat::where('status', 'quarantined')->count(),
                 'last_scan' => $lastScan ? \Illuminate\Support\Carbon::parse($lastScan)->diffForHumans() : 'Never',
                 'firewall_status' => $this->getFirewallStatus(),
-                'scan_status' => 'idle'
+                'scan_status' => 'idle',
+                'tools_installed' => $this->checkToolsInstalled(),
+                'install_status' => Setting::where('key', 'shield_install_status')->value('value') ?: 'idle'
             ];
 
             try {
                 $stats['scan_status'] = Setting::where('key', 'shield_scan_status')->value('value') ?: 'idle';
+                
+                // Check if installation finished
+                if ($stats['install_status'] === 'installing' && file_exists('/tmp/nimbus_shield_install_done')) {
+                    Setting::updateOrCreate(['key' => 'shield_install_status'], ['value' => 'idle']);
+                    unlink('/tmp/nimbus_shield_install_done');
+                    $stats['install_status'] = 'idle';
+                    $stats['tools_installed'] = $this->checkToolsInstalled();
+                }
             } catch (\Exception $e) {
                 // Settings table might not exist yet
                 \Log::warning("Settings table check failed: " . $e->getMessage());
@@ -119,16 +129,60 @@ class ShieldController extends Controller
                 // 2. Scan for common PHP shell patterns
                 $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
                 foreach ($shellPatterns as $pattern) {
-                    $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage 2>/dev/null";
+                    // Exclude vendor, node_modules, storage, AND the Nimbus panel itself to avoid false positives
+                    $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage --exclude-dir=nimbus 2>/dev/null";
                     $files = $this->executeSudoCommand($cmd);
                     foreach ($files as $file) {
                         if (empty($file) || !is_string($file)) continue;
+                        $filePath = trim($file);
+                        
+                        // Additional check to skip if it's inside the nimbus directory (backup safety)
+                        if (str_contains($filePath, '/usr/local/nimbus')) continue;
+
                         $findings[] = [
-                            'file_path' => trim($file),
+                            'file_path' => $filePath,
                             'type' => 'Potential Web Shell',
                             'details' => "Contains suspicious function: $pattern"
                         ];
                     }
+                }
+
+                // 3. Scan with ClamAV if installed
+                try {
+                    $clamOutput = [];
+                    $clamReturn = 0;
+                    // --no-summary to reduce output, -r for recursive
+                    exec("sudo clamscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    
+                    // Clamscan returns 1 if viruses are found
+                    if ($clamReturn === 1) {
+                        foreach ($clamOutput as $line) {
+                            if (str_contains($line, 'FOUND')) {
+                                $parts = explode(': ', $line);
+                                $filePath = trim($parts[0] ?? '');
+                                $threatType = trim($parts[1] ?? 'Malware Detected');
+                                
+                                if ($filePath && !str_contains($filePath, '/usr/local/nimbus')) {
+                                    $findings[] = [
+                                        'file_path' => $filePath,
+                                        'type' => 'ClamAV: ' . $threatType,
+                                        'details' => 'Detected by ClamAV Antivirus engine.'
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning("Clamscan failed or not installed: " . $e->getMessage());
+                }
+
+                // 4. Scan with Maldet if installed
+                try {
+                    // Maldet is usually at /usr/local/sbin/maldet
+                    // We can use -a for scan all in path
+                    // But maldet scans are slow, we might want to skip for "Quick Scan"
+                } catch (\Exception $e) {
+                    \Log::warning("Maldet scan failed: " . $e->getMessage());
                 }
 
                 // Save findings to database
@@ -238,9 +292,135 @@ class ShieldController extends Controller
 
     private function getFirewallStatus()
     {
+        $output = [];
         exec("sudo ufw status", $output);
         $statusLine = $output[0] ?? '';
         return str_contains($statusLine, 'active') && !str_contains($statusLine, 'inactive') ? 'Active' : 'Inactive';
+    }
+
+    /**
+     * Get detailed firewall rules
+     */
+    public function getFirewallRules()
+    {
+        try {
+            $output = [];
+            exec("sudo ufw status numbered", $output);
+            
+            $rules = [];
+            foreach ($output as $line) {
+                if (preg_match('/^\[\s*(\d+)\]\s+(.*?)\s+(ALLOW|DENY)\s+(.*?)$/i', $line, $matches)) {
+                    $rules[] = [
+                        'index' => $matches[1],
+                        'to' => trim($matches[2]),
+                        'action' => $matches[3],
+                        'from' => trim($matches[4])
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'status' => $this->getFirewallStatus(),
+                'rules' => $rules
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Add firewall rule
+     */
+    public function addFirewallRule(Request $request)
+    {
+        $port = $request->input('port');
+        $action = $request->input('action', 'allow'); // allow or deny
+        $proto = $request->input('proto', 'tcp');
+
+        // Validation
+        if (!$port || !preg_match('/^[a-zA-Z0-9:]+$/', $port)) {
+            return response()->json(['error' => 'Invalid port format'], 400);
+        }
+        
+        $action = in_array($action, ['allow', 'deny']) ? $action : 'allow';
+        $proto = in_array($proto, ['tcp', 'udp', 'any']) ? $proto : 'tcp';
+
+        try {
+            $cmd = "ufw " . $action . " " . escapeshellarg($port) . "/" . $proto;
+            $this->executeSudoCommand($cmd);
+            return response()->json(['success' => true, 'message' => "Rule added: $action $port/$proto"]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Delete firewall rule by index
+     */
+    public function deleteFirewallRule(Request $request)
+    {
+        $index = $request->input('index');
+        if (!$index || !is_numeric($index)) {
+            return response()->json(['error' => 'Invalid rule index'], 400);
+        }
+
+        try {
+            $this->executeSudoCommand("ufw --force delete " . escapeshellarg($index));
+            return response()->json(['success' => true, 'message' => "Rule removed"]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Toggle Firewall (On/Off)
+     */
+    public function toggleFirewall(Request $request)
+    {
+        $enable = $request->input('enable');
+        $command = $enable ? "ufw --force enable" : "ufw disable";
+        
+        try {
+            $this->executeSudoCommand($command);
+            return response()->json(['success' => true, 'message' => "Firewall " . ($enable ? "enabled" : "disabled")]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Scan an uploaded file (Real-time protection)
+     */
+    public function scanUpload($filePath)
+    {
+        try {
+            // Check with ClamAV instantly
+            $output = [];
+            $return = 0;
+            exec("sudo clamscan --no-summary " . escapeshellarg($filePath), $output, $return);
+            
+            if ($return === 1) {
+                return [
+                    'safe' => false,
+                    'reason' => 'Virus detected by ClamAV'
+                ];
+            }
+
+            // Check for web shell patterns
+            $threat = $this->scanSingleFile($filePath);
+            if ($threat) {
+                return [
+                    'safe' => false,
+                    'reason' => $threat['type'] . ': ' . $threat['details']
+                ];
+            }
+
+            return ['safe' => true];
+        } catch (\Exception $e) {
+            \Log::error("Upload scan failed: " . $e->getMessage());
+            return ['safe' => true]; // Allow on error to avoid blocking valid uploads if scanner breaks
+        }
     }
 
     /**
@@ -251,9 +431,30 @@ class ShieldController extends Controller
     {
         if (!file_exists($filePath)) return null;
 
+        // 1. ClamAV Scan
+        try {
+            $output = [];
+            $return = 0;
+            // Use --no-summary for speed
+            exec("sudo clamscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
+            if ($return === 1) {
+                foreach ($output as $line) {
+                    if (str_contains($line, 'FOUND')) {
+                        $parts = explode(': ', $line);
+                        return [
+                            'type' => 'ClamAV: ' . trim($parts[1] ?? 'Malware'),
+                            'details' => 'Detected by ClamAV Antivirus engine during upload/scan.'
+                        ];
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning("ClamAV scanFile failed: " . $e->getMessage());
+        }
+
         $filename = basename($filePath);
         
-        // 1. Check for hex-named HTML files
+        // 2. Check for hex-named HTML files
         if (preg_match('/^[0-9a-f]{10,20}\.html$/', $filename)) {
             return [
                 'type' => 'Suspicious HTML (Hex-named)',
@@ -261,19 +462,75 @@ class ShieldController extends Controller
             ];
         }
 
-        // 2. Check for shell patterns
-        $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
-        $content = file_get_contents($filePath);
-        foreach ($shellPatterns as $pattern) {
-            if (str_contains($content, $pattern)) {
-                return [
-                    'type' => 'Potential Web Shell',
-                    'details' => "Contains suspicious function: $pattern"
-                ];
+        // 3. Check for shell patterns
+        try {
+            $content = file_get_contents($filePath);
+            if ($content) {
+                $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
+                foreach ($shellPatterns as $pattern) {
+                    if (str_contains($content, $pattern)) {
+                        return [
+                            'type' => 'Potential Web Shell',
+                            'details' => "Contains suspicious function: $pattern"
+                        ];
+                    }
+                }
             }
+        } catch (\Exception $e) {
+            \Log::warning("Shell pattern scanFile failed: " . $e->getMessage());
         }
 
         return null;
+    }
+
+    /**
+     * Check if security tools are installed
+     */
+    private function checkToolsInstalled()
+    {
+        $clamav = shell_exec('which clamscan');
+        $ufw = shell_exec('which ufw');
+        $maldet = shell_exec('which maldet');
+        
+        return [
+            'clamav' => !empty($clamav),
+            'ufw' => !empty($ufw),
+            'maldet' => !empty($maldet),
+            'all' => (!empty($clamav) && !empty($ufw) && !empty($maldet))
+        ];
+    }
+
+    /**
+     * Start background installation of security tools
+     */
+    public function installTools()
+    {
+        try {
+            $status = Setting::where('key', 'shield_install_status')->value('value');
+            if ($status === 'installing') {
+                return response()->json(['error' => 'Installation already in progress'], 409);
+            }
+
+            Setting::updateOrCreate(['key' => 'shield_install_status'], ['value' => 'installing']);
+
+            // Build the install script
+            $installCmd = "sudo apt-get update && sudo apt-get install -y clamav clamav-daemon ufw && " .
+                         "wget http://www.rfxn.com/downloads/maldetect-current.tar.gz && " .
+                         "tar -xzf maldetect-current.tar.gz && " .
+                         "cd maldetect-* && sudo ./install.sh && " .
+                         "cd .. && rm -rf maldetect-* && " .
+                         "echo 'done' > /tmp/nimbus_shield_install_done";
+
+            // Run in background
+            exec("nohup sh -c \"$installCmd\" > /dev/null 2>&1 &");
+
+            // Start a watcher to reset status when done
+            // We'll check the /tmp file in getStatus
+            
+            return response()->json(['success' => true, 'message' => 'Installation started in background']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     private function executeSudoCommand($command)

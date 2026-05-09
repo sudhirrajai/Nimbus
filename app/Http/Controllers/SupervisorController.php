@@ -298,7 +298,8 @@ BASH;
     {
         try {
             $name = $request->input('name');
-            exec("sudo supervisorctl start {$name} 2>&1", $output, $code);
+            $escapedName = escapeshellarg($name);
+            exec("sudo supervisorctl start {$escapedName} 2>&1", $output, $code);
             
             return response()->json([
                 'success' => $code === 0,
@@ -316,7 +317,8 @@ BASH;
     {
         try {
             $name = $request->input('name');
-            exec("sudo supervisorctl stop {$name} 2>&1", $output, $code);
+            $escapedName = escapeshellarg($name);
+            exec("sudo supervisorctl stop {$escapedName} 2>&1", $output, $code);
             
             return response()->json([
                 'success' => $code === 0,
@@ -334,7 +336,8 @@ BASH;
     {
         try {
             $name = $request->input('name');
-            exec("sudo supervisorctl restart {$name} 2>&1", $output, $code);
+            $escapedName = escapeshellarg($name);
+            exec("sudo supervisorctl restart {$escapedName} 2>&1", $output, $code);
             
             return response()->json([
                 'success' => $code === 0,
