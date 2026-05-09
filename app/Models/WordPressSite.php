@@ -30,6 +30,7 @@ class WordPressSite extends Model
         'auto_update' => 'boolean',
         'ssl_enabled' => 'boolean',
         'last_checked_at' => 'datetime',
+        'db_password' => 'encrypted',
     ];
 
     /**

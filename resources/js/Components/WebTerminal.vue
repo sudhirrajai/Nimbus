@@ -48,7 +48,7 @@
             <span class="prompt-command">{{ line.command }}</span>
           </template>
           <template v-else-if="line.type === 'output'">
-            <span class="output-text" v-html="line.html || escapeHtml(line.text)"></span>
+            <span class="output-text" v-text="line.text"></span>
           </template>
           <template v-else-if="line.type === 'error'">
             <span class="output-error">{{ line.text }}</span>

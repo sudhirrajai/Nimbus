@@ -202,23 +202,23 @@ class WordPressController extends Controller
             $this->execCmd("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output);
 
             // 2. Download WordPress
-            $this->execCmd("cd {$domainPath} && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
-            $this->execCmd("sudo rm -f {$domainPath}/index.html", $output);
+            $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
+            $this->execCmd("sudo rm -f " . escapeshellarg($domainPath . '/index.html'), $output);
 
             // 3. Create wp-config.php
             $dbNameArg = escapeshellarg($dbName);
             $dbUserArg = escapeshellarg($dbUser);
             $dbPassArg = escapeshellarg($dbPass);
-            $this->execCmd("cd {$domainPath} && sudo -u www-data wp config create --dbname={$dbNameArg} --dbuser={$dbUserArg} --dbpass={$dbPassArg} --dbhost=localhost --allow-root 2>&1", $output);
+            $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp config create --dbname={$dbNameArg} --dbuser={$dbUserArg} --dbpass={$dbPassArg} --dbhost=localhost --allow-root 2>&1", $output);
 
             // 4. Install WordPress
             $url = 'http://' . $domain;
-            $this->execCmd("cd {$domainPath} && sudo -u www-data wp core install --url={$url} --title=" . escapeshellarg($request->site_title) . " --admin_user=" . escapeshellarg($request->admin_user) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($request->admin_email) . " --allow-root 2>&1", $output);
+            $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core install --url=" . escapeshellarg($url) . " --title=" . escapeshellarg($request->site_title) . " --admin_user=" . escapeshellarg($request->admin_user) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($request->admin_email) . " --allow-root 2>&1", $output);
 
             // 5. Set permissions
-            $this->execCmd("sudo chown -R www-data:www-data {$domainPath}", $output);
-            $this->execCmd("sudo find {$domainPath} -type d -exec chmod 755 {} \\;", $output);
-            $this->execCmd("sudo find {$domainPath} -type f -exec chmod 644 {} \\;", $output);
+            $this->execCmd("sudo chown -R www-data:www-data " . escapeshellarg($domainPath), $output);
+            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type d -exec chmod 755 {} \\;", $output);
+            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type f -exec chmod 644 {} \\;", $output);
 
             // Check WP version
             $wpVersion = 'Unknown';
@@ -265,7 +265,7 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $cmd = "cd {$site->path} && sudo -u www-data wp user update " . escapeshellarg($request->username) . " --user_pass=" . escapeshellarg($request->new_password) . " --allow-root 2>&1";
+            $cmd = "cd " . escapeshellarg($site->path) . " && sudo -u www-data wp user update " . escapeshellarg($request->username) . " --user_pass=" . escapeshellarg($request->new_password) . " --allow-root 2>&1";
             $this->execCmd($cmd, $output);
 
             return response()->json(['success' => true, 'message' => 'Password changed successfully.', 'output' => $output]);
@@ -285,22 +285,22 @@ class WordPressController extends Controller
         try {
             // Get plugins
             $pluginsJson = '';
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp plugin list --format=json --allow-root 2>&1", $pluginsJson);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin list --format=json --allow-root 2>&1", $pluginsJson);
             $details['plugins'] = json_decode($pluginsJson, true) ?? [];
 
             // Get themes
             $themesJson = '';
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp theme list --format=json --allow-root 2>&1", $themesJson);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp theme list --format=json --allow-root 2>&1", $themesJson);
             $details['themes'] = json_decode($themesJson, true) ?? [];
 
             // Get users
             $usersJson = '';
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp user list --format=json --fields=ID,user_login,user_email,roles --allow-root 2>&1", $usersJson);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp user list --format=json --fields=ID,user_login,user_email,roles --allow-root 2>&1", $usersJson);
             $details['users'] = json_decode($usersJson, true) ?? [];
 
             // Check for core update
             $coreCheck = '';
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp core check-update --format=json --allow-root 2>&1", $coreCheck);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core check-update --format=json --allow-root 2>&1", $coreCheck);
             $coreUpdates = json_decode($coreCheck, true);
             if (is_array($coreUpdates) && count($coreUpdates) > 0) {
                 $details['core_update'] = $coreUpdates[0];
@@ -321,7 +321,7 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp core update --allow-root 2>&1", $output);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core update --allow-root 2>&1", $output);
             
             // Re-check version
             $versionFile = $site->path . '/wp-includes/version.php';
@@ -347,7 +347,7 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp plugin update --all --allow-root 2>&1", $output);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin update --all --allow-root 2>&1", $output);
             return response()->json(['success' => true, 'message' => 'Plugins updated.', 'output' => $output]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
@@ -364,7 +364,7 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $this->execCmd("cd {$site->path} && sudo -u www-data wp plugin {$request->action} " . escapeshellarg($request->plugin) . " --allow-root 2>&1", $output);
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin {$request->action} " . escapeshellarg($request->plugin) . " --allow-root 2>&1", $output);
             return response()->json(['success' => true, 'message' => "Plugin {$request->action}d.", 'output' => $output]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
@@ -382,7 +382,7 @@ class WordPressController extends Controller
         try {
             if ($request->input('delete_files')) {
                 // Wipe the whole directory minus logs, or let's be safer and just empty it except logs
-                $this->execCmd("sudo find {$site->path} -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +", $output);
+                $this->execCmd("sudo find " . escapeshellarg($site->path) . " -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +", $output);
             }
             if ($request->input('delete_database') && $site->db_name) {
                 // Must use sudo mysql instead of DB facade because nimbus DB user lacks DROP privileges

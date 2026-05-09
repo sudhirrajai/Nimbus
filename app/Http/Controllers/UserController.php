@@ -249,10 +249,10 @@ class UserController extends Controller
     {
         try {
             // Create user with home directory, no login shell (nologin for security)
-            shell_exec("sudo useradd -m -d /home/{$username} -s /bin/bash " . escapeshellarg($username) . " 2>&1");
+            shell_exec("sudo useradd -m -d /home/" . escapeshellarg($username) . " -s /bin/bash " . escapeshellarg($username) . " 2>&1");
 
             // Set home directory permissions (user only)
-            shell_exec("sudo chmod 750 /home/{$username} 2>&1");
+            shell_exec("sudo chmod 750 /home/" . escapeshellarg($username) . " 2>&1");
 
             // Add user to www-data group so they can read web files
             shell_exec("sudo usermod -aG www-data " . escapeshellarg($username) . " 2>&1");
