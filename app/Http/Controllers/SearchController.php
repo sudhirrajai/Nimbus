@@ -31,6 +31,7 @@ class SearchController extends Controller
             ['title' => 'Databases', 'url' => '/database', 'icon' => 'storage', 'category' => 'Menu', 'description' => 'MySQL/MariaDB databases and users'],
             ['title' => 'SSL Certificates', 'url' => '/ssl', 'icon' => 'lock', 'category' => 'Menu', 'description' => 'Manage HTTPS and Let\'s Encrypt'],
             ['title' => 'Nginx Configuration', 'url' => '/nginx', 'icon' => 'settings_ethernet', 'category' => 'Menu', 'description' => 'Custom server blocks and redirects'],
+            ['title' => 'Nimbus Shield', 'url' => '/shield', 'icon' => 'security', 'category' => 'Menu', 'description' => 'Security scans, firewall, and threat protection'],
             ['title' => 'PHP Configuration', 'url' => '/php', 'icon' => 'code', 'category' => 'Menu', 'description' => 'Edit php.ini and manage extensions'],
             ['title' => 'WordPress', 'url' => '/wordpress', 'icon' => 'description', 'category' => 'Menu', 'description' => 'One-click install and management'],
             
