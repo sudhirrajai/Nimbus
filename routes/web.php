@@ -290,6 +290,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/security/rules/{rule}/toggle', [\App\Http\Controllers\SecurityController::class, 'toggleRule'])->name('security.rules.toggle');
             Route::delete('/security/rules/{rule}', [\App\Http\Controllers\SecurityController::class, 'deleteRule'])->name('security.rules.delete');
             Route::post('/security/mode', [\App\Http\Controllers\SecurityController::class, 'updateMode'])->name('security.mode.update');
+            Route::post('/security/panel-domain', [\App\Http\Controllers\PanelDomainController::class, 'setup'])->name('security.panel-domain');
         });
 
         // Backups (Coming Soon)
