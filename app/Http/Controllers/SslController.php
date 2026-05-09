@@ -47,7 +47,15 @@ class SslController extends Controller
                         return in_array($name, $accessibleDomains);
                     }
                     return true;
-                })
+                });
+
+            // Add panel domain if set
+            $panelDomain = \App\Models\Setting::where('key', 'panel_domain')->value('value');
+            if ($panelDomain && !str_contains($panelDomain, ' ')) {
+                $directories->push($panelDomain);
+            }
+
+            $domains = $directories->unique()
                 ->map(function ($domain) use ($serverIp) {
                     $info = $this->getDomainSslInfo($domain);
                     $info['is_active'] = $this->checkDomainDns($domain, $serverIp);
@@ -57,7 +65,7 @@ class SslController extends Controller
                 ->values();
 
             return response()->json([
-                'domains' => $directories,
+                'domains' => $domains,
                 'certbotInstalled' => $this->isCertbotInstalled(),
                 'server_ip' => $serverIp
             ]);

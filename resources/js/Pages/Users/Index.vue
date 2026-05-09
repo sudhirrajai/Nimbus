@@ -47,13 +47,26 @@
     <div class="col-12">
       <div class="card">
         <div class="card-header pb-0">
-          <h6 class="mb-0"><i class="material-symbols-rounded text-sm me-1">people</i> Panel Users</h6>
+          <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="material-symbols-rounded text-sm me-1">people</i> Panel Users</h6>
+            <div class="d-flex align-items-center gap-3">
+              <div class="input-group input-group-sm" style="width: 250px;">
+                <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                <input v-model="searchQuery" type="text" class="form-control" placeholder="Search users by name or email...">
+              </div>
+              <button class="btn btn-link text-dark p-0 mb-0" @click="loadUsers" :disabled="loading">
+                <i class="material-symbols-rounded" :class="{ 'spin': loading }">refresh</i>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="card-body px-0 pb-2">
           <div v-if="loading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
-          <div v-else-if="users.length === 0" class="text-center py-5">
-            <i class="material-symbols-rounded" style="font-size:48px;opacity:0.3">group</i>
-            <p class="text-secondary mt-2">No additional users. You are the root admin.</p>
+          <div v-else-if="filteredUsers.length === 0" class="text-center py-5">
+            <div class="empty-state">
+              <i class="material-symbols-rounded opacity-3" style="font-size: 64px;">person_off</i>
+              <p class="text-secondary mt-3">No users found matching your search.</p>
+            </div>
           </div>
           <div v-else class="table-responsive">
             <table class="table align-items-center mb-0">
@@ -69,7 +82,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="user in users" :key="user.id">
+                <tr v-for="user in paginatedUsers" :key="user.id" class="user-row">
                   <td>
                     <div class="d-flex px-2 py-1">
                       <div class="icon icon-sm icon-shape shadow text-center border-radius-md me-3 d-flex align-items-center justify-content-center"
@@ -115,6 +128,28 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Pagination -->
+          <div v-if="filteredUsers.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+            <div class="text-xs text-secondary">
+              Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredUsers.length) }} of {{ filteredUsers.length }} users
+            </div>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                <button class="page-link" @click="currentPage--" aria-label="Previous">
+                  <i class="material-symbols-rounded text-xs">chevron_left</i>
+                </button>
+              </li>
+              <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                <button class="page-link" @click="currentPage = page">{{ page }}</button>
+              </li>
+              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                <button class="page-link" @click="currentPage++" aria-label="Next">
+                  <i class="material-symbols-rounded text-xs">chevron_right</i>
+                </button>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -285,6 +320,10 @@ const saving = ref(false)
 const savingWebsites = ref(false)
 const deleting = ref(false)
 
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+
 const showUserModal = ref(false)
 const showWebsitesModal = ref(false)
 const showDeleteModal = ref(false)
@@ -314,6 +353,24 @@ const statsCards = computed(() => [
   { label: 'Active', value: users.value.filter(u => u.status === 'active').length, icon: 'check_circle', color: 'success' },
   { label: 'Suspended', value: users.value.filter(u => u.status === 'suspended').length, icon: 'block', color: 'danger' },
 ])
+
+const filteredUsers = computed(() => {
+  if (!searchQuery.value) return users.value
+  const q = searchQuery.value.toLowerCase()
+  return users.value.filter(user => 
+    user.name.toLowerCase().includes(q) || 
+    user.email.toLowerCase().includes(q) ||
+    (user.linux_user && user.linux_user.toLowerCase().includes(q))
+  )
+})
+
+const totalPages = computed(() => Math.ceil(filteredUsers.value.length / itemsPerPage.value))
+
+const paginatedUsers = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredUsers.value.slice(start, end)
+})
 
 const notify = (msg, type = 'success') => {
   toastMessage.value = msg; toastType.value = type; showToast.value = true

@@ -170,7 +170,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="domain in domains" :key="domain.domain" class="domain-row">
+                    <tr v-for="domain in paginatedDomains" :key="domain.domain" class="domain-row">
                       <td>
                         <div class="d-flex align-items-center px-3 py-2">
                           <div class="icon-box-ssl me-3" :class="getStatusIconClass(domain.status)">
@@ -272,6 +272,14 @@
                         </div>
                       </td>
                     </tr>
+                    <tr v-if="filteredDomains.length === 0">
+                        <td colspan="5" class="text-center py-5 text-secondary">
+                          <div class="empty-state">
+                            <i class="material-symbols-rounded opacity-3" style="font-size: 64px;">gpp_maybe</i>
+                            <p class="mt-3">No domains found matching your search.</p>
+                          </div>
+                        </td>
+                      </tr>
                   </tbody>
                 </table>
               </div>

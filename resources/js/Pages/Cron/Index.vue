@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <MainLayout>
     <Head title="Cron Jobs" />
         <div class="container-fluid py-2">
@@ -42,28 +42,36 @@
                         <div class="card">
                             <div class="card-header pb-0 d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0">System Scheduled Tasks</h6>
-                                <button class="btn btn-sm bg-gradient-primary" @click="openCreateModal">
-                                    <i class="material-symbols-rounded text-sm me-1">add</i>
-                                    New Cron Job
-                                </button>
-                            </div>
-                            <div class="card-body">
-                                <div v-if="jobs.length === 0" class="text-center py-4 text-muted">
-                                    <i class="material-symbols-rounded mb-2" style="font-size: 48px;">schedule</i>
-                                    <p>No cron jobs configured. Create one to get started.</p>
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="input-group input-group-sm" style="width: 250px;">
+                                        <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                                        <input v-model="searchQuery" type="text" class="form-control" placeholder="Search cron jobs...">
+                                    </div>
+                                    <button class="btn btn-sm bg-gradient-primary mb-0" @click="openCreateModal">
+                                        <i class="material-symbols-rounded text-sm me-1">add</i>
+                                        New Cron Job
+                                    </button>
                                 </div>
-                                <div v-else class="table-responsive">
+                            </div>
+                            <div class="card-body px-0 pt-0 pb-2">
+                                <div v-if="filteredJobs.length === 0" class="text-center py-5 text-muted">
+                                    <div class="empty-state">
+                                        <i class="material-symbols-rounded opacity-3" style="font-size: 64px;">schedule</i>
+                                        <p class="mt-3">No cron jobs found matching your search.</p>
+                                    </div>
+                                </div>
+                                <div v-else class="table-responsive p-0">
                                     <table class="table align-items-center mb-0">
                                         <thead>
                                             <tr>
                                                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">User</th>
-                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Schedule</th>
-                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Command</th>
-                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Schedule</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Command</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="job in jobs" :key="job.id">
+                                            <tr v-for="job in paginatedJobs" :key="job.id" class="domain-row">
                                                 <td class="ps-4">
                                                     <span :class="['badge badge-sm', job.user === 'root' ? 'bg-gradient-danger' : 'bg-gradient-info']">
                                                         {{ job.user }}
@@ -85,20 +93,44 @@
                                                         {{ job.command }}
                                                     </code>
                                                 </td>
-                                                <td>
-                                                    <button class="btn btn-link text-success p-1" title="Run Now" @click="runNow(job)">
-                                                        <i class="material-symbols-rounded">play_arrow</i>
-                                                    </button>
-                                                    <button class="btn btn-link text-primary p-1" title="Edit" @click="editJob(job)">
-                                                        <i class="material-symbols-rounded">edit</i>
-                                                    </button>
-                                                    <button class="btn btn-link text-danger p-1" title="Delete" @click="confirmDelete(job)">
-                                                        <i class="material-symbols-rounded">delete</i>
-                                                    </button>
+                                                <td class="text-center">
+                                                    <div class="d-flex justify-content-center gap-1">
+                                                        <button class="action-btn btn-view" title="Run Now" @click="runNow(job)">
+                                                            <i class="material-symbols-rounded">play_arrow</i>
+                                                        </button>
+                                                        <button class="action-btn btn-edit" title="Edit" @click="editJob(job)">
+                                                            <i class="material-symbols-rounded">edit</i>
+                                                        </button>
+                                                        <button class="action-btn btn-delete" title="Delete" @click="confirmDelete(job)">
+                                                            <i class="material-symbols-rounded">delete</i>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         </tbody>
                                     </table>
+                                </div>
+                                
+                                <!-- Pagination -->
+                                <div v-if="filteredJobs.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                                    <div class="text-xs text-secondary">
+                                        Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredJobs.length) }} of {{ filteredJobs.length }} entries
+                                    </div>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                                            <button class="page-link" @click="currentPage--" aria-label="Previous">
+                                                <i class="material-symbols-rounded text-xs">chevron_left</i>
+                                            </button>
+                                        </li>
+                                        <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                                            <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                                        </li>
+                                        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                                            <button class="page-link" @click="currentPage++" aria-label="Next">
+                                                <i class="material-symbols-rounded text-xs">chevron_right</i>
+                                            </button>
+                                        </li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
@@ -291,12 +323,15 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const loading = ref(true)
 const saving = ref(false)
 const jobs = ref([])
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
 
 // Modals
 const showModal = ref(false)
@@ -304,6 +339,25 @@ const showOutputModal = ref(false)
 const isEditing = ref(false)
 const editingJob = ref(null)
 const jobOutput = ref('')
+
+// Computed
+const filteredJobs = computed(() => {
+    if (!searchQuery.value) return jobs.value
+    const q = searchQuery.value.toLowerCase()
+    return jobs.value.filter(job => 
+        job.command.toLowerCase().includes(q) || 
+        job.user.toLowerCase().includes(q) ||
+        job.schedule.toLowerCase().includes(q)
+    )
+})
+
+const totalPages = computed(() => Math.ceil(filteredJobs.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const paginatedJobs = computed(() => {
+    return filteredJobs.value.slice(paginationStart.value, paginationEnd.value)
+})
 
 // Form
 const form = ref({

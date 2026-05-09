@@ -114,32 +114,25 @@
                         <div class="card">
                             <div class="card-header pb-0 d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0">Supervisor Configurations</h6>
-                                <div class="d-flex gap-2">
-                                    <div class="btn-group" v-if="groups.length > 0">
-                                        <button class="btn btn-sm btn-outline-success" @click="startAll" title="Start All">
-                                            <i class="material-symbols-rounded text-sm">play_arrow</i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-warning" @click="stopAll" title="Stop All">
-                                            <i class="material-symbols-rounded text-sm">stop</i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-info" @click="restartAll" title="Restart All">
-                                            <i class="material-symbols-rounded text-sm">refresh</i>
-                                        </button>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="input-group input-group-sm" style="width: 250px;">
+                                        <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                                        <input v-model="searchQuery" type="text" class="form-control" placeholder="Search processes or groups...">
                                     </div>
-                                    <button class="btn btn-sm btn-outline-primary" @click="reloadConfig">
-                                        <i class="material-symbols-rounded text-sm me-1">sync</i>
+                                    <button class="btn btn-sm btn-outline-primary mb-0" @click="loadProcesses">
+                                        <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin': loading }">refresh</i>
                                         Reload
                                     </button>
-                                    <button class="btn btn-sm bg-gradient-primary" @click="openCreateModal">
+                                    <button class="btn btn-sm bg-gradient-primary mb-0" @click="openCreateModal">
                                         <i class="material-symbols-rounded text-sm me-1">add</i>
                                         New Process
                                     </button>
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div v-if="groups.length === 0" class="text-center py-4 text-muted">
-                                    <i class="material-symbols-rounded mb-2" style="font-size: 48px;">memory</i>
-                                    <p>No processes configured. Create one to get started.</p>
+                                <div v-if="filteredGroups.length === 0" class="text-center py-4 text-muted">
+                                    <i class="material-symbols-rounded mb-2" style="font-size: 48px;">search_off</i>
+                                    <p>No processes found matching your search.</p>
                                 </div>
 
                                 <div v-else class="table-responsive">
@@ -154,7 +147,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <template v-for="group in groups" :key="group.name">
+                                            <template v-for="group in paginatedGroups" :key="group.name">
                                                 <!-- Group Row -->
                                                 <tr class="bg-light-gray">
                                                     <td>
@@ -238,6 +231,28 @@
                                             </template>
                                         </tbody>
                                     </table>
+                                </div>
+
+                                <!-- Pagination -->
+                                <div v-if="filteredGroups.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                                    <div class="text-xs text-secondary">
+                                        Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredGroups.length) }} of {{ filteredGroups.length }} groups
+                                    </div>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                                            <button class="page-link" @click="currentPage--" aria-label="Previous">
+                                                <i class="material-symbols-rounded text-xs">chevron_left</i>
+                                            </button>
+                                        </li>
+                                        <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                                            <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                                        </li>
+                                        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                                            <button class="page-link" @click="currentPage++" aria-label="Next">
+                                                <i class="material-symbols-rounded text-xs">chevron_right</i>
+                                            </button>
+                                        </li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
@@ -594,6 +609,10 @@ const status = ref({ installed: false, running: false })
 const groups = ref([])
 const expandedGroups = ref([])
 
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+
 // Modals
 const showCreateModal = ref(false)
 const showLogsModal = ref(false)
@@ -661,6 +680,24 @@ const stoppedCount = computed(() => {
         count += group.processes.filter(p => p.status !== 'RUNNING').length
     })
     return count
+})
+
+const filteredGroups = computed(() => {
+    if (!searchQuery.value) return groups.value
+    const q = searchQuery.value.toLowerCase()
+    return groups.value.filter(group => {
+        const groupMatches = group.name.toLowerCase().includes(q)
+        const processMatches = group.processes.some(p => p.name.toLowerCase().includes(q))
+        return groupMatches || processMatches
+    })
+})
+
+const totalPages = computed(() => Math.ceil(filteredGroups.value.length / itemsPerPage.value))
+
+const paginatedGroups = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage.value
+    const end = start + itemsPerPage.value
+    return filteredGroups.value.slice(start, end)
 })
 
 // Live config preview
@@ -887,9 +924,19 @@ const editProcess = async (name) => {
     try {
         const response = await axios.get('/supervisor/config', { params: { name } })
         if (response.data.success) {
-            newProcess.value = response.data.config
+            newProcess.value = { ...newProcess.value, ...response.data.config }
+            // Ensure rawConfig is populated in the form
+            newProcess.value.rawConfig = response.data.raw || response.data.config.rawConfig || ''
             isEditing.value = true
             showCreateModal.value = true
+            
+            // If command is empty OR the user wants it to display in manual tab
+            // we should set manualMode if we have raw content. 
+            // The user said: "if any conf is there then that conf should display in the manual tab also"
+            // So we'll populate it, but keep the builder mode by default unless it's purely manual.
+            if (!newProcess.value.command && newProcess.value.rawConfig) {
+                manualMode.value = true
+            }
         }
     } catch (error) {
         showNotification('Failed to load config: ' + (error.response?.data?.error || error.message), 'error')
