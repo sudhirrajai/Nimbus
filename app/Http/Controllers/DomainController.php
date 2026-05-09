@@ -33,10 +33,25 @@ class DomainController extends Controller
                     
                     $documentRoot = $path;
                     $nginxConfig = '/etc/nginx/sites-enabled/' . $domain;
-                    if (File::exists($nginxConfig)) {
-                        $configContent = File::get($nginxConfig);
-                        if (preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
-                            $documentRoot = trim($matches[1]);
+                    $configExists = false;
+                    try {
+                        $output = [];
+                        exec("sudo test -f " . escapeshellarg($nginxConfig) . " && echo 'exists'", $output);
+                        $configExists = isset($output[0]) && $output[0] === 'exists';
+                    } catch (\Exception $e) {
+                        $configExists = false;
+                    }
+
+                    if ($configExists) {
+                        try {
+                            $output = [];
+                            exec("sudo cat " . escapeshellarg($nginxConfig) . " 2>/dev/null", $output);
+                            $configContent = implode("\n", $output);
+                            if (preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
+                                $documentRoot = trim($matches[1]);
+                            }
+                        } catch (\Exception $e) {
+                            \Log::warning("Failed to read Nginx config for $domain: " . $e->getMessage());
                         }
                     }
 

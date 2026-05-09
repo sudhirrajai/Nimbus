@@ -145,6 +145,20 @@
           </Link>
         </li>
 
+        <!-- ═══ SECURITY & PROTECTION (Root & Admin) ═══ -->
+        <li v-if="isRootOrAdmin" class="nav-item mt-3">
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
+            Security & Protection
+          </h6>
+        </li>
+
+        <li v-if="isRootOrAdmin" class="nav-item">
+          <Link href="/shield" class="nav-link" :class="isActive('/shield')">
+            <i class="material-symbols-rounded opacity-5">shield</i>
+            <span class="nav-link-text ms-1">Nimbus Shield</span>
+          </Link>
+        </li>
+
         <!-- ═══ MONITORING (Root & Admin) ═══ -->
         <li v-if="isRootOrAdmin" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\ShieldController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -686,6 +687,18 @@ class FileManagerController extends Controller
                     $escapedTarget = escapeshellarg($targetPath);
                     $this->executeSudoCommand("mv {$escapedTemp} {$escapedTarget}");
                     $this->executeSudoCommand("chmod 644 {$escapedTarget}");
+
+                    // Nimbus Shield: Scan on upload
+                    $finding = ShieldController::scanFile($targetPath);
+                    if ($finding) {
+                        \App\Models\SecurityThreat::create([
+                            'file_path' => $targetPath,
+                            'type' => $finding['type'],
+                            'details' => $finding['details'] . ' (Detected during upload)',
+                            'status' => 'detected'
+                        ]);
+                    }
+
                     return response()->json(['message' => 'File uploaded successfully']);
                 }
 
@@ -703,6 +716,17 @@ class FileManagerController extends Controller
                 $escapedTargetPath = escapeshellarg($targetPath);
                 $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
                 $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
+
+                // Nimbus Shield: Scan on upload
+                $finding = ShieldController::scanFile($targetPath);
+                if ($finding) {
+                    \App\Models\SecurityThreat::create([
+                        'file_path' => $targetPath,
+                        'type' => $finding['type'],
+                        'details' => $finding['details'] . ' (Detected during upload)',
+                        'status' => 'detected'
+                    ]);
+                }
 
                 return response()->json(['message' => 'File uploaded successfully']);
             }
