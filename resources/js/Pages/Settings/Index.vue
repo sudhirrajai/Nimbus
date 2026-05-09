@@ -156,6 +156,19 @@
                                     </label>
                                 </div>
                             </div>
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="allowIpAccess" v-model="allowIpAccess">
+                                    <label class="form-check-label" for="allowIpAccess">
+                                        <strong>Allow Panel Access via IP</strong><br>
+                                        <small class="text-muted">Keep IP access (e.g. http://IP:8090) as a backup</small>
+                                    </label>
+                                </div>
+                                <div v-if="!allowIpAccess" class="alert alert-warning border-0 text-white text-xxs mt-2 py-2">
+                                    <i class="material-symbols-rounded me-1" style="font-size: 14px;">warning</i>
+                                    Disabling IP access may lock you out if your domain fails. Ensure you have SSH access.
+                                </div>
+                            </div>
                         </div>
                         <div class="modal-footer border-0">
                             <button type="button" class="btn btn-link text-dark mb-0" @click="showPanelDomainModal = false">Cancel</button>
@@ -456,10 +469,12 @@ const showPanelDomainModal = ref(false)
 const configuringPanel = ref(false)
 const panelDomain = ref('')
 const installSsl = ref(true)
+const allowIpAccess = ref(true)
 
 onMounted(async () => {
     await loadSettings()
     await loadSecurityData()
+    await loadPanelDomainData()
 })
 
 const loadSettings = async () => {
@@ -484,6 +499,19 @@ const loadSecurityData = async () => {
         }
     } catch (error) {
         console.error('Failed to load security data:', error)
+    }
+}
+
+const loadPanelDomainData = async () => {
+    try {
+        const response = await axios.get('/settings/data')
+        if (response.data.success) {
+            panelDomain.value = response.data.settings.panel_domain || ''
+            installSsl.value = response.data.settings.panel_ssl === '1'
+            allowIpAccess.value = response.data.settings.allow_ip_access !== '0'
+        }
+    } catch (error) {
+        console.error('Failed to load panel domain data:', error)
     }
 }
 
@@ -574,7 +602,8 @@ const setupPanelDomain = async () => {
     try {
         const response = await axios.post('/settings/security/panel-domain', {
             domain: panelDomain.value,
-            install_ssl: installSsl.value
+            install_ssl: installSsl.value,
+            allow_ip_access: allowIpAccess.value
         })
         
         if (response.data.success) {

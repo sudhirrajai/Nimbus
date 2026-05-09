@@ -357,8 +357,10 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="item in filteredItems" :key="item.name + item.type"
-                      @contextmenu.prevent="openContextMenu($event, item)" class="file-row"
+                    <tr v-for="item in paginatedItems" :key="item.name + item.type"
+                      @contextmenu.prevent="openContextMenu($event, item)" 
+                      @dblclick="handleDoubleClick(item)"
+                      class="file-row cursor-pointer"
                       :class="{ 'text-muted': item.hidden }">
                       <td>
                         <input type="checkbox" class="form-check-input" :checked="isSelected(item)"
@@ -434,6 +436,28 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              
+              <!-- Pagination -->
+              <div v-if="filteredItems.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="text-xs text-secondary">
+                  Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredItems.length) }} of {{ filteredItems.length }} entries
+                </div>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link" @click="currentPage--" aria-label="Previous">
+                      <i class="material-symbols-rounded text-xs">chevron_left</i>
+                    </button>
+                  </li>
+                  <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                    <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link" @click="currentPage++" aria-label="Next">
+                      <i class="material-symbols-rounded text-xs">chevron_right</i>
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -901,6 +925,8 @@ const props = defineProps({
 const webTerminalRef = ref(null)
 const items = ref([])
 const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(15)
 const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
@@ -1001,7 +1027,18 @@ const hasSelected = computed(() => selectedItems.value.length > 0)
 const filteredItems = computed(() => {
   if (!searchQuery.value) return items.value
   const q = searchQuery.value.toLowerCase()
-  return items.value.filter(item => item.name.toLowerCase().includes(q))
+  return items.value.filter(item => 
+    item.name.toLowerCase().includes(q) || 
+    (item.extension && item.extension.toLowerCase().includes(q))
+  )
+})
+
+const totalPages = computed(() => Math.ceil(filteredItems.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const paginatedItems = computed(() => {
+  return filteredItems.value.slice(paginationStart.value, paginationEnd.value)
 })
 
 const contextMenuStyle = computed(() => {
@@ -1027,6 +1064,14 @@ const contextMenuStyle = computed(() => {
     left: `${x}px`
   }
 })
+
+const handleDoubleClick = (item) => {
+  if (item.type === 'directory') {
+    openDirectory(item.name)
+  } else if (item.type === 'file' && item.editable) {
+    editFile(item.name)
+  }
+}
 
 onMounted(() => {
   loadFiles()
