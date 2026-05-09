@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\SecurityThreat;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,7 @@ class ShieldController extends Controller
                 'quarantined' => SecurityThreat::where('status', 'quarantined')->count(),
                 'last_scan' => SecurityThreat::max('detected_at')?->diffForHumans() ?? 'Never',
                 'firewall_status' => $this->getFirewallStatus(),
+                'scan_status' => Setting::where('key', 'shield_scan_status')->value('value') ?: 'idle',
             ];
 
             return response()->json([
@@ -52,6 +54,12 @@ class ShieldController extends Controller
      */
     public function startScan(Request $request)
     {
+        // Check if scan is already running
+        $currentStatus = Setting::where('key', 'shield_scan_status')->value('value');
+        if ($currentStatus === 'running') {
+            return response()->json(['error' => 'A scan is already in progress'], 409);
+        }
+
         $path = $request->input('path', '/var/www');
         
         // Ensure path is safe
@@ -59,10 +67,18 @@ class ShieldController extends Controller
              return response()->json(['error' => 'Invalid scan path'], 403);
         }
 
+        // Set status to running
+        Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'running']);
+
+        // Allow the script to continue after disconnect
+        ignore_user_abort(true);
+        set_time_limit(0);
+
         try {
             $findings = [];
             
             // 1. Scan for long hex-named HTML files (SEO injections)
+            // Use find -type f for efficiency
             $hexFiles = $this->executeSudoCommand("find " . escapeshellarg($path) . " -type f -regex '.*/[0-9a-f]\{10,20\}\.html'");
             foreach ($hexFiles as $file) {
                 if (empty($file)) continue;
@@ -73,14 +89,13 @@ class ShieldController extends Controller
                 ];
             }
 
-            // 2. Scan for common PHP shell patterns (very basic but fast)
-            // We use grep -l to only get filenames to save RAM
+            // 2. Scan for common PHP shell patterns
             $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
             foreach ($shellPatterns as $pattern) {
                 $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage 2>/dev/null";
                 $files = $this->executeSudoCommand($cmd);
                 foreach ($files as $file) {
-                    if (empty($file)) continue;
+                    if (empty($file) || !is_string($file)) continue;
                     $findings[] = [
                         'file_path' => $file,
                         'type' => 'Potential Web Shell',
@@ -102,14 +117,29 @@ class ShieldController extends Controller
                 );
             }
 
+            // Set status to idle
+            Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Scan completed',
                 'findings_count' => count($findings)
             ]);
         } catch (\Exception $e) {
+            \Log::error("Shield scan failed: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
+        } finally {
+            Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
         }
+    }
+
+    /**
+     * Force stop/reset scan status
+     */
+    public function stopScan()
+    {
+        Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
+        return response()->json(['success' => true, 'message' => 'Scan status reset']);
     }
 
     /**

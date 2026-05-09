@@ -449,14 +449,28 @@ class DomainController extends Controller
 
             // Step 1: Delete Nginx symlink first (if it exists)
             $symlinkPath = $this->resolveNginxConfigPath('/etc/nginx/sites-enabled/', $domain);
-            if (file_exists($symlinkPath)) {
+            $symlinkExists = false;
+            try {
+                $output = [];
+                exec("sudo test -f " . escapeshellarg($symlinkPath) . " && echo 'exists'", $output);
+                $symlinkExists = isset($output[0]) && $output[0] === 'exists';
+            } catch (\Exception $e) { $symlinkExists = false; }
+
+            if ($symlinkExists) {
                 \Log::info("Removing Nginx symlink: $symlinkPath");
                 $this->executeSudoCommand("rm -f {$symlinkPath}");
             }
 
             // Step 2: Delete Nginx config file
             $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
-            if (file_exists($configPath)) {
+            $configExists = false;
+            try {
+                $output = [];
+                exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+                $configExists = isset($output[0]) && $output[0] === 'exists';
+            } catch (\Exception $e) { $configExists = false; }
+
+            if ($configExists) {
                 \Log::info("Removing Nginx config: $configPath");
                 $this->executeSudoCommand("rm -f {$configPath}");
             }
@@ -693,8 +707,11 @@ NGINX;
         ];
 
         foreach ($variations as $file) {
-            if (file_exists($baseDir . $file)) {
-                return $baseDir . $file;
+            $path = $baseDir . $file;
+            $output = [];
+            exec("sudo test -f " . escapeshellarg($path) . " && echo 'exists'", $output);
+            if (isset($output[0]) && $output[0] === 'exists') {
+                return $path;
             }
         }
 

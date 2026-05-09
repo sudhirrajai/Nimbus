@@ -17,12 +17,16 @@
                                         Active protection for your server. Scan for threats, manage firewall rules, and monitor system integrity.
                                     </p>
                                     <div class="d-flex gap-2">
-                                        <button @click="startScan('/var/www')" :disabled="scanning" class="btn btn-primary mb-0">
-                                            <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin': scanning }">search</i>
-                                            {{ scanning ? 'Scanning...' : 'Quick Scan' }}
+                                        <button v-if="!scanning" @click="startScan('/var/www')" class="btn btn-primary mb-0">
+                                            <i class="material-symbols-rounded text-sm me-1">search</i>
+                                            Quick Scan
                                         </button>
-                                        <button @click="startScan('/usr/local/nimbus')" :disabled="scanning" class="btn btn-outline-white mb-0">
+                                        <button v-if="!scanning" @click="startScan('/usr/local/nimbus')" class="btn btn-outline-white mb-0">
                                             Full System Scan
+                                        </button>
+                                        <button v-if="scanning" @click="stopScan" class="btn btn-danger mb-0">
+                                            <i class="material-symbols-rounded text-sm me-1">stop</i>
+                                            Stop Scan
                                         </button>
                                     </div>
                                 </div>
@@ -189,13 +193,15 @@ const stats = ref({
     active_threats: 0,
     quarantined: 0,
     last_scan: 'Never',
-    firewall_status: 'Checking...'
+    firewall_status: 'Checking...',
+    scan_status: 'idle'
 })
 
 const searchQuery = ref('')
 const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
+let statusInterval = null
 
 const loadStatus = async () => {
     try {
@@ -203,17 +209,44 @@ const loadStatus = async () => {
         if (response.data.success) {
             threats.value = response.data.threats
             stats.value = response.data.stats
+            
+            // Sync scanning state with backend
+            scanning.value = stats.value.scan_status === 'running'
+            
+            if (scanning.value) {
+                startPolling()
+            } else {
+                stopPolling()
+            }
         }
     } catch (error) {
-        showNotification('Failed to load status', 'danger')
+        // Only show error if not polling
+        if (!statusInterval) {
+            showNotification('Failed to load status', 'danger')
+        }
     } finally {
         loading.value = false
     }
 }
 
+const startPolling = () => {
+    if (statusInterval) return
+    statusInterval = setInterval(loadStatus, 5000) // Poll every 5 seconds
+}
+
+const stopPolling = () => {
+    if (statusInterval) {
+        clearInterval(statusInterval)
+        statusInterval = null
+    }
+}
+
 const startScan = async (path) => {
+    if (scanning.value) return
+    
     scanning.value = true
     showNotification('Starting scan in ' + path + '...', 'info')
+    
     try {
         const response = await axios.post('/shield/scan', { path })
         if (response.data.success) {
@@ -221,9 +254,27 @@ const startScan = async (path) => {
             await loadStatus()
         }
     } catch (error) {
-        showNotification('Scan failed: ' + (error.response?.data?.error || error.message), 'danger')
-    } finally {
-        scanning.value = false
+        if (error.response?.status === 409) {
+            showNotification('A scan is already running. Monitoring progress...', 'info')
+            startPolling()
+        } else {
+            showNotification('Scan failed: ' + (error.response?.data?.error || error.message), 'danger')
+            scanning.value = false
+        }
+    }
+}
+
+const stopScan = async () => {
+    try {
+        const response = await axios.post('/shield/stop')
+        if (response.data.success) {
+            showNotification('Scan stopped/reset', 'info')
+            scanning.value = false
+            stopPolling()
+            await loadStatus()
+        }
+    } catch (error) {
+        showNotification('Failed to stop scan', 'danger')
     }
 }
 
@@ -280,6 +331,11 @@ const showNotification = (message, type = 'success') => {
 
 onMounted(() => {
     loadStatus()
+})
+
+import { onUnmounted } from 'vue';
+onUnmounted(() => {
+    stopPolling()
 })
 </script>
 
