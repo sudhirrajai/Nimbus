@@ -338,10 +338,17 @@ class ShieldController extends Controller
         $action = $request->input('action', 'allow'); // allow or deny
         $proto = $request->input('proto', 'tcp');
 
-        if (!$port) return response()->json(['error' => 'Port is required'], 400);
+        // Validation
+        if (!$port || !preg_match('/^[a-zA-Z0-9:]+$/', $port)) {
+            return response()->json(['error' => 'Invalid port format'], 400);
+        }
+        
+        $action = in_array($action, ['allow', 'deny']) ? $action : 'allow';
+        $proto = in_array($proto, ['tcp', 'udp', 'any']) ? $proto : 'tcp';
 
         try {
-            $this->executeSudoCommand("ufw $action $port/$proto");
+            $cmd = "ufw " . $action . " " . escapeshellarg($port) . "/" . $proto;
+            $this->executeSudoCommand($cmd);
             return response()->json(['success' => true, 'message' => "Rule added: $action $port/$proto"]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -354,10 +361,12 @@ class ShieldController extends Controller
     public function deleteFirewallRule(Request $request)
     {
         $index = $request->input('index');
-        if (!$index) return response()->json(['error' => 'Rule index is required'], 400);
+        if (!$index || !is_numeric($index)) {
+            return response()->json(['error' => 'Invalid rule index'], 400);
+        }
 
         try {
-            $this->executeSudoCommand("ufw --force delete $index");
+            $this->executeSudoCommand("ufw --force delete " . escapeshellarg($index));
             return response()->json(['success' => true, 'message' => "Rule removed"]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);

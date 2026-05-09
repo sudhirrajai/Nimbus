@@ -196,9 +196,13 @@ class WordPressController extends Controller
             $dbPassSafe = escapeshellarg($dbPass);
             $dbNameSafe = escapeshellarg($dbName); // For shell
 
-            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS \`{$dbName}\`\" 2>&1", $output);
+            $dbNameEscaped = "`" . str_replace("`", "``", $dbName) . "`";
+            $dbUserEscaped = "'" . str_replace("'", "''", $dbUser) . "'";
+            $dbPassEscaped = "'" . str_replace("'", "''", $dbPass) . "'";
+
+            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS {$dbNameEscaped}\" 2>&1", $output);
             $this->execCmd("sudo mysql -e \"CREATE USER IF NOT EXISTS {$dbUserSafe}@'localhost' IDENTIFIED BY {$dbPassSafe}\" 2>&1", $output);
-            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON \`{$dbName}\`.* TO {$dbUserSafe}@'localhost'\" 2>&1", $output);
+            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON {$dbNameEscaped}.* TO {$dbUserSafe}@'localhost'\" 2>&1", $output);
             $this->execCmd("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output);
 
             // 2. Download WordPress
@@ -364,7 +368,8 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin {$request->action} " . escapeshellarg($request->plugin) . " --allow-root 2>&1", $output);
+            $action = in_array($request->action, ['activate', 'deactivate', 'update', 'delete', 'install']) ? $request->action : 'list';
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin " . escapeshellarg($action) . " " . escapeshellarg($request->plugin) . " --allow-root 2>&1", $output);
             return response()->json(['success' => true, 'message' => "Plugin {$request->action}d.", 'output' => $output]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
