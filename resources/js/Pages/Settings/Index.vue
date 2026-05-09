@@ -141,7 +141,7 @@
                         <div class="modal-body">
                             <div class="alert alert-info border-0 text-white text-xs">
                                 <i class="material-symbols-rounded me-2">info</i>
-                                Before continuing, ensure your subdomain is pointing (A Record) to this server IP: <strong>{{ currentIp }}</strong>
+                                Before continuing, ensure your subdomain is pointing (A Record) to this server IP: <strong>{{ serverIp }}</strong>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Panel Subdomain / Domain</label>
@@ -154,6 +154,19 @@
                                         <strong>Auto-Install SSL (Let's Encrypt)</strong><br>
                                         <small class="text-muted">Recommended for secure access</small>
                                     </label>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="allowIpAccess" v-model="allowIpAccess">
+                                    <label class="form-check-label" for="allowIpAccess">
+                                        <strong>Allow Panel Access via IP</strong><br>
+                                        <small class="text-muted">Keep IP access (e.g. http://IP:8090) as a backup</small>
+                                    </label>
+                                </div>
+                                <div v-if="!allowIpAccess" class="alert alert-warning border-0 text-white text-xxs mt-2 py-2">
+                                    <i class="material-symbols-rounded me-1" style="font-size: 14px;">warning</i>
+                                    Disabling IP access may lock you out if your domain fails. Ensure you have SSH access.
                                 </div>
                             </div>
                         </div>
@@ -430,6 +443,7 @@ const settings = ref({
 const securityRules = ref([])
 const securityMode = ref('off')
 const currentIp = ref('')
+const serverIp = ref('')
 const showAddRule = ref(false)
 const savingRule = ref(false)
 const newRule = ref({
@@ -455,10 +469,12 @@ const showPanelDomainModal = ref(false)
 const configuringPanel = ref(false)
 const panelDomain = ref('')
 const installSsl = ref(true)
+const allowIpAccess = ref(true)
 
 onMounted(async () => {
     await loadSettings()
     await loadSecurityData()
+    await loadPanelDomainData()
 })
 
 const loadSettings = async () => {
@@ -479,9 +495,23 @@ const loadSecurityData = async () => {
             securityRules.value = response.data.rules
             securityMode.value = response.data.mode
             currentIp.value = response.data.current_ip
+            serverIp.value = response.data.server_ip
         }
     } catch (error) {
         console.error('Failed to load security data:', error)
+    }
+}
+
+const loadPanelDomainData = async () => {
+    try {
+        const response = await axios.get('/settings/data')
+        if (response.data.success) {
+            panelDomain.value = response.data.settings.panel_domain || ''
+            installSsl.value = response.data.settings.panel_ssl === '1'
+            allowIpAccess.value = response.data.settings.allow_ip_access !== '0'
+        }
+    } catch (error) {
+        console.error('Failed to load panel domain data:', error)
     }
 }
 
@@ -572,7 +602,8 @@ const setupPanelDomain = async () => {
     try {
         const response = await axios.post('/settings/security/panel-domain', {
             domain: panelDomain.value,
-            install_ssl: installSsl.value
+            install_ssl: installSsl.value,
+            allow_ip_access: allowIpAccess.value
         })
         
         if (response.data.success) {

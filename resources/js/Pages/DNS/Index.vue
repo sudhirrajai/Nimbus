@@ -40,8 +40,14 @@
       <div class="row" v-if="!selectedDomain">
         <div class="col-12">
           <div class="card">
-            <div class="card-header pb-0">
+            <div class="card-header pb-0 d-flex justify-content-between align-items-center">
               <h6 class="mb-0">Select a Domain</h6>
+              <div class="ms-md-auto pe-md-3 d-flex align-items-center">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                  <input v-model="domainSearchQuery" type="text" class="form-control" placeholder="Search domains...">
+                </div>
+              </div>
             </div>
             <div class="card-body">
               <div v-if="loading" class="text-center py-4">
@@ -57,7 +63,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="domain in domains" :key="domain.domain">
+                    <tr v-for="domain in paginatedDomains" :key="domain.domain">
                       <td>
                         <div class="d-flex align-items-center">
                           <i class="material-symbols-rounded text-info me-2">language</i>
@@ -80,6 +86,28 @@
                   </tbody>
                 </table>
               </div>
+              
+              <!-- Pagination -->
+              <div v-if="filteredDomains.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="text-xs text-secondary">
+                  Showing {{ domainPaginationStart + 1 }} to {{ Math.min(domainPaginationEnd, filteredDomains.length) }} of {{ filteredDomains.length }} entries
+                </div>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: domainCurrentPage === 1 }">
+                    <button class="page-link" @click="domainCurrentPage--" aria-label="Previous">
+                      <i class="material-symbols-rounded text-xs">chevron_left</i>
+                    </button>
+                  </li>
+                  <li v-for="page in domainTotalPages" :key="page" class="page-item" :class="{ active: domainCurrentPage === page }">
+                    <button class="page-link" @click="domainCurrentPage = page">{{ page }}</button>
+                  </li>
+                  <li class="page-item" :class="{ disabled: domainCurrentPage === domainTotalPages }">
+                    <button class="page-link" @click="domainCurrentPage++" aria-label="Next">
+                      <i class="material-symbols-rounded text-xs">chevron_right</i>
+                    </button>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -96,9 +124,15 @@
                 </button>
                 <h6 class="mb-0 d-inline-block">{{ selectedDomain.domain }}</h6>
               </div>
-              <button v-if="selectedDomain.is_connected" class="btn bg-gradient-dark mb-0" @click="showAddRecordModal = true">
-                <i class="material-symbols-rounded text-sm me-1">add</i> Add Record
-              </button>
+              <div class="d-flex align-items-center gap-3">
+                <div class="input-group input-group-sm" style="width: 200px;">
+                  <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                  <input v-model="recordSearchQuery" type="text" class="form-control" placeholder="Search records...">
+                </div>
+                <button v-if="selectedDomain.is_connected" class="btn bg-gradient-dark mb-0" @click="showAddRecordModal = true">
+                  <i class="material-symbols-rounded text-sm me-1">add</i> Add Record
+                </button>
+              </div>
             </div>
             <div class="card-body">
               
@@ -145,7 +179,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="record in records" :key="record.id">
+                      <tr v-for="record in paginatedRecords" :key="record.id">
                         <td><span class="badge bg-light text-dark border">{{ record.type }}</span></td>
                         <td><span class="text-sm font-weight-bold">{{ record.name }}</span></td>
                         <td><span class="text-sm text-truncate d-inline-block" style="max-width: 250px;">{{ record.content }}</span></td>
@@ -280,8 +314,14 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+
+const domainSearchQuery = ref('')
+const domainCurrentPage = ref(1)
+const recordSearchQuery = ref('')
+const recordCurrentPage = ref(1)
+const itemsPerPage = ref(10)
 
 const loading = ref(false)
 const domains = ref([])
@@ -346,6 +386,38 @@ const loadDomains = async () => {
     loading.value = false
   }
 }
+
+const filteredDomains = computed(() => {
+  if (!domainSearchQuery.value) return domains.value
+  const q = domainSearchQuery.value.toLowerCase()
+  return domains.value.filter(d => d.domain.toLowerCase().includes(q))
+})
+
+const domainTotalPages = computed(() => Math.ceil(filteredDomains.value.length / itemsPerPage.value))
+const domainPaginationStart = computed(() => (domainCurrentPage.value - 1) * itemsPerPage.value)
+const domainPaginationEnd = computed(() => domainCurrentPage.value * itemsPerPage.value)
+
+const paginatedDomains = computed(() => {
+  return filteredDomains.value.slice(domainPaginationStart.value, domainPaginationEnd.value)
+})
+
+const filteredRecords = computed(() => {
+  if (!recordSearchQuery.value) return records.value
+  const q = recordSearchQuery.value.toLowerCase()
+  return records.value.filter(r => 
+    r.name.toLowerCase().includes(q) || 
+    r.type.toLowerCase().includes(q) || 
+    r.content.toLowerCase().includes(q)
+  )
+})
+
+const recordTotalPages = computed(() => Math.ceil(filteredRecords.value.length / itemsPerPage.value))
+const recordPaginationStart = computed(() => (recordCurrentPage.value - 1) * itemsPerPage.value)
+const recordPaginationEnd = computed(() => recordCurrentPage.value * itemsPerPage.value)
+
+const paginatedRecords = computed(() => {
+  return filteredRecords.value.slice(recordPaginationStart.value, recordPaginationEnd.value)
+})
 
 const selectDomain = (domain) => {
   selectedDomain.value = domain

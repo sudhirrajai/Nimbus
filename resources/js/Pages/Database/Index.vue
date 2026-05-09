@@ -223,9 +223,13 @@
           <div class="col-12">
             <div class="card">
               <div class="card-header pb-0">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="mb-0">Databases</h6>
-                  <span class="badge bg-gradient-primary">{{ databases.length }} databases</span>
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="input-group input-group-sm" style="width: 250px;">
+                      <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                      <input v-model="dbSearchQuery" type="text" class="form-control" placeholder="Search databases...">
+                    </div>
+                    <span class="badge bg-gradient-primary">{{ filteredDatabases.length }} databases</span>
+                  </div>
                 </div>
               </div>
               <div class="card-body">
@@ -241,7 +245,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                    <tr v-for="db in databases" :key="db.name" class="domain-row">
+                    <tr v-for="db in paginatedDatabases" :key="db.name" class="domain-row">
                       <td>
                         <div class="d-flex align-items-center px-3 py-2">
                           <div class="icon-box-db me-3">
@@ -290,6 +294,28 @@
                       </tr>
                     </tbody>
                   </table>
+                </div>
+                
+                <!-- Pagination -->
+                <div v-if="filteredDatabases.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                  <div class="text-xs text-secondary">
+                    Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredDatabases.length) }} of {{ filteredDatabases.length }} entries
+                  </div>
+                  <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item" :class="{ disabled: dbCurrentPage === 1 }">
+                      <button class="page-link" @click="dbCurrentPage--" aria-label="Previous">
+                        <i class="material-symbols-rounded text-xs">chevron_left</i>
+                      </button>
+                    </li>
+                    <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: dbCurrentPage === page }">
+                      <button class="page-link" @click="dbCurrentPage = page">{{ page }}</button>
+                    </li>
+                    <li class="page-item" :class="{ disabled: dbCurrentPage === totalPages }">
+                      <button class="page-link" @click="dbCurrentPage++" aria-label="Next">
+                        <i class="material-symbols-rounded text-xs">chevron_right</i>
+                      </button>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -464,7 +490,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const loading = ref(false)
@@ -485,6 +511,10 @@ const showCredentials = ref(false)
 const installLog = ref('')
 const databases = ref([])
 const users = ref([])
+
+const dbSearchQuery = ref('')
+const dbCurrentPage = ref(1)
+const itemsPerPage = ref(10)
 
 const newDatabase = ref({ name: '' })
 const newUser = ref({ username: '', password: '' })
@@ -541,6 +571,20 @@ const checkStatus = async () => {
     loading.value = false
   }
 }
+
+const filteredDatabases = computed(() => {
+  if (!dbSearchQuery.value) return databases.value
+  const q = dbSearchQuery.value.toLowerCase()
+  return databases.value.filter(db => db.name.toLowerCase().includes(q))
+})
+
+const totalPages = computed(() => Math.ceil(filteredDatabases.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (dbCurrentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => dbCurrentPage.value * itemsPerPage.value)
+
+const paginatedDatabases = computed(() => {
+  return filteredDatabases.value.slice(paginationStart.value, paginationEnd.value)
+})
 
 const loadData = async () => {
   try {

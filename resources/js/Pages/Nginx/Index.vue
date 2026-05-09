@@ -56,8 +56,13 @@
           <div class="card">
             <div class="card-header pb-0">
               <div class="d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">Domain Configurations</h6>
-                <span class="badge bg-gradient-primary">{{ domains.length }} domains</span>
+                <div class="d-flex align-items-center gap-3">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                    <input v-model="searchQuery" type="text" class="form-control" placeholder="Search domains...">
+                  </div>
+                  <span class="badge bg-gradient-primary">{{ filteredDomains.length }} domains</span>
+                </div>
               </div>
               <p class="text-sm text-secondary mb-0">Edit nginx configuration for each domain</p>
             </div>
@@ -142,6 +147,28 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              
+              <!-- Pagination -->
+              <div v-if="filteredDomains.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="text-xs text-secondary">
+                  Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredDomains.length) }} of {{ filteredDomains.length }} entries
+                </div>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link" @click="currentPage--" aria-label="Previous">
+                      <i class="material-symbols-rounded text-xs">chevron_left</i>
+                    </button>
+                  </li>
+                  <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                    <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link" @click="currentPage++" aria-label="Next">
+                      <i class="material-symbols-rounded text-xs">chevron_right</i>
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -250,7 +277,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const loading = ref(false)
@@ -259,6 +286,9 @@ const reloading = ref(false)
 const toggling = ref(null)
 
 const domains = ref([])
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
 
 const showEditorModal = ref(false)
 const showReloadModal = ref(false)
@@ -304,6 +334,20 @@ const loadDomains = async () => {
     loading.value = false
   }
 }
+
+const filteredDomains = computed(() => {
+  if (!searchQuery.value) return domains.value
+  const q = searchQuery.value.toLowerCase()
+  return domains.value.filter(d => d.domain.toLowerCase().includes(q))
+})
+
+const totalPages = computed(() => Math.ceil(filteredDomains.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const paginatedDomains = computed(() => {
+  return filteredDomains.value.slice(paginationStart.value, paginationEnd.value)
+})
 
 const openEditor = async (domain) => {
   try {

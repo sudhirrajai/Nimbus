@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -86,11 +87,16 @@ class ProfileController extends Controller
      */
     public function getSettings()
     {
+        $dbSettings = Setting::all()->pluck('value', 'key')->toArray();
+
         $settings = [
-            'panel_name' => config('app.name', 'Nimbus'),
-            'timezone' => config('app.timezone', 'UTC'),
-            'auto_refresh' => true,
-            'session_lifetime' => config('session.lifetime', 120),
+            'panel_name' => $dbSettings['panel_name'] ?? config('app.name', 'Nimbus'),
+            'timezone' => $dbSettings['timezone'] ?? config('app.timezone', 'UTC'),
+            'auto_refresh' => ($dbSettings['auto_refresh'] ?? '1') === '1',
+            'session_lifetime' => (int)($dbSettings['session_lifetime'] ?? config('session.lifetime', 120)),
+            'panel_domain' => $dbSettings['panel_domain'] ?? '',
+            'panel_ssl' => $dbSettings['panel_ssl'] ?? '0',
+            'allow_ip_access' => $dbSettings['allow_ip_access'] ?? '1',
         ];
 
         return response()->json([
@@ -104,8 +110,20 @@ class ProfileController extends Controller
      */
     public function updateSettings(Request $request)
     {
-        // For now, just return success
-        // In a full implementation, we would save to a settings table or .env file
+        $validated = $request->validate([
+            'panel_name' => 'string|nullable',
+            'timezone' => 'string|nullable',
+            'auto_refresh' => 'boolean|nullable',
+            'session_lifetime' => 'integer|nullable',
+        ]);
+
+        foreach ($validated as $key => $value) {
+            if ($key === 'auto_refresh') {
+                $value = $value ? '1' : '0';
+            }
+            Setting::updateOrCreate(['key' => $key], ['value' => (string)$value]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Settings updated successfully'

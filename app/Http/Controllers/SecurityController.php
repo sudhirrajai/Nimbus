@@ -22,7 +22,8 @@ class SecurityController extends Controller
             'success' => true,
             'rules' => $rules,
             'mode' => $mode,
-            'current_ip' => $currentIp
+            'current_ip' => $currentIp,
+            'server_ip' => request()->server('SERVER_ADDR') ?? $_SERVER['SERVER_ADDR'] ?? '66.116.204.19'
         ]);
     }
 

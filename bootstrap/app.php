@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(prepend: [
             \App\Http\Middleware\SecurityMiddleware::class,
+            \App\Http\Middleware\EnsurePanelAccess::class,
         ]);
 
         $middleware->web(append: [

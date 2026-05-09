@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use App\Models\Setting;
 
 class PanelDomainController extends Controller
 {
@@ -15,11 +16,13 @@ class PanelDomainController extends Controller
     {
         $request->validate([
             'domain' => 'required|string|max:253',
-            'install_ssl' => 'boolean'
+            'install_ssl' => 'boolean',
+            'allow_ip_access' => 'boolean'
         ]);
 
         $domain = strtolower(trim($request->input('domain')));
         $installSsl = $request->input('install_ssl', true);
+        $allowIpAccess = $request->input('allow_ip_access', true);
 
         // Security validation
         if (!$this->isValidDomain($domain)) {
@@ -37,6 +40,11 @@ class PanelDomainController extends Controller
 
             // 3. Update .env APP_URL
             $this->updateEnvUrl($domain, $installSsl);
+
+            // 4. Save settings to DB
+            Setting::updateOrCreate(['key' => 'panel_domain'], ['value' => $domain]);
+            Setting::updateOrCreate(['key' => 'panel_ssl'], ['value' => $installSsl ? '1' : '0']);
+            Setting::updateOrCreate(['key' => 'allow_ip_access'], ['value' => $allowIpAccess ? '1' : '0']);
 
             return response()->json([
                 'success' => true,

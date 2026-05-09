@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="Git Deployments" />
     <div class="container-fluid py-4">
@@ -42,9 +42,15 @@
             <div class="card-header pb-0">
               <div class="d-flex justify-content-between align-items-center">
                 <h6>Your Deployments</h6>
-                <button class="btn btn-link text-dark p-0 mb-0" @click="loadDeployments" :disabled="loading">
-                  <i class="material-symbols-rounded" :class="{ 'spin': loading }">refresh</i>
-                </button>
+                <div class="d-flex align-items-center gap-3">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                    <input v-model="searchQuery" type="text" class="form-control" placeholder="Search deployments...">
+                  </div>
+                  <button class="btn btn-link text-dark p-0 mb-0" @click="loadDeployments" :disabled="loading">
+                    <i class="material-symbols-rounded" :class="{ 'spin': loading }">refresh</i>
+                  </button>
+                </div>
               </div>
             </div>
             <div class="card-body px-0 pt-0 pb-2">
@@ -62,7 +68,7 @@
                   </thead>
 
                   <tbody>
-                    <tr v-for="dep in deployments" :key="dep.id">
+                    <tr v-for="dep in paginatedDeployments" :key="dep.id">
                       <td>
                         <div class="d-flex px-2 py-1">
                           <div class="d-flex flex-column justify-content-center">
@@ -340,11 +346,14 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 
 const deployments = ref([])
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
 const loading = ref(false)
 const submitting = ref(false)
 const deploying = ref(false)
@@ -377,6 +386,24 @@ const showAlert = (type, message) => {
   alert.value = { show: true, type, message }
   setTimeout(() => { alert.value.show = false }, 5000)
 }
+
+const filteredDeployments = computed(() => {
+  if (!searchQuery.value) return deployments.value
+  const q = searchQuery.value.toLowerCase()
+  return deployments.value.filter(dep => 
+    dep.domain.toLowerCase().includes(q) || 
+    dep.repo_url.toLowerCase().includes(q) || 
+    dep.branch.toLowerCase().includes(q)
+  )
+})
+
+const totalPages = computed(() => Math.ceil(filteredDeployments.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const paginatedDeployments = computed(() => {
+  return filteredDeployments.value.slice(paginationStart.value, paginationEnd.value)
+})
 
 const loadDeployments = async () => {
   try {

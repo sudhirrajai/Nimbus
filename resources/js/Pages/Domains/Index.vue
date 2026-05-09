@@ -32,9 +32,14 @@
       <!-- Domain Table -->
       <div class="row">
         <div class="col-12">
-          <div class="card">
-            <div class="card-header pb-0">
-              <h6>Your Domains</h6>
+            <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">Your Domains</h6>
+              <div class="ms-md-auto pe-md-3 d-flex align-items-center">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                  <input v-model="searchQuery" type="text" class="form-control" placeholder="Search domains...">
+                </div>
+              </div>
             </div>
             <div class="card-body px-0 pt-0 pb-2">
               <div class="table-responsive p-0">
@@ -60,7 +65,7 @@
                   </thead>
 
                    <tbody>
-                    <tr v-for="domain in domains" :key="domain.name" :class="{ 'opacity-6': !domain.is_active }" class="domain-row">
+                    <tr v-for="domain in paginatedDomains" :key="domain.name" :class="{ 'opacity-6': !domain.is_active }" class="domain-row">
                       <td>
                         <div class="d-flex px-3 py-2">
                           <div class="d-flex flex-column justify-content-center">
@@ -147,6 +152,28 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              
+              <!-- Pagination -->
+              <div v-if="filteredDomains.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="text-xs text-secondary">
+                  Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredDomains.length) }} of {{ filteredDomains.length }} entries
+                </div>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link" @click="currentPage--" aria-label="Previous">
+                      <i class="material-symbols-rounded text-xs">chevron_left</i>
+                    </button>
+                  </li>
+                  <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                    <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link" @click="currentPage++" aria-label="Next">
+                      <i class="material-symbols-rounded text-xs">chevron_right</i>
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -346,6 +373,9 @@ const userRole = computed(() => page.props.auth?.user?.role || 'user')
 const isRootOrAdmin = computed(() => page.props.auth?.user?.is_root || userRole.value === 'root' || userRole.value === 'admin')
 
 const domains = ref([])
+const searchQuery = ref("")
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
 const serverIp = ref("")
 const showModal = ref(false)
 const showDeleteModal = ref(false)
@@ -401,6 +431,20 @@ const validateDomain = (domain) => {
 const clearValidationError = () => {
   validationError.value = ""
 }
+
+const filteredDomains = computed(() => {
+  if (!searchQuery.value) return domains.value
+  const q = searchQuery.value.toLowerCase()
+  return domains.value.filter(domain => domain.name.toLowerCase().includes(q))
+})
+
+const totalPages = computed(() => Math.ceil(filteredDomains.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const paginatedDomains = computed(() => {
+  return filteredDomains.value.slice(paginationStart.value, paginationEnd.value)
+})
 
 const loadDomains = async () => {
   try {
