@@ -108,6 +108,65 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Panel Access & SSL -->
+                <div class="col-lg-12 mb-4">
+                    <div class="card bg-gradient-light border-0">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="mb-1 text-dark">Panel Access & SSL</h6>
+                                    <p class="text-sm mb-0">Set up a subdomain (e.g., panel.yourdomain.com) to access Nimbus securely over HTTPS.</p>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button class="btn bg-gradient-dark mb-0" @click="showPanelDomainModal = true">
+                                        <i class="material-symbols-rounded text-sm me-2">language</i>
+                                        Configure Domain
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Domain Modal -->
+            <div v-if="showPanelDomainModal" class="modal fade show" style="display: block; background: rgba(0,0,0,0.5);" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header bg-gradient-dark border-0">
+                            <h6 class="modal-title text-white">Configure Panel Domain</h6>
+                            <button type="button" class="btn-close btn-close-white" @click="showPanelDomainModal = false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info border-0 text-white text-xs">
+                                <i class="material-symbols-rounded me-2">info</i>
+                                Before continuing, ensure your subdomain is pointing (A Record) to this server IP: <strong>{{ currentIp }}</strong>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Panel Subdomain / Domain</label>
+                                <input type="text" class="form-control" v-model="panelDomain" placeholder="e.g. panel.example.com">
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="installSsl" v-model="installSsl">
+                                    <label class="form-check-label" for="installSsl">
+                                        <strong>Auto-Install SSL (Let's Encrypt)</strong><br>
+                                        <small class="text-muted">Recommended for secure access</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-link text-dark mb-0" @click="showPanelDomainModal = false">Cancel</button>
+                            <button type="button" class="btn bg-gradient-dark mb-0" @click="setupPanelDomain" :disabled="configuringPanel">
+                                <span v-if="configuringPanel" class="spinner-border spinner-border-sm me-2"></span>
+                                {{ configuringPanel ? 'Configuring...' : 'Apply Configuration' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
             </div>
 
             <!-- IP Rules Table -->
@@ -392,6 +451,12 @@ const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
 
+// Panel Domain Configuration
+const showPanelDomainModal = ref(false)
+const configuringPanel = ref(false)
+const panelDomain = ref('')
+const installSsl = ref(true)
+
 onMounted(async () => {
     await loadSettings()
     await loadSecurityData()
@@ -496,6 +561,31 @@ const formatDate = (dateString) => {
     if (!dateString) return '-'
     const date = new Date(dateString)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+const setupPanelDomain = async () => {
+    if (!panelDomain.value) {
+        notify('Domain/Subdomain is required', 'error')
+        return
+    }
+    
+    configuringPanel.value = true
+    try {
+        const response = await axios.post('/settings/security/panel-domain', {
+            domain: panelDomain.value,
+            install_ssl: installSsl.value
+        })
+        
+        if (response.data.success) {
+            notify(response.data.message, 'success')
+            showPanelDomainModal.value = false
+            // Optional: suggest logout or refresh to use new domain
+        }
+    } catch (error) {
+        notify(error.response?.data?.message || 'Failed to configure panel domain', 'error')
+    } finally {
+        configuringPanel.value = false
+    }
 }
 
 const notify = (message, type = 'success') => {
