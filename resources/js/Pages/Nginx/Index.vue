@@ -78,7 +78,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="domain in domains" :key="domain.domain" class="domain-row">
+                    <tr v-for="domain in paginatedDomains" :key="domain.domain" class="domain-row">
                       <td>
                         <div class="d-flex align-items-center px-3 py-2">
                           <div class="icon-box-nginx me-3">
@@ -139,12 +139,14 @@
                         </div>
                       </td>
                     </tr>
-                    <tr v-if="domains.length === 0">
-                      <td colspan="4" class="text-center py-4 text-secondary opacity-6">
-                        <i class="material-symbols-rounded d-block mb-2" style="font-size: 2rem;">folder_off</i>
-                        No domains found
-                      </td>
-                    </tr>
+                    <tr v-if="filteredDomains.length === 0">
+                        <td colspan="4" class="text-center py-5 text-secondary">
+                          <div class="empty-state">
+                            <i class="material-symbols-rounded opacity-3" style="font-size: 64px;">folder_off</i>
+                            <p class="mt-3">No domains found matching your search.</p>
+                          </div>
+                        </td>
+                      </tr>
                   </tbody>
                 </table>
               </div>

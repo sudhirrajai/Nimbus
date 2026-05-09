@@ -89,13 +89,20 @@ class ProfileController extends Controller
     {
         $dbSettings = Setting::all()->pluck('value', 'key')->toArray();
 
+        $panelDomain = $dbSettings['panel_domain'] ?? '';
+        
+        // Auto-detect domain if not set but accessed via hostname
+        if (empty($panelDomain) && !request()->isIp()) {
+            $panelDomain = request()->getHost();
+        }
+
         $settings = [
             'panel_name' => $dbSettings['panel_name'] ?? config('app.name', 'Nimbus'),
             'timezone' => $dbSettings['timezone'] ?? config('app.timezone', 'UTC'),
             'auto_refresh' => ($dbSettings['auto_refresh'] ?? '1') === '1',
             'session_lifetime' => (int)($dbSettings['session_lifetime'] ?? config('session.lifetime', 120)),
-            'panel_domain' => $dbSettings['panel_domain'] ?? '',
-            'panel_ssl' => $dbSettings['panel_ssl'] ?? '0',
+            'panel_domain' => $panelDomain,
+            'panel_ssl' => $dbSettings['panel_ssl'] ?? (request()->isSecure() ? '1' : '0'),
             'allow_ip_access' => $dbSettings['allow_ip_access'] ?? '1',
         ];
 

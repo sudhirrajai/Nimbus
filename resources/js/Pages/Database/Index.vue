@@ -223,22 +223,25 @@
           <div class="col-12">
             <div class="card">
               <div class="card-header pb-0">
-                  <div class="d-flex align-items-center gap-3">
-                    <div class="input-group input-group-sm" style="width: 250px;">
-                      <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
-                      <input v-model="dbSearchQuery" type="text" class="form-control" placeholder="Search databases...">
+                  <div class="d-flex align-items-center justify-content-between">
+                    <h6 class="mb-0">Your Databases</h6>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="input-group input-group-sm" style="width: 250px;">
+                        <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
+                        <input v-model="dbSearchQuery" type="text" class="form-control" placeholder="Search databases...">
+                      </div>
+                      <span class="badge bg-gradient-primary">{{ filteredDatabases.length }} databases</span>
                     </div>
-                    <span class="badge bg-gradient-primary">{{ filteredDatabases.length }} databases</span>
                   </div>
                 </div>
-              <div class="card-body">
-                <div class="table-responsive">
+              <div class="card-body px-0 pt-0 pb-2">
+                <div class="table-responsive p-0">
                   <table class="table align-items-center mb-0">
                     <thead>
                       <tr>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Database</th>
-                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
-                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Users</th>
+                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Size</th>
+                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Users</th>
                         <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                           Actions</th>
                       </tr>
@@ -271,11 +274,11 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <button class="action-btn btn-sso" @click="openPhpMyAdmin(db)"
+                          <button class="action-btn btn-view" @click="openPhpMyAdmin(db)"
                             title="Open in Nimbus DB">
                             <i class="material-symbols-rounded">open_in_new</i>
                           </button>
-                          <button class="action-btn btn-settings" @click="manageDatabase(db)"
+                          <button class="action-btn btn-edit" @click="manageDatabase(db)"
                             title="Manage">
                             <i class="material-symbols-rounded">settings</i>
                           </button>
@@ -286,9 +289,12 @@
                         </div>
                       </td>
                     </tr>
-                      <tr v-if="databases.length === 0">
-                        <td colspan="4" class="text-center py-4 text-secondary">
-                          No databases found. Create one above.
+                      <tr v-if="filteredDatabases.length === 0">
+                        <td colspan="4" class="text-center py-5 text-secondary">
+                          <div class="empty-state">
+                            <i class="material-symbols-rounded opacity-3" style="font-size: 64px;">database</i>
+                            <p class="mt-3">No databases found matching your search.</p>
+                          </div>
                         </td>
                       </tr>
                     </tbody>

@@ -83,7 +83,7 @@
                       <i class="material-symbols-rounded text-sm text-secondary">search</i>
                     </span>
                     <input v-model="searchQuery" type="text" class="form-control border-start-0 ps-0"
-                      placeholder="Filter files..." />
+                      placeholder="Search files and folders..." />
                   </div>
                   <div class="form-check form-switch mb-0 ms-1">
                     <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden"
