@@ -312,6 +312,15 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/force-check', [\App\Http\Controllers\UpdateController::class, 'forceCheck'])->name('force-check');
         });
 
+        // Nimbus Shield routes
+        Route::prefix('shield')->name('shield.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\ShieldController::class, 'index'])->name('index');
+            Route::get('/status', [\App\Http\Controllers\ShieldController::class, 'getStatus'])->name('status');
+            Route::post('/scan', [\App\Http\Controllers\ShieldController::class, 'startScan'])->name('scan');
+            Route::post('/quarantine', [\App\Http\Controllers\ShieldController::class, 'quarantine'])->name('quarantine');
+            Route::post('/delete', [\App\Http\Controllers\ShieldController::class, 'deleteThreat'])->name('delete');
+        });
+
         // User Management routes
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');
