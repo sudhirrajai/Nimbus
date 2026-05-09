@@ -93,7 +93,24 @@
 
             <div class="row">
                 <div class="col-12">
-                    <div class="card my-4">
+                    <!-- Tab Navigation -->
+                    <div class="nav-wrapper position-relative end-0 mb-3">
+                        <ul class="nav nav-pills nav-fill p-1 bg-transparent" role="tablist">
+                            <li class="nav-item">
+                                <a @click="activeTab = 'threats'" :class="activeTab === 'threats' ? 'active shadow' : ''" class="nav-link mb-0 px-0 py-1" data-bs-toggle="tab" href="javascript:;" role="tab">
+                                    <i class="material-symbols-rounded text-sm me-2">verified_user</i> Malware Scans
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a @click="activeTab = 'firewall'" :class="activeTab === 'firewall' ? 'active shadow' : ''" class="nav-link mb-0 px-0 py-1" data-bs-toggle="tab" href="javascript:;" role="tab">
+                                    <i class="material-symbols-rounded text-sm me-2">local_fire_department</i> Firewall Rules
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Threats Tab -->
+                    <div v-if="activeTab === 'threats'" class="card my-4">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                             <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center px-3">
                                 <h6 class="text-white text-capitalize ps-3">Threat Detection Log</h6>
@@ -163,6 +180,99 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Firewall Tab -->
+                    <div v-if="activeTab === 'firewall'" class="card my-4">
+                        <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+                            <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center px-3">
+                                <h6 class="text-white text-capitalize ps-3">Active Firewall Rules (UFW)</h6>
+                                <div class="d-flex gap-2">
+                                    <button @click="toggleFirewall" class="btn btn-sm mb-0" :class="stats.firewall_status === 'Active' ? 'btn-danger' : 'btn-success'">
+                                        {{ stats.firewall_status === 'Active' ? 'Disable Firewall' : 'Enable Firewall' }}
+                                    </button>
+                                    <button @click="showAddRuleModal = true" class="btn btn-sm btn-primary mb-0">
+                                        <i class="material-symbols-rounded text-sm me-1">add</i> Add Rule
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body px-0 pb-2">
+                            <div v-if="loadingRules" class="text-center py-5">
+                                <div class="spinner-border text-dark" role="status"></div>
+                            </div>
+                            <div v-else-if="firewallRules.length === 0" class="text-center py-5">
+                                <i class="material-symbols-rounded text-secondary mb-2" style="font-size: 48px;">policy</i>
+                                <p class="text-secondary">No custom firewall rules found. Default policies are active.</p>
+                            </div>
+                            <div v-else class="table-responsive p-0">
+                                <table class="table align-items-center mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">#</th>
+                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">To (Port/Service)</th>
+                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Action</th>
+                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">From (Source)</th>
+                                            <th class="text-secondary opacity-7"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="rule in firewallRules" :key="rule.index">
+                                            <td class="ps-4"><span class="text-xs font-weight-bold">{{ rule.index }}</span></td>
+                                            <td><span class="text-sm">{{ rule.to }}</span></td>
+                                            <td>
+                                                <span class="badge badge-sm" :class="rule.action.toUpperCase() === 'ALLOW' ? 'bg-gradient-success' : 'bg-gradient-danger'">
+                                                    {{ rule.action }}
+                                                </span>
+                                            </td>
+                                            <td><span class="text-xs">{{ rule.from }}</span></td>
+                                            <td class="align-middle text-right px-3">
+                                                <button @click="removeRule(rule.index)" class="btn btn-link text-danger text-gradient px-3 mb-0">
+                                                    <i class="material-symbols-rounded text-sm me-2">delete</i>Remove
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Rule Modal -->
+            <div v-if="showAddRuleModal" class="modal fade show d-block" style="background: rgba(0,0,0,0.5)">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-radius-lg">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Add Firewall Rule</h5>
+                            <button type="button" class="btn-close" @click="showAddRuleModal = false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Port / Service</label>
+                                <input v-model="newRule.port" type="text" class="form-control border px-2" placeholder="e.g. 80, 443, 3306">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Action</label>
+                                <select v-model="newRule.action" class="form-control border px-2">
+                                    <option value="allow">Allow</option>
+                                    <option value="deny">Deny</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Protocol</label>
+                                <select v-model="newRule.proto" class="form-control border px-2">
+                                    <option value="tcp">TCP</option>
+                                    <option value="udp">UDP</option>
+                                    <option value="any">Any</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @click="showAddRuleModal = false">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="addRule">Add Rule</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -197,6 +307,16 @@ const stats = ref({
     scan_status: 'idle'
 })
 
+const activeTab = ref('threats')
+const loadingRules = ref(false)
+const firewallRules = ref([])
+const showAddRuleModal = ref(false)
+const newRule = ref({
+    port: '',
+    action: 'allow',
+    proto: 'tcp'
+})
+
 const searchQuery = ref('')
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -228,6 +348,71 @@ const loadStatus = async () => {
         loading.value = false
     }
 }
+
+const loadFirewallRules = async () => {
+    loadingRules.value = true
+    try {
+        const response = await axios.get('/shield/firewall/rules')
+        if (response.data.success) {
+            firewallRules.value = response.data.rules
+            stats.value.firewall_status = response.data.status
+        }
+    } catch (error) {
+        showNotification('Failed to load firewall rules', 'danger')
+    } finally {
+        loadingRules.value = false
+    }
+}
+
+const toggleFirewall = async () => {
+    const enable = stats.value.firewall_status !== 'Active'
+    try {
+        const response = await axios.post('/shield/firewall/toggle', { enable })
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+            loadFirewallRules()
+        }
+    } catch (error) {
+        showNotification('Failed to toggle firewall', 'danger')
+    }
+}
+
+const addRule = async () => {
+    try {
+        const response = await axios.post('/shield/firewall/add', newRule.value)
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+            showAddRuleModal.value = false
+            newRule.value = { port: '', action: 'allow', proto: 'tcp' }
+            loadFirewallRules()
+        }
+    } catch (error) {
+        showNotification('Failed to add rule', 'danger')
+    }
+}
+
+const removeRule = async (index) => {
+    if (!confirm('Are you sure you want to remove this firewall rule?')) return
+    try {
+        // We'll need a backend method for this, I'll add it to ShieldController later or use index
+        // For now let's assume we use 'ufw delete [index]'
+        const response = await axios.post('/shield/firewall/delete', { index })
+        if (response.data.success) {
+            showNotification('Rule removed', 'success')
+            loadFirewallRules()
+        }
+    } catch (error) {
+        showNotification('Failed to remove rule', 'danger')
+    }
+}
+
+// Watch activeTab to load rules
+import { watch } from 'vue';
+watch(activeTab, (newTab) => {
+    if (newTab === 'firewall') {
+        loadFirewallRules()
+    }
+})
 
 const startPolling = () => {
     if (statusInterval) return
