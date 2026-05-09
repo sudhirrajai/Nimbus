@@ -31,10 +31,11 @@ class ShieldController extends Controller
                 ->limit(50)
                 ->get();
 
+            $lastScan = SecurityThreat::max('detected_at');
             $stats = [
                 'active_threats' => SecurityThreat::where('status', 'detected')->count(),
                 'quarantined' => SecurityThreat::where('status', 'quarantined')->count(),
-                'last_scan' => SecurityThreat::max('detected_at')?->diffForHumans() ?? 'Never',
+                'last_scan' => $lastScan ? \Illuminate\Support\Carbon::parse($lastScan)->diffForHumans() : 'Never',
                 'firewall_status' => $this->getFirewallStatus(),
                 'scan_status' => 'idle'
             ];
