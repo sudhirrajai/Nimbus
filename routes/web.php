@@ -317,6 +317,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/', [\App\Http\Controllers\ShieldController::class, 'index'])->name('index');
             Route::get('/status', [\App\Http\Controllers\ShieldController::class, 'getStatus'])->name('status');
             Route::post('/scan', [\App\Http\Controllers\ShieldController::class, 'startScan'])->name('scan');
+            Route::post('/stop', [\App\Http\Controllers\ShieldController::class, 'stopScan'])->name('stop');
             Route::post('/quarantine', [\App\Http\Controllers\ShieldController::class, 'quarantine'])->name('quarantine');
             Route::post('/delete', [\App\Http\Controllers\ShieldController::class, 'deleteThreat'])->name('delete');
         });
