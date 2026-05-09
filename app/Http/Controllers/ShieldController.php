@@ -36,8 +36,15 @@ class ShieldController extends Controller
                 'quarantined' => SecurityThreat::where('status', 'quarantined')->count(),
                 'last_scan' => SecurityThreat::max('detected_at')?->diffForHumans() ?? 'Never',
                 'firewall_status' => $this->getFirewallStatus(),
-                'scan_status' => Setting::where('key', 'shield_scan_status')->value('value') ?: 'idle',
+                'scan_status' => 'idle'
             ];
+
+            try {
+                $stats['scan_status'] = Setting::where('key', 'shield_scan_status')->value('value') ?: 'idle';
+            } catch (\Exception $e) {
+                // Settings table might not exist yet
+                \Log::warning("Settings table check failed: " . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -45,7 +52,11 @@ class ShieldController extends Controller
                 'stats' => $stats
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            \Log::error("Failed to get Shield status: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -54,82 +65,102 @@ class ShieldController extends Controller
      */
     public function startScan(Request $request)
     {
-        // Check if scan is already running
-        $currentStatus = Setting::where('key', 'shield_scan_status')->value('value');
-        if ($currentStatus === 'running') {
-            return response()->json(['error' => 'A scan is already in progress'], 409);
-        }
-
-        $path = $request->input('path', '/var/www');
-        
-        // Ensure path is safe
-        if (!str_starts_with($path, '/var/www') && !str_starts_with($path, '/usr/local/nimbus')) {
-             return response()->json(['error' => 'Invalid scan path'], 403);
-        }
-
-        // Set status to running
-        Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'running']);
-
-        // Allow the script to continue after disconnect
-        ignore_user_abort(true);
-        set_time_limit(0);
-
         try {
-            $findings = [];
-            
-            // 1. Scan for long hex-named HTML files (SEO injections)
-            // Use find -type f for efficiency
-            $hexFiles = $this->executeSudoCommand("find " . escapeshellarg($path) . " -type f -regex '.*/[0-9a-f]\{10,20\}\.html'");
-            foreach ($hexFiles as $file) {
-                if (empty($file)) continue;
-                $findings[] = [
-                    'file_path' => $file,
-                    'type' => 'Suspicious HTML (Hex-named)',
-                    'details' => 'Likely SEO injection or backdoor.'
-                ];
+            // Check if scan is already running
+            $currentStatus = 'idle';
+            try {
+                $currentStatus = Setting::where('key', 'shield_scan_status')->value('value') ?: 'idle';
+            } catch (\Exception $e) {
+                \Log::warning("Settings table check failed during startScan: " . $e->getMessage());
             }
 
-            // 2. Scan for common PHP shell patterns
-            $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
-            foreach ($shellPatterns as $pattern) {
-                $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage 2>/dev/null";
-                $files = $this->executeSudoCommand($cmd);
-                foreach ($files as $file) {
-                    if (empty($file) || !is_string($file)) continue;
+            if ($currentStatus === 'running') {
+                return response()->json(['error' => 'A scan is already in progress'], 409);
+            }
+
+            $path = $request->input('path', '/var/www');
+            
+            // Ensure path is safe
+            if (!str_starts_with($path, '/var/www') && !str_starts_with($path, '/usr/local/nimbus')) {
+                 return response()->json(['error' => 'Invalid scan path'], 403);
+            }
+
+            // Set status to running
+            try {
+                Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'running']);
+            } catch (\Exception $e) {
+                \Log::warning("Could not update scan status: " . $e->getMessage());
+            }
+
+            // Allow the script to continue after disconnect
+            if (function_exists('ignore_user_abort')) {
+                ignore_user_abort(true);
+            }
+            if (function_exists('set_time_limit')) {
+                set_time_limit(0);
+            }
+
+            try {
+                $findings = [];
+                
+                // 1. Scan for long hex-named HTML files (SEO injections)
+                // Use find -type f for efficiency
+                $hexFiles = $this->executeSudoCommand("find " . escapeshellarg($path) . " -type f -regex '.*/[0-9a-f]\{10,20\}\.html'");
+                foreach ($hexFiles as $file) {
+                    if (empty($file)) continue;
                     $findings[] = [
-                        'file_path' => $file,
-                        'type' => 'Potential Web Shell',
-                        'details' => "Contains suspicious function: $pattern"
+                        'file_path' => trim($file),
+                        'type' => 'Suspicious HTML (Hex-named)',
+                        'details' => 'Likely SEO injection or backdoor.'
                     ];
                 }
+
+                // 2. Scan for common PHP shell patterns
+                $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
+                foreach ($shellPatterns as $pattern) {
+                    $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage 2>/dev/null";
+                    $files = $this->executeSudoCommand($cmd);
+                    foreach ($files as $file) {
+                        if (empty($file) || !is_string($file)) continue;
+                        $findings[] = [
+                            'file_path' => trim($file),
+                            'type' => 'Potential Web Shell',
+                            'details' => "Contains suspicious function: $pattern"
+                        ];
+                    }
+                }
+
+                // Save findings to database
+                foreach ($findings as $finding) {
+                    SecurityThreat::updateOrCreate(
+                        ['file_path' => $finding['file_path']],
+                        [
+                            'type' => $finding['type'],
+                            'details' => $finding['details'],
+                            'status' => 'detected',
+                            'detected_at' => now()
+                        ]
+                    );
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Scan completed',
+                    'findings_count' => count($findings)
+                ]);
+            } catch (\Exception $e) {
+                \Log::error("Shield internal scan logic failed: " . $e->getMessage());
+                return response()->json(['error' => $e->getMessage()], 500);
+            } finally {
+                try {
+                    Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
+                } catch (\Exception $e) {
+                    \Log::warning("Could not reset scan status: " . $e->getMessage());
+                }
             }
-
-            // Save findings to database
-            foreach ($findings as $finding) {
-                SecurityThreat::updateOrCreate(
-                    ['file_path' => $finding['file_path']],
-                    [
-                        'type' => $finding['type'],
-                        'details' => $finding['details'],
-                        'status' => 'detected',
-                        'detected_at' => now()
-                    ]
-                );
-            }
-
-            // Set status to idle
-            Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Scan completed',
-                'findings_count' => count($findings)
-            ]);
         } catch (\Exception $e) {
-            \Log::error("Shield scan failed: " . $e->getMessage());
+            \Log::error("Shield startScan fatal error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
-        } finally {
-            Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
         }
     }
 
