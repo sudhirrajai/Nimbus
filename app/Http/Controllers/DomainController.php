@@ -175,7 +175,7 @@ class DomainController extends Controller
                     'required',
                     'string',
                     'max:253',
-                    'regex:/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i'
+                    'regex:/^[a-z0-9_.-]+$/i'
                 ]
             ], [
                 'domain.required' => 'Domain name is required',
@@ -275,7 +275,7 @@ class DomainController extends Controller
                     'required',
                     'string',
                     'max:253',
-                    'regex:/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i'
+                    'regex:/^[a-z0-9_.-]+$/i'
                 ]
             ], [
                 'domain.required' => 'Domain name is required',
@@ -421,7 +421,7 @@ class DomainController extends Controller
             
             // Sanitize domain name to prevent command injection
             $domain = strtolower(trim($domain));
-            if (!preg_match('/^[a-z0-9.-]+$/', $domain)) {
+            if (!preg_match('/^[a-z0-9_.-]+$/', $domain)) {
                 return response()->json([
                     'error' => 'Invalid domain name format'
                 ], 400);

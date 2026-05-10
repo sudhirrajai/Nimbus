@@ -182,8 +182,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::delete('/{domain}/records/{recordId}', [\App\Http\Controllers\CloudflareDnsController::class, 'deleteRecord'])->name('records.delete');
     });
 
-    // ─── ROOT ONLY — System Administration ───────────────────────
-    Route::middleware(['role:root'])->group(function () {
+    // ─── ROOT & ADMIN — System Administration ───────────────────────
+    Route::middleware(['role:root,admin'])->group(function () {
 
         // PHP Configuration routes
         Route::prefix('php')->name('php.')->group(function () {

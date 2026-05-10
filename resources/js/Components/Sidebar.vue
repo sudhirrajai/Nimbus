@@ -124,21 +124,21 @@
           </li>
         </template>
 
-        <!-- ═══ AUTOMATION (Root only) ═══ -->
-        <li v-if="isRoot" class="nav-item mt-3">
+        <!-- ═══ AUTOMATION (Root & Admin) ═══ -->
+        <li v-if="isRootOrAdmin" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Automation
           </h6>
         </li>
 
-        <li v-if="isRoot" class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/supervisor" class="nav-link" :class="isActive('/supervisor')">
             <i class="material-symbols-rounded opacity-5">memory</i>
             <span class="nav-link-text ms-1">Supervisor</span>
           </Link>
         </li>
 
-        <li v-if="isRoot" class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/cron" class="nav-link" :class="isActive('/cron')">
             <i class="material-symbols-rounded opacity-5">schedule</i>
             <span class="nav-link-text ms-1">Cron Jobs</span>

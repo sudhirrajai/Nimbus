@@ -21,7 +21,7 @@ class FileManagerController extends Controller
         $domainPath = $this->basePath . $domain;
 
         // Security check
-        if (!$this->isValidPath($domainPath)) {
+        if (!$this->isValidPath($domain, $domainPath)) {
             abort(403, 'Access denied');
         }
 
@@ -45,7 +45,7 @@ class FileManagerController extends Controller
             $showHidden = filter_var($request->input('showHidden', false), FILTER_VALIDATE_BOOLEAN);
             $fullPath = $this->getFullPath($domain, $path);
 
-            if (!$this->isValidPath($fullPath)) {
+            if (!$this->isValidPath($domain, $fullPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -142,7 +142,7 @@ class FileManagerController extends Controller
             $dirPath = $this->getFullPath($domain, $path);
             $targetPath = $dirPath . '/' . $name;
 
-            if (!$this->isValidPath($targetPath)) {
+            if (!$this->isValidPath($domain, $targetPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -181,7 +181,7 @@ class FileManagerController extends Controller
             $dirPath = $this->getFullPath($domain, $path);
             $targetPath = $dirPath . '/' . $name;
 
-            if (!$this->isValidPath($targetPath)) {
+            if (!$this->isValidPath($domain, $targetPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -218,7 +218,7 @@ class FileManagerController extends Controller
             foreach ($items as $item) {
                 $targetPath = $dirPath . '/' . $item;
 
-                if (!$this->isValidPath($targetPath)) {
+                if (!$this->isValidPath($domain, $targetPath)) {
                     continue;
                 }
 
@@ -255,7 +255,7 @@ class FileManagerController extends Controller
             $oldPath = $dirPath . '/' . $oldName;
             $newPath = $dirPath . '/' . $newName;
 
-            if (!$this->isValidPath($oldPath) || !$this->isValidPath($newPath)) {
+            if (!$this->isValidPath($domain, $oldPath) || !$this->isValidPath($domain, $newPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -300,7 +300,7 @@ class FileManagerController extends Controller
             $sourceFull = $sourceDir . '/' . $name;
             $destFull = $destDir . '/' . $name;
 
-            if (!$this->isValidPath($sourceFull) || !$this->isValidPath($destFull)) {
+            if (!$this->isValidPath($domain, $sourceFull) || !$this->isValidPath($domain, $destFull)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -346,7 +346,7 @@ class FileManagerController extends Controller
             $sourceFull = $sourceDir . '/' . $name;
             $destFull = $destDir . '/' . $name;
 
-            if (!$this->isValidPath($sourceFull) || !$this->isValidPath($destFull)) {
+            if (!$this->isValidPath($domain, $sourceFull) || !$this->isValidPath($domain, $destFull)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -393,7 +393,7 @@ class FileManagerController extends Controller
             $dirPath = $this->getFullPath($domain, $path);
             $zipPath = $dirPath . '/' . $zipName;
 
-            if (!$this->isValidPath($zipPath)) {
+            if (!$this->isValidPath($domain, $zipPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -441,7 +441,7 @@ class FileManagerController extends Controller
                 $destPath = $this->getFullPath($domain, $destination);
             }
 
-            if (!$this->isValidPath($archivePath) || !$this->isValidPath($destPath)) {
+            if (!$this->isValidPath($domain, $archivePath) || !$this->isValidPath($domain, $destPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -491,7 +491,7 @@ class FileManagerController extends Controller
             $path = $request->input('path');
             $fullPath = $this->getFullPath($domain, $path);
 
-            if (!$this->isValidPath($fullPath)) {
+            if (!$this->isValidPath($domain, $fullPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -531,7 +531,7 @@ class FileManagerController extends Controller
             $content = $request->input('content');
             $fullPath = $this->getFullPath($domain, $path);
 
-            if (!$this->isValidPath($fullPath)) {
+            if (!$this->isValidPath($domain, $fullPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -567,7 +567,7 @@ class FileManagerController extends Controller
             $dirPath = $this->getFullPath($domain, $path);
             $filePath = $dirPath . '/' . $name;
 
-            if (!$this->isValidPath($filePath)) {
+            if (!$this->isValidPath($domain, $filePath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -609,7 +609,7 @@ class FileManagerController extends Controller
             $dirPath = $this->getFullPath($domain, $path);
             $newDirPath = $dirPath . '/' . $name;
 
-            if (!$this->isValidPath($newDirPath)) {
+            if (!$this->isValidPath($domain, $newDirPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -662,7 +662,7 @@ class FileManagerController extends Controller
                 $targetPath = $dirPath . '/' . $originalName;
                 $tempFilePath = $dirPath . '/' . $originalName . '.part';
 
-                if (!$this->isValidPath($targetPath)) {
+                if (!$this->isValidPath($domain, $targetPath)) {
                     return response()->json(['error' => 'Access denied'], 403);
                 }
 
@@ -707,7 +707,7 @@ class FileManagerController extends Controller
                 // Fallback for single non-chunked uploads
                 $targetPath = $dirPath . '/' . $file->getClientOriginalName();
 
-                if (!$this->isValidPath($targetPath)) {
+                if (!$this->isValidPath($domain, $targetPath)) {
                     return response()->json(['error' => 'Access denied'], 403);
                 }
 
@@ -745,7 +745,7 @@ class FileManagerController extends Controller
             $path = $request->input('path');
             $fullPath = $this->getFullPath($domain, $path);
 
-            if (!$this->isValidPath($fullPath)) {
+            if (!$this->isValidPath($domain, $fullPath)) {
                 abort(403, 'Access denied');
             }
 
@@ -769,7 +769,7 @@ class FileManagerController extends Controller
             $path = $request->input('path', '');
             $fullPath = $this->getFullPath($domain, $path);
 
-            if (!$this->isValidPath($fullPath)) {
+            if (!$this->isValidPath($domain, $fullPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -839,7 +839,7 @@ class FileManagerController extends Controller
             $stash = trim((string) $request->input('stash', ''));
             $fullPath = $this->getFullPath($domain, $path);
 
-            if (!$this->isValidPath($fullPath)) {
+            if (!$this->isValidPath($domain, $fullPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -921,7 +921,7 @@ class FileManagerController extends Controller
             ]);
 
             $domainPath = $this->basePath . $domain;
-            if (!$this->isValidPath($domainPath)) {
+            if (!$this->isValidPath($domain, $domainPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
@@ -973,12 +973,16 @@ class FileManagerController extends Controller
         return $domainPath . '/' . ltrim($path, '/');
     }
 
-    private function isValidPath($path)
+    private function isValidPath($domain, $path)
     {
         $realPath = realpath($path) ?: $path;
-        $baseRealPath = realpath($this->basePath);
+        $domainRoot = realpath($this->basePath . $domain);
 
-        return strpos($realPath, $baseRealPath) === 0;
+        if (!$domainRoot) {
+            return false;
+        }
+
+        return strpos($realPath, $domainRoot) === 0;
     }
 
     private function isTextFile($file)

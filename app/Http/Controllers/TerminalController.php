@@ -90,21 +90,37 @@ class TerminalController extends Controller
             }
         }
 
+        // Security check: Jail paths for non-root users
+        $user = auth()->user();
+        $isRoot = $user && $user->role === 'root';
+
+        if (!$isRoot) {
+            if (!$this->isCommandSafe($command, $domain)) {
+                return response()->json([
+                    'success' => false,
+                    'output' => "Error: Access denied. Paths outside your domain or dangerous commands are restricted.\n",
+                    'exit_code' => 1,
+                    'cwd' => $path,
+                ]);
+            }
+        }
+
         // Handle 'cd' command specially — parse and update working directory
         if (preg_match('/^cd\s+(.+)$/', $command, $matches)) {
             $targetDir = trim($matches[1]);
 
             // Resolve the target directory
             if ($targetDir === '~') {
-                $targetDir = '/var/www/' . $domain;
+                $targetDir = $this->basePath . $domain;
             } elseif (!str_starts_with($targetDir, '/')) {
                 $targetDir = $realWorkDir . '/' . $targetDir;
             }
 
             $realTarget = realpath($targetDir);
 
-            // Must stay within /var/www/
-            if (!$realTarget || !is_dir($realTarget) || !str_starts_with($realTarget, $realBase)) {
+            // Must stay within domain root for non-root
+            $domainRoot = realpath($this->basePath . $domain);
+            if (!$realTarget || !is_dir($realTarget) || (!$isRoot && !str_starts_with($realTarget, $domainRoot))) {
                 return response()->json([
                     'success' => false,
                     'output' => "bash: cd: {$matches[1]}: No such file or directory (or access denied)\n",
@@ -212,5 +228,34 @@ class TerminalController extends Controller
                 'cwd' => $path,
             ]);
         }
+    /**
+     * Check if the command is safe to execute based on paths and patterns
+     */
+    private function isCommandSafe($command, $domain)
+    {
+        $domainRoot = realpath($this->basePath . $domain);
+        if (!$domainRoot) return false;
+
+        // Block dangerous commands for non-root users
+        $dangerous = ['sudo', 'su', 'chroot', 'passwd', 'userdel', 'useradd', 'visudo'];
+        foreach ($dangerous as $d) {
+            if (str_contains(strtolower($command), $d)) return false;
+        }
+
+        // Split command to tokens and check paths
+        $tokens = preg_split('/\s+/', $command);
+        foreach ($tokens as $token) {
+            $token = trim($token, "\"'");
+            
+            // Block directory traversal
+            if (str_contains($token, '..')) return false;
+            
+            // Block absolute paths that don't start with the domain root
+            if (str_starts_with($token, '/') && !str_starts_with($token, $domainRoot)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
