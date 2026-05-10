@@ -20,6 +20,32 @@ class ShieldController extends Controller
         return Inertia::render('Shield/Index');
     }
 
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'auto_scan_enabled' => 'required|boolean',
+            'auto_scan_time' => 'required|string|regex:/^[0-2][0-9]:[0-5][0-9]$/'
+        ]);
+
+        try {
+            Setting::updateOrCreate(
+                ['key' => 'shield_auto_scan'],
+                ['value' => $request->auto_scan_enabled ? '1' : '0']
+            );
+            Setting::updateOrCreate(
+                ['key' => 'shield_auto_scan_time'],
+                ['value' => $request->auto_scan_time]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Security settings updated successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * Get security status and recent threats
      */
@@ -39,7 +65,9 @@ class ShieldController extends Controller
                 'firewall_status' => $this->getFirewallStatus(),
                 'scan_status' => 'idle',
                 'tools_installed' => $this->checkToolsInstalled(),
-                'install_status' => Setting::where('key', 'shield_install_status')->value('value') ?: 'idle'
+                'install_status' => Setting::where('key', 'shield_install_status')->value('value') ?: 'idle',
+                'auto_scan_enabled' => Setting::where('key', 'shield_auto_scan')->value('value') === '1',
+                'auto_scan_time' => Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00'
             ];
 
             try {

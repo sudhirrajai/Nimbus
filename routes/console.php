@@ -15,5 +15,10 @@ Artisan::command('shield:scan {path}', function ($path) {
 })->purpose('Run a security scan in background');
 
 use Illuminate\Support\Facades\Schedule;
+use App\Models\Setting;
 
-Schedule::command('shield:scan /var/www')->dailyAt('03:00');
+Schedule::command('shield:scan /var/www')
+    ->dailyAt(Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00')
+    ->when(function () {
+        return Setting::where('key', 'shield_auto_scan')->value('value') === '1';
+    });
