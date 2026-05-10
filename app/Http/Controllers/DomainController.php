@@ -196,7 +196,7 @@ class DomainController extends Controller
                 ], 500);
             }
 
-            $domain = strtolower(trim($request->domain));
+            $domain = trim($request->domain);
             $path = $this->basePath . $domain;
 
             // Check if domain already exists
@@ -284,7 +284,7 @@ class DomainController extends Controller
             ]);
 
             $oldPath = $this->basePath . $oldDomain;
-            $newDomain = strtolower(trim($request->domain));
+            $newDomain = trim($request->domain);
             $newPath = $this->basePath . $newDomain;
 
             // Check if old domain exists
@@ -420,8 +420,8 @@ class DomainController extends Controller
             \Log::info("Starting deletion process for domain: $domain");
             
             // Sanitize domain name to prevent command injection
-            $domain = strtolower(trim($domain));
-            if (!preg_match('/^[a-z0-9_.-]+$/', $domain)) {
+            $domain = trim($domain);
+            if (!preg_match('/^[a-zA-Z0-9_.-]+$/', $domain)) {
                 return response()->json([
                     'error' => 'Invalid domain name format'
                 ], 400);
