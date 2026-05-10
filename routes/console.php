@@ -13,3 +13,7 @@ Artisan::command('shield:scan {path}', function ($path) {
     $controller->runInternalScan($path);
     $this->info("Scan completed.");
 })->purpose('Run a security scan in background');
+
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('shield:scan /var/www')->dailyAt('03:00');
