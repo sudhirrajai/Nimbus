@@ -1,197 +1,238 @@
 <template>
     <MainLayout>
-        <div class="container-fluid py-4">
+        <div class="container-fluid py-4 bg-gray-100 min-vh-100">
+            <!-- Header Section -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h3 class="font-weight-bolder mb-0">Nimbus Shield</h3>
+                    <p class="text-sm mb-0 text-secondary">Advanced real-time protection & firewall management.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <div v-if="scanning" class="d-flex align-items-center me-3">
+                        <div class="spinner-grow text-primary spinner-grow-sm me-2" role="status"></div>
+                        <span class="text-xs font-weight-bold text-primary">System Scan in Progress...</span>
+                    </div>
+                    <button v-if="!scanning" @click="startScan('/var/www')" class="btn btn-dark btn-sm mb-0 shadow-sm">
+                        <i class="material-symbols-rounded text-sm me-1">search</i> Quick Scan
+                    </button>
+                    <button v-if="!scanning" @click="startScan('/usr/local/nimbus')" class="btn btn-outline-dark btn-sm mb-0 shadow-sm">
+                        Full System Scan
+                    </button>
+                    <button v-if="scanning" @click="stopScan" class="btn btn-danger btn-sm mb-0 shadow-sm">
+                        <i class="material-symbols-rounded text-sm me-1">stop</i> Stop
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
             <div class="row mb-4">
-                <div class="col-lg-8">
-                    <div class="card bg-gradient-dark shadow-dark">
-                        <div class="card-body p-4">
+                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                    <div class="card shadow-sm border-radius-lg overflow-hidden">
+                        <div class="card-body p-3">
                             <div class="row">
                                 <div class="col-8">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <div class="icon icon-shape bg-gradient-primary shadow-primary text-center border-radius-md me-3">
-                                            <i class="material-symbols-rounded opacity-10">shield</i>
-                                        </div>
-                                        <h3 class="text-white mb-0">Nimbus Shield</h3>
-                                    </div>
-                                    <p class="text-white opacity-8 mb-4">
-                                        Active protection for your server. Scan for threats, manage firewall rules, and monitor system integrity.
-                                    </p>
-
-                                    <!-- Installation Banner -->
-                                    <div v-if="!stats.tools_installed.all && stats.install_status === 'idle'" class="alert alert-warning border-0 d-flex align-items-center mb-4 py-2 px-3" style="background: rgba(255,184,0,0.2)">
-                                        <i class="material-symbols-rounded text-warning me-2">warning</i>
-                                        <span class="text-white text-sm me-3">Some security tools (ClamAV, Maldet) are not installed.</span>
-                                        <button @click="installTools" class="btn btn-sm btn-warning mb-0 py-1">Install Now</button>
-                                    </div>
-
-                                    <!-- Installing Status -->
-                                    <div v-if="stats.install_status === 'installing'" class="alert alert-info border-0 d-flex align-items-center mb-4 py-2 px-3" style="background: rgba(0,184,255,0.2)">
-                                        <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
-                                        <span class="text-white text-sm">Installing security tools in background... This may take a few minutes.</span>
-                                    </div>
-
-                                    <div class="d-flex gap-2">
-                                        <button v-if="!scanning" @click="startScan('/var/www')" class="btn btn-primary mb-0">
-                                            <i class="material-symbols-rounded text-sm me-1">search</i>
-                                            Quick Scan
-                                        </button>
-                                        <button v-if="!scanning" @click="startScan('/usr/local/nimbus')" class="btn btn-outline-white mb-0">
-                                            Full System Scan
-                                        </button>
-                                        <button v-if="scanning" @click="stopScan" class="btn btn-danger mb-0">
-                                            <i class="material-symbols-rounded text-sm me-1">stop</i>
-                                            Stop Scan
-                                        </button>
+                                    <div class="numbers">
+                                        <p class="text-sm mb-0 text-capitalize font-weight-bold text-secondary">Active Threats</p>
+                                        <h5 class="font-weight-bolder mb-0" :class="stats.active_threats > 0 ? 'text-danger' : 'text-success'">
+                                            {{ stats.active_threats }}
+                                            <span class="text-xs font-weight-normal text-secondary ms-1">detected</span>
+                                        </h5>
                                     </div>
                                 </div>
                                 <div class="col-4 text-end">
-                                    <div class="chart">
-                                        <div class="status-badge" :class="stats.active_threats > 0 ? 'bg-danger' : 'bg-success'">
-                                            <i class="material-symbols-rounded text-white" style="font-size: 48px;">{{ stats.active_threats > 0 ? 'warning' : 'check_circle' }}</i>
-                                        </div>
-                                        <h5 class="text-white mt-3">{{ stats.active_threats > 0 ? 'Threats Detected' : 'System Secure' }}</h5>
+                                    <div class="icon icon-shape bg-gradient-danger shadow-danger text-center border-radius-md">
+                                        <i class="material-symbols-rounded opacity-10">warning</i>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-4">
-                    <div class="card h-100">
-                        <div class="card-header pb-0 p-3">
-                            <h6 class="mb-0">Security Overview</h6>
-                        </div>
+                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                    <div class="card shadow-sm border-radius-lg overflow-hidden">
                         <div class="card-body p-3">
-                            <ul class="list-group">
-                                <li class="list-group-item border-0 d-flex justify-content-between ps-0 mb-2 border-radius-lg">
-                                    <div class="d-flex align-items-center">
-                                        <div class="icon icon-shape icon-sm me-3 bg-gradient-dark shadow text-center">
-                                            <i class="material-symbols-rounded opacity-10">local_fire_department</i>
-                                        </div>
-                                        <div class="d-flex flex-column">
-                                            <h6 class="mb-1 text-dark text-sm">Firewall (UFW)</h6>
-                                            <span class="text-xs">System Level Protection</span>
-                                        </div>
+                            <div class="row">
+                                <div class="col-8">
+                                    <div class="numbers">
+                                        <p class="text-sm mb-0 text-capitalize font-weight-bold text-secondary">Firewall Status</p>
+                                        <h5 class="font-weight-bolder mb-0" :class="stats.firewall_status === 'Active' ? 'text-success' : 'text-danger'">
+                                            {{ stats.firewall_status }}
+                                        </h5>
                                     </div>
-                                    <div class="d-flex">
-                                        <span class="badge" :class="stats.firewall_status === 'Active' ? 'badge-success' : 'badge-danger'">{{ stats.firewall_status }}</span>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <div class="icon icon-shape bg-gradient-success shadow-success text-center border-radius-md">
+                                        <i class="material-symbols-rounded opacity-10">local_fire_department</i>
                                     </div>
-                                </li>
-                                <li class="list-group-item border-0 d-flex justify-content-between ps-0 mb-2 border-radius-lg">
-                                    <div class="d-flex align-items-center">
-                                        <div class="icon icon-shape icon-sm me-3 bg-gradient-dark shadow text-center">
-                                            <i class="material-symbols-rounded opacity-10">history</i>
-                                        </div>
-                                        <div class="d-flex flex-column">
-                                            <h6 class="mb-1 text-dark text-sm">Last Scan</h6>
-                                            <span class="text-xs">{{ stats.last_scan }}</span>
-                                        </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                    <div class="card shadow-sm border-radius-lg overflow-hidden">
+                        <div class="card-body p-3">
+                            <div class="row">
+                                <div class="col-8">
+                                    <div class="numbers">
+                                        <p class="text-sm mb-0 text-capitalize font-weight-bold text-secondary">Quarantined</p>
+                                        <h5 class="font-weight-bolder mb-0 text-dark">
+                                            {{ stats.quarantined }}
+                                            <span class="text-xs font-weight-normal text-secondary ms-1">files isolated</span>
+                                        </h5>
                                     </div>
-                                </li>
-                                <li class="list-group-item border-0 d-flex justify-content-between ps-0 border-radius-lg">
-                                    <div class="d-flex align-items-center">
-                                        <div class="icon icon-shape icon-sm me-3 bg-gradient-dark shadow text-center">
-                                            <i class="material-symbols-rounded opacity-10">inventory_2</i>
-                                        </div>
-                                        <div class="d-flex flex-column">
-                                            <h6 class="mb-1 text-dark text-sm">Quarantined</h6>
-                                            <span class="text-xs">{{ stats.quarantined }} files isolated</span>
-                                        </div>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <div class="icon icon-shape bg-gradient-dark shadow-dark text-center border-radius-md">
+                                        <i class="material-symbols-rounded opacity-10">inventory_2</i>
                                     </div>
-                                </li>
-                            </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6">
+                    <div class="card shadow-sm border-radius-lg overflow-hidden">
+                        <div class="card-body p-3">
+                            <div class="row">
+                                <div class="col-8">
+                                    <div class="numbers">
+                                        <p class="text-sm mb-0 text-capitalize font-weight-bold text-secondary">Last Scan</p>
+                                        <h6 class="font-weight-bolder mb-0 text-xs mt-1">
+                                            {{ stats.last_scan }}
+                                        </h6>
+                                    </div>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <div class="icon icon-shape bg-gradient-primary shadow-primary text-center border-radius-md">
+                                        <i class="material-symbols-rounded opacity-10">history</i>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-12">
-                    <!-- Tab Navigation -->
-                    <div class="nav-wrapper position-relative end-0 mb-3">
-                        <ul class="nav nav-pills nav-fill p-1 bg-transparent" role="tablist">
-                            <li class="nav-item">
-                                <a @click="activeTab = 'threats'" :class="activeTab === 'threats' ? 'active shadow' : ''" class="nav-link mb-0 px-0 py-1" data-bs-toggle="tab" href="javascript:;" role="tab">
-                                    <i class="material-symbols-rounded text-sm me-2">verified_user</i> Malware Scans
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a @click="activeTab = 'firewall'" :class="activeTab === 'firewall' ? 'active shadow' : ''" class="nav-link mb-0 px-0 py-1" data-bs-toggle="tab" href="javascript:;" role="tab">
-                                    <i class="material-symbols-rounded text-sm me-2">local_fire_department</i> Firewall Rules
-                                </a>
-                            </li>
-                        </ul>
+            <!-- Installation Status Banner -->
+            <div v-if="!stats.tools_installed.all || stats.install_status === 'installing'" class="card mb-4 border-0 shadow-sm bg-gradient-info">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <div class="icon icon-shape bg-white text-info text-center border-radius-md me-3">
+                            <i class="material-symbols-rounded opacity-10">{{ stats.install_status === 'installing' ? 'hourglass_top' : 'security' }}</i>
+                        </div>
+                        <div>
+                            <h6 class="text-white mb-0">{{ stats.install_status === 'installing' ? 'Setting up Protection...' : 'Security Tools Missing' }}</h6>
+                            <p class="text-white text-xs opacity-8 mb-0">
+                                {{ stats.install_status === 'installing' ? 'We are configuring ClamAV and Maldet for real-time monitoring.' : 'Install ClamAV and Maldet to enable advanced threat detection.' }}
+                            </p>
+                        </div>
                     </div>
+                    <button v-if="stats.install_status !== 'installing'" @click="installTools" class="btn btn-white btn-sm mb-0">
+                        Configure Now
+                    </button>
+                    <div v-else class="text-white text-xs font-weight-bold">
+                        Please wait...
+                    </div>
+                </div>
+            </div>
 
-                    <!-- Threats Tab -->
-                    <div v-if="activeTab === 'threats'" class="card my-4">
-                        <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
-                            <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center px-3">
-                                <h6 class="text-white text-capitalize ps-3">Threat Detection Log</h6>
-                                <div class="input-group input-group-sm w-25">
-                                    <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
-                                    <input v-model="searchQuery" type="text" class="form-control" placeholder="Filter threats...">
-                                </div>
+            <!-- Main Content Area -->
+            <div class="card shadow-sm border-radius-xl">
+                <div class="card-header pb-0 p-3 bg-white border-radius-xl">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <ul class="nav nav-pills p-1 bg-gray-100 border-radius-lg w-fit-content" role="tablist">
+                                <li class="nav-item">
+                                    <button @click="activeTab = 'threats'" :class="activeTab === 'threats' ? 'bg-white shadow text-dark' : 'text-secondary'" class="btn btn-link btn-sm mb-0 px-4 py-2 border-radius-md text-capitalize font-weight-bold">
+                                        <i class="material-symbols-rounded text-sm me-1">verified_user</i> Malware Log
+                                    </button>
+                                </li>
+                                <li class="nav-item">
+                                    <button @click="activeTab = 'firewall'" :class="activeTab === 'firewall' ? 'bg-white shadow text-dark' : 'text-secondary'" class="btn btn-link btn-sm mb-0 px-4 py-2 border-radius-md text-capitalize font-weight-bold">
+                                        <i class="material-symbols-rounded text-sm me-1">local_fire_department</i> Firewall
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div v-if="activeTab === 'threats'" class="input-group input-group-sm w-50 ms-auto">
+                                <span class="input-group-text text-body border-0 bg-gray-100"><i class="material-symbols-rounded text-sm">search</i></span>
+                                <input v-model="searchQuery" type="text" class="form-control border-0 bg-gray-100 px-2" placeholder="Search threats...">
+                            </div>
+                            <div v-if="activeTab === 'firewall'" class="d-flex justify-content-end gap-2">
+                                <button @click="showAddRuleModal = true" class="btn btn-dark btn-sm mb-0 shadow-sm">
+                                    <i class="material-symbols-rounded text-sm me-1">add</i> New Rule
+                                </button>
+                                <button @click="toggleFirewall" class="btn btn-sm mb-0 shadow-sm" :class="stats.firewall_status === 'Active' ? 'btn-outline-danger' : 'btn-success'">
+                                    {{ stats.firewall_status === 'Active' ? 'Disable UFW' : 'Enable UFW' }}
+                                </button>
                             </div>
                         </div>
-                        <div class="card-body px-0 pb-2">
-                            <div v-if="loading" class="text-center py-5">
-                                <div class="spinner-border text-dark" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
+                    </div>
+                </div>
+                <div class="card-body p-0 pt-3">
+                    <!-- Threats Tab -->
+                    <div v-if="activeTab === 'threats'">
+                        <div v-if="loading" class="text-center py-6">
+                            <div class="spinner-border text-dark" role="status"></div>
+                            <p class="text-xs text-secondary mt-2">Loading system logs...</p>
+                        </div>
+                        <div v-else-if="filteredThreats.length === 0" class="text-center py-6">
+                            <div class="mb-3">
+                                <i class="material-symbols-rounded text-success" style="font-size: 64px;">verified_user</i>
                             </div>
-                            <div v-else-if="filteredThreats.length === 0" class="text-center py-5">
-                                <i class="material-symbols-rounded text-secondary mb-2" style="font-size: 48px;">verified_user</i>
-                                <p class="text-secondary">No active threats detected. Your system is clean.</p>
-                            </div>
-                            <div v-else class="table-responsive p-0">
-                                <table class="table align-items-center mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">File Path</th>
-                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Type</th>
-                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Detected</th>
-                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
-                                            <th class="text-secondary opacity-7"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="threat in filteredThreats" :key="threat.id">
-                                            <td>
-                                                <div class="d-flex px-3 py-1">
-                                                    <div class="d-flex flex-column justify-content-center">
-                                                        <h6 class="mb-0 text-sm">{{ threat.file_path }}</h6>
-                                                        <p class="text-xs text-secondary mb-0">{{ threat.details }}</p>
-                                                    </div>
+                            <h6 class="text-dark">No Threats Found</h6>
+                            <p class="text-xs text-secondary">Your system is clean and all scans returned positive results.</p>
+                        </div>
+                        <div v-else class="table-responsive p-0">
+                            <table class="table align-items-center mb-0">
+                                <thead class="bg-gray-100">
+                                    <tr>
+                                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-4">Security Threat</th>
+                                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Detection Type</th>
+                                        <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Time</th>
+                                        <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Action Taken</th>
+                                        <th class="text-secondary opacity-7"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="threat in filteredThreats" :key="threat.id" class="hover-bg-gray">
+                                        <td class="ps-4">
+                                            <div class="d-flex py-1">
+                                                <div class="d-flex flex-column justify-content-center">
+                                                    <h6 class="mb-0 text-sm font-weight-bold">{{ threat.file_path }}</h6>
+                                                    <p class="text-xs text-secondary mb-0 text-wrap max-width-300">{{ threat.details }}</p>
                                                 </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-sm" :class="threat.type.includes('Shell') ? 'bg-gradient-danger' : 'bg-gradient-warning'">
-                                                    {{ threat.type }}
-                                                </span>
-                                            </td>
-                                            <td class="align-middle text-center">
-                                                <span class="text-secondary text-xs font-weight-bold">{{ formatDate(threat.detected_at) }}</span>
-                                            </td>
-                                            <td class="align-middle text-center text-sm">
-                                                <span class="badge badge-sm border" :class="getStatusBadgeClass(threat.status)">
-                                                    {{ threat.status }}
-                                                </span>
-                                            </td>
-                                            <td class="align-middle text-right px-3">
-                                                <div class="d-flex gap-2 justify-content-end">
-                                                    <button v-if="threat.status === 'detected'" @click="quarantineThreat(threat.id)" class="btn btn-link text-warning text-gradient px-3 mb-0">
-                                                        <i class="material-symbols-rounded text-sm me-2">inventory_2</i>Quarantine
-                                                    </button>
-                                                    <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient px-3 mb-0">
-                                                        <i class="material-symbols-rounded text-sm me-2">delete</i>Delete
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="material-symbols-rounded text-sm me-1" :class="threat.type.includes('ClamAV') ? 'text-primary' : 'text-danger'">{{ threat.type.includes('ClamAV') ? 'coronavirus' : 'code' }}</i>
+                                                <span class="text-xs font-weight-bold">{{ threat.type }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="align-middle text-center">
+                                            <span class="text-secondary text-xs">{{ formatDate(threat.detected_at) }}</span>
+                                        </td>
+                                        <td class="align-middle text-center text-sm">
+                                            <span class="badge badge-sm rounded-pill" :class="getStatusBadgeClass(threat.status)">
+                                                {{ threat.status }}
+                                            </span>
+                                        </td>
+                                        <td class="align-middle text-right px-4">
+                                            <div class="d-flex gap-2 justify-content-end">
+                                                <button v-if="threat.status === 'detected'" @click="quarantineThreat(threat.id)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine">
+                                                    <i class="material-symbols-rounded">inventory_2</i>
+                                                </button>
+                                                <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient p-0 mb-0" title="Delete">
+                                                    <i class="material-symbols-rounded">delete</i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -613,21 +654,32 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.spin {
-    animation: fa-spin 2s infinite linear;
+.w-fit-content {
+    width: fit-content;
 }
-@keyframes fa-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(359deg); }
+.hover-bg-gray:hover {
+    background-color: #f8f9fa !important;
+    transition: background-color 0.2s ease;
 }
-.status-badge {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    box-shadow: 0 0 20px rgba(0,0,0,0.2);
+.max-width-300 {
+    max-width: 300px;
+}
+.avatar-xxs {
+    width: 24px;
+    height: 24px;
+}
+.bg-gray-100 {
+    background-color: #f8f9fa !important;
+}
+.badge {
+    text-transform: uppercase;
+    font-weight: 700;
+}
+.rounded-pill {
+    border-radius: 50rem !important;
+}
+.py-6 {
+    padding-top: 4rem !important;
+    padding-bottom: 4rem !important;
 }
 </style>
