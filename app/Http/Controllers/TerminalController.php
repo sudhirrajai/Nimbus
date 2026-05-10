@@ -228,6 +228,8 @@ class TerminalController extends Controller
                 'cwd' => $path,
             ]);
         }
+    }
+
     /**
      * Check if the command is safe to execute based on paths and patterns
      */
