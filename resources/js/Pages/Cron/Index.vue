@@ -316,6 +316,41 @@
                 </div>
             </div>
             <div v-if="showOutputModal" class="modal-backdrop fade show"></div>
+
+            <!-- Delete Confirmation Modal -->
+            <div class="modal fade" :class="{ show: showDeleteModal }" :style="showDeleteModal ? 'display: block;' : ''" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header bg-gradient-danger border-0">
+                            <h5 class="modal-title text-white">
+                                <i class="material-symbols-rounded me-2">warning</i>
+                                Confirm Deletion
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" @click="showDeleteModal = false"></button>
+                        </div>
+                        <div class="modal-body p-4 text-center">
+                            <div class="mb-4">
+                                <i class="material-symbols-rounded text-danger" style="font-size: 64px;">delete_forever</i>
+                            </div>
+                            <h5 class="mb-3">Are you sure?</h5>
+                            <p class="text-secondary mb-0">You are about to permanently remove this cron job:</p>
+                            <code class="d-block bg-light p-2 my-3 border-radius-md text-break text-danger">{{ jobToDelete?.command }}</code>
+                            <p class="text-xs text-muted">
+                                <i class="material-symbols-rounded text-xs me-1">info</i>
+                                This will stop the task from running on your server immediately.
+                            </p>
+                        </div>
+                        <div class="modal-footer border-0 p-3 justify-content-center">
+                            <button type="button" class="btn btn-outline-secondary mb-0 px-4" @click="showDeleteModal = false">Cancel</button>
+                            <button type="button" class="btn btn-danger mb-0 px-4" @click="executeDelete" :disabled="deleting">
+                                <span v-if="deleting" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                {{ deleting ? 'Deleting...' : 'Delete Permanently' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-if="showDeleteModal" class="modal-backdrop fade show" style="z-index: 1040;"></div>
         </div>
     </MainLayout>
 </template>
@@ -336,9 +371,12 @@ const itemsPerPage = ref(10)
 // Modals
 const showModal = ref(false)
 const showOutputModal = ref(false)
+const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const editingJob = ref(null)
+const jobToDelete = ref(null)
 const jobOutput = ref('')
+const deleting = ref(false)
 
 // Computed
 const filteredJobs = computed(() => {
@@ -440,16 +478,25 @@ const saveJob = async () => {
     }
 }
 
-const confirmDelete = async (job) => {
-    if (!confirm('Delete this cron job?')) return
+const confirmDelete = (job) => {
+    jobToDelete.value = job
+    showDeleteModal.value = true
+}
+
+const executeDelete = async () => {
+    if (!jobToDelete.value) return
+    deleting.value = true
     try {
         await axios.post('/cron/delete', { 
-            command: job.command,
-            user: job.user
+            command: jobToDelete.value.command,
+            user: jobToDelete.value.user
         })
+        showDeleteModal.value = false
         await loadJobs()
     } catch (error) {
         alert('Failed: ' + (error.response?.data?.error || error.message))
+    } finally {
+        deleting.value = false
     }
 }
 
