@@ -542,8 +542,8 @@ const startScan = async (path) => {
     try {
         const response = await axios.post('/shield/scan', { path })
         if (response.data.success) {
-            showNotification('Scan completed! ' + response.data.findings_count + ' findings.', 'success')
-            await loadStatus()
+            showNotification(response.data.message, 'success')
+            startPolling()
         }
     } catch (error) {
         if (error.response?.status === 409) {
