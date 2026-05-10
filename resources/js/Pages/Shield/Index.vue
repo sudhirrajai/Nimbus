@@ -171,7 +171,7 @@
                                                 </span>
                                             </td>
                                             <td class="align-middle text-center">
-                                                <span class="text-secondary text-xs font-weight-bold">{{ threat.detected_at }}</span>
+                                                <span class="text-secondary text-xs font-weight-bold">{{ formatDate(threat.detected_at) }}</span>
                                             </td>
                                             <td class="align-middle text-center text-sm">
                                                 <span class="badge badge-sm border" :class="getStatusBadgeClass(threat.status)">
@@ -183,7 +183,7 @@
                                                     <button v-if="threat.status === 'detected'" @click="quarantineThreat(threat.id)" class="btn btn-link text-warning text-gradient px-3 mb-0">
                                                         <i class="material-symbols-rounded text-sm me-2">inventory_2</i>Quarantine
                                                     </button>
-                                                    <button @click="deleteThreat(threat.id)" class="btn btn-link text-danger text-gradient px-3 mb-0">
+                                                    <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient px-3 mb-0">
                                                         <i class="material-symbols-rounded text-sm me-2">delete</i>Delete
                                                     </button>
                                                 </div>
@@ -248,6 +248,40 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete Threat Confirmation Modal -->
+            <div v-if="showDeleteThreatModal" class="modal fade show d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-radius-lg shadow-lg border-0">
+                        <div class="modal-header bg-gradient-danger border-0">
+                            <h5 class="modal-title text-white">
+                                <i class="material-symbols-rounded me-2">warning</i>
+                                Confirm Permanent Deletion
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" @click="showDeleteThreatModal = false"></button>
+                        </div>
+                        <div class="modal-body p-4 text-center">
+                            <div class="mb-4">
+                                <i class="material-symbols-rounded text-danger" style="font-size: 64px;">delete_forever</i>
+                            </div>
+                            <h5 class="mb-3">Are you sure?</h5>
+                            <p class="text-secondary mb-0">You are about to permanently delete:</p>
+                            <code class="d-block bg-light p-2 my-3 border-radius-md text-break text-danger">{{ threatToDelete?.file_path }}</code>
+                            <p class="text-sm text-muted">
+                                <i class="material-symbols-rounded text-xs me-1">info</i>
+                                This action cannot be undone. The file will be removed from the server immediately.
+                            </p>
+                        </div>
+                        <div class="modal-footer border-0 p-3 justify-content-center">
+                            <button type="button" class="btn btn-outline-secondary mb-0 px-4" @click="showDeleteThreatModal = false">Cancel</button>
+                            <button type="button" class="btn btn-danger mb-0 px-4" @click="executeDeleteThreat" :disabled="deletingThreat">
+                                <span v-if="deletingThreat" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                {{ deletingThreat ? 'Deleting...' : 'Delete Permanently' }}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -327,6 +361,9 @@ const activeTab = ref('threats')
 const loadingRules = ref(false)
 const firewallRules = ref([])
 const showAddRuleModal = ref(false)
+const showDeleteThreatModal = ref(false)
+const threatToDelete = ref(null)
+const deletingThreat = ref(false)
 const newRule = ref({
     port: '',
     action: 'allow',
@@ -505,16 +542,25 @@ const quarantineThreat = async (id) => {
     }
 }
 
-const deleteThreat = async (id) => {
-    if (!confirm('PERMANENTLY DELETE this file? This cannot be undone.')) return
+const confirmDeleteThreat = (threat) => {
+    threatToDelete.value = threat
+    showDeleteThreatModal.value = true
+}
+
+const executeDeleteThreat = async () => {
+    if (!threatToDelete.value) return
+    deletingThreat.value = true
     try {
-        const response = await axios.post('/shield/delete', { id })
+        const response = await axios.post('/shield/delete', { id: threatToDelete.value.id })
         if (response.data.success) {
             showNotification('File deleted permanently', 'success')
+            showDeleteThreatModal.value = false
             await loadStatus()
         }
     } catch (error) {
         showNotification('Delete failed', 'danger')
+    } finally {
+        deletingThreat.value = false
     }
 }
 
@@ -534,6 +580,19 @@ const getStatusBadgeClass = (status) => {
         case 'deleted': return 'border-secondary text-secondary'
         default: return 'border-secondary text-secondary'
     }
+}
+
+const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    }).format(date);
 }
 
 const showNotification = (message, type = 'success') => {
