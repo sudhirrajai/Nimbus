@@ -153,6 +153,11 @@
                                         <i class="material-symbols-rounded text-sm me-1">local_fire_department</i> Firewall
                                     </button>
                                 </li>
+                                <li class="nav-item">
+                                    <button @click="activeTab = 'settings'" :class="activeTab === 'settings' ? 'bg-white shadow text-dark' : 'text-secondary'" class="btn btn-link btn-sm mb-0 px-4 py-2 border-radius-md text-capitalize font-weight-bold">
+                                        <i class="material-symbols-rounded text-sm me-1">settings</i> Settings
+                                    </button>
+                                </li>
                             </ul>
                         </div>
                         <div class="col-md-6 text-end">
@@ -291,6 +296,72 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Settings Tab -->
+                    <div v-if="activeTab === 'settings'" class="p-4">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card border shadow-none">
+                                    <div class="card-header pb-0 p-3 bg-white">
+                                        <h6 class="mb-0">Automated Protection Settings</h6>
+                                        <p class="text-xs text-secondary mb-0">Configure when and how Nimbus Shield should scan your server automatically.</p>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <div class="d-flex align-items-center justify-content-between mb-4">
+                                            <div>
+                                                <h6 class="text-sm font-weight-bold mb-0">Daily Auto-Scan</h6>
+                                                <p class="text-xs text-secondary mb-0">Automatically scan all websites for malware every day.</p>
+                                            </div>
+                                            <div class="form-check form-switch ps-0">
+                                                <input class="form-check-input ms-auto" type="checkbox" v-model="stats.auto_scan_enabled">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-4" :class="{ 'opacity-5': !stats.auto_scan_enabled }">
+                                            <label class="text-sm font-weight-bold mb-1 d-block">Preferred Scan Time (24h format)</label>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <input type="time" v-model="stats.auto_scan_time" class="form-control border px-2 w-25" :disabled="!stats.auto_scan_enabled">
+                                                <span class="text-xs text-secondary">Server time: {{ new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
+                                            </div>
+                                            <p class="text-xs text-secondary mt-2">
+                                                <i class="material-symbols-rounded text-xs me-1">info</i>
+                                                We recommend scheduling scans during low-traffic periods (e.g., 03:00 AM).
+                                            </p>
+                                        </div>
+
+                                        <hr class="horizontal dark my-4">
+                                        
+                                        <div class="d-flex justify-content-end">
+                                            <button @click="saveSecuritySettings" class="btn btn-dark btn-sm mb-0 px-4" :disabled="savingSettings">
+                                                <span v-if="savingSettings" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                {{ savingSettings ? 'Saving...' : 'Save Settings' }}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-gray-100 border-0 shadow-none h-100">
+                                    <div class="card-body p-3">
+                                        <h6 class="text-sm font-weight-bold mb-3">Scheduling Tips</h6>
+                                        <div class="d-flex mb-3">
+                                            <i class="material-symbols-rounded text-primary me-2">timer</i>
+                                            <p class="text-xs text-secondary mb-0"><b>Off-peak hours:</b> Most malware injections happen at night. A 3:00 AM scan is ideal.</p>
+                                        </div>
+                                        <div class="d-flex mb-3">
+                                            <i class="material-symbols-rounded text-success me-2">bolt</i>
+                                            <p class="text-xs text-secondary mb-0"><b>Resources:</b> Auto-scans run with low-priority settings so they won't slow down your sites.</p>
+                                        </div>
+                                        <div class="d-flex mb-3">
+                                            <i class="material-symbols-rounded text-info me-2">notification_important</i>
+                                            <p class="text-xs text-secondary mb-0"><b>Cron Job:</b> Ensure your system cron is active for these settings to take effect.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -395,8 +466,28 @@ const stats = ref({
     firewall_status: 'Checking...',
     scan_status: 'idle',
     tools_installed: { all: true }, // Default to true to avoid flicker
-    install_status: 'idle'
+    install_status: 'idle',
+    auto_scan_enabled: false,
+    auto_scan_time: '03:00'
 })
+
+const savingSettings = ref(false)
+const saveSecuritySettings = async () => {
+    savingSettings.value = true
+    try {
+        const response = await axios.post('/shield/settings', {
+            auto_scan_enabled: stats.value.auto_scan_enabled,
+            auto_scan_time: stats.value.auto_scan_time
+        })
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+        }
+    } catch (error) {
+        showNotification('Failed to save settings', 'danger')
+    } finally {
+        savingSettings.value = false
+    }
+}
 
 const activeTab = ref('threats')
 const loadingRules = ref(false)
