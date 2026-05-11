@@ -584,32 +584,27 @@
         </div>
       </div>
 
-      <!-- Fullscreen Editor -->
+      <!-- Fullscreen Ace Editor -->
       <transition name="fade">
         <div v-if="showEditorModal" class="fullscreen-editor-overlay">
-          <div class="editor-header d-flex align-items-center px-4 py-2 bg-white shadow-sm border-bottom">
+          <div class="editor-header px-4 py-3 bg-dark d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center">
-              <div class="icon-sm bg-gradient-primary shadow-primary border-radius-md me-3 d-flex align-items-center justify-content-center">
-                <i class="material-symbols-rounded text-white text-xs">edit_note</i>
-              </div>
-              <div>
-                <h6 class="mb-0 font-weight-bolder">{{ editingFile }}</h6>
-                <p class="text-xxs text-secondary mb-0">Path: /{{ currentPath }}</p>
-              </div>
+              <i class="material-symbols-rounded text-white me-2">edit_note</i>
+              <span class="text-white font-weight-bold">{{ editingFile }}</span>
+              <span class="badge badge-sm bg-primary ms-3">{{ detectedMode }}</span>
             </div>
-            <div class="ms-auto d-flex gap-2">
-              <button class="btn btn-sm btn-outline-secondary mb-0 border-radius-lg" @click="closeEditor">Cancel</button>
-              <button class="btn btn-sm bg-gradient-primary mb-0 border-radius-lg px-4" @click="saveFile" :disabled="saving">
-                <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
-                <i class="material-symbols-rounded text-xs me-1">save</i> Save
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving">
+                <i class="material-symbols-rounded text-sm me-1">{{ saving ? 'sync' : 'save' }}</i>
+                {{ saving ? 'Saving...' : 'Save Changes' }}
+              </button>
+              <button class="btn btn-sm btn-outline-light mb-0" @click="closeEditor">
+                <i class="material-symbols-rounded text-sm me-1">close</i>
+                Close
               </button>
             </div>
           </div>
-          <div class="editor-body h-100 bg-white">
-            <textarea v-model="fileContent" class="form-control font-monospace border-0 h-100 p-4" 
-              style="font-size: 14px; line-height: 1.6; outline: none; box-shadow: none; resize: none; overflow-y: auto;" 
-              placeholder="Start coding..."></textarea>
-          </div>
+          <div id="ace-editor-container" class="flex-grow-1"></div>
         </div>
       </transition>
 
@@ -655,6 +650,21 @@ import WebTerminal from '@/Components/WebTerminal.vue'
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
+import ace from 'ace-builds'
+
+// Import Ace components
+import 'ace-builds/src-noconflict/mode-php'
+import 'ace-builds/src-noconflict/mode-javascript'
+import 'ace-builds/src-noconflict/mode-html'
+import 'ace-builds/src-noconflict/mode-css'
+import 'ace-builds/src-noconflict/mode-json'
+import 'ace-builds/src-noconflict/mode-sh'
+import 'ace-builds/src-noconflict/mode-sql'
+import 'ace-builds/src-noconflict/mode-python'
+import 'ace-builds/src-noconflict/mode-markdown'
+import 'ace-builds/src-noconflict/mode-yaml'
+import 'ace-builds/src-noconflict/theme-monokai'
+import 'ace-builds/src-noconflict/ext-language_tools'
 
 const props = defineProps({
   domain: String,
@@ -722,6 +732,8 @@ const renameName = ref('')
 const selectedItem = ref(null)
 const editingFile = ref('')
 const fileContent = ref('')
+const detectedMode = ref('text')
+let aceEditor = null
 const fileInput = ref(null)
 const newPermissions = ref('')
 const recursivePermissions = ref(false)
@@ -1121,9 +1133,46 @@ const editFile = async (name) => {
     fileContent.value = response.data.content
     editingFile.value = name
     showEditorModal.value = true
+    
+    // Auto-detect language
+    const ext = name.split('.').pop().toLowerCase()
+    const modes = {
+      'php': 'php', 'js': 'javascript', 'html': 'html', 'css': 'css', 
+      'json': 'json', 'sh': 'sh', 'sql': 'sql', 'py': 'python',
+      'md': 'markdown', 'xml': 'xml', 'yaml': 'yaml', 'yml': 'yaml'
+    }
+    detectedMode.value = modes[ext] || 'text'
+
+    nextTick(() => {
+      initAceEditor()
+    })
   } catch (error) {
-    showAlert('danger', 'Failed to read file')
+    const msg = error.response?.data?.error || 'Failed to read file'
+    showAlert('danger', msg)
   }
+}
+
+const initAceEditor = () => {
+  if (aceEditor) aceEditor.destroy()
+  
+  aceEditor = ace.edit("ace-editor-container")
+  aceEditor.setTheme("ace/theme/monokai")
+  aceEditor.session.setMode(`ace/mode/${detectedMode.value}`)
+  aceEditor.setValue(fileContent.value, -1)
+  
+  // Options
+  aceEditor.setOptions({
+    fontSize: "14px",
+    enableBasicAutocompletion: true,
+    enableLiveAutocompletion: true,
+    showPrintMargin: false,
+    scrollPastEnd: 0.5,
+    wrap: true
+  })
+
+  aceEditor.on('change', () => {
+    fileContent.value = aceEditor.getValue()
+  })
 }
 
 const saveFile = async () => {
@@ -1132,7 +1181,7 @@ const saveFile = async () => {
     const filePath = currentPath.value ? `${currentPath.value}/${editingFile.value}` : editingFile.value
     await axios.post(`/file-manager/${props.domain}/save`, { path: filePath, content: fileContent.value })
     showAlert('success', 'File saved')
-    closeEditor()
+    // We don't closeEditor here anymore, just keep editing
     loadFiles()
   } catch (error) {
     showAlert('danger', 'Failed to save file')
@@ -1142,6 +1191,10 @@ const saveFile = async () => {
 }
 
 const closeEditor = () => {
+  if (aceEditor) {
+    aceEditor.destroy()
+    aceEditor = null
+  }
   showEditorModal.value = false
   editingFile.value = ''
   fileContent.value = ''
@@ -1352,8 +1405,14 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 .context-menu-divider { height: 1px; background: rgba(0,0,0,0.05); margin: 4px 0; }
 
 .fullscreen-editor-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2500;
-  background: white; display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999 !important;
+  background: #1e1e1e; display: flex; flex-direction: column;
+  width: 100vw; height: 100vh;
+}
+
+.editor-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 60px;
 }
 
 .spin-animation { animation: rotate 2s linear infinite; }
