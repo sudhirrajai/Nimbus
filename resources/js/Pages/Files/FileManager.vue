@@ -668,7 +668,7 @@
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
 import WebTerminal from '@/Components/WebTerminal.vue'
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import ace from 'ace-builds'
