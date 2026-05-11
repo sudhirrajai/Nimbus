@@ -7,12 +7,22 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <h4 class="font-weight-bolder mb-0">File Manager</h4>
-              <p class="mb-0 text-sm">{{ domain }} - /var/www/{{ domain }}{{ currentPath ? '/' + currentPath : '' }}</p>
+          <div class="glass-card d-flex justify-content-between align-items-center p-3">
+            <div class="d-flex align-items-center">
+              <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
+                <i class="material-symbols-rounded opacity-10">folder_open</i>
+              </div>
+              <div>
+                <h4 class="font-weight-bolder mb-0">File Manager</h4>
+                <p class="mb-0 text-sm text-secondary">
+                  <span class="text-primary font-weight-bold">{{ domain }}</span> 
+                  <span class="mx-2 text-lighter">/</span> 
+                  <span class="text-muted">/var/www/{{ domain }}</span>
+                  <span v-if="currentPath" class="text-dark font-weight-bold">/{{ currentPath }}</span>
+                </p>
+              </div>
             </div>
-            <button class="btn btn-outline-secondary mb-0" @click="goBack">
+            <button class="btn btn-link text-secondary mb-0" @click="goBack">
               <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
               Back to Domains
             </button>
@@ -290,179 +300,102 @@
 
               <div v-else class="text-sm text-secondary">
                 {{ gitInfo.message || 'No Git repository found in this folder or its parent folders.' }}
-              </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-xxs text-secondary font-weight-bold text-uppercase">{{ items.length }} items</span>
+              <button class="btn btn-link text-secondary mb-0 p-1" @click="toggleSelectAll">
+                <i class="material-symbols-rounded text-sm">{{ allSelected ? 'deselect' : 'select_all' }}</i>
+              </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Quick Actions Bar -->
-      <div class="row mb-3">
-        <div class="col-12">
-          <div class="quick-actions-bar d-flex flex-wrap align-items-center gap-3">
-            <span class="text-xs text-secondary fw-bold text-uppercase me-1">Quick Actions</span>
-            <button class="quick-action-btn" @click="toggleSelectAll" :title="'Ctrl+A'">
-              <i class="material-symbols-rounded text-sm">{{ allSelected ? 'deselect' : 'select_all' }}</i>
-              <span>{{ allSelected ? 'Deselect All' : 'Select All' }}</span>
-              <kbd>Ctrl+A</kbd>
-            </button>
-            <button class="quick-action-btn" @click="bulkCopyMove('copy')" :disabled="!hasSelected" title="Ctrl+C">
-              <i class="material-symbols-rounded text-sm">content_copy</i>
-              <span>Copy</span>
-              <kbd>Ctrl+C</kbd>
-            </button>
-            <button class="quick-action-btn" @click="bulkCopyMove('move')" :disabled="!hasSelected" title="Ctrl+X">
-              <i class="material-symbols-rounded text-sm">drive_file_move</i>
-              <span>Move</span>
-              <kbd>Ctrl+X</kbd>
-            </button>
-            <button class="quick-action-btn" @click="bulkDelete" :disabled="!hasSelected" title="Delete">
-              <i class="material-symbols-rounded text-sm">delete</i>
-              <span>Delete</span>
-              <kbd>Del</kbd>
-            </button>
-            <button class="quick-action-btn" @click="loadFiles" title="F5">
-              <i class="material-symbols-rounded text-sm">refresh</i>
-              <span>Refresh</span>
-              <kbd>F5</kbd>
-            </button>
-            <button class="quick-action-btn" @click="goUpOneLevel" :disabled="!currentPath" title="Backspace">
-              <i class="material-symbols-rounded text-sm">arrow_upward</i>
-              <span>Up</span>
-              <kbd>Backspace</kbd>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- File List -->
-      <div class="row">
-        <div class="col-12">
-          <div class="card">
-            <div class="card-body p-0">
-              <div class="table-responsive">
-                <table class="table align-items-center mb-0">
-                  <thead>
-                    <tr>
-                      <th style="width:40px"
-                        class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                        <!-- placeholder for checkbox column -->
-                      </th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Name</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Modified</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Permissions</th>
-                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
-                        Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="item in paginatedItems" :key="item.name + item.type"
-                      @contextmenu.prevent="openContextMenu($event, item)" 
-                      @dblclick="handleDoubleClick(item)"
-                      class="file-row cursor-pointer"
-                      :class="{ 'text-muted': item.hidden }">
-                      <td>
-                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)"
-                          @change="toggleSelectItem(item, $event)">
-                      </td>
-
-                      <td>
-                        <div class="d-flex px-2 py-1 align-items-center">
-                          <div class="me-3">
-                            <i class="material-symbols-rounded"
-                              :class="item.type === 'directory' ? 'text-warning' : 'text-info'">
-                              {{ item.type === 'directory' ? 'folder' : 'description' }}
-                            </i>
-                          </div>
-                          <div>
-                            <a v-if="item.type === 'directory'" href="#" @click.prevent="openDirectory(item.name)"
-                              class="text-sm font-weight-bold mb-0">
-                              {{ item.name }}
-                            </a>
-                            <span v-else class="text-sm font-weight-bold mb-0">
-                              {{ item.name }}
-                            </span>
-                            <p class="text-xs text-secondary mb-0" v-if="item.extension">
-                              {{ item.extension.toUpperCase() }} file
-                            </p>
-                          </div>
+          <!-- File List Area -->
+          <div class="glass-card p-0 overflow-hidden">
+            <div class="table-responsive">
+              <table class="table align-items-center mb-0">
+                <thead class="bg-gray-100 opacity-7">
+                  <tr>
+                    <th style="width:40px" class="text-uppercase text-secondary text-xxs font-weight-bolder"></th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Name</th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Size</th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Modified</th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in paginatedItems" :key="item.name + item.type"
+                    @contextmenu.prevent="openContextMenu($event, item)" 
+                    @dblclick="handleDoubleClick(item)"
+                    class="file-row-modern"
+                    :class="{ 'selected': isSelected(item), 'opacity-5': item.hidden }">
+                    <td class="ps-3">
+                      <div class="form-check mb-0">
+                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @change="toggleSelectItem(item, $event)">
+                      </div>
+                    </td>
+                    <td>
+                      <div class="d-flex px-2 py-2 align-items-center">
+                        <div class="file-icon-box me-3" :class="item.type === 'directory' ? 'bg-light-warning' : 'bg-light-info'">
+                          <i class="material-symbols-rounded" :class="item.type === 'directory' ? 'text-warning' : 'text-info'">
+                            {{ item.type === 'directory' ? 'folder' : 'description' }}
+                          </i>
                         </div>
-                      </td>
-                      <td>
-                        <span class="text-xs">{{ item.type === 'directory' ? item.size : item.sizeFormatted }}</span>
-                      </td>
-                      <td>
-                        <span class="text-xs">{{ item.modified }}</span>
-                      </td>
-                      <td>
-                        <span class="badge badge-sm bg-gradient-secondary cursor-pointer"
-                          @click="openPermissionsModal(item)" title="Click to change permissions">
-                          {{ item.permissions }}
-                        </span>
-                      </td>
-                      <td class="align-middle text-center">
-                        <button v-if="item.type === 'file' && item.editable" class="btn btn-link text-primary mb-0 px-2"
-                          @click="editFile(item.name)" title="Edit">
+                        <div class="d-flex flex-column">
+                          <a v-if="item.type === 'directory'" href="#" @click.prevent="openDirectory(item.name)" class="text-sm font-weight-bold text-dark mb-0">
+                            {{ item.name }}
+                          </a>
+                          <span v-else class="text-sm font-weight-bold text-dark mb-0">{{ item.name }}</span>
+                          <span class="text-xxs text-secondary">{{ item.permissions }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span class="text-xs font-weight-bold">{{ item.type === 'directory' ? '--' : item.sizeFormatted }}</span></td>
+                    <td><span class="text-xs text-secondary">{{ item.modified }}</span></td>
+                    <td class="text-center">
+                      <div class="d-flex justify-content-center gap-1">
+                        <button v-if="item.type === 'file' && item.editable" class="action-btn-circle" @click="editFile(item.name)" title="Edit">
                           <i class="material-symbols-rounded text-sm">edit_note</i>
                         </button>
-                        <button v-if="item.type === 'file'" class="btn btn-link text-success mb-0 px-2"
-                          @click="downloadFile(item.name)" title="Download">
+                        <button v-if="item.type === 'file'" class="action-btn-circle" @click="downloadFile(item.name)" title="Download">
                           <i class="material-symbols-rounded text-sm">download</i>
                         </button>
-                        <button class="btn btn-link text-warning mb-0 px-2" @click="openRenameModal(item)"
-                          title="Rename">
-                          <i class="material-symbols-rounded text-sm">label</i>
+                        <button class="action-btn-circle" @click="openContextMenu($event, item)" title="More">
+                          <i class="material-symbols-rounded text-sm">more_vert</i>
                         </button>
-                        <button class="btn btn-link text-danger mb-0 px-2" @click="confirmDelete(item)" title="Delete">
-                          <i class="material-symbols-rounded text-sm">delete</i>
-                        </button>
-                      </td>
-                    </tr>
-
-                    <tr v-if="items.length === 0 && !loading">
-                      <td colspan="6" class="text-center py-5">
-                        <i class="material-symbols-rounded text-secondary" style="font-size: 48px;">folder_open</i>
-                        <p class="text-secondary mb-0">This folder is empty</p>
-                      </td>
-                    </tr>
-
-                    <tr v-if="loading">
-                      <td colspan="6" class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status">
-                          <span class="visually-hidden">Loading...</span>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Empty State -->
+            <div v-if="items.length === 0 && !loading" class="text-center py-7">
+              <div class="empty-state-icon mb-3">
+                <i class="material-symbols-rounded">folder_open</i>
               </div>
-              
-              <!-- Pagination -->
-              <div v-if="filteredItems.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
-                <div class="text-xs text-secondary">
-                  Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredItems.length) }} of {{ filteredItems.length }} entries
-                </div>
-                <ul class="pagination pagination-sm mb-0">
-                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                    <button class="page-link" @click="currentPage--" aria-label="Previous">
-                      <i class="material-symbols-rounded text-xs">chevron_left</i>
-                    </button>
-                  </li>
-                  <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
-                    <button class="page-link" @click="currentPage = page">{{ page }}</button>
-                  </li>
-                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                    <button class="page-link" @click="currentPage++" aria-label="Next">
-                      <i class="material-symbols-rounded text-xs">chevron_right</i>
-                    </button>
-                  </li>
-                </ul>
-              </div>
+              <h6 class="text-secondary">Empty Directory</h6>
+              <p class="text-xs text-muted">Upload or create files to get started</p>
+              <button class="btn btn-sm bg-gradient-primary mt-2" @click="triggerUpload">Upload Files</button>
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="filteredItems.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top bg-gray-50">
+              <span class="text-xxs text-secondary font-weight-bold">Page {{ currentPage }} of {{ totalPages }}</span>
+              <ul class="pagination pagination-primary pagination-xs mb-0">
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                  <button class="page-link" @click="currentPage--"><i class="material-symbols-rounded">chevron_left</i></button>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                  <button class="page-link" @click="currentPage++"><i class="material-symbols-rounded">chevron_right</i></button>
+                </li>
+              </ul>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Git Panel (Moved to bottom or hidden until needed) -->
+      <div id="git-panel" class="row mt-4">
 
       <!-- Context Menu -->
       <div v-if="contextMenu.show" class="context-menu" :style="contextMenuStyle" @click.stop>
@@ -1744,55 +1677,143 @@ const executeCopyMove = async () => {
   }
 }
 
+const scrollToGit = () => {
+  const el = document.getElementById('git-panel')
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
 </script>
 
 <style scoped>
-/* Toolbar card */
-.toolbar-card {
+/* Glassmorphism Card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+/* Sidebar Nav Pills */
+.nav-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
   border: none;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  background: transparent;
+  border-radius: 10px;
+  color: #67748e;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+  text-align: left;
 }
 
-/* Toolbar vertical divider */
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: #dee2e6;
-  margin: 0 4px;
+.nav-pill-btn i {
+  font-size: 18px;
+  opacity: 0.8;
 }
 
-/* Search input */
-.toolbar-search {
-  max-width: 200px;
-  min-width: 140px;
+.nav-pill-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #344767;
 }
-.toolbar-search .form-control:focus {
+
+.nav-pill-btn.active {
+  background: #fff;
+  color: #344767;
+  font-weight: 600;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Modern Search */
+.glass-search {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  padding: 0 8px;
+  width: 240px;
+}
+
+.glass-search .form-control:focus {
   box-shadow: none;
 }
-.toolbar-search .input-group-text {
-  border-color: #dee2e6;
-}
-.toolbar-search .form-control {
-  border-color: #dee2e6;
+
+/* File Row Modern */
+.file-row-modern {
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 }
 
-/* Bulk actions bar */
-.bulk-actions-bar {
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  animation: slideDown 0.2s ease;
+.file-row-modern:hover {
+  background: rgba(94, 114, 228, 0.04) !important;
+  transform: scale(1.002);
 }
 
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
+.file-row-modern.selected {
+  background: rgba(94, 114, 228, 0.08) !important;
+}
+
+.file-icon-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-light-warning { background: rgba(251, 207, 51, 0.15); }
+.bg-light-info { background: rgba(17, 205, 239, 0.15); }
+
+/* Action Buttons */
+.action-btn-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #67748e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.action-btn-circle:hover {
+  background: white;
+  color: #5e72e4;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Bulk Actions Overlay */
+.bulk-actions-overlay {
+  animation: slideInUp 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Breadcrumb bar */
-.breadcrumb-bar {
+/* Empty State */
+.empty-state-icon {
+  width: 80px;
+  height: 80px;
   background: #f8f9fa;
-  border-radius: 0.5rem;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid #eee;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.empty-state-icon i {
+  font-size: 40px;
+  color: #adb5bd;
 }
 
 /* Refresh spin animation */
@@ -1804,192 +1825,39 @@ const executeCopyMove = async () => {
   to { transform: rotate(360deg); }
 }
 
-/* File row hover */
-.file-row {
-  transition: background-color 0.15s ease;
-}
-.file-row:hover {
-  background-color: rgba(0, 0, 0, 0.02);
-}
-
-/* Upload Drop Zone */
-.upload-drop-zone-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.drop-zone-content {
-  text-align: center;
-  transform: scale(0.9);
-  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.drop-zone-icon-box {
-  width: 120px;
-  height: 120px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 4px dashed rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto;
-}
-
-.drop-zone-icon-box i {
-  font-size: 64px;
-  color: white;
-  animation: bounce 2s infinite;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-  to { transform: scale(1); }
-}
-
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
-  40% {transform: translateY(-20px);}
-  60% {transform: translateY(-10px);}
-}
-
-/* Git console */
+/* Git Console */
 .git-console {
-  background: #1a1a2e;
-  color: #e0e0e0;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-family: 'Fira Code', 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+  background: #1e1e2f;
+  color: #a9b7c6;
+  padding: 1rem;
+  border-radius: 12px;
+  font-family: 'Fira Code', monospace;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Context menu */
+/* Context Menu */
 .context-menu {
   position: fixed;
   z-index: 9999;
-  background: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
-  min-width: 180px;
-  padding: 6px 0;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(15px);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
+
 .context-menu-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  transition: background-color 0.1s;
-}
-.context-menu-item:hover {
-  background: #f0f2f5;
-}
-.context-menu-divider {
-  height: 1px;
-  background: #eee;
-  margin: 4px 0;
-}
-
-/* Modal icon */
-.modal-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 20px;
-}
-
-/* Source info card */
-.source-info-card {
-  background: #f8f9fa;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid #eee;
-}
-
-/* Cursor pointer utility */
-.cursor-pointer {
-  cursor: pointer;
-}
-
-/* Quick Actions Bar */
-.quick-actions-bar {
-  background: #f1f3f5;
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px dashed #dee2e6;
-}
-
-.quick-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background: white;
-  color: #495057;
-  font-size: 12px;
-  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 8px;
   transition: all 0.15s ease;
-  white-space: nowrap;
 }
 
-.quick-action-btn:hover:not(:disabled) {
-  background: #e9ecef;
-  border-color: #adb5bd;
-  color: #212529;
-}
-
-.quick-action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.quick-action-btn kbd {
-  display: inline-block;
-  padding: 1px 5px;
-  font-size: 10px;
-  font-family: inherit;
-  color: #6c757d;
-  background: #f1f3f5;
-  border: 1px solid #dee2e6;
-  border-radius: 3px;
-  line-height: 1.4;
-  margin-left: 2px;
-}
-
-/* Git Token Section */
-.git-token-section {
-  background: #f8f9fa;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  border: 1px solid #e9ecef;
-  animation: slideDown 0.2s ease;
+.context-menu-item:hover {
+  background: #5e72e4;
+  color: white;
 }
 </style>
 

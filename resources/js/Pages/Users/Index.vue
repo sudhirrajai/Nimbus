@@ -345,6 +345,9 @@ const allPermissions = [
   { key: 'wordpress', label: 'WordPress', icon: 'web' },
   { key: 'database', label: 'Database', icon: 'storage' },
   { key: 'ssl', label: 'SSL', icon: 'lock' },
+  { key: 'nginx', label: 'Nginx', icon: 'settings_input_component' },
+  { key: 'supervisor', label: 'Supervisor', icon: 'bolt' },
+  { key: 'cron', label: 'Cron', icon: 'schedule' },
 ]
 
 const statsCards = computed(() => [

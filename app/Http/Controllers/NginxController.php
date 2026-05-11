@@ -32,15 +32,18 @@ class NginxController extends Controller
                 ], 500);
             }
 
+            $user = auth()->user();
             $directories = collect(File::directories($this->basePath))
                 ->map(function ($path) {
                     return basename($path);
                 })
-                ->filter(function ($name) {
+                ->filter(function ($name) use ($user) {
                     // Ignore system directories
-                    return !in_array(strtolower($name), [
-                        'html', 'default', 'public', 'cgi-bin', 'nimbus'
-                    ]);
+                    if (in_array(strtolower($name), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
+                        return false;
+                    }
+                    // Filter based on user permissions
+                    return $user->hasDomainPermission($name, 'nginx');
                 })
                 ->map(function ($domain) {
                     $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
@@ -78,9 +81,13 @@ class NginxController extends Controller
 
             $domain = trim($request->input('domain'));
             
-            // Security validation
+            // Security and Permission validation
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'nginx')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
             $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
@@ -118,9 +125,13 @@ class NginxController extends Controller
             $domain = trim($request->input('domain'));
             $content = $request->input('content');
             
-            // Security validation
+            // Security and Permission validation
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'nginx')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
             $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
@@ -201,6 +212,16 @@ class NginxController extends Controller
     public function reloadNginx()
     {
         try {
+            // Check if user has permission to reload nginx
+            $user = auth()->user();
+            if (!$user->isRootOrAdmin()) {
+                // For regular users, check if they have nginx permission for at least one domain
+                $hasAnyNginxPerm = $user->websites()->whereJsonContains('permissions', 'nginx')->exists();
+                if (!$hasAnyNginxPerm) {
+                    return response()->json(['error' => 'You do not have permission to reload Nginx'], 403);
+                }
+            }
+
             // Test config first
             $testResult = $this->testNginxConfig();
             
@@ -257,8 +278,13 @@ BASH;
             $domain = trim($request->input('domain'));
             $enabled = $request->input('enabled');
             
+            // Security and Permission validation
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'nginx')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
             $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
