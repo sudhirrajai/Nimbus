@@ -95,6 +95,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/{domain}/git/action', [FileManagerController::class, 'gitAction'])->name('git.action');
         Route::post('/{domain}/git/token', [FileManagerController::class, 'saveGitToken'])->name('git.token.save');
         Route::get('/{domain}/git/token', [FileManagerController::class, 'getGitToken'])->name('git.token.get');
+        Route::post('/{domain}/search', [FileManagerController::class, 'search'])->name('search');
         // Web Terminal
         Route::post('/{domain}/terminal/execute', [\App\Http\Controllers\TerminalController::class, 'execute'])->name('terminal.execute');
     });
