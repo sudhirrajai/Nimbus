@@ -1004,11 +1004,21 @@ class FileManagerController extends Controller
 
     private function isValidPath($domain, $path)
     {
-        $realPath = realpath($path) ?: $path;
+        // Sanitize path by removing any '..' or './' sequences manually first
+        $path = str_replace(['../', '..\\', './', '.\\'], '', $path);
+        
+        $realPath = realpath($path);
         $domainRoot = realpath($this->basePath . $domain);
 
         if (!$domainRoot) {
             return false;
+        }
+
+        // If realpath failed (file doesn't exist yet), we check if the parent directory is valid
+        if (!$realPath) {
+            $parentDir = realpath(dirname($path));
+            if (!$parentDir) return false;
+            return strpos($parentDir, $domainRoot) === 0;
         }
 
         return strpos($realPath, $domainRoot) === 0;
@@ -1277,7 +1287,8 @@ class FileManagerController extends Controller
                         'path' => $relPath,
                         'fullPath' => $line,
                         'type' => is_dir($line) ? 'directory' : 'file',
-                        'matchType' => 'filename'
+                        'matchType' => 'filename',
+                        'editable' => is_dir($line) ? false : $this->isTextFile($line)
                     ];
                 }
             } else {
@@ -1295,7 +1306,8 @@ class FileManagerController extends Controller
                         'path' => $relPath,
                         'fullPath' => $line,
                         'type' => 'file',
-                        'matchType' => 'content'
+                        'matchType' => 'content',
+                        'editable' => $this->isTextFile($line)
                     ];
                 }
             }

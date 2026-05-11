@@ -113,28 +113,40 @@
                 Terminal
               </button>
 
-              <div class="ms-auto d-flex align-items-center gap-2">
-                <div class="input-group input-group-sm glass-search">
-                  <select v-model="searchType" class="form-select border-0 bg-transparent text-xxs font-weight-bold ps-2" style="width: 80px;">
-                    <option value="filename">Name</option>
-                    <option value="content">Content</option>
-                  </select>
-                  <span class="input-group-text border-0 bg-transparent ps-0 pe-2">
+              <div class="ms-auto d-flex align-items-center gap-3">
+                <div class="search-wrapper-premium shadow-sm">
+                  <div class="search-type-selector">
+                    <i class="material-symbols-rounded text-sm">filter_list</i>
+                    <select v-model="searchType" class="form-select border-0 bg-transparent text-xxs font-weight-bold">
+                      <option value="filename">Name</option>
+                      <option value="content">Content</option>
+                    </select>
+                  </div>
+                  <div class="vr bg-gray-300 my-2" style="width: 1px;"></div>
+                  <div class="search-input-box">
                     <i class="material-symbols-rounded text-sm text-secondary">search</i>
-                  </span>
-                  <input v-model="searchQuery" type="text" class="form-control border-0 bg-transparent ps-0" 
-                    placeholder="Search..." @keyup.enter="handleSearch" />
+                    <input v-model="searchQuery" type="text" class="form-control border-0 bg-transparent ps-1" 
+                      placeholder="Search files..." @keyup.enter="handleSearch" />
+                    <button v-if="searchQuery" class="btn btn-link p-0 m-0 me-2" @click="searchQuery = ''; isSearching = false; loadFiles()">
+                      <i class="material-symbols-rounded text-sm text-secondary">close</i>
+                    </button>
+                  </div>
                 </div>
-                <div class="form-check form-switch mb-0">
-                  <input class="form-check-input" type="checkbox" id="deepSearchToggle" v-model="deepSearch">
-                  <label class="form-check-label text-xxs text-secondary mb-0" for="deepSearchToggle">In-depth</label>
+                
+                <div class="d-flex align-items-center gap-3 bg-gray-100 px-3 py-1 border-radius-lg border">
+                  <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0" type="checkbox" id="deepSearchToggle" v-model="deepSearch">
+                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="deepSearchToggle">In-depth</label>
+                  </div>
+                  <div class="vr bg-gray-300" style="height: 15px;"></div>
+                  <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="loadFiles">
+                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="showHiddenToggle">Hidden</label>
+                  </div>
                 </div>
-                <div class="form-check form-switch mb-0">
-                  <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="loadFiles">
-                  <label class="form-check-label text-xxs text-secondary mb-0" for="showHiddenToggle">Hidden</label>
-                </div>
-                <button class="btn btn-link text-secondary mb-0 p-1" @click="loadFiles" :disabled="loading">
-                  <i class="material-symbols-rounded text-lg" :class="{ 'spin-animation': loading }">refresh</i>
+
+                <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
+                  <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
                 </button>
               </div>
             </div>
@@ -1404,9 +1416,62 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
   transition: background-color 0.2s ease, transform 0.2s ease; 
   border-bottom: 1px solid rgba(0,0,0,0.03); 
   will-change: background-color, transform;
+  cursor: pointer;
+  user-select: none;
 }
 .file-row-modern:hover { background: rgba(94, 114, 228, 0.05); transform: translateX(2px); }
 .file-row-modern.selected { background: rgba(94, 114, 228, 0.08); }
+
+.search-wrapper-premium {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 4px 12px;
+  min-width: 350px;
+  transition: all 0.3s ease;
+}
+
+.search-wrapper-premium:focus-within {
+  border-color: #5e72e4;
+  box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
+}
+
+.search-type-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-type-selector select {
+  padding: 4px 20px 4px 4px;
+  width: auto;
+  font-size: 11px;
+  color: #344767;
+}
+
+.search-input-box {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+  gap: 8px;
+}
+
+.search-input-box input {
+  font-size: 13px;
+  height: 32px;
+}
+
+.btn-icon-only.btn-rounded {
+  border-radius: 50% !important;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .file-icon-box { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .bg-light-warning { background: rgba(251, 207, 51, 0.15); }
