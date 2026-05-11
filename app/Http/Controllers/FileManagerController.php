@@ -58,7 +58,14 @@ class FileManagerController extends Controller
             // Use scandir so we can control whether hidden files are included
             $entries = @scandir($fullPath);
             if ($entries === false) {
-                return response()->json(['error' => 'Failed to read directory'], 500);
+                // Fallback to sudo ls
+                $escapedPath = escapeshellarg($fullPath);
+                $output = $this->executeSudoCommand("ls -A1 {$escapedPath}");
+                if (empty($output)) {
+                    $entries = [];
+                } else {
+                    $entries = array_filter(array_map('trim', $output));
+                }
             }
 
             // Separate directories and files so directories come first
@@ -503,7 +510,16 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'File is not editable'], 400);
             }
 
-            $content = File::get($fullPath);
+            // Try reading with standard PHP first, fall back to sudo cat for protected files
+            $content = '';
+            try {
+                $content = File::get($fullPath);
+            } catch (\Exception $e) {
+                // Fallback to sudo cat
+                $escapedPath = escapeshellarg($fullPath);
+                $output = $this->executeSudoCommand("cat {$escapedPath}");
+                $content = implode("\n", $output);
+            }
 
             return response()->json([
                 'content' => $content,
@@ -512,7 +528,7 @@ class FileManagerController extends Controller
             ]);
         } catch (\Exception $e) {
             \Log::error("File read error: " . $e->getMessage());
-            return response()->json(['error' => 'Failed to read file'], 500);
+            return response()->json(['error' => 'Failed to read file: ' . $e->getMessage()], 500);
         }
     }
 
@@ -539,7 +555,20 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'File is not editable'], 400);
             }
 
-            File::put($fullPath, $content);
+            try {
+                File::put($fullPath, $content);
+            } catch (\Exception $e) {
+                // Fallback: write to temp and sudo mv
+                $tempPath = tempnam(sys_get_temp_dir(), 'nimbus_save_');
+                File::put($tempPath, $content);
+                
+                $escapedTemp = escapeshellarg($tempPath);
+                $escapedFull = escapeshellarg($fullPath);
+                
+                $this->executeSudoCommand("mv {$escapedTemp} {$escapedFull}");
+                $this->executeSudoCommand("chown www-data:www-data {$escapedFull}");
+                $this->executeSudoCommand("chmod 644 {$escapedFull}");
+            }
 
             return response()->json([
                 'message' => 'File saved successfully',
@@ -547,7 +576,7 @@ class FileManagerController extends Controller
             ]);
         } catch (\Exception $e) {
             \Log::error("File save error: " . $e->getMessage());
-            return response()->json(['error' => 'Failed to save file'], 500);
+            return response()->json(['error' => 'Failed to save file: ' . $e->getMessage()], 500);
         }
     }
 
