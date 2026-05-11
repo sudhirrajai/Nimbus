@@ -25,6 +25,7 @@ class CronController extends Controller
             $users = ['www-data', 'root'];
             $id = 1;
 
+            $userModel = auth()->user();
             foreach ($users as $user) {
                 $output = [];
                 exec("sudo crontab -u {$user} -l 2>/dev/null", $output, $code);
@@ -38,18 +39,31 @@ class CronController extends Controller
                         
                         // Parse cron line: minute hour day month weekday command
                         if (preg_match('/^([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+(.+)$/', $line, $matches)) {
-                            $jobs[] = [
-                                'id' => $id++,
-                                'user' => $user,
-                                'minute' => $matches[1],
-                                'hour' => $matches[2],
-                                'day' => $matches[3],
-                                'month' => $matches[4],
-                                'weekday' => $matches[5],
-                                'command' => $matches[6],
-                                'schedule' => "{$matches[1]} {$matches[2]} {$matches[3]} {$matches[4]} {$matches[5]}",
-                                'raw' => $line
-                            ];
+                            $command = $matches[6];
+                            
+                            // Check permission for this command
+                            $hasPermission = $userModel->isRootOrAdmin();
+                            if (!$hasPermission) {
+                                // Extract domain from command path like /var/www/domain
+                                if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
+                                    $hasPermission = $userModel->hasDomainPermission($m[1], 'cron');
+                                }
+                            }
+
+                            if ($hasPermission) {
+                                $jobs[] = [
+                                    'id' => $id++,
+                                    'user' => $user,
+                                    'minute' => $matches[1],
+                                    'hour' => $matches[2],
+                                    'day' => $matches[3],
+                                    'month' => $matches[4],
+                                    'weekday' => $matches[5],
+                                    'command' => $command,
+                                    'schedule' => "{$matches[1]} {$matches[2]} {$matches[3]} {$matches[4]} {$matches[5]}",
+                                    'raw' => $line
+                                ];
+                            }
                         }
                     }
                 }
@@ -87,6 +101,18 @@ class CronController extends Controller
             $month = $request->input('month');
             $weekday = $request->input('weekday');
             $command = $request->input('command');
+
+            // Check permission
+            $userModel = auth()->user();
+            if (!$userModel->isRootOrAdmin()) {
+                if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
+                    if (!$userModel->hasDomainPermission($m[1], 'cron')) {
+                        return response()->json(['error' => 'Permission denied for this domain path'], 403);
+                    }
+                } else {
+                    return response()->json(['error' => 'Permission denied. Users can only create cron jobs for their assigned websites.'], 403);
+                }
+            }
 
             $cronLine = "{$minute} {$hour} {$day} {$month} {$weekday} {$command}";
 
@@ -145,6 +171,25 @@ class CronController extends Controller
             $weekday = $request->input('weekday');
             $command = $request->input('command');
 
+            // Check permission
+            $userModel = auth()->user();
+            if (!$userModel->isRootOrAdmin()) {
+                // Check old command
+                if (preg_match('#/var/www/([^/\s]+)#', $oldCommand, $m)) {
+                    if (!$userModel->hasDomainPermission($m[1], 'cron')) {
+                        return response()->json(['error' => 'Permission denied for the existing job'], 403);
+                    }
+                }
+                // Check new command
+                if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
+                    if (!$userModel->hasDomainPermission($m[1], 'cron')) {
+                        return response()->json(['error' => 'Permission denied for the new domain path'], 403);
+                    }
+                } else {
+                    return response()->json(['error' => 'Permission denied. Users can only point cron jobs to their assigned websites.'], 403);
+                }
+            }
+
             $newCronLine = "{$minute} {$hour} {$day} {$month} {$weekday} {$command}";
 
             // Get existing crontab
@@ -185,9 +230,6 @@ class CronController extends Controller
         }
     }
 
-    /**
-     * Delete cron job
-     */
     public function deleteJob(Request $request)
     {
         try {
@@ -198,6 +240,18 @@ class CronController extends Controller
 
             $user = $request->input('user');
             $command = $request->input('command');
+
+            // Check permission
+            $userModel = auth()->user();
+            if (!$userModel->isRootOrAdmin()) {
+                if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
+                    if (!$userModel->hasDomainPermission($m[1], 'cron')) {
+                        return response()->json(['error' => 'Permission denied for this domain path'], 403);
+                    }
+                } else {
+                    return response()->json(['error' => 'Permission denied'], 403);
+                }
+            }
 
             // Get existing crontab
             exec("sudo crontab -u {$user} -l 2>/dev/null", $existing, $code);
@@ -242,6 +296,18 @@ class CronController extends Controller
 
             $user = $request->input('user');
             $command = $request->input('command');
+            
+            // Check permission
+            $userModel = auth()->user();
+            if (!$userModel->isRootOrAdmin()) {
+                if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
+                    if (!$userModel->hasDomainPermission($m[1], 'cron')) {
+                        return response()->json(['error' => 'Permission denied for this domain path'], 403);
+                    }
+                } else {
+                    return response()->json(['error' => 'Permission denied'], 403);
+                }
+            }
             
             // Run in background as the correct user
             exec("cd /usr/local/nimbus && sudo -u {$user} {$command} > /tmp/cron_output.log 2>&1 &");

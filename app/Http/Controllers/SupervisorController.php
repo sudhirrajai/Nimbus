@@ -102,10 +102,17 @@ class SupervisorController extends Controller
             $projects = [];
             $wwwPath = '/var/www';
             
+            $user = auth()->user();
             if (is_dir($wwwPath)) {
                 $dirs = scandir($wwwPath);
                 foreach ($dirs as $dir) {
                     if ($dir === '.' || $dir === '..' || $dir === 'html') continue;
+                    
+                    // Filter based on user permissions
+                    if (!$user->hasDomainPermission($dir, 'supervisor')) {
+                        continue;
+                    }
+
                     $fullPath = "{$wwwPath}/{$dir}";
                     if (is_dir($fullPath)) {
                         // Check if it's a Laravel project (has artisan file)
@@ -281,9 +288,26 @@ BASH;
                 }
             }
 
+            $user = auth()->user();
             return response()->json([
                 'success' => true,
-                'groups' => array_values($groups),
+                'groups' => array_values(array_filter($groups, function($group) use ($user) {
+                    // Root/Admin can see everything
+                    if ($user->isRootOrAdmin()) return true;
+                    
+                    // For others, check if the group name (usually the project name or starts with it)
+                    // or the directory in the config matches their allowed websites
+                    if ($user->hasDomainPermission($group['name'], 'supervisor')) return true;
+                    
+                    // Check if any process in the group has a directory the user can access
+                    foreach ($group['processes'] as $proc) {
+                        if (isset($proc['info']) && preg_match('#/var/www/([^/]+)#', $proc['info'], $m)) {
+                            if ($user->hasDomainPermission($m[1], 'supervisor')) return true;
+                        }
+                    }
+                    
+                    return false;
+                })),
                 'count' => count($groups)
             ]);
         } catch (\Exception $e) {
@@ -298,6 +322,12 @@ BASH;
     {
         try {
             $name = $request->input('name');
+            $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+            
+            if (!auth()->user()->hasDomainPermission($groupName, 'supervisor')) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
             $escapedName = escapeshellarg($name);
             exec("sudo supervisorctl start {$escapedName} 2>&1", $output, $code);
             
@@ -317,6 +347,12 @@ BASH;
     {
         try {
             $name = $request->input('name');
+            $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+            
+            if (!auth()->user()->hasDomainPermission($groupName, 'supervisor')) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
             $escapedName = escapeshellarg($name);
             exec("sudo supervisorctl stop {$escapedName} 2>&1", $output, $code);
             
@@ -336,6 +372,12 @@ BASH;
     {
         try {
             $name = $request->input('name');
+            $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+            
+            if (!auth()->user()->hasDomainPermission($groupName, 'supervisor')) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
             $escapedName = escapeshellarg($name);
             exec("sudo supervisorctl restart {$escapedName} 2>&1", $output, $code);
             
