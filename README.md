@@ -33,81 +33,83 @@
 <table>
 <tr>
 <td width="50%">
-
+ 
 ### 🌐 Domain Management
 - Create and manage domains
 - Automatic Nginx configuration
 - Virtual host management
 - Directory browsing
+- **Upcoming:** Apache & Caddy support
 
 </td>
 <td width="50%">
 
-### 🔒 SSL Certificates
-- One-click Let's Encrypt SSL
-- Auto-renewal support
-- Certificate status monitoring
-- HTTPS redirects
+### 📁 File Manager (Elite)
+- **Ace Editor Integration:** Pro syntax highlighting
+- **In-depth Search:** Find files by name or content
+- **Double-click Edit:** Seamless code editing
+- Web-based browser with glassmorphic UI
+- Permissions editor (chmod/chown)
 
 </td>
 </tr>
 <tr>
+<td width="50%">
+
+### 🔒 SSL Certificates
+- One-click Let's Encrypt SSL
+- Live certificate probing
+- Auto-renewal support
+- HTTPS redirects
+
+</td>
 <td width="50%">
 
 ### 🗄️ Database Management
 - Create MySQL/MariaDB databases
 - User management with permissions
 - phpMyAdmin integration
-- Database import/export
-
-</td>
-<td width="50%">
-
-### 📁 File Manager
-- Web-based file browser
-- Upload, download, delete files
-- Create folders
-- File permissions editor
+- **Roadmap:** Multi-DB (SQLite, Postgre, NoSQL)
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### ⚡ Supervisor
+### ⚡ Supervisor & Cron
 - Queue worker management
-- Process monitoring
-- Start/Stop/Restart workers
-- Real-time logs
+- Process monitoring & logs
+- Visual cron scheduler
+- Human-readable schedules
 
 </td>
 <td width="50%">
 
-### ⏰ Cron Jobs
-- Visual cron scheduler
-- Quick presets (every minute, hourly, daily)
-- Human-readable schedule descriptions
-- Run jobs manually
+### 🌿 Git & Deployment
+- Full Git integration (Status, Commit, Push/Pull)
+- Branch management & switching
+- Personal Access Token (PAT) auth
+- Repository path auto-detection
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### 📧 Email Server
-- Postfix + Dovecot setup
-- Virtual mailboxes
-- Roundcube webmail
-- Email account management
+### 🛒 WordPress Manager
+- Theme & Plugin management
+- User control & Settings
+- **Upcoming:** Quick One-click Install
+- Auto-configuration
 
 </td>
 <td width="50%">
 
 ### 📊 Server Monitoring
 - Real-time CPU, RAM, Disk usage
+- Process list & controls
+- **Upcoming:** Long-term resource history
 - Network statistics
-- Process list
-- System uptime
 
 </td>
 </tr>
@@ -205,28 +207,28 @@ The uninstaller is interactive and will ask you to choose a removal mode:
 ## 🗺️ Roadmap
 
 ### ✅ Available Now
-- [x] Domain Management
-- [x] SSL Certificates (Let's Encrypt)
-- [x] Database Management
-- [x] File Manager
-- [x] Supervisor / Queue Workers
-- [x] Cron Jobs
-- [x] Email Server (Postfix + Dovecot + Roundcube)
-- [x] PHP Configuration
-- [x] Log Viewer
-- [x] Resource Monitoring
-- [x] Profile & Settings
-- [x] Auto Updates
+- [x] **Elite File Manager** (Ace Editor + In-depth Search)
+- [x] **Git Integration** (Commit, Pull, Push, Branches)
+- [x] **WordPress Manager** (Themes, Plugins, Users)
+- [x] Domain Management (Nginx)
+- [x] SSL Certificates (Let's Encrypt + Probing)
+- [x] Database Management (MariaDB)
+- [x] Supervisor & Cron Jobs
+- [x] Resource Monitoring (Real-time)
+- [x] PHP Configuration & Log Viewer
 
-### 🚧 Coming Soon
-- [ ] **Backups** - Scheduled backups with cloud storage
-- [ ] **FTP Accounts** - Create and manage FTP users
-- [ ] **Two-Factor Authentication**
-- [ ] **Multiple Users** - Team management
-- [ ] **Docker Support**
-- [ ] **WordPress Quick Install**
-- [ ] **DNS Management**
-- [ ] **Firewall Rules**
+### 🚧 Current Roadmap (Q2-Q3 2026)
+- [ ] **Apache & Caddy Support** - Alternative web server integrations
+- [ ] **Redis Manager** - Key management, status, and config
+- [ ] **Email Management** - Robust Postfix/Dovecot UI
+- [ ] **Auto Backups** - Scheduled backups to cloud (S3, Dropbox, etc.)
+
+### 🚀 Future Vision
+- [ ] **PHP Version Switcher** - Change PHP versions per project
+- [ ] **Multi-Database Support** - SQLite, PostgreSQL, MongoDB
+- [ ] **Longer Resource History** - Extended monitoring charts & logs
+- [ ] **Two-Factor Authentication (2FA)**
+- [ ] **Docker Support** - Container management
 
 ---
 
