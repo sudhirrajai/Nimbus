@@ -215,7 +215,12 @@
                             {{ item.name }}
                           </a>
                           <span v-else class="text-sm font-weight-bold text-dark mb-0">{{ item.name }}</span>
-                          <span v-if="isSearching && item.path" class="text-xxs text-primary font-weight-bold">{{ item.path }}</span>
+                          <div v-if="isSearching && item.path" class="d-flex align-items-center gap-2">
+                            <span class="text-xxs text-primary font-weight-bold">{{ item.path }}</span>
+                            <button class="btn btn-link p-0 m-0 text-xxs text-info" @click.stop="jumpToPath(item.path)" title="Go to folder">
+                              <i class="material-symbols-rounded text-xs">open_in_new</i>
+                            </button>
+                          </div>
                           <span v-else class="text-xxs text-secondary">{{ item.permissions }}</span>
                         </div>
                       </div>
@@ -594,6 +599,10 @@
               <span class="badge badge-sm bg-primary ms-3">{{ detectedMode }}</span>
             </div>
             <div class="d-flex gap-2">
+              <button v-if="detectedMode === 'json'" class="btn btn-sm btn-outline-info mb-0" @click="formatContent">
+                <i class="material-symbols-rounded text-sm me-1">format_align_left</i>
+                Format
+              </button>
               <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving">
                 <i class="material-symbols-rounded text-sm me-1">{{ saving ? 'sync' : 'save' }}</i>
                 {{ saving ? 'Saving...' : 'Save Changes' }}
@@ -1198,7 +1207,33 @@ const closeEditor = () => {
   showEditorModal.value = false
   editingFile.value = ''
   fileContent.value = ''
+  document.body.style.overflow = '' // Restore scroll
 }
+
+const formatContent = () => {
+  if (detectedMode.value === 'json') {
+    try {
+      const obj = JSON.parse(fileContent.value)
+      const formatted = JSON.stringify(obj, null, 2)
+      aceEditor.setValue(formatted, -1)
+      fileContent.value = formatted
+    } catch (e) {
+      showAlert('danger', 'Invalid JSON content')
+    }
+  }
+}
+
+const jumpToPath = (path) => {
+  const parts = path.split('/')
+  parts.pop() // Remove filename
+  currentPath.value = parts.join('/')
+  loadFiles()
+}
+
+watch(showEditorModal, (val) => {
+  if (val) document.body.style.overflow = 'hidden'
+  else document.body.style.overflow = ''
+})
 
 const triggerUpload = () => fileInput.value.click()
 
