@@ -521,10 +521,11 @@ touch ${NIMBUS_DIR}/storage/logs/laravel.log
 chown -R ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}
 
 # Set directory permissions (755 for directories)
-find ${NIMBUS_DIR} -type d -exec chmod 755 {} \;
+# Exclude node_modules as it has its own complex permission structure
+find ${NIMBUS_DIR} -path "${NIMBUS_DIR}/node_modules" -prune -o -type d -exec chmod 755 {} \;
 
 # Set file permissions (644 for files)
-find ${NIMBUS_DIR} -type f -exec chmod 644 {} \;
+find ${NIMBUS_DIR} -path "${NIMBUS_DIR}/node_modules" -prune -o -type f -exec chmod 644 {} \;
 
 # Storage and cache need to be fully writable (775)
 chmod -R 775 ${NIMBUS_DIR}/storage
@@ -538,8 +539,9 @@ find ${NIMBUS_DIR}/bootstrap/cache -type f -exec chmod 664 {} \;
 chmod 664 ${NIMBUS_DIR}/storage/logs/laravel.log
 chown ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}/storage/logs/laravel.log
 
-# Make artisan executable
+# Restore execute bits for required binaries
 chmod +x ${NIMBUS_DIR}/artisan
+[ -d "${NIMBUS_DIR}/node_modules/.bin" ] && chmod -R +x ${NIMBUS_DIR}/node_modules/.bin
 
 # Setup /var/www/ directory for hosting websites
 mkdir -p /var/www
