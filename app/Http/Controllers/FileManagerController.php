@@ -1209,6 +1209,78 @@ class FileManagerController extends Controller
         return $output;
     }
 
+    /**
+     * Search for files or content within files
+     */
+    public function search(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'query' => 'required|string|min:2',
+                'path' => 'nullable|string',
+                'type' => 'required|string|in:filename,content'
+            ]);
+
+            $query = $request->input('query');
+            $path = $request->input('path', '');
+            $type = $request->input('type');
+            $fullPath = $this->getFullPath($domain, $path);
+
+            if (!$this->isValidPath($domain, $fullPath)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            $results = [];
+            $escapedPath = escapeshellarg($fullPath);
+            $escapedQuery = escapeshellarg($query);
+
+            if ($type === 'filename') {
+                // Search for filenames using 'find'
+                $output = [];
+                $command = "sudo find {$escapedPath} -maxdepth 5 -name " . escapeshellarg("*{$query}*") . " -not -path '*/node_modules/*' -not -path '*/.git/*'";
+                exec($command, $output);
+
+                foreach ($output as $line) {
+                    if (empty($line)) continue;
+                    $relPath = $this->toDomainRelativePath($domain, $line);
+                    $results[] = [
+                        'name' => basename($line),
+                        'path' => $relPath,
+                        'fullPath' => $line,
+                        'type' => is_dir($line) ? 'directory' : 'file',
+                        'matchType' => 'filename'
+                    ];
+                }
+            } else {
+                // Search for content using 'grep'
+                $output = [];
+                // -r: recursive, -l: list files only, -i: case-insensitive
+                $command = "sudo grep -ril --exclude-dir={node_modules,.git} {$escapedQuery} {$escapedPath} | head -n 50";
+                exec($command, $output);
+
+                foreach ($output as $line) {
+                    if (empty($line)) continue;
+                    $relPath = $this->toDomainRelativePath($domain, $line);
+                    $results[] = [
+                        'name' => basename($line),
+                        'path' => $relPath,
+                        'fullPath' => $line,
+                        'type' => 'file',
+                        'matchType' => 'content'
+                    ];
+                }
+            }
+
+            return response()->json([
+                'results' => array_slice($results, 0, 100),
+                'query' => $query
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Search error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     private function executeSudoCommand($command)
     {
         $output = [];

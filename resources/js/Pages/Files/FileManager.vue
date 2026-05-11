@@ -113,12 +113,21 @@
                 Terminal
               </button>
 
-              <div class="ms-auto d-flex align-items-center gap-3">
+              <div class="ms-auto d-flex align-items-center gap-2">
                 <div class="input-group input-group-sm glass-search">
-                  <span class="input-group-text border-0 bg-transparent ps-2">
+                  <select v-model="searchType" class="form-select border-0 bg-transparent text-xxs font-weight-bold ps-2" style="width: 80px;">
+                    <option value="filename">Name</option>
+                    <option value="content">Content</option>
+                  </select>
+                  <span class="input-group-text border-0 bg-transparent ps-0 pe-2">
                     <i class="material-symbols-rounded text-sm text-secondary">search</i>
                   </span>
-                  <input v-model="searchQuery" type="text" class="form-control border-0 bg-transparent ps-0" placeholder="Search files..." />
+                  <input v-model="searchQuery" type="text" class="form-control border-0 bg-transparent ps-0" 
+                    placeholder="Search..." @keyup.enter="handleSearch" />
+                </div>
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" id="deepSearchToggle" v-model="deepSearch">
+                  <label class="form-check-label text-xxs text-secondary mb-0" for="deepSearchToggle">In-depth</label>
                 </div>
                 <div class="form-check form-switch mb-0">
                   <input class="form-check-input" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="loadFiles">
@@ -198,7 +207,7 @@
                       <div class="d-flex px-2 py-2 align-items-center">
                         <div class="file-icon-box me-3 shadow-sm" :class="item.type === 'directory' ? 'bg-light-warning' : 'bg-light-info'">
                           <i class="material-symbols-rounded" :class="item.type === 'directory' ? 'text-warning' : 'text-info'">
-                            {{ item.type === 'directory' ? 'folder' : 'description' }}
+                            {{ item.type === 'directory' ? 'folder' : (item.matchType === 'content' ? 'find_in_page' : 'description') }}
                           </i>
                         </div>
                         <div class="d-flex flex-column">
@@ -206,7 +215,8 @@
                             {{ item.name }}
                           </a>
                           <span v-else class="text-sm font-weight-bold text-dark mb-0">{{ item.name }}</span>
-                          <span class="text-xxs text-secondary">{{ item.permissions }}</span>
+                          <span v-if="isSearching && item.path" class="text-xxs text-primary font-weight-bold">{{ item.path }}</span>
+                          <span v-else class="text-xxs text-secondary">{{ item.permissions }}</span>
                         </div>
                       </div>
                     </td>
@@ -220,9 +230,9 @@
                         <button v-if="item.type === 'file'" class="action-btn-circle" @click="downloadFile(item.name)" title="Download">
                           <i class="material-symbols-rounded text-sm">download</i>
                         </button>
-                        <button class="action-btn-circle" @click="openContextMenu($event, item)" title="More options">
-                          <i class="material-symbols-rounded text-sm">more_vert</i>
-                        </button>
+                <button class="action-btn-circle" @click.stop="openContextMenu($event, item)" title="More options">
+                  <i class="material-symbols-rounded text-sm">more_vert</i>
+                </button>
                       </div>
                     </td>
                   </tr>
@@ -661,6 +671,10 @@ const breadcrumbs = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const showHidden = ref(false)
+const deepSearch = ref(false)
+const searchType = ref('filename')
+const isSearching = ref(false)
+const searchResults = ref([])
 const gitLoading = ref(false)
 const gitActionLoading = ref(false)
 const gitCommitMessage = ref('')
@@ -749,6 +763,8 @@ const alert = ref({
 const hasSelected = computed(() => selectedItems.value.length > 0)
 
 const filteredItems = computed(() => {
+  if (isSearching.value) return searchResults.value
+  
   if (!searchQuery.value) return items.value
   const q = searchQuery.value.toLowerCase()
   return items.value.filter(item => 
@@ -896,6 +912,8 @@ const changePermissions = async () => {
 const loadFiles = async () => {
   try {
     loading.value = true
+    isSearching.value = false
+    searchResults.value = []
     const response = await axios.post(`/file-manager/${props.domain}/list`, {
       path: currentPath.value || '',
       showHidden: showHidden.value
@@ -907,6 +925,34 @@ const loadFiles = async () => {
     await loadGitStatus()
   } catch (error) {
     showAlert('danger', 'Failed to load files')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSearch = async () => {
+  if (!searchQuery.value || searchQuery.value.length < 2) {
+    if (isSearching.value) loadFiles()
+    return
+  }
+
+  if (!deepSearch.value) {
+    isSearching.value = false
+    return
+  }
+
+  try {
+    loading.value = true
+    isSearching.value = true
+    const response = await axios.post(`/file-manager/${props.domain}/search`, {
+      query: searchQuery.value,
+      path: currentPath.value || '',
+      type: searchType.value
+    })
+    searchResults.value = response.data.results
+    currentPage.value = 1
+  } catch (error) {
+    showAlert('danger', 'Search failed')
   } finally {
     loading.value = false
   }
@@ -1238,11 +1284,12 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 
 <style scoped>
 .glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 1rem;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+  will-change: transform, opacity;
 }
 
 .nav-pill-btn {
@@ -1265,8 +1312,12 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 .nav-pill-btn.active { background: #fff; color: #5e72e4; font-weight: 700; shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
 
 .glass-search { background: rgba(0, 0, 0, 0.05); border-radius: 10px; width: 220px; }
-.file-row-modern { transition: all 0.2s; border-bottom: 1px solid rgba(0,0,0,0.03); }
-.file-row-modern:hover { background: rgba(94, 114, 228, 0.04); transform: translateX(4px); }
+.file-row-modern { 
+  transition: background-color 0.2s ease, transform 0.2s ease; 
+  border-bottom: 1px solid rgba(0,0,0,0.03); 
+  will-change: background-color, transform;
+}
+.file-row-modern:hover { background: rgba(94, 114, 228, 0.05); transform: translateX(2px); }
 .file-row-modern.selected { background: rgba(94, 114, 228, 0.08); }
 
 .file-icon-box { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
@@ -1277,7 +1328,12 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
   width: 30px; height: 30px; border-radius: 50%; border: none; background: transparent;
   color: #67748e; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
 }
-.action-btn-circle:hover { background: white; color: #5e72e4; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.action-btn-circle:hover { 
+  background: white; 
+  color: #5e72e4; 
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+  transform: translateY(-1px);
+}
 
 .bulk-actions-overlay { position: sticky; bottom: 10px; z-index: 100; border-radius: 12px; }
 
@@ -1287,16 +1343,16 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 }
 
 .context-menu {
-  position: fixed; z-index: 9999; background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px); border-radius: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-  min-width: 180px; padding: 6px; border: 1px solid rgba(255, 255, 255, 0.5);
+  position: fixed; z-index: 3000; background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: none; border-radius: 12px; box-shadow: 0 15px 50px rgba(0, 0, 0, 0.2);
+  min-width: 200px; padding: 8px; border: 1px solid rgba(0, 0, 0, 0.05);
 }
 .context-menu-item { padding: 8px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; }
 .context-menu-item:hover { background: #5e72e4; color: white; }
 .context-menu-divider { height: 1px; background: rgba(0,0,0,0.05); margin: 4px 0; }
 
 .fullscreen-editor-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1100;
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2500;
   background: white; display: flex; flex-direction: column;
 }
 
