@@ -16,6 +16,11 @@
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
               </button>
+              <button class="btn btn-outline-primary mb-0" @click="syncNginxLimits" :disabled="syncing || loading">
+                <i v-if="syncing" class="spinner-border spinner-border-sm me-1"></i>
+                <i v-else class="material-symbols-rounded text-sm me-1">sync_alt</i>
+                Sync with Nginx
+              </button>
               <button class="btn bg-gradient-warning mb-0" @click="confirmRestart" :disabled="loading">
                 <i class="material-symbols-rounded text-sm me-1">restart_alt</i>
                 Restart PHP-FPM
@@ -271,6 +276,7 @@ import axios from 'axios'
 const loading = ref(false)
 const saving = ref(false)
 const restarting = ref(false)
+const syncing = ref(false)
 const updatingSettings = reactive({})
 
 const phpInfo = ref(null)
@@ -447,6 +453,18 @@ const restartPhp = async () => {
     showAlert('danger', error.response?.data?.error || 'Failed to restart PHP-FPM')
   } finally {
     restarting.value = false
+  }
+}
+
+const syncNginxLimits = async () => {
+  try {
+    syncing.value = true
+    const response = await axios.post('/php/sync-nginx-limits')
+    showAlert('success', response.data.message || 'Nginx limits synchronized with PHP successfully!')
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to synchronize Nginx limits')
+  } finally {
+    syncing.value = false
   }
 }
 </script>
