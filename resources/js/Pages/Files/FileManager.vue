@@ -646,17 +646,19 @@
       </div>
 
       <!-- Drop Zone Overlay -->
-      <transition name="fade">
-        <div v-if="isDragging" class="upload-drop-zone-overlay">
-          <div class="drop-zone-content">
-            <div class="drop-zone-icon-box mb-4 shadow-lg scale-up">
-              <i class="material-symbols-rounded text-white" style="font-size: 48px;">upload_file</i>
+      <teleport to="body">
+        <transition name="fade">
+          <div v-if="isDragging" class="upload-drop-zone-overlay">
+            <div class="drop-zone-content">
+              <div class="drop-zone-icon-box mb-4 shadow-lg scale-up">
+                <i class="material-symbols-rounded text-white" style="font-size: 48px;">upload_file</i>
+              </div>
+              <h2 class="text-white font-weight-bolder">Release to Upload</h2>
+              <p class="text-white opacity-8">Dropping into: <span class="font-weight-bold">/{{ currentPath || 'root' }}</span></p>
             </div>
-            <h2 class="text-white font-weight-bolder">Release to Upload</h2>
-            <p class="text-white opacity-8">Dropping into: <span class="font-weight-bold">/{{ currentPath || 'root' }}</span></p>
           </div>
-        </div>
-      </transition>
+        </transition>
+      </teleport>
 
     </div>
 
@@ -1526,12 +1528,31 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 .slide-up-leave-to { transform: translateY(20px); opacity: 0; }
 
 .upload-drop-zone-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2000;
-  background: rgba(94, 114, 228, 0.9); backdrop-filter: blur(8px);
-  display: flex; align-items: center; justify-content: center; text-align: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000; /* High, but usually lower than fixed sidebar */
+  background: rgba(94, 114, 228, 0.92);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none; /* Allow drop events to pass through if needed, though we handle them on window */
+}
+.drop-zone-content {
+  pointer-events: auto;
 }
 .drop-zone-icon-box {
-  width: 100px; height: 100px; background: rgba(255,255,255,0.2);
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
 }
 </style>
