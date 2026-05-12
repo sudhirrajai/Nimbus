@@ -31,12 +31,38 @@ class PhpController extends Controller
      */
     private function getEffectiveMaxUploadSize()
     {
-        $uploadMax = $this->parseSize(ini_get('upload_max_filesize'));
-        $postMax = $this->parseSize(ini_get('post_max_size'));
+        // Default values
+        $maxUpload = $this->parseSize(ini_get('upload_max_filesize'));
+        $maxPost = $this->parseSize(ini_get('post_max_size'));
         
+        // Try to read from actual ini files to get the most accurate "target" limits
+        try {
+            $iniFiles = $this->getIniFiles();
+            foreach ($iniFiles as $ini) {
+                // We prioritize FPM settings as they affect web uploads
+                if (strpos($ini['label'], 'FPM') !== false) {
+                    $settings = $this->parseIniFile($ini['path']);
+                    if (isset($settings['upload_max_filesize'])) {
+                        $maxUpload = max($maxUpload, $this->parseSize($settings['upload_max_filesize']));
+                    }
+                    if (isset($settings['post_max_size'])) {
+                        $maxPost = max($maxPost, $this->parseSize($settings['post_max_size']));
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning("Could not parse ini files for sync: " . $e->getMessage());
+        }
+
         // Return the smaller of the two, formatted for Nginx (e.g. 128M)
-        $min = min($uploadMax, $postMax);
-        return ($min / 1024 / 1024) . 'M';
+        $min = min($maxUpload, $maxPost);
+        
+        // If we still get a very low value, use a sensible default of at least 512M if the user intended higher
+        if ($min < 128 * 1024 * 1024) {
+            $min = 128 * 1024 * 1024;
+        }
+
+        return ceil($min / 1024 / 1024) . 'M';
     }
 
     /**
@@ -44,14 +70,23 @@ class PhpController extends Controller
      */
     private function parseSize($size)
     {
+        $size = trim($size);
+        if (empty($size)) return 0;
+        
         $unit = strtolower(substr($size, -1));
-        $value = (int)$size;
+        $value = (float)$size;
+        
         switch ($unit) {
             case 'g': $value *= 1024;
             case 'm': $value *= 1024;
             case 'k': $value *= 1024;
+                break;
+            default:
+                // If it's just a number, it's already in bytes
+                return (int)$value;
         }
-        return $value;
+        
+        return (int)$value;
     }
 
     /**
