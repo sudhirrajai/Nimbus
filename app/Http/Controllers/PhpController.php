@@ -27,6 +27,34 @@ class PhpController extends Controller
     }
 
     /**
+     * Get the effective max upload size based on php.ini settings
+     */
+    private function getEffectiveMaxUploadSize()
+    {
+        $uploadMax = $this->parseSize(ini_get('upload_max_filesize'));
+        $postMax = $this->parseSize(ini_get('post_max_size'));
+        
+        // Return the smaller of the two, formatted for Nginx (e.g. 128M)
+        $min = min($uploadMax, $postMax);
+        return ($min / 1024 / 1024) . 'M';
+    }
+
+    /**
+     * Parse PHP size strings (like 128M, 1G) to bytes
+     */
+    private function parseSize($size)
+    {
+        $unit = strtolower(substr($size, -1));
+        $value = (int)$size;
+        switch ($unit) {
+            case 'g': $value *= 1024;
+            case 'm': $value *= 1024;
+            case 'k': $value *= 1024;
+        }
+        return $value;
+    }
+
+    /**
      * Get list of PHP ini files
      */
     private function getIniFiles()
@@ -500,5 +528,66 @@ BASH;
         }
 
         return null;
+    }
+
+    /**
+     * Sync PHP upload limits to Nginx client_max_body_size
+     */
+    public function syncNginxLimits(Request $request)
+    {
+        try {
+            $maxSize = $this->getEffectiveMaxUploadSize();
+            
+            // 1. Update global nginx.conf if possible
+            $nginxConf = '/etc/nginx/nginx.conf';
+            if (File::exists($nginxConf)) {
+                $content = $this->readFileWithSudo($nginxConf);
+                
+                // Check if client_max_body_size exists in http block
+                if (preg_match('/client_max_body_size\s+[^;]+;/', $content)) {
+                    $content = preg_replace('/client_max_body_size\s+[^;]+;/', "client_max_body_size {$maxSize};", $content);
+                } else {
+                    // Try to insert after 'http {'
+                    $content = preg_replace('/http\s*\{/', "http {\n    client_max_body_size {$maxSize};", $content);
+                }
+                
+                // Save back to nginx.conf
+                $tempFile = tempnam(sys_get_temp_dir(), 'nginxconf_');
+                File::put($tempFile, $content);
+                $this->executeSudoCommand("cp " . escapeshellarg($tempFile) . " " . escapeshellarg($nginxConf));
+                unlink($tempFile);
+            }
+
+            // 2. Also update all site configs in sites-available to ensure consistency
+            $sitesDir = '/etc/nginx/sites-available/';
+            if (File::exists($sitesDir)) {
+                $files = File::files($sitesDir);
+                foreach ($files as $file) {
+                    $path = $file->getRealPath();
+                    $siteContent = $this->readFileWithSudo($path);
+                    
+                    if (preg_match('/client_max_body_size\s+[^;]+;/', $siteContent)) {
+                        $siteContent = preg_replace('/client_max_body_size\s+[^;]+;/', "client_max_body_size {$maxSize};", $siteContent);
+                        
+                        $tempSiteFile = tempnam(sys_get_temp_dir(), 'nginxsite_');
+                        File::put($tempSiteFile, $siteContent);
+                        $this->executeSudoCommand("cp " . escapeshellarg($tempSiteFile) . " " . escapeshellarg($path));
+                        unlink($tempSiteFile);
+                    }
+                }
+            }
+
+            // 3. Reload Nginx
+            $this->executeSudoCommand("nginx -t");
+            $this->executeSudoCommand("systemctl reload nginx");
+
+            return response()->json([
+                'message' => "Successfully synchronized upload limits. Nginx client_max_body_size set to {$maxSize}.",
+                'size' => $maxSize
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Sync Nginx Limits error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

@@ -599,6 +599,34 @@ HTML;
     }
 
     /**
+     * Get the effective max upload size based on php.ini settings for Nginx
+     */
+    private function getPhpUploadLimit()
+    {
+        try {
+            $uploadMax = ini_get('upload_max_filesize');
+            $postMax = ini_get('post_max_size');
+            
+            // Helper to convert to MB
+            $toMB = function($size) {
+                $unit = strtolower(substr($size, -1));
+                $value = (int)$size;
+                switch ($unit) {
+                    case 'g': $value *= 1024; break;
+                    case 'm': break; // already in M
+                    case 'k': $value /= 1024; break;
+                }
+                return $value;
+            };
+
+            $minMB = min($toMB($uploadMax), $toMB($postMax));
+            return $minMB . 'M';
+        } catch (\Exception $e) {
+            return '128M'; // Fallback
+        }
+    }
+
+    /**
      * Create Nginx configuration for domain
      */
     private function createNginxConfig($domain)
@@ -627,8 +655,8 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
 
-    # Upload limit
-    client_max_body_size 2048M;
+    # Upload limit (Synced from PHP)
+    client_max_body_size {$this->getPhpUploadLimit()};
     
     # PHP handling
     location ~ \.php$ {

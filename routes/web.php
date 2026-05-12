@@ -194,6 +194,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/save', [PhpController::class, 'saveIni'])->name('save');
             Route::post('/update-setting', [PhpController::class, 'updateSetting'])->name('update-setting');
             Route::post('/restart', [PhpController::class, 'restartPhp'])->name('restart');
+            Route::post('/sync-nginx-limits', [PhpController::class, 'syncNginxLimits'])->name('sync-nginx-limits');
         });
 
         // Nginx Configuration routes
