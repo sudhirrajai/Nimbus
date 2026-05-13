@@ -63,6 +63,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
 
     Route::prefix('domains')->group(function () {
         Route::get('/api', [DomainController::class, 'index'])->name('domain.index');
+        Route::get('/api/{domain}/details', [DomainController::class, 'getDomainDetails'])->name('domain.details');
     });
 
     // Domain create/update/delete — root+admin only

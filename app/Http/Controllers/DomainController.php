@@ -12,7 +12,7 @@ class DomainController extends Controller
     private $basePath = '/var/www/';
 
     /**
-     * Return all domain folders with DNS status
+     * Return all domain folders — FAST (no shell commands per domain)
      */
     public function index()
     {
@@ -28,12 +28,13 @@ class DomainController extends Controller
             $accessibleDomains = $user->accessibleDomains();
 
             $directories = collect(File::directories($this->basePath))
-                ->map(function ($path) use ($serverIp) {
+                ->map(function ($path) {
                     $domain = basename($path);
-                    
-                    $documentRoot = $path;
+
+                    // Quick nginx config check — just test file existence
                     $nginxConfig = '/etc/nginx/sites-enabled/' . $domain;
                     $configExists = false;
+                    $documentRoot = $path;
                     try {
                         $output = [];
                         exec("sudo test -f " . escapeshellarg($nginxConfig) . " && echo 'exists'", $output);
@@ -55,41 +56,26 @@ class DomainController extends Controller
                         }
                     }
 
-                    // Get storage usage
-                    $storage = '0B';
-                    try {
-                        $escapedPath = escapeshellarg($path);
-                        $output = $this->executeSudoCommand("du -sh {$escapedPath}");
-                        if (!empty($output) && isset($output[0])) {
-                            // du output format: "size\tpath"
-                            $storage = trim(explode("\t", $output[0])[0]);
-                        }
-                    } catch (\Exception $e) {
-                        \Log::warning("Failed to get storage for $domain: " . $e->getMessage());
-                    }
-
                     return [
                         'name' => $domain,
                         'path' => $path,
                         'document_root' => $documentRoot,
-                        'storage' => $storage,
-                        'is_active' => $this->checkDomainDns($domain, $serverIp),
-                        'server_ip' => $serverIp
+                        'storage' => null,       // Loaded lazily
+                        'is_active' => null,     // Loaded lazily
+                        'server_ip' => null
                     ];
                 })
                 ->filter(function ($item) use ($user, $accessibleDomains) {
-                    // Ignore system directories and the Nimbus control panel itself
                     if (in_array(strtolower($item['name']), [
                         'html', 
                         'default', 
                         'public', 
                         'cgi-bin',
-                        'nimbus'  // Exclude Nimbus control panel
+                        'nimbus'
                     ])) {
                         return false;
                     }
 
-                    // Non-root users can only see their assigned domains
                     if (!$user->isRoot()) {
                         return in_array($item['name'], $accessibleDomains);
                     }
@@ -106,6 +92,48 @@ class DomainController extends Controller
             return response()->json([
                 'error' => 'Failed to load domains: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Get expensive details (storage + DNS) for a single domain — called lazily from frontend
+     */
+    public function getDomainDetails($domain)
+    {
+        try {
+            $path = $this->basePath . $domain;
+            $serverIp = $this->getServerIp();
+
+            // Storage usage
+            $storage = '0B';
+            try {
+                $escapedPath = escapeshellarg($path);
+                $output = $this->executeSudoCommand("du -sh {$escapedPath}");
+                if (!empty($output) && isset($output[0])) {
+                    $storage = trim(explode("\t", $output[0])[0]);
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Failed to get storage for $domain: " . $e->getMessage());
+            }
+
+            // DNS check — cached per domain for 5 minutes
+            $isActive = cache()->remember("domain_dns_{$domain}", 300, function () use ($domain, $serverIp) {
+                return $this->checkDomainDns($domain, $serverIp);
+            });
+
+            return response()->json([
+                'domain' => $domain,
+                'storage' => $storage,
+                'is_active' => $isActive,
+                'server_ip' => $serverIp
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'domain' => $domain,
+                'storage' => '?',
+                'is_active' => false,
+                'server_ip' => ''
+            ]);
         }
     }
 
