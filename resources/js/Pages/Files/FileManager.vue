@@ -811,6 +811,9 @@ const copyMoveInput = ref(null)
 const isBulkCopyMove = ref(false)
 const bulkCopyMoveItems = ref([])
 
+// Clipboard state for Ctrl+C / Ctrl+X / Ctrl+V
+const clipboard = ref({ items: [], action: '', sourcePath: '' })
+
 // Extract modal state
 const showExtractModal = ref(false)
 const extractItem = ref(null)
@@ -890,24 +893,95 @@ const handleKeyboardShortcuts = (e) => {
   const tag = e.target.tagName.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return
 
+  // Ctrl+A — Select all
   if (e.ctrlKey && e.key === 'a') {
     e.preventDefault()
     toggleSelectAll()
   }
 
+  // Ctrl+C — Copy selected items to clipboard
+  if (e.ctrlKey && e.key === 'c' && hasSelected.value) {
+    e.preventDefault()
+    clipboard.value = {
+      items: [...selectedItems.value],
+      action: 'copy',
+      sourcePath: currentPath.value || ''
+    }
+    showAlert('success', `${selectedItems.value.length} item(s) copied to clipboard`)
+  }
+
+  // Ctrl+X — Cut selected items to clipboard
+  if (e.ctrlKey && e.key === 'x' && hasSelected.value) {
+    e.preventDefault()
+    clipboard.value = {
+      items: [...selectedItems.value],
+      action: 'move',
+      sourcePath: currentPath.value || ''
+    }
+    showAlert('success', `${selectedItems.value.length} item(s) cut to clipboard`)
+  }
+
+  // Ctrl+V — Paste from clipboard
+  if (e.ctrlKey && e.key === 'v' && clipboard.value.items.length > 0) {
+    e.preventDefault()
+    pasteFromClipboard()
+  }
+
+  // Delete — Delete selected items
   if (e.key === 'Delete' && hasSelected.value) {
     e.preventDefault()
     bulkDelete()
   }
 
+  // F2 — Rename (single selection only)
+  if (e.key === 'F2' && selectedItems.value.length === 1) {
+    e.preventDefault()
+    const item = items.value.find(i => i.name === selectedItems.value[0].name)
+    if (item) {
+      renameName.value = item.name
+      renameItem.value = item
+      showRenameModal.value = true
+    }
+  }
+
+  // F5 — Refresh
   if (e.key === 'F5') {
     e.preventDefault()
     loadFiles()
   }
 
+  // Backspace — Go up one level
   if (e.key === 'Backspace' && currentPath.value) {
     e.preventDefault()
     goUpOneLevel()
+  }
+
+  // Escape — Deselect all
+  if (e.key === 'Escape') {
+    selectedItems.value = []
+    allSelected.value = false
+  }
+}
+
+const pasteFromClipboard = async () => {
+  if (!clipboard.value.items.length) return
+  try {
+    for (const it of clipboard.value.items) {
+      await axios.post(`/file-manager/${props.domain}/${clipboard.value.action}`, {
+        sourcePath: clipboard.value.sourcePath,
+        name: it.name,
+        destinationPath: currentPath.value || ''
+      })
+    }
+    showAlert('success', `${clipboard.value.items.length} item(s) ${clipboard.value.action === 'copy' ? 'copied' : 'moved'} successfully`)
+    // Clear clipboard after move (cut), keep after copy
+    if (clipboard.value.action === 'move') {
+      clipboard.value = { items: [], action: '', sourcePath: '' }
+    }
+    selectedItems.value = []
+    loadFiles()
+  } catch (err) {
+    showAlert('danger', `Paste failed: ${err.response?.data?.error || 'Unknown error'}`)
   }
 }
 
