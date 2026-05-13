@@ -99,6 +99,7 @@ sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 755 "\$ADMINER_STO
 echo "Creating MySQL admin user..."
 sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
+sudo mysql -e "ALTER USER '{$adminUser}'@'localhost' IDENTIFIED WITH mysql_native_password BY '{$adminPass}'" 2>&1 || true
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
 echo "Installation completed successfully"; echo "Username: {$adminUser}"; echo "Database Viewer: Ready at /db/"
@@ -215,16 +216,17 @@ BASH;
 LOG_FILE="{$scriptLogFile}"; STATUS_FILE="{$scriptStatusFile}"; LOCK_FILE="{$scriptLockFile}"
 cleanup() { rm -f "\$LOCK_FILE"; }; trap cleanup EXIT
 ADMINER_STORE="/usr/share/adminer"; ADMINER_VERSION="4.8.1"
-GH_URL="#"
-ALT_URL="https://www.vmcore.in/"
+GH_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
+ALT_URL="https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php"
 echo "Downloading Database Viewer \${ADMINER_VERSION}..."; sudo mkdir -p "\$ADMINER_STORE"
-sudo curl -fsSL "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
-if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then sudo curl -fsSL "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1; fi
+sudo curl -fsSLk "\$GH_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1
+if [ \$? -ne 0 ] || [ ! -f "\$ADMINER_STORE/adminer.php" ]; then sudo curl -fsSLk "\$ALT_URL" -o "\$ADMINER_STORE/adminer.php" 2>&1; fi
 if [ ! -f "\$ADMINER_STORE/adminer.php" ]; then echo "ERROR: Download failed!"; echo "error" > "\$STATUS_FILE"; exit 1; fi
 sudo chown -R www-data:www-data "\$ADMINER_STORE"; sudo chmod 644 "\$ADMINER_STORE/adminer.php"
 echo "Recreating MySQL admin user..."
 sudo mysql -e "DROP USER IF EXISTS '{$adminUser}'@'localhost'" 2>&1 || true
 sudo mysql -e "CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'" 2>&1
+sudo mysql -e "ALTER USER '{$adminUser}'@'localhost' IDENTIFIED WITH mysql_native_password BY '{$adminPass}'" 2>&1 || true
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION" 2>&1
 sudo mysql -e "FLUSH PRIVILEGES" 2>&1
 echo "Installation completed successfully!"; echo "done" > "\$STATUS_FILE"
@@ -658,11 +660,20 @@ BASH;
             $host = $request->input('host', 'localhost');
             $password = $request->input('password');
 
-            $escapedUser = $this->escapeIdentifier($username);
+            $escapedUser = "`" . str_replace("`", "``", $username) . "`";
+            $escapedHost = "`" . str_replace("`", "``", $host) . "`";
             $escapedPass = escapeshellarg($password);
             
             $output = [];
+            $code = 0;
+            
+            // Try ALTER USER first (Standard for MySQL 5.7+ and MariaDB 10.2+)
             exec("sudo mysql -e \"ALTER USER '{$username}'@'{$host}' IDENTIFIED BY {$escapedPass}\" 2>&1", $output, $code);
+            
+            // If ALTER USER fails, try SET PASSWORD (Legacy/Compatibility)
+            if ($code !== 0) {
+                exec("sudo mysql -e \"SET PASSWORD FOR '{$username}'@'{$host}' = {$escapedPass}\" 2>&1", $output, $code);
+            }
             
             if ($code !== 0) {
                 throw new \Exception("Failed to update password: " . implode("\n", $output));

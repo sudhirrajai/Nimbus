@@ -95,7 +95,9 @@ class TerminalController extends Controller
         $isRoot = $user && $user->role === 'root';
 
         if (!$isRoot) {
-            if (!$this->isCommandSafe($command, $domain)) {
+            // We allow '..' in 'cd' commands because we validate the final target path later
+            $isCd = preg_match('/^cd\s+/', $command);
+            if (!$this->isCommandSafe($command, $domain, $isCd)) {
                 return response()->json([
                     'success' => false,
                     'output' => "Error: Access denied. Paths outside your domain or dangerous commands are restricted.\n",
@@ -163,6 +165,11 @@ class TerminalController extends Controller
                 'ip' => $request->ip(),
             ]);
 
+            // Auto-append --no-interaction to artisan commands
+            if (str_contains($command, 'php artisan') && !str_contains($command, '--no-interaction')) {
+                $command .= ' --no-interaction';
+            }
+
             // Execute the command with a timeout
             $escapedWorkDir = escapeshellarg($realWorkDir);
             $fullCommand = "cd {$escapedWorkDir} && sudo -u www-data bash -c " . escapeshellarg($command) . " 2>&1";
@@ -175,7 +182,7 @@ class TerminalController extends Controller
 
             $process = proc_open($fullCommand, $descriptors, $pipes, $realWorkDir, [
                 'HOME' => '/tmp',
-                'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+                'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/www-data/.config/composer/vendor/bin',
                 'TERM' => 'xterm-256color',
             ]);
 
@@ -233,13 +240,13 @@ class TerminalController extends Controller
     /**
      * Check if the command is safe to execute based on paths and patterns
      */
-    private function isCommandSafe($command, $domain)
+    private function isCommandSafe($command, $domain, $allowDots = false)
     {
         $domainRoot = realpath($this->basePath . $domain);
         if (!$domainRoot) return false;
 
         // Block dangerous commands for non-root users
-        $dangerous = ['sudo', 'su', 'chroot', 'passwd', 'userdel', 'useradd', 'visudo'];
+        $dangerous = ['sudo', 'su', 'chroot', 'passwd', 'userdel', 'useradd', 'visudo', 'apt', 'yum', 'dnf'];
         foreach ($dangerous as $d) {
             if (str_contains(strtolower($command), $d)) return false;
         }
@@ -249,8 +256,8 @@ class TerminalController extends Controller
         foreach ($tokens as $token) {
             $token = trim($token, "\"'");
             
-            // Block directory traversal
-            if (str_contains($token, '..')) return false;
+            // Block directory traversal unless it's a 'cd' command (handled specially)
+            if (!$allowDots && str_contains($token, '..')) return false;
             
             // Block absolute paths that don't start with the domain root
             if (str_starts_with($token, '/') && !str_starts_with($token, $domainRoot)) {

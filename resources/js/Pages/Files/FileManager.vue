@@ -1354,7 +1354,11 @@ const executeCopyMove = async () => {
   finally { copyMoveProcessing.value = false }
 }
 
-const itemIsArchive = (item) => item?.name.toLowerCase().endsWith('.zip')
+const itemIsArchive = (item) => {
+  if (!item) return false
+  const name = item.name.toLowerCase()
+  return name.endsWith('.zip') || name.endsWith('.tar.gz') || name.endsWith('.tar')
+}
 const openExtractModal = (item) => {
   extractItem.value = item
   showExtractModal.value = true

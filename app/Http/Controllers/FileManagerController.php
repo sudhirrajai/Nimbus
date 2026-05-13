@@ -467,7 +467,19 @@ class FileManagerController extends Controller
 
             // Determine extraction command based on file type
             if ($extension === 'zip') {
-                $this->executeSudoCommand("unzip -o {$escapedArchive} -d {$escapedDest}");
+                if (class_exists('ZipArchive')) {
+                    $zip = new \ZipArchive;
+                    $res = $zip->open($archivePath);
+                    if ($res === TRUE) {
+                        $zip->extractTo($destPath);
+                        $zip->close();
+                    } else {
+                        throw new \Exception("Could not open ZIP archive. Error code: " . $res);
+                    }
+                } else {
+                    // Fallback to system unzip if extension is missing
+                    $this->executeSudoCommand("unzip -o {$escapedArchive} -d {$escapedDest}");
+                }
             } elseif ($extension === 'gz' || str_ends_with(strtolower($name), '.tar.gz')) {
                 $this->executeSudoCommand("tar -xzf {$escapedArchive} -C {$escapedDest}");
             } elseif ($extension === 'tar') {
