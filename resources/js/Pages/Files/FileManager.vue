@@ -556,6 +556,42 @@
         </div>
       </div>
 
+      <!-- Extract Archive Modal -->
+      <div v-if="showExtractModal" class="modal-backdrop fade show" @click="showExtractModal = false"></div>
+      <div v-if="showExtractModal" class="modal fade show d-block">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="glass-card modal-content border-0">
+            <div class="modal-header border-0 pb-0">
+              <h5 class="modal-title font-weight-bolder">
+                <i class="material-symbols-rounded text-primary me-2 align-middle">unarchive</i>
+                Extract Archive
+              </h5>
+              <button type="button" class="btn-close" @click="showExtractModal = false"></button>
+            </div>
+            <div class="modal-body pt-3">
+              <p class="text-sm text-muted mb-3">
+                Extracting: <span class="font-weight-bold text-dark">{{ extractItem?.name }}</span>
+              </p>
+              <div>
+                <label class="form-label text-xs font-weight-bold">Destination Path (relative to domain root)</label>
+                <div class="input-group input-group-outline bg-white border border-radius-lg overflow-hidden">
+                  <span class="input-group-text border-0 bg-light"><i class="material-symbols-rounded text-sm">folder</i></span>
+                  <input v-model="extractDestination" type="text" class="form-control border-0 ps-2" placeholder="Leave empty to extract here" @keyup.enter="executeExtract" />
+                </div>
+                <small class="text-muted mt-2 d-block">Leave empty to extract in the current directory.</small>
+              </div>
+            </div>
+            <div class="modal-footer border-0">
+              <button class="btn btn-link text-secondary mb-0" @click="showExtractModal = false">Cancel</button>
+              <button class="btn bg-gradient-success mb-0" @click="executeExtract" :disabled="extractProcessing">
+                <span v-if="extractProcessing" class="spinner-border spinner-border-sm me-2"></span>
+                {{ extractProcessing ? 'Extracting...' : 'Extract Now' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Create File/Folder -->
       <div v-if="showCreateFileModal" class="modal-backdrop fade show" @click="showCreateFileModal = false"></div>
       <div v-if="showCreateFileModal" class="modal fade show d-block">

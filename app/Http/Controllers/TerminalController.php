@@ -165,9 +165,21 @@ class TerminalController extends Controller
                 'ip' => $request->ip(),
             ]);
 
-            // Auto-append --no-interaction to artisan commands
-            if (str_contains($command, 'php artisan') && !str_contains($command, '--no-interaction')) {
-                $command .= ' --no-interaction';
+            // Auto-append --force to artisan commands that need production confirmation
+            if (str_contains($command, 'php artisan')) {
+                $forceCommands = ['migrate', 'db:seed', 'db:wipe', 'migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback', 'optimize:clear', 'cache:clear', 'config:clear', 'route:clear', 'view:clear', 'storage:link'];
+                $needsForce = false;
+                foreach ($forceCommands as $fc) {
+                    if (str_contains($command, $fc)) {
+                        $needsForce = true;
+                        break;
+                    }
+                }
+                if ($needsForce && !str_contains($command, '--force')) {
+                    $command .= ' --force';
+                } elseif (!$needsForce && !str_contains($command, '--no-interaction')) {
+                    $command .= ' --no-interaction';
+                }
             }
 
             // Execute the command with a timeout
