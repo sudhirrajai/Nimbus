@@ -72,14 +72,19 @@
                           <div class="d-flex flex-column justify-content-center">
                             <h6 class="mb-0 text-sm font-weight-bold">
                               {{ domain.name }}
-                              <i v-if="!domain.is_active" class="material-symbols-rounded text-xs text-warning ms-1" title="DNS not pointing to this server">warning</i>
+                              <i v-if="domain.is_active === false" class="material-symbols-rounded text-xs text-warning ms-1" title="DNS not pointing to this server">warning</i>
+                              <i v-if="domain.is_active === null" class="spinner-border spinner-border-sm ms-1" style="width: 10px; height: 10px; border-width: 1px;"></i>
                             </h6>
                             <p class="text-xs text-secondary mb-0 opacity-7">/var/www/{{ domain.name }}</p>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <span v-if="domain.is_active" class="status-pill status-active">
+                        <span v-if="domain.is_active === null" class="status-pill opacity-5">
+                          <span class="spinner-border spinner-border-sm me-2" style="width: 10px; height: 10px; border-width: 1px;"></span>
+                          Checking...
+                        </span>
+                        <span v-else-if="domain.is_active" class="status-pill status-active">
                           <span class="pill-dot"></span>
                           Active
                         </span>
@@ -89,7 +94,10 @@
                         </span>
                       </td>
                       <td>
-                        <span class="text-xs font-weight-bold text-dark">{{ domain.storage || '0B' }}</span>
+                        <span v-if="domain.storage === null" class="text-xs text-muted">
+                          <span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px; border-width: 1px;"></span>
+                        </span>
+                        <span v-else class="text-xs font-weight-bold text-dark">{{ domain.storage }}</span>
                       </td>
                       <td>
                         <div class="d-flex align-items-center">
@@ -453,11 +461,37 @@ const loadDomains = async () => {
     const res = await axios.get('/domains/api')
     domains.value = res.data.domains
     serverIp.value = res.data.server_ip
+    
+    // Lazy load details for each domain
+    fetchDetailsSequentially()
   } catch (error) {
     showAlert('danger', 'Failed to load domains')
     console.error(error)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchDetailsSequentially = async () => {
+  // We fetch details for each domain one by one to avoid overwhelming the server
+  // and to provide a "pop-in" effect for the data
+  for (let i = 0; i < domains.value.length; i++) {
+    const domain = domains.value[i]
+    try {
+      const res = await axios.get(`/domains/api/${domain.name}/details`)
+      // Update the domain object in place
+      domains.value[i] = {
+        ...domain,
+        storage: res.data.storage,
+        is_active: res.data.is_active,
+        server_ip: res.data.server_ip
+      }
+    } catch (err) {
+      console.error(`Failed to load details for ${domain.name}`, err)
+      // Set some defaults so UI doesn't look broken
+      domains.value[i].storage = '?'
+      domains.value[i].is_active = false
+    }
   }
 }
 
