@@ -140,7 +140,7 @@
                   </div>
                   <div class="vr bg-gray-300" style="height: 15px;"></div>
                   <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
-                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="loadFiles">
+                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="onToggleHidden">
                     <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="showHiddenToggle">Hidden</label>
                   </div>
                 </div>
@@ -724,6 +724,10 @@ import 'ace-builds/src-noconflict/mode-markdown'
 import 'ace-builds/src-noconflict/mode-yaml'
 import 'ace-builds/src-noconflict/theme-monokai'
 import 'ace-builds/src-noconflict/ext-language_tools'
+import { usePage } from '@inertiajs/vue3'
+
+const page = usePage()
+const userId = computed(() => page.props.auth?.user?.id || 'guest')
 
 const props = defineProps({
   domain: String,
@@ -880,6 +884,11 @@ const contextMenuStyle = computed(() => {
 })
 
 onMounted(() => {
+  // Restore per-user hidden files preference
+  const savedHidden = localStorage.getItem(`nimbus_showHidden_${userId.value}`)
+  if (savedHidden === 'true') {
+    showHidden.value = true
+  }
   loadFiles()
   checkGitToken()
   window.addEventListener('keydown', handleKeyboardShortcuts)
@@ -888,6 +897,11 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcuts)
 })
+
+const onToggleHidden = () => {
+  localStorage.setItem(`nimbus_showHidden_${userId.value}`, showHidden.value)
+  loadFiles()
+}
 
 const handleKeyboardShortcuts = (e) => {
   const tag = e.target.tagName.toLowerCase()
