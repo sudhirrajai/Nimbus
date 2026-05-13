@@ -140,7 +140,7 @@
                   </div>
                   <div class="vr bg-gray-300" style="height: 15px;"></div>
                   <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
-                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="loadFiles">
+                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="onToggleHidden">
                     <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="showHiddenToggle">Hidden</label>
                   </div>
                 </div>
@@ -724,6 +724,10 @@ import 'ace-builds/src-noconflict/mode-markdown'
 import 'ace-builds/src-noconflict/mode-yaml'
 import 'ace-builds/src-noconflict/theme-monokai'
 import 'ace-builds/src-noconflict/ext-language_tools'
+import { usePage } from '@inertiajs/vue3'
+
+const page = usePage()
+const userId = computed(() => page.props.auth?.user?.id || 'guest')
 
 const props = defineProps({
   domain: String,
@@ -811,6 +815,9 @@ const copyMoveInput = ref(null)
 const isBulkCopyMove = ref(false)
 const bulkCopyMoveItems = ref([])
 
+// Clipboard state for Ctrl+C / Ctrl+X / Ctrl+V
+const clipboard = ref({ items: [], action: '', sourcePath: '' })
+
 // Extract modal state
 const showExtractModal = ref(false)
 const extractItem = ref(null)
@@ -877,6 +884,11 @@ const contextMenuStyle = computed(() => {
 })
 
 onMounted(() => {
+  // Restore per-user hidden files preference
+  const savedHidden = localStorage.getItem(`nimbus_showHidden_${userId.value}`)
+  if (savedHidden === 'true') {
+    showHidden.value = true
+  }
   loadFiles()
   checkGitToken()
   window.addEventListener('keydown', handleKeyboardShortcuts)
@@ -886,28 +898,104 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcuts)
 })
 
+const onToggleHidden = () => {
+  localStorage.setItem(`nimbus_showHidden_${userId.value}`, showHidden.value)
+  loadFiles()
+}
+
 const handleKeyboardShortcuts = (e) => {
   const tag = e.target.tagName.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return
 
+  // Ctrl+A — Select all
   if (e.ctrlKey && e.key === 'a') {
     e.preventDefault()
     toggleSelectAll()
   }
 
+  // Ctrl+C — Copy selected items to clipboard
+  if (e.ctrlKey && e.key === 'c' && hasSelected.value) {
+    e.preventDefault()
+    clipboard.value = {
+      items: [...selectedItems.value],
+      action: 'copy',
+      sourcePath: currentPath.value || ''
+    }
+    showAlert('success', `${selectedItems.value.length} item(s) copied to clipboard`)
+  }
+
+  // Ctrl+X — Cut selected items to clipboard
+  if (e.ctrlKey && e.key === 'x' && hasSelected.value) {
+    e.preventDefault()
+    clipboard.value = {
+      items: [...selectedItems.value],
+      action: 'move',
+      sourcePath: currentPath.value || ''
+    }
+    showAlert('success', `${selectedItems.value.length} item(s) cut to clipboard`)
+  }
+
+  // Ctrl+V — Paste from clipboard
+  if (e.ctrlKey && e.key === 'v' && clipboard.value.items.length > 0) {
+    e.preventDefault()
+    pasteFromClipboard()
+  }
+
+  // Delete — Delete selected items
   if (e.key === 'Delete' && hasSelected.value) {
     e.preventDefault()
     bulkDelete()
   }
 
+  // F2 — Rename (single selection only)
+  if (e.key === 'F2' && selectedItems.value.length === 1) {
+    e.preventDefault()
+    const item = items.value.find(i => i.name === selectedItems.value[0].name)
+    if (item) {
+      renameName.value = item.name
+      renameItem.value = item
+      showRenameModal.value = true
+    }
+  }
+
+  // F5 — Refresh
   if (e.key === 'F5') {
     e.preventDefault()
     loadFiles()
   }
 
+  // Backspace — Go up one level
   if (e.key === 'Backspace' && currentPath.value) {
     e.preventDefault()
     goUpOneLevel()
+  }
+
+  // Escape — Deselect all
+  if (e.key === 'Escape') {
+    selectedItems.value = []
+    allSelected.value = false
+  }
+}
+
+const pasteFromClipboard = async () => {
+  if (!clipboard.value.items.length) return
+  try {
+    for (const it of clipboard.value.items) {
+      await axios.post(`/file-manager/${props.domain}/${clipboard.value.action}`, {
+        sourcePath: clipboard.value.sourcePath,
+        name: it.name,
+        destinationPath: currentPath.value || ''
+      })
+    }
+    showAlert('success', `${clipboard.value.items.length} item(s) ${clipboard.value.action === 'copy' ? 'copied' : 'moved'} successfully`)
+    // Clear clipboard after move (cut), keep after copy
+    if (clipboard.value.action === 'move') {
+      clipboard.value = { items: [], action: '', sourcePath: '' }
+    }
+    selectedItems.value = []
+    loadFiles()
+  } catch (err) {
+    showAlert('danger', `Paste failed: ${err.response?.data?.error || 'Unknown error'}`)
   }
 }
 
