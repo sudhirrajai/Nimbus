@@ -1,6 +1,7 @@
-﻿<template>
+<template>
   <MainLayout>
-    <Head title="phpMyAdmin" />
+    <Head title="Nimbus DB" />
+
     <div class="phpmyadmin-wrapper">
       <div class="header-bar border-bottom">
         <h5 class="mb-0 text-dark font-weight-bolder">

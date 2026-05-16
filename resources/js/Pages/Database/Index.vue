@@ -12,7 +12,7 @@
               <p class="mb-0 text-sm">Manage MySQL databases, users, and Nimbus DB</p>
             </div>
             <div class="d-flex gap-2" v-if="status.viewerInstalled">
-              <button class="btn btn-outline-warning mb-0" @click="reinstallPhpMyAdmin" :disabled="reinstalling">
+              <button class="btn btn-outline-warning mb-0" @click="reinstallDatabaseViewer" :disabled="reinstalling">
                 <span v-if="reinstalling" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">refresh</i>
                 {{ reinstalling ? 'Reinstalling...' : 'Reinstall' }}
@@ -60,7 +60,7 @@
               <i class="material-symbols-rounded text-warning" style="font-size: 4rem;">database</i>
               <h4 class="mt-3">Nimbus DB Not Installed</h4>
               <p class="text-secondary mb-4">Install Database Viewer to manage your MySQL databases</p>
-              <button class="btn bg-gradient-primary btn-lg" @click="installPhpMyAdmin" :disabled="installing">
+              <button class="btn bg-gradient-primary btn-lg" @click="installDatabaseViewer" :disabled="installing">
                 <i class="material-symbols-rounded text-sm me-1">download</i>
                 Install Nimbus DB
               </button>
@@ -274,7 +274,7 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <button class="action-btn btn-view" @click="openPhpMyAdmin(db)"
+                          <button class="action-btn btn-view" @click="openDatabaseViewer(db)"
                             title="Open in Nimbus DB">
                             <i class="material-symbols-rounded">open_in_new</i>
                           </button>
@@ -607,13 +607,14 @@ const loadData = async () => {
   }
 }
 
-const installPhpMyAdmin = async () => {
+const installDatabaseViewer = async () => {
   try {
     installing.value = true
     installLog.value = '' // Reset log
     showAlert('info', 'Installing Nimbus DB... This may take a few minutes.')
 
     const response = await axios.post('/database/install-viewer')
+
 
     // Start polling for status if polling mode
     if (response.data.polling) {
@@ -710,7 +711,7 @@ const pollInstallStatus = async () => {
   }
 }
 
-const reinstallPhpMyAdmin = async () => {
+const reinstallDatabaseViewer = async () => {
   if (!confirm('Are you sure you want to reinstall Database Viewer? This will remove and reinstall it with new credentials.')) {
     return
   }
@@ -720,6 +721,7 @@ const reinstallPhpMyAdmin = async () => {
     showAlert('info', 'Reinstalling Nimbus DB... This may take a few minutes.')
 
     const response = await axios.post('/database/reinstall-viewer')
+
 
     credentials.value = response.data.credentials
     showCredentials.value = true
@@ -735,13 +737,29 @@ const reinstallPhpMyAdmin = async () => {
   }
 }
 
-const openPhpMyAdminSSO = async () => {
+const openDatabaseViewer = async (db = null) => {
+  try {
+    openingPma.value = true
+    const response = await axios.post('/database/viewer/access', { database: db?.name || '' })
+
+    if (response.data.url) {
+      window.open(response.data.url, '_blank')
+    } else {
+      showAlert('danger', response.data.error || 'Failed to generate access link')
+    }
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
+  } finally {
+    openingPma.value = false
+  }
+}
+
+const openDatabaseViewerSSO = async () => {
   try {
     openingPma.value = true
     const response = await axios.get('/database/viewer/sso')
 
     if (response.data.success && response.data.url) {
-      // Open Database Viewer with SSO token in new tab
       window.open(response.data.url, '_blank')
     } else {
       showAlert('danger', response.data.error || 'Failed to generate SSO link')
@@ -757,6 +775,7 @@ const createDatabase = async () => {
   try {
     creatingDb.value = true
     await axios.post('/database/create', { name: newDatabase.value.name })
+
     showAlert('success', `Database '${newDatabase.value.name}' created successfully`)
     newDatabase.value.name = ''
     await loadData()

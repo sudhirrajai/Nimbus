@@ -138,8 +138,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
     Route::prefix('database')->name('database.')->group(function () {
         Route::get('/', [DatabaseController::class, 'index'])->name('index');
         Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
-        Route::post('/install-viewer', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-viewer');
-        Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-viewer');
+        Route::post('/install-viewer', [DatabaseController::class, 'installDatabaseViewer'])->name('install-viewer');
+        Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallDatabaseViewer'])->name('reinstall-viewer');
         Route::post('/clear-lock', [DatabaseController::class, 'clearInstallLock'])->name('clear-lock');
         Route::get('/install-status', [DatabaseController::class, 'getInstallStatus'])->name('install-status');
         Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');

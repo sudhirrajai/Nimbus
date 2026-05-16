@@ -12,7 +12,7 @@ class DatabaseController extends Controller
 {
     private $viewerPath = '/usr/share/adminer';
     private $adminerPublicPath = null;
-    private $credentialsPath = '/usr/local/nimbus/storage/app/phpmyadmin_credentials.json';
+    private $credentialsPath = '/usr/local/nimbus/storage/app/nimbus_db_credentials.json';
 
     public function __construct() { $this->adminerPublicPath = public_path('db'); }
 
@@ -47,7 +47,7 @@ class DatabaseController extends Controller
     /**
      * Install Database Viewer (no apt — just downloads a single PHP file)
      */
-    public function installPhpMyAdmin()
+    public function installDatabaseViewer()
     {
         try {
             if (file_exists($this->viewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php')) {
@@ -59,8 +59,8 @@ class DatabaseController extends Controller
                 return response()->json(['error' => "Another installation is in progress: {$lockContent}. Please wait."], 409);
             }
             file_put_contents($lockFile, 'Database Viewer installation');
-            $logFile    = storage_path('logs/phpmyadmin_install.log');
-            $statusFile = storage_path('logs/phpmyadmin_status.txt');
+            $logFile    = storage_path('logs/nimbus_db_install.log');
+            $statusFile = storage_path('logs/nimbus_db_status.txt');
             file_put_contents($logFile,    "Database Viewer installation started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
             $adminUser = 'nimbus_admin';
@@ -125,8 +125,8 @@ BASH;
      */
     public function getInstallStatus()
     {
-        $logFile    = storage_path('logs/phpmyadmin_install.log');
-        $statusFile = storage_path('logs/phpmyadmin_status.txt');
+        $logFile    = storage_path('logs/nimbus_db_install.log');
+        $statusFile = storage_path('logs/nimbus_db_status.txt');
         $log    = file_exists($logFile)    ? file_get_contents($logFile)    : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
         if ($status === 'running') {
@@ -155,9 +155,9 @@ BASH;
 
             $credentials = json_decode(File::get($this->credentialsPath), true);
             
-            $content = "Database Viewer Credentials\n";
+            $content = "Nimbus DB Credentials\n";
             $content .= "======================\n\n";
-            $content .= "URL: /phpmyadmin\n";
+            $content .= "URL: /db/\n";
             $content .= "Username: {$credentials['username']}\n";
             $content .= "Password: {$credentials['password']}\n";
             $content .= "Created: {$credentials['created_at']}\n\n";
@@ -165,7 +165,7 @@ BASH;
 
             return response($content)
                 ->header('Content-Type', 'text/plain')
-                ->header('Content-Disposition', 'attachment; filename="phpmyadmin_credentials.txt"');
+                ->header('Content-Disposition', 'attachment; filename="nimbus_db_credentials.txt"');
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -174,7 +174,7 @@ BASH;
     /**
      * Reinstall Database Viewer (remove and install again)
      */
-    public function reinstallPhpMyAdmin()
+    public function reinstallDatabaseViewer()
     {
         try {
             // Remove existing Database Viewer files
@@ -200,8 +200,8 @@ BASH;
             $this->createDatabaseViewerWrapper();
 
             // Re-download Database Viewer + recreate MySQL user
-            $logFile    = storage_path('logs/phpmyadmin_install.log');
-            $statusFile = storage_path('logs/phpmyadmin_status.txt');
+            $logFile    = storage_path('logs/nimbus_db_install.log');
+            $statusFile = storage_path('logs/nimbus_db_status.txt');
             $lockFile   = storage_path('logs/nimbus_install.lock');
             file_put_contents($logFile,    "Database Viewer reinstall started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
