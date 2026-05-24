@@ -66,8 +66,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/api/{domain}/details', [DomainController::class, 'getDomainDetails'])->name('domain.details');
     });
 
-    // Domain create/update/delete — root+admin only
-    Route::middleware(['role:root,admin'])->prefix('domains')->group(function () {
+    // Domain create/update/delete — root, admin, and user
+    Route::middleware(['role:root,admin,user'])->prefix('domains')->group(function () {
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
         Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
