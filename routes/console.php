@@ -14,6 +14,21 @@ Artisan::command('shield:scan {path}', function ($path) {
     $this->info("Scan completed.");
 })->purpose('Run a security scan in background');
 
+Artisan::command('shield:scan-file {filePath}', function ($filePath) {
+    $finding = \App\Http\Controllers\ShieldController::scanFile($filePath);
+    if ($finding) {
+        \App\Models\SecurityThreat::updateOrCreate(
+            ['file_path' => $filePath],
+            [
+                'type' => $finding['type'],
+                'details' => $finding['details'] . ' (Detected during upload)',
+                'status' => 'detected',
+                'detected_at' => now()
+            ]
+        );
+    }
+})->purpose('Scan a single uploaded file in background');
+
 use Illuminate\Support\Facades\Schedule;
 use App\Models\Setting;
 
