@@ -214,6 +214,30 @@
         </div>
       </div>
 
+      <!-- Unsaved Changes Warning Modal -->
+      <div class="modal-backdrop fade show" v-if="showUnsavedConfirmModal" @click="showUnsavedConfirmModal = false" style="z-index: 10050;"></div>
+      <div class="modal fade show d-block" v-if="showUnsavedConfirmModal" style="z-index: 10051;">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow-2xl bg-white">
+            <div class="modal-body text-center py-5">
+              <div class="modal-icon bg-gradient-warning mx-auto mb-4 shadow-warning d-flex align-items-center justify-content-center border-radius-xl" style="width: 64px; height: 64px; margin: 0 auto;">
+                <i class="material-symbols-rounded text-white" style="font-size: 32px;">warning</i>
+              </div>
+              <h4 class="font-weight-bolder text-dark">Unsaved Changes</h4>
+              <p class="text-secondary px-4 mb-4">
+                You have unsaved changes in your Nginx configuration. Are you sure you want to close? Your modifications will be lost.
+              </p>
+              <div class="d-flex justify-content-center gap-3">
+                <button class="btn btn-link text-secondary mb-0 font-weight-bold" @click="showUnsavedConfirmModal = false">Keep Editing</button>
+                <button class="btn bg-gradient-warning mb-0 border-radius-lg px-4 shadow-warning text-white" @click="showUnsavedConfirmModal = false; closeEditor()">
+                  Discard & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Reload Confirmation Modal -->
       <div class="modal-backdrop fade show" v-if="showReloadModal" @click="showReloadModal = false"></div>
       <div class="modal fade show d-block" v-if="showReloadModal">
@@ -302,6 +326,7 @@ const currentPage = ref(1)
 const itemsPerPage = ref(10)
 
 const showEditorModal = ref(false)
+const showUnsavedConfirmModal = ref(false)
 const showReloadModal = ref(false)
 const showTestModal = ref(false)
 
@@ -438,9 +463,7 @@ const closeEditor = () => {
 const closeEditorConfirm = () => {
   const isDirty = editorContent.value !== originalEditorContent.value
   if (isDirty) {
-    if (confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
-      closeEditor()
-    }
+    showUnsavedConfirmModal.value = true
   } else {
     closeEditor()
   }
