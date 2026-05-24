@@ -196,7 +196,16 @@ class ShieldController extends Controller
             try {
                 $clamOutput = [];
                 $clamReturn = 0;
-                exec("sudo clamscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                
+                exec("which clamdscan 2>/dev/null", $whichOutput, $whichReturn);
+                if ($whichReturn === 0) {
+                    exec("sudo clamdscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    if ($clamReturn === 2) {
+                        exec("sudo clamscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    }
+                } else {
+                    exec("sudo clamscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                }
                 
                 if ($clamReturn === 1) {
                     foreach ($clamOutput as $line) {
@@ -460,8 +469,16 @@ class ShieldController extends Controller
         try {
             $output = [];
             $return = 0;
-            // Use --no-summary for speed
-            exec("sudo clamscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
+            // Try clamdscan (daemon - ultra-fast) first, fallback to clamscan if daemon is not running or missing
+            exec("which clamdscan 2>/dev/null", $whichOutput, $whichReturn);
+            if ($whichReturn === 0) {
+                exec("sudo clamdscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
+                if ($return === 2) {
+                    exec("sudo clamscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
+                }
+            } else {
+                exec("sudo clamscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
+            }
             if ($return === 1) {
                 foreach ($output as $line) {
                     if (str_contains($line, 'FOUND')) {
