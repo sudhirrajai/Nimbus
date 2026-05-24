@@ -16,7 +16,7 @@ class FileManagerController extends Controller
     /**
      * Display file manager for a domain
      */
-    public function index($domain)
+    public function index(Request $request, $domain)
     {
         $domainPath = $this->basePath . $domain;
 
@@ -31,7 +31,7 @@ class FileManagerController extends Controller
 
         return Inertia::render('Files/FileManager', [
             'domain' => $domain,
-            'initialPath' => ''
+            'initialPath' => $request->query('path', '')
         ]);
     }
 
