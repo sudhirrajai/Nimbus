@@ -704,12 +704,16 @@
         <div class="modal-dialog modal-sm modal-dialog-centered">
           <div class="glass-card modal-content border-0 text-center p-4">
             <div class="spinner-border text-primary mx-auto mb-3" role="status"></div>
-            <h6 class="font-weight-bolder">Uploading Files</h6>
+            <h6 class="font-weight-bolder">
+              {{ uploadProgress === 100 ? 'Scanning for viruses...' : 'Uploading Files' }}
+            </h6>
             <p class="text-xs text-secondary mb-3">{{ uploadFileName }}</p>
             <div class="progress mb-2" style="height: 6px;">
               <div class="progress-bar bg-gradient-primary" :style="{ width: uploadProgress + '%' }"></div>
             </div>
-            <span class="text-xxs font-weight-bold text-dark">{{ uploadProgress }}%</span>
+            <span class="text-xxs font-weight-bold text-dark">
+              {{ uploadProgress === 100 ? 'Analyzing file contents...' : uploadProgress + '%' }}
+            </span>
           </div>
         </div>
       </div>
