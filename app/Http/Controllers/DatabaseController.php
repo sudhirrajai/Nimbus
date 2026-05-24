@@ -25,58 +25,6 @@ class DatabaseController extends Controller
     }
 
     /**
-     * Get list of all databases
-     */
-    public function getDatabases()
-    {
-        try {
-            // Use sudo mysql to get all databases
-            $output = [];
-            exec("sudo mysql -N -e \"SHOW DATABASES\" 2>&1", $output, $code);
-            
-            if ($code !== 0) {
-                throw new \Exception("Failed to query databases: " . implode("\n", $output));
-            }
-            
-            $result = [];
-            foreach ($output as $dbName) {
-                $dbName = trim($dbName);
-                
-                // Skip system databases
-                $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin'];
-                if (in_array($dbName, $systemDbs)) continue;
-                
-                $result[] = [
-                    'name' => $dbName,
-                    'size' => $this->getDatabaseSize($dbName),
-                    'user_count' => $this->getDatabaseUserCount($dbName)
-                ];
-            }
-
-            return response()->json(['databases' => $result]);
-        } catch (\Exception $e) {
-            \Log::error("Failed to get databases: " . $e->getMessage());
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
-
-    /**
-     * Get number of users assigned to a database
-     */
-    private function getDatabaseUserCount($dbName)
-    {
-        try {
-            $output = [];
-            $escapedDb = escapeshellarg($dbName);
-            exec("sudo mysql -N -e \"SELECT COUNT(DISTINCT User) FROM mysql.db WHERE Db = {$escapedDb}\" 2>&1", $output, $code);
-            
-            return (int) ($output[0] ?? 0);
-        } catch (\Exception $e) {
-            return 0;
-        }
-    }
-
-    /**
      * Get Database Viewer installation status
      */
     public function getStatus()
