@@ -124,9 +124,9 @@ class GitDeploymentService
             // Build clone URL based on repo type
             $cloneUrl = $this->buildCloneUrl($deployment);
 
-            // Clean existing content in the domain directory (keep logs dir)
+            // Clean existing content in the domain directory
             $cleanOutput = $this->executeCommand(
-                "sudo find {$domainPath} -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +",
+                "sudo find {$domainPath} -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
                 $domainPath
             );
 
@@ -675,11 +675,6 @@ class GitDeploymentService
                 $this->executeCommand("sudo ln -s {$configPath} {$symlinkPath}");
             }
 
-            // Ensure logs directory exists before testing Nginx to prevent emerg failures
-            $this->executeCommand("sudo mkdir -p {$domainPath}/logs");
-            $this->executeCommand("sudo touch {$domainPath}/logs/access.log {$domainPath}/logs/error.log");
-            $this->executeCommand("sudo chown -R www-data:www-data {$domainPath}/logs");
-
             // Test and reload nginx
             $this->executeCommand("sudo nginx -t");
             $this->executeCommand("sudo systemctl reload nginx");
@@ -716,8 +711,8 @@ server {
     index index.php index.html index.htm;
     
     # Logs
-    access_log {$domainPath}/logs/access.log;
-    error_log {$domainPath}/logs/error.log;
+    access_log /var/log/nginx/{$domain}.access.log;
+    error_log /var/log/nginx/{$domain}.error.log;
     
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;

@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
+use App\Models\User;
+use App\Models\UserWebsite;
 
 class DomainController extends Controller
 {
@@ -235,7 +236,7 @@ class DomainController extends Controller
             }
 
             // Create folder structure using sudo for proper permissions
-            $this->executeSudoCommand("mkdir -p {$path}/logs");
+            $this->executeSudoCommand("mkdir -p {$path}");
             $this->executeSudoCommand("chown -R www-data:www-data {$path}");
             $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
             $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
@@ -245,8 +246,9 @@ class DomainController extends Controller
             $indexContent = $this->getDefaultIndexContent($domain);
             file_put_contents("$path/index.html", $indexContent);
 
-            // Create .env file placeholder
+            // Create .env and .htaccess placeholders
             file_put_contents("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n");
+            file_put_contents("$path/.htaccess", "# Nimbus Control Panel - Default .htaccess\n# Powered by Nimbus\n\nOptions -Indexes\n");
 
             // Create Nginx configuration
             $this->createNginxConfig($domain);
@@ -263,6 +265,29 @@ class DomainController extends Controller
 
             // Log the creation
             \Log::info("Domain created: $domain by user " . auth()->id());
+
+            // ─── NEW: Auto-assign domain to user ──────────────────────
+            $user = auth()->user();
+            if (!$user->isRoot()) {
+                // 1. Create database assignment
+                UserWebsite::create([
+                    'user_id' => $user->id,
+                    'domain' => $domain,
+                    'permissions' => ['files', 'deployments', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron'],
+                ]);
+
+                // 2. Grant Linux user ACL access
+                if ($user->linux_user) {
+                    try {
+                        $this->executeSudoCommand("setfacl -R -m u:{$user->linux_user}:rwx " . escapeshellarg($path));
+                        $this->executeSudoCommand("setfacl -R -d -m u:{$user->linux_user}:rwx " . escapeshellarg($path));
+                        \Log::info("Linux ACLs granted for user {$user->linux_user} on $domain");
+                    } catch (\Exception $e) {
+                        \Log::error("Failed to set Linux ACLs for {$user->linux_user} on $domain: " . $e->getMessage());
+                    }
+                }
+            }
+            // ──────────────────────────────────────────────────────────
 
             return response()->json([
                 'message' => 'Domain created successfully',
@@ -406,6 +431,12 @@ class DomainController extends Controller
                 $this->executeSudoCommand("mkdir -p " . escapeshellarg($newRoot));
                 $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($newRoot));
                 $this->executeSudoCommand("chmod 2775 " . escapeshellarg($newRoot));
+                
+                // Add default .htaccess to new root
+                $htaccess = $newRoot . '/.htaccess';
+                file_put_contents($htaccess, "# Nimbus Control Panel - Root .htaccess\nOptions -Indexes\n");
+                $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($htaccess));
+                $this->executeSudoCommand("chmod 664 " . escapeshellarg($htaccess));
             }
 
             // Update Nginx config
@@ -535,6 +566,11 @@ class DomainController extends Controller
 
             \Log::info("Domain deleted successfully: $domain by user " . auth()->id());
 
+            // ─── NEW: Cleanup database assignments ────────────────────
+            UserWebsite::where('domain', $domain)->delete();
+            \Log::info("UserWebsite assignments removed for $domain");
+            // ──────────────────────────────────────────────────────────
+
             return response()->json([
                 'message' => 'Domain deleted successfully',
                 'domain' => $domain
@@ -561,37 +597,165 @@ class DomainController extends Controller
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to $domain</title>
+    <title>Welcome to $domain | Nimbus</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --accent: #ec4899;
+            --dark: #0f172a;
+            --light: #f8fafc;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: 'Outfit', sans-serif;
+            background: var(--dark);
+            color: var(--light);
+            height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
         }
-        .container {
+
+        /* Animated Background Gradients */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0) 50%),
+                        radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.1) 0%, rgba(15, 23, 42, 0) 40%);
+            animation: rotate 30s linear infinite;
+            z-index: -1;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4rem 3rem;
+            border-radius: 2.5rem;
             text-align: center;
-            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeInScale 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            z-index: 10;
         }
+
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: -0.05em;
+            margin-bottom: 2rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
         h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to bottom right, #fff 50%, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
+
         p {
-            font-size: 1.2rem;
-            opacity: 0.9;
+            font-size: 1.25rem;
+            color: #94a3b8;
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+            font-weight: 300;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.5rem 1.25rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 100px;
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn {
+            display: inline-block;
+            background: var(--light);
+            color: var(--dark);
+            padding: 1rem 2.5rem;
+            border-radius: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+            background: #fff;
+        }
+
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.875rem;
+            color: #475569;
+            font-weight: 400;
+        }
+
+        /* Float animation for the card */
+        .card {
+            animation: fadeInScale 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 Welcome to $domain</h1>
-        <p>Your domain is ready! Start building something amazing.</p>
-        <p style="font-size: 0.9rem; margin-top: 2rem;">Powered by Nimbus Control Panel</p>
+    <div class="card">
+        <div class="badge">Success!</div>
+        <div class="logo">NIMBUS</div>
+        <h1>$domain is Live.</h1>
+        <p>Your new digital space is ready and waiting. Log in to the Nimbus panel to start uploading your magic.</p>
+        <a href="#" class="btn">Get Started</a>
+        <div class="footer">
+            Powered by Nimbus Control Panel &bull; Premium Cloud Hosting
+        </div>
     </div>
 </body>
 </html>
@@ -675,8 +839,8 @@ server {
     index index.php index.html index.htm;
     
     # Logs
-    access_log {$domainPath}/logs/access.log;
-    error_log {$domainPath}/logs/error.log;
+    access_log /var/log/nginx/{$domain}.access.log;
+    error_log /var/log/nginx/{$domain}.error.log;
     
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -809,6 +973,51 @@ NGINX;
         $domainsToRepair = array_unique($domainsToRepair);
         foreach ($domainsToRepair as $domain) {
             $this->ensureDomainStructure($this->basePath . $domain);
+            
+            // ─── NEW: Auto-migrate Nginx logs to system path ─────
+            $this->migrateNginxLogsToSystemPath($domain);
+            // ──────────────────────────────────────────────────
+        }
+    }
+
+    /**
+     * Migrate old Nginx log paths (inside domain) to system path (/var/log/nginx/)
+     * This prevents Nginx from crashing if the user deletes the log folder.
+     */
+    private function migrateNginxLogsToSystemPath($domain)
+    {
+        $configPath = "/etc/nginx/sites-available/{$domain}";
+        if (!File::exists($configPath)) {
+            // Check for variations (.conf, etc)
+            $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+            if (!File::exists($configPath)) return;
+        }
+
+        try {
+            $content = $this->executeSudoCommand("cat " . escapeshellarg($configPath));
+            $contentStr = implode("\n", $content);
+            $domainPath = $this->basePath . $domain;
+
+            // Pattern for old log paths: access_log /var/www/domain/logs/access.log;
+            $oldAccessPattern = "access_log {$domainPath}/logs/access.log;";
+            $oldErrorPattern = "error_log {$domainPath}/logs/error.log;";
+
+            if (strpos($contentStr, $oldAccessPattern) !== false || strpos($contentStr, $oldErrorPattern) !== false) {
+                \Log::info("Migrating Nginx logs for $domain to system path...");
+                
+                $newAccess = "access_log /var/log/nginx/{$domain}.access.log;";
+                $newError = "error_log /var/log/nginx/{$domain}.error.log;";
+                
+                $escapedConfig = escapeshellarg($configPath);
+                
+                // Use sed to replace the lines
+                $this->executeSudoCommand("sed -i 's|access_log .*logs/access.log;|{$newAccess}|g' {$escapedConfig}");
+                $this->executeSudoCommand("sed -i 's|error_log .*logs/error.log;|{$newError}|g' {$escapedConfig}");
+                
+                \Log::info("Migration complete for $domain");
+            }
+        } catch (\Exception $e) {
+            \Log::error("Failed to migrate logs for $domain: " . $e->getMessage());
         }
     }
 
@@ -817,34 +1026,24 @@ NGINX;
      */
     private function ensureDomainStructure($domainPath)
     {
-        $logsPath = $domainPath . '/logs';
-        $accessLogPath = $logsPath . '/access.log';
-        $errorLogPath = $logsPath . '/error.log';
+        // We no longer create logs/ inside the domain to prevent Nginx crashes if users delete them.
+        // Nginx logs are now redirected to /var/log/nginx/
+        if (!File::exists($domainPath)) {
+            $this->executeSudoCommand('mkdir -p ' . escapeshellarg($domainPath));
+        }
 
-        $this->executeSudoCommand(
-            'mkdir -p '
-            . escapeshellarg($logsPath)
-        );
-
-        $this->executeSudoCommand(
-            'touch '
-            . escapeshellarg($accessLogPath)
-            . ' '
-            . escapeshellarg($errorLogPath)
-        );
-
-        $this->executeSudoCommand(
-            'chown -R www-data:www-data ' . escapeshellarg($domainPath)
-        );
-        $this->executeSudoCommand(
-            'chmod 2775 '
-            . escapeshellarg($domainPath)
-            . ' '
-            . escapeshellarg($logsPath)
-        );
-        $this->executeSudoCommand(
-            'chmod 664 ' . escapeshellarg($accessLogPath) . ' ' . escapeshellarg($errorLogPath)
-        );
+        $this->executeSudoCommand('chown -R www-data:www-data ' . escapeshellarg($domainPath));
+        $this->executeSudoCommand('chmod 2775 ' . escapeshellarg($domainPath));
+        
+        // Ensure index.html exists if empty
+        $indexFile = $domainPath . '/index.html';
+        if (!File::exists($indexFile) && count(File::files($domainPath)) === 0) {
+            $domain = basename($domainPath);
+            $indexContent = $this->getDefaultIndexContent($domain);
+            file_put_contents($indexFile, $indexContent);
+            $this->executeSudoCommand('chown www-data:www-data ' . escapeshellarg($indexFile));
+            $this->executeSudoCommand('chmod 664 ' . escapeshellarg($indexFile));
+        }
     }
 
     /**

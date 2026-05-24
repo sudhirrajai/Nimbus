@@ -66,8 +66,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::get('/api/{domain}/details', [DomainController::class, 'getDomainDetails'])->name('domain.details');
     });
 
-    // Domain create/update/delete — root+admin only
-    Route::middleware(['role:root,admin'])->prefix('domains')->group(function () {
+    // Domain create/update/delete — root, admin, and user
+    Route::middleware(['role:root,admin,user'])->prefix('domains')->group(function () {
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
         Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
@@ -138,8 +138,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
     Route::prefix('database')->name('database.')->group(function () {
         Route::get('/', [DatabaseController::class, 'index'])->name('index');
         Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
-        Route::post('/install-viewer', [DatabaseController::class, 'installPhpMyAdmin'])->name('install-viewer');
-        Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallPhpMyAdmin'])->name('reinstall-viewer');
+        Route::post('/install-viewer', [DatabaseController::class, 'installDatabaseViewer'])->name('install-viewer');
+        Route::post('/reinstall-viewer', [DatabaseController::class, 'reinstallDatabaseViewer'])->name('reinstall-viewer');
         Route::post('/clear-lock', [DatabaseController::class, 'clearInstallLock'])->name('clear-lock');
         Route::get('/install-status', [DatabaseController::class, 'getInstallStatus'])->name('install-status');
         Route::get('/credentials/download', [DatabaseController::class, 'downloadCredentials'])->name('credentials.download');

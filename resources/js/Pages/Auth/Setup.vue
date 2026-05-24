@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <Head title="Setup" />
   <div class="setup-page">
     <div class="setup-container">
@@ -36,10 +36,10 @@
           </div>
 
           <form @submit.prevent="submit" class="setup-form">
-            <div v-if="Object.keys(errors).length > 0" class="alert alert-danger">
+            <div v-if="Object.keys(form.errors).length > 0" class="alert alert-danger">
               <i class="material-symbols-rounded">error</i>
               <div>
-                <span v-for="(error, key) in errors" :key="key">{{ error }}</span>
+                <span v-for="(error, key) in form.errors" :key="key" class="d-block">{{ error }}</span>
               </div>
             </div>
 
@@ -132,7 +132,6 @@ import { ref, computed } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 
 const page = usePage()
-const errors = page.props.errors || {}
 const loading = ref(false)
 const showPassword = ref(false)
 

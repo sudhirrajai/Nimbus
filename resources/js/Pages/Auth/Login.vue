@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <Head title="Login" />
   <div class="login-page">
     <div class="login-container">
@@ -40,9 +40,9 @@
           </div>
 
           <form @submit.prevent="submit" class="login-form">
-            <div v-if="errors.email" class="alert alert-danger">
+            <div v-if="form.errors.email" class="alert alert-danger">
               <i class="material-symbols-rounded">error</i>
-              {{ errors.email }}
+              {{ form.errors.email }}
             </div>
 
             <div class="form-group">
@@ -108,7 +108,6 @@ import { ref } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 
 const page = usePage()
-const errors = page.props.errors || {}
 const loading = ref(false)
 const showPassword = ref(false)
 
