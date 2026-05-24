@@ -655,7 +655,7 @@
                 <i class="material-symbols-rounded text-sm me-1">{{ saving ? 'sync' : 'save' }}</i>
                 {{ saving ? 'Saving...' : 'Save Changes' }}
               </button>
-              <button class="btn btn-sm btn-outline-light mb-0" @click="closeEditor">
+              <button class="btn btn-sm btn-outline-light mb-0" @click="closeEditorConfirm">
                 <i class="material-symbols-rounded text-sm me-1">close</i>
                 Close
               </button>
@@ -805,6 +805,7 @@ const renameName = ref('')
 const selectedItem = ref(null)
 const editingFile = ref('')
 const fileContent = ref('')
+const originalFileContent = ref('')
 const detectedMode = ref('text')
 let aceEditor = null
 const fileInput = ref(null)
@@ -893,19 +894,34 @@ const contextMenuStyle = computed(() => {
   }
 })
 
+const handlePopState = (event) => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const path = urlParams.get('path') || ''
+  currentPath.value = path
+  loadFiles()
+}
+
 onMounted(() => {
   // Restore per-user hidden files preference
   const savedHidden = localStorage.getItem(`nimbus_showHidden_${userId.value}`)
   if (savedHidden === 'true') {
     showHidden.value = true
   }
+  
+  // Sync currentPath from URL query parameter initially if initialPath is empty but URL has query
+  const urlParams = new URLSearchParams(window.location.search)
+  const urlPath = urlParams.get('path') || ''
+  currentPath.value = urlPath || props.initialPath || ''
+
   loadFiles()
   checkGitToken()
   window.addEventListener('keydown', handleKeyboardShortcuts)
+  window.addEventListener('popstate', handlePopState)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcuts)
+  window.removeEventListener('popstate', handlePopState)
 })
 
 const onToggleHidden = () => {
@@ -914,6 +930,17 @@ const onToggleHidden = () => {
 }
 
 const handleKeyboardShortcuts = (e) => {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    if (showEditorModal.value) {
+      closeEditorConfirm()
+    } else {
+      selectedItems.value = []
+      allSelected.value = false
+    }
+    return
+  }
+
   const tag = e.target.tagName.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return
 
@@ -980,11 +1007,7 @@ const handleKeyboardShortcuts = (e) => {
     goUpOneLevel()
   }
 
-  // Escape — Deselect all
-  if (e.key === 'Escape') {
-    selectedItems.value = []
-    allSelected.value = false
-  }
+  // Selected escape is handled at start of handleKeyboardShortcuts
 }
 
 const pasteFromClipboard = async () => {
@@ -1183,19 +1206,31 @@ const runGitSwitchBranch = () => performGitAction('switch_branch', { branch: git
 const navigateTo = (path) => {
   currentPath.value = path
   loadFiles()
+  const newUrl = path 
+    ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
+    : window.location.pathname
+  window.history.pushState({ path }, '', newUrl)
 }
 
 const openDirectory = (name) => {
-  currentPath.value = currentPath.value ? `${currentPath.value}/${name}` : name
+  const path = currentPath.value ? `${currentPath.value}/${name}` : name
+  currentPath.value = path
   loadFiles()
+  const newUrl = `${window.location.pathname}?path=${encodeURIComponent(path)}`
+  window.history.pushState({ path }, '', newUrl)
 }
 
 const goUpOneLevel = () => {
   if (!currentPath.value) return
   const pathParts = currentPath.value.split('/').filter(Boolean)
   pathParts.pop()
-  currentPath.value = pathParts.join('/')
+  const path = pathParts.join('/')
+  currentPath.value = path
   loadFiles()
+  const newUrl = path 
+    ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
+    : window.location.pathname
+  window.history.pushState({ path }, '', newUrl)
 }
 
 const goBack = () => router.visit('/domains')
@@ -1288,6 +1323,7 @@ const editFile = async (name) => {
     const filePath = currentPath.value ? `${currentPath.value}/${name}` : name
     const response = await axios.post(`/file-manager/${props.domain}/read`, { path: filePath })
     fileContent.value = response.data.content
+    originalFileContent.value = response.data.content
     editingFile.value = name
     showEditorModal.value = true
     
@@ -1327,6 +1363,15 @@ const initAceEditor = () => {
     wrap: true
   })
 
+  // Close editor on pressing Esc inside the Ace Editor
+  aceEditor.commands.addCommand({
+    name: 'closeEditorOnEsc',
+    bindKey: {win: 'Esc', mac: 'Esc'},
+    exec: function(editor) {
+      closeEditorConfirm()
+    }
+  })
+
   aceEditor.on('change', () => {
     fileContent.value = aceEditor.getValue()
   })
@@ -1338,6 +1383,7 @@ const saveFile = async () => {
     const filePath = currentPath.value ? `${currentPath.value}/${editingFile.value}` : editingFile.value
     await axios.post(`/file-manager/${props.domain}/save`, { path: filePath, content: fileContent.value })
     showAlert('success', 'File saved')
+    originalFileContent.value = fileContent.value
     // We don't closeEditor here anymore, just keep editing
     loadFiles()
   } catch (error) {
@@ -1356,6 +1402,17 @@ const closeEditor = () => {
   editingFile.value = ''
   fileContent.value = ''
   document.body.style.overflow = '' // Restore scroll
+}
+
+const closeEditorConfirm = () => {
+  const isDirty = fileContent.value !== originalFileContent.value
+  if (isDirty) {
+    if (confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
+      closeEditor()
+    }
+  } else {
+    closeEditor()
+  }
 }
 
 const formatContent = () => {

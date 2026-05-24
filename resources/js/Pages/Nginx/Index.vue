@@ -178,7 +178,7 @@
       </div>
 
       <!-- Editor Modal -->
-      <div class="modal-backdrop fade show" v-if="showEditorModal" @click="closeEditor"></div>
+      <div class="modal-backdrop fade show" v-if="showEditorModal" @click="closeEditorConfirm"></div>
       <div class="modal fade show d-block" v-if="showEditorModal">
         <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 90vw;">
           <div class="modal-content">
@@ -187,7 +187,7 @@
                 <h5 class="modal-title mb-0">Nginx Config: {{ editingDomain?.domain }}</h5>
                 <p class="text-sm text-secondary mb-0">{{ editingDomain?.configPath }}</p>
               </div>
-              <button type="button" class="btn-close" @click="closeEditor"></button>
+              <button type="button" class="btn-close" @click="closeEditorConfirm"></button>
             </div>
             <div class="modal-body">
               <transition name="fade">
@@ -204,7 +204,7 @@
               <div id="nginx-editor-container" class="nginx-editor-box border shadow-inner"></div>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="closeEditor">Cancel</button>
+              <button class="btn btn-outline-secondary" @click="closeEditorConfirm">Cancel</button>
               <button class="btn bg-gradient-info" @click="saveAndTest" :disabled="saving">
                 <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
                 Save & Test
@@ -281,7 +281,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import ace from 'ace-builds'
 
@@ -307,6 +307,7 @@ const showTestModal = ref(false)
 
 const editingDomain = ref(null)
 const editorContent = ref('')
+const originalEditorContent = ref('')
 const testResult = ref(null)
 
 const alert = ref({
@@ -315,8 +316,20 @@ const alert = ref({
   message: ''
 })
 
+const handleKeyboardShortcuts = (e) => {
+  if (e.key === 'Escape' && showEditorModal.value) {
+    e.preventDefault()
+    closeEditorConfirm()
+  }
+}
+
 onMounted(() => {
   loadDomains()
+  window.addEventListener('keydown', handleKeyboardShortcuts)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcuts)
 })
 
 const showAlert = (type, message) => {
@@ -379,6 +392,15 @@ const initNginxEditor = () => {
     wrap: true
   })
 
+  // Close editor on pressing Esc inside the Ace Editor
+  aceEditor.commands.addCommand({
+    name: 'closeEditorOnEsc',
+    bindKey: {win: 'Esc', mac: 'Esc'},
+    exec: function(editor) {
+      closeEditorConfirm()
+    }
+  })
+
   aceEditor.on('change', () => {
     editorContent.value = aceEditor.getValue()
   })
@@ -389,6 +411,7 @@ const openEditor = async (domain) => {
     loading.value = true
     const response = await axios.post('/nginx/config/read', { domain: domain.domain })
     editorContent.value = response.data.content
+    originalEditorContent.value = response.data.content
     editingDomain.value = domain
     showEditorModal.value = true
     
@@ -412,6 +435,17 @@ const closeEditor = () => {
   editorContent.value = ''
 }
 
+const closeEditorConfirm = () => {
+  const isDirty = editorContent.value !== originalEditorContent.value
+  if (isDirty) {
+    if (confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
+      closeEditor()
+    }
+  } else {
+    closeEditor()
+  }
+}
+
 const saveAndTest = async () => {
   try {
     saving.value = true
@@ -420,6 +454,7 @@ const saveAndTest = async () => {
       content: editorContent.value
     })
     showAlert('success', 'Configuration saved and tested successfully')
+    originalEditorContent.value = editorContent.value
     closeEditor()
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to save configuration')
