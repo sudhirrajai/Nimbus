@@ -190,16 +190,18 @@
               <button type="button" class="btn-close" @click="closeEditor"></button>
             </div>
             <div class="modal-body">
+              <transition name="fade">
+                <div v-if="alert.show" :class="`alert alert-${alert.type} alert-dismissible fade show text-white mb-3`" role="alert">
+                  <span class="alert-icon"><i class="material-symbols-rounded">{{ getAlertIcon(alert.type) }}</i></span>
+                  <span class="alert-text ms-2 font-weight-bold text-white">{{ alert.message }}</span>
+                  <button type="button" class="btn-close text-white" @click="alert.show = false" style="filter: invert(1);"></button>
+                </div>
+              </transition>
               <div class="alert alert-warning py-2 mb-3">
                 <i class="material-symbols-rounded text-sm me-1">warning</i>
                 <small>Be careful when editing nginx configuration. Invalid settings will be automatically reverted. A backup is created before saving.</small>
               </div>
-              <textarea 
-                v-model="editorContent" 
-                class="form-control font-monospace" 
-                rows="25"
-                style="font-size: 13px;"
-              ></textarea>
+              <div id="nginx-editor-container" class="nginx-editor-box border shadow-inner"></div>
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" @click="closeEditor">Cancel</button>
@@ -279,8 +281,15 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import axios from 'axios'
+import ace from 'ace-builds'
+
+// Import Ace components
+import 'ace-builds/src-noconflict/mode-nginx'
+import 'ace-builds/src-noconflict/theme-monokai'
+import 'ace-builds/src-noconflict/ext-language_tools'
+import 'ace-builds/src-noconflict/ext-searchbox'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -351,6 +360,30 @@ const paginatedDomains = computed(() => {
   return filteredDomains.value.slice(paginationStart.value, paginationEnd.value)
 })
 
+let aceEditor = null
+
+const initNginxEditor = () => {
+  if (aceEditor) aceEditor.destroy()
+  
+  aceEditor = ace.edit("nginx-editor-container")
+  aceEditor.setTheme("ace/theme/monokai")
+  aceEditor.session.setMode("ace/mode/nginx")
+  aceEditor.setValue(editorContent.value, -1)
+  
+  aceEditor.setOptions({
+    fontSize: "14px",
+    enableBasicAutocompletion: true,
+    enableLiveAutocompletion: true,
+    showPrintMargin: false,
+    scrollPastEnd: 0.5,
+    wrap: true
+  })
+
+  aceEditor.on('change', () => {
+    editorContent.value = aceEditor.getValue()
+  })
+}
+
 const openEditor = async (domain) => {
   try {
     loading.value = true
@@ -358,6 +391,10 @@ const openEditor = async (domain) => {
     editorContent.value = response.data.content
     editingDomain.value = domain
     showEditorModal.value = true
+    
+    nextTick(() => {
+      initNginxEditor()
+    })
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to read configuration')
   } finally {
@@ -366,6 +403,10 @@ const openEditor = async (domain) => {
 }
 
 const closeEditor = () => {
+  if (aceEditor) {
+    aceEditor.destroy()
+    aceEditor = null
+  }
   showEditorModal.value = false
   editingDomain.value = null
   editorContent.value = ''
@@ -548,6 +589,14 @@ const reloadAfterTest = async () => {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+.nginx-editor-box {
+  width: 100%;
+  height: 550px;
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: 'Fira Code', monospace;
 }
 </style>
 
