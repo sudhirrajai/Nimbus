@@ -729,16 +729,10 @@ class FileManagerController extends Controller
                     $this->executeSudoCommand("mv {$escapedTemp} {$escapedTarget}");
                     $this->executeSudoCommand("chmod 644 {$escapedTarget}");
 
-                    // Nimbus Shield: Scan on upload
-                    $finding = ShieldController::scanFile($targetPath);
-                    if ($finding) {
-                        \App\Models\SecurityThreat::create([
-                            'file_path' => $targetPath,
-                            'type' => $finding['type'],
-                            'details' => $finding['details'] . ' (Detected during upload)',
-                            'status' => 'detected'
-                        ]);
-                    }
+                    // Nimbus Shield: Scan on upload (Asynchronous background scan for raw performance)
+                    $escapedTarget = escapeshellarg($targetPath);
+                    $cmd = "php artisan shield:scan-file {$escapedTarget}";
+                    exec("nohup {$cmd} > /dev/null 2>&1 &");
 
                     return response()->json(['message' => 'File uploaded successfully']);
                 }
@@ -758,16 +752,10 @@ class FileManagerController extends Controller
                 $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
                 $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
 
-                // Nimbus Shield: Scan on upload
-                $finding = ShieldController::scanFile($targetPath);
-                if ($finding) {
-                    \App\Models\SecurityThreat::create([
-                        'file_path' => $targetPath,
-                        'type' => $finding['type'],
-                        'details' => $finding['details'] . ' (Detected during upload)',
-                        'status' => 'detected'
-                    ]);
-                }
+                // Nimbus Shield: Scan on upload (Asynchronous background scan for raw performance)
+                $escapedTarget = escapeshellarg($targetPath);
+                $cmd = "php artisan shield:scan-file {$escapedTarget}";
+                exec("nohup {$cmd} > /dev/null 2>&1 &");
 
                 return response()->json(['message' => 'File uploaded successfully']);
             }
