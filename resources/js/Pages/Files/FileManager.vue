@@ -661,6 +661,15 @@
               </button>
             </div>
           </div>
+          <!-- Floating Toast Alert inside Editor -->
+          <transition name="fade">
+            <div v-if="alert.show" class="editor-toast-alert shadow-lg" :class="alert.type === 'success' ? 'bg-success' : 'bg-danger'">
+              <i class="material-symbols-rounded text-white me-2">
+                {{ alert.type === 'success' ? 'check_circle' : 'error' }}
+              </i>
+              <span class="text-white font-weight-bold">{{ alert.message }}</span>
+            </div>
+          </transition>
           <div id="ace-editor-container" class="flex-grow-1"></div>
         </div>
       </transition>
@@ -1643,6 +1652,37 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 .editor-header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   min-height: 60px;
+}
+
+.editor-toast-alert {
+  position: absolute;
+  top: 80px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  padding: 12px 24px;
+  border-radius: 12px;
+  animation: slideInRight 0.3s ease;
+}
+
+.editor-toast-alert.bg-success {
+  background-color: #2dce89 !important;
+}
+
+.editor-toast-alert.bg-danger {
+  background-color: #f5365c !important;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .spin-animation { animation: rotate 2s linear infinite; }
