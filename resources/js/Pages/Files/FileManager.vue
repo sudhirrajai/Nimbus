@@ -1,8 +1,7 @@
 <template>
   <MainLayout>
     <Head title="File Manager" />
-    <div class="container-fluid py-4" @click="closeContextMenu" @dragenter.prevent="handleDragEnter"
-      @dragover.prevent="handleDragOver" @dragleave.prevent="handleDragLeave" @drop.prevent="handleDrop">
+    <div class="container-fluid py-4" @click="closeContextMenu">
 
       <!-- Header -->
       <div class="row mb-4">
@@ -946,11 +945,22 @@ onMounted(() => {
   checkGitToken()
   window.addEventListener('keydown', handleKeyboardShortcuts)
   window.addEventListener('popstate', handlePopState)
+
+  // Viewport drag and drop listeners
+  window.addEventListener('dragenter', handleWindowDragEnter)
+  window.addEventListener('dragover', handleWindowDragOver)
+  window.addEventListener('dragleave', handleWindowDragLeave)
+  window.addEventListener('drop', handleWindowDrop)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcuts)
   window.removeEventListener('popstate', handlePopState)
+
+  window.removeEventListener('dragenter', handleWindowDragEnter)
+  window.removeEventListener('dragover', handleWindowDragOver)
+  window.removeEventListener('dragleave', handleWindowDragLeave)
+  window.removeEventListener('drop', handleWindowDrop)
 })
 
 const onToggleHidden = () => {
@@ -1470,9 +1480,33 @@ watch(showEditorModal, (val) => {
 const triggerUpload = () => fileInput.value.click()
 
 const handleFileUpload = (e) => processFilesUpload(e.target.files)
-const handleDrop = (e) => {
+
+const handleWindowDragEnter = (e) => {
+  e.preventDefault()
+  isDragging.value = true
+  dragCounter.value++
+}
+
+const handleWindowDragLeave = (e) => {
+  e.preventDefault()
+  dragCounter.value--
+  if (dragCounter.value === 0) {
+    isDragging.value = false
+  }
+}
+
+const handleWindowDragOver = (e) => {
+  e.preventDefault()
+  isDragging.value = true
+}
+
+const handleWindowDrop = (e) => {
+  e.preventDefault()
   isDragging.value = false
-  processFilesUpload(e.dataTransfer.files)
+  dragCounter.value = 0
+  if (e.dataTransfer && e.dataTransfer.files) {
+    processFilesUpload(e.dataTransfer.files)
+  }
 }
 
 const processFilesUpload = async (files) => {
@@ -1495,10 +1529,6 @@ const processFilesUpload = async (files) => {
   uploading.value = false
   loadFiles()
 }
-
-const handleDragEnter = () => { isDragging.value = true; dragCounter.value++ }
-const handleDragLeave = () => { dragCounter.value--; if (dragCounter.value === 0) isDragging.value = false }
-const handleDragOver = (e) => { e.preventDefault(); isDragging.value = true }
 
 const downloadFile = (name) => {
   const filePath = currentPath.value ? `${currentPath.value}/${name}` : name
@@ -1786,7 +1816,7 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 1000; /* High, but usually lower than fixed sidebar */
+  z-index: 20000; /* Overlays the entire screen */
   background: rgba(94, 114, 228, 0.92);
   backdrop-filter: blur(12px);
   display: flex;
