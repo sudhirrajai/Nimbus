@@ -322,6 +322,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/scan', [\App\Http\Controllers\ShieldController::class, 'startScan'])->name('scan');
             Route::post('/stop', [\App\Http\Controllers\ShieldController::class, 'stopScan'])->name('stop');
             Route::post('/quarantine', [\App\Http\Controllers\ShieldController::class, 'quarantine'])->name('quarantine');
+            Route::post('/restore', [\App\Http\Controllers\ShieldController::class, 'restoreQuarantine'])->name('restore');
             Route::post('/delete', [\App\Http\Controllers\ShieldController::class, 'deleteThreat'])->name('delete');
             
             // Firewall management

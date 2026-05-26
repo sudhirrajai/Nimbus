@@ -24,7 +24,10 @@ class ShieldController extends Controller
     {
         $request->validate([
             'auto_scan_enabled' => 'required|boolean',
-            'auto_scan_time' => 'required|string|regex:/^[0-2][0-9]:[0-5][0-9]$/'
+            'auto_scan_time' => 'required|string|regex:/^[0-2][0-9]:[0-5][0-9]$/',
+            'auto_quarantine' => 'required|boolean',
+            'email_alerts' => 'required|boolean',
+            'alert_emails' => 'nullable|string'
         ]);
 
         try {
@@ -35,6 +38,18 @@ class ShieldController extends Controller
             Setting::updateOrCreate(
                 ['key' => 'shield_auto_scan_time'],
                 ['value' => $request->auto_scan_time]
+            );
+            Setting::updateOrCreate(
+                ['key' => 'shield_auto_quarantine'],
+                ['value' => $request->auto_quarantine ? '1' : '0']
+            );
+            Setting::updateOrCreate(
+                ['key' => 'shield_email_alerts'],
+                ['value' => $request->email_alerts ? '1' : '0']
+            );
+            Setting::updateOrCreate(
+                ['key' => 'shield_alert_emails'],
+                ['value' => $request->alert_emails ?: '']
             );
 
             return response()->json([
@@ -67,7 +82,10 @@ class ShieldController extends Controller
                 'tools_installed' => $this->checkToolsInstalled(),
                 'install_status' => Setting::where('key', 'shield_install_status')->value('value') ?: 'idle',
                 'auto_scan_enabled' => Setting::where('key', 'shield_auto_scan')->value('value') === '1',
-                'auto_scan_time' => Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00'
+                'auto_scan_time' => Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00',
+                'auto_quarantine' => Setting::where('key', 'shield_auto_quarantine')->value('value') === '1',
+                'email_alerts' => Setting::where('key', 'shield_email_alerts')->value('value') === '1',
+                'alert_emails' => Setting::where('key', 'shield_alert_emails')->value('value') ?: ''
             ];
 
             try {
@@ -160,6 +178,23 @@ class ShieldController extends Controller
         }
 
         try {
+            $autoQuarantine = Setting::where('key', 'shield_auto_quarantine')->value('value') === '1';
+            $emailAlerts = Setting::where('key', 'shield_email_alerts')->value('value') === '1';
+            $alertEmails = Setting::where('key', 'shield_alert_emails')->value('value');
+
+            if ($emailAlerts && !empty($alertEmails)) {
+                $emails = array_map('trim', explode(',', $alertEmails));
+                foreach ($emails as $email) {
+                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $this->sendEncryptedEmail(
+                            $email,
+                            "Nimbus Shield: Scan Started",
+                            "<p>A security scan has been initiated on path: <strong>$path</strong></p><p>You will receive another email once the scan completes with a detailed report.</p>"
+                        );
+                    }
+                }
+            }
+
             $findings = [];
             
             // 1. Scan for long hex-named HTML files (SEO injections)
@@ -228,20 +263,68 @@ class ShieldController extends Controller
                 \Log::warning("Clamscan failed or not installed: " . $e->getMessage());
             }
 
-            // Save findings to database
+            // Save findings to database and process auto-quarantine
+            $quarantineDir = storage_path('app/quarantine');
+            if ($autoQuarantine && !is_dir($quarantineDir)) {
+                mkdir($quarantineDir, 0700, true);
+            }
+
             foreach ($findings as $finding) {
+                $status = 'detected';
+                $details = $finding['details'];
+
+                if ($autoQuarantine) {
+                    $filename = basename($finding['file_path']) . '.' . time() . '.bak';
+                    $destination = $quarantineDir . '/' . $filename;
+                    
+                    try {
+                        $this->executeSudoCommand("mv " . escapeshellarg($finding['file_path']) . " " . escapeshellarg($destination));
+                        $this->executeSudoCommand("chmod 000 " . escapeshellarg($destination));
+                        $status = 'quarantined';
+                        $details .= " | Quarantined to: $destination";
+                    } catch (\Exception $e) {
+                        \Log::warning("Auto-quarantine failed for {$finding['file_path']}: " . $e->getMessage());
+                    }
+                }
+
                 SecurityThreat::updateOrCreate(
                     ['file_path' => $finding['file_path']],
                     [
                         'type' => $finding['type'],
-                        'details' => $finding['details'],
-                        'status' => 'detected',
-                        'detected_at' => now()
+                        'details' => $details,
+                        'status' => $status,
+                        'detected_at' => now(),
+                        'resolved_at' => $status === 'quarantined' ? now() : null
                     ]
                 );
             }
 
             \Log::info("Shield scan completed for $path. Findings: " . count($findings));
+
+            if ($emailAlerts && !empty($alertEmails)) {
+                $emails = array_map('trim', explode(',', $alertEmails));
+                $htmlReport = "<h3>Nimbus Shield: Scan Completed</h3>";
+                $htmlReport .= "<p>Scan path: <strong>$path</strong></p>";
+                $htmlReport .= "<p>Total threats found: <strong>" . count($findings) . "</strong></p>";
+                
+                if (count($findings) > 0) {
+                    $htmlReport .= "<table border='1' cellpadding='5' cellspacing='0' style='border-collapse: collapse; width: 100%;'>";
+                    $htmlReport .= "<thead><tr><th>File Path</th><th>Type</th><th>Status</th></tr></thead><tbody>";
+                    foreach ($findings as $finding) {
+                        $fileStatus = $autoQuarantine ? "Quarantined" : "Detected";
+                        $htmlReport .= "<tr><td>{$finding['file_path']}</td><td>{$finding['type']}</td><td>{$fileStatus}</td></tr>";
+                    }
+                    $htmlReport .= "</tbody></table>";
+                } else {
+                    $htmlReport .= "<p>No threats were detected. Your system is clean.</p>";
+                }
+
+                foreach ($emails as $email) {
+                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $this->sendEncryptedEmail($email, "Nimbus Shield: Scan Completed - " . count($findings) . " Threats Found", $htmlReport);
+                    }
+                }
+            }
         } catch (\Exception $e) {
             \Log::error("Shield internal scan logic failed: " . $e->getMessage());
         } finally {
@@ -322,6 +405,87 @@ class ShieldController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    public function restoreQuarantine(Request $request)
+    {
+        $id = $request->input('id');
+        $threat = SecurityThreat::find($id);
+        
+        if (!$threat) return response()->json(['error' => 'Threat not found'], 404);
+        if ($threat->status !== 'quarantined') return response()->json(['error' => 'Threat is not quarantined'], 400);
+
+        if (preg_match('/Quarantined to: (.+)$/', $threat->details, $matches)) {
+            $quarantinedPath = trim($matches[1]);
+            $originalPath = $threat->file_path;
+
+            try {
+                if (!File::exists($quarantinedPath)) {
+                     return response()->json(['error' => 'Quarantined file missing'], 404);
+                }
+
+                $this->executeSudoCommand("mv " . escapeshellarg($quarantinedPath) . " " . escapeshellarg($originalPath));
+                $this->executeSudoCommand("chmod 644 " . escapeshellarg($originalPath));
+
+                $cleanDetails = explode(' | Quarantined to:', $threat->details)[0];
+
+                $threat->update([
+                    'status' => 'detected',
+                    'details' => $cleanDetails
+                ]);
+
+                return response()->json(['success' => true, 'message' => 'File restored successfully']);
+            } catch (\Exception $e) {
+                return response()->json(['error' => $e->getMessage()], 500);
+            }
+        }
+
+        return response()->json(['error' => 'Could not determine quarantine path'], 400);
+    }
+
+    private function sendEncryptedEmail($to, $subject, $htmlContent)
+    {
+        $apiUrl = 'https://vmcore.in/api/send-encrypted-email';
+        $apiKey = 'vmk_ZZALOAMF78GByDGlGe3buSlly2Z32s9r7ey8KJf3w7VojizG';
+        $encKey = 'UOFE3D52L3fjfCvew0rd2ed/GgwCzN521vlgJ7hmlm0=';
+
+        $rawKey = base64_decode($encKey);
+        
+        $encryptValue = function($value) use ($rawKey) {
+            $iv = random_bytes(16);
+            $encrypted = openssl_encrypt($value, 'AES-256-CBC', $rawKey, 0, $iv);
+            $mac = hash_hmac('sha256', base64_encode($iv) . $encrypted, $rawKey);
+
+            return base64_encode(json_encode([
+                'iv'    => base64_encode($iv),
+                'value' => $encrypted,
+                'mac'   => $mac,
+                'tag'   => '',
+            ]));
+        };
+
+        $payload = [
+            'to_email'          => $to,
+            'encrypted_subject' => $encryptValue($subject),
+            'encrypted_content' => $encryptValue($htmlContent),
+        ];
+
+        $ch = curl_init($apiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => [
+                "X-Api-Key: $apiKey",
+                "Accept: application/json",
+                "Content-Type: application/json"
+            ],
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_TIMEOUT        => 10
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return $response;
     }
 
     private function getFirewallStatus()

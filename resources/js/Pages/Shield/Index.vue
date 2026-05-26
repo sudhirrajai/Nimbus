@@ -230,6 +230,9 @@
                                                 <button v-if="threat.status === 'detected'" @click="quarantineThreat(threat.id)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine">
                                                     <i class="material-symbols-rounded">inventory_2</i>
                                                 </button>
+                                                <button v-if="threat.status === 'quarantined'" @click="restoreThreat(threat.id)" class="btn btn-link text-success text-gradient p-0 mb-0" title="Restore File">
+                                                    <i class="material-symbols-rounded">restore_page</i>
+                                                </button>
                                                 <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient p-0 mb-0" title="Delete">
                                                     <i class="material-symbols-rounded">delete</i>
                                                 </button>
@@ -327,6 +330,35 @@
                                                 <i class="material-symbols-rounded text-xs me-1">info</i>
                                                 We recommend scheduling scans during low-traffic periods (e.g., 03:00 AM).
                                             </p>
+                                        </div>
+
+                                        <hr class="horizontal dark my-4">
+
+                                        <div class="d-flex align-items-center justify-content-between mb-4">
+                                            <div>
+                                                <h6 class="text-sm font-weight-bold mb-0">Auto-Quarantine Threats</h6>
+                                                <p class="text-xs text-secondary mb-0">Automatically isolate suspicious files immediately during scans.</p>
+                                            </div>
+                                            <div class="form-check form-switch ps-0">
+                                                <input class="form-check-input ms-auto" type="checkbox" v-model="stats.auto_quarantine">
+                                            </div>
+                                        </div>
+
+                                        <hr class="horizontal dark my-4">
+
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
+                                            <div>
+                                                <h6 class="text-sm font-weight-bold mb-0">Email Notifications</h6>
+                                                <p class="text-xs text-secondary mb-0">Send an encrypted report when a scan starts and finishes.</p>
+                                            </div>
+                                            <div class="form-check form-switch ps-0">
+                                                <input class="form-check-input ms-auto" type="checkbox" v-model="stats.email_alerts">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-4" :class="{ 'opacity-5': !stats.email_alerts }">
+                                            <label class="text-sm font-weight-bold mb-1 d-block">Alert Recipients (Comma separated)</label>
+                                            <input type="text" v-model="stats.alert_emails" class="form-control border px-2 w-100" placeholder="admin@domain.com, security@domain.com" :disabled="!stats.email_alerts">
                                         </div>
 
                                         <hr class="horizontal dark my-4">
@@ -468,7 +500,10 @@ const stats = ref({
     tools_installed: { all: true }, // Default to true to avoid flicker
     install_status: 'idle',
     auto_scan_enabled: false,
-    auto_scan_time: '03:00'
+    auto_scan_time: '03:00',
+    auto_quarantine: false,
+    email_alerts: false,
+    alert_emails: ''
 })
 
 const savingSettings = ref(false)
@@ -477,7 +512,10 @@ const saveSecuritySettings = async () => {
     try {
         const response = await axios.post('/shield/settings', {
             auto_scan_enabled: stats.value.auto_scan_enabled,
-            auto_scan_time: stats.value.auto_scan_time
+            auto_scan_time: stats.value.auto_scan_time,
+            auto_quarantine: stats.value.auto_quarantine,
+            email_alerts: stats.value.email_alerts,
+            alert_emails: stats.value.alert_emails
         })
         if (response.data.success) {
             showNotification(response.data.message, 'success')
@@ -671,6 +709,19 @@ const quarantineThreat = async (id) => {
         }
     } catch (error) {
         showNotification('Quarantine failed', 'danger')
+    }
+}
+
+const restoreThreat = async (id) => {
+    if (!confirm('Are you sure you want to restore this file to its original location? Only do this if you are certain it is safe.')) return
+    try {
+        const response = await axios.post('/shield/restore', { id })
+        if (response.data.success) {
+            showNotification('File restored successfully', 'success')
+            await loadStatus()
+        }
+    } catch (error) {
+        showNotification(error.response?.data?.error || 'Restore failed', 'danger')
     }
 }
 
