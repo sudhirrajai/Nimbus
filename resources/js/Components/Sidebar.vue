@@ -5,8 +5,9 @@
       <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
         id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
 
-      <a class="navbar-brand px-4 py-3 m-0" href="#">
-        <span class="ms-1 text-sm text-dark font-weight-bold">Nimbus Control Panel</span>
+      <a class="navbar-brand px-4 py-3 m-0" href="https://vmcore.in" target="_blank" style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1;">
+        <span class="ms-1 text-sm text-dark font-weight-bold" style="letter-spacing: -0.03em;">nimbus</span>
+        <span class="ms-1 text-xxs text-muted opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by VMCore</span>
       </a>
     </div>
 
@@ -220,8 +221,8 @@
 
     <div class="sidenav-footer position-absolute w-100 bottom-0">
       <div class="mx-3">
-        <a class="btn btn-outline-dark mt-4 w-100" href="/documentation">
-          <i class="material-symbols-rounded text-sm me-1">article</i>
+        <a class="btn btn-outline-dark mt-4 w-100" href="https://nimbus-docs.vmcore.in/" target="_blank">
+          <i class="material-symbols-rounded text-sm me-1">menu_book</i>
           Documentation
         </a>
       </div>

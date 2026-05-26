@@ -597,164 +597,335 @@ class DomainController extends Controller
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to $domain | Nimbus</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <title>$domain is Ready | nimbus by VMCore</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700,900" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    
     <style>
         :root {
-            --primary: #6366f1;
-            --secondary: #a855f7;
-            --accent: #ec4899;
-            --dark: #0f172a;
-            --light: #f8fafc;
+            --primary: #ec4899;
+            --secondary: #e91e63;
+            --dark: #0f111a;
+            --card-bg: #1e2130;
+            --text-main: #ffffff;
+            --text-secondary: #8e94a9;
+            --success: #4caf50;
         }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--dark);
-            color: var(--light);
-            height: 100vh;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark);
+            color: var(--text-main);
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            padding: 2rem 1rem;
             position: relative;
+            overflow-x: hidden;
         }
 
-        /* Animated Background Gradients */
+        /* Ambient Glow */
         body::before {
             content: '';
             position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0) 50%),
-                        radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.1) 0%, rgba(15, 23, 42, 0) 40%);
-            animation: rotate 30s linear infinite;
-            z-index: -1;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(233, 30, 99, 0.08) 0%, rgba(15, 17, 26, 0) 70%);
+            top: -100px;
+            right: -100px;
+            z-index: 1;
         }
 
-        @keyframes rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        body::after {
+            content: '';
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(103, 116, 142, 0.05) 0%, rgba(15, 17, 26, 0) 70%);
+            bottom: -200px;
+            left: -200px;
+            z-index: 1;
         }
 
-        .card {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 4rem 3rem;
-            border-radius: 2.5rem;
-            text-align: center;
-            max-width: 600px;
-            width: 90%;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            animation: fadeInScale 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        .container {
+            width: 100%;
+            max-width: 850px;
             position: relative;
             z-index: 10;
         }
 
-        @keyframes fadeInScale {
-            from { opacity: 0; transform: scale(0.9) translateY(20px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+        .brand-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
         }
 
-        .logo {
-            font-weight: 800;
-            font-size: 1.5rem;
-            letter-spacing: -0.05em;
-            margin-bottom: 2rem;
+        .brand-logo {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            text-transform: lowercase;
+            color: var(--text-main);
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .brand-logo:hover {
+            opacity: 0.8;
+        }
+
+        .brand-logo span {
+            background: linear-gradient(to right, #ff4081, #e91e63);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            font-weight: 900;
+        }
+
+        .brand-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 0.25rem;
+        }
+
+        .brand-sub a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .brand-sub a:hover {
+            color: #ff4081;
+        }
+
+        .main-card {
+            background: rgba(30, 33, 48, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 1.5rem;
+            padding: 3.5rem 3rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.2);
+            color: var(--success);
+            padding: 0.5rem 1.25rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1.5rem;
+        }
+
+        .badge-status i {
+            font-size: 14px;
         }
 
         h1 {
-            font-size: 3.5rem;
+            font-size: 2.75rem;
             font-weight: 800;
-            margin-bottom: 1.5rem;
-            line-height: 1;
             letter-spacing: -0.02em;
-            background: linear-gradient(to bottom right, #fff 50%, #94a3b8);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+            line-height: 1.1;
         }
 
-        p {
-            font-size: 1.25rem;
-            color: #94a3b8;
-            margin-bottom: 2.5rem;
-            line-height: 1.6;
-            font-weight: 300;
+        h1 span {
+            color: #ff4081;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 0.5rem 1.25rem;
-            background: rgba(99, 102, 241, 0.1);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            border-radius: 100px;
-            color: var(--primary);
+        .tagline {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            max-width: 580px;
+            margin: 0 auto 3rem;
+        }
+
+        /* Dashboard-like Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 3rem;
+            text-align: left;
+        }
+
+        .grid-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            transition: all 0.25s ease;
+        }
+
+        .grid-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-3px);
+            border-color: rgba(233, 30, 99, 0.2);
+        }
+
+        .item-icon {
+            width: 38px;
+            height: 38px;
+            background: rgba(233, 30, 99, 0.1);
+            color: #ff4081;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .item-icon i {
+            font-size: 20px;
+        }
+
+        .item-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .item-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(195deg, #42424a, #191919);
+            color: #ffffff;
             font-weight: 600;
             font-size: 0.875rem;
-            margin-bottom: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .btn {
-            display: inline-block;
-            background: var(--light);
-            color: var(--dark);
-            padding: 1rem 2.5rem;
-            border-radius: 1rem;
-            font-weight: 600;
+            padding: 0.875rem 2.25rem;
+            border-radius: 0.75rem;
             text-decoration: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .btn:hover {
+        .btn-action:hover {
             transform: translateY(-2px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-            background: #fff;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(195deg, #4f4f56, #222222);
         }
 
         .footer {
-            margin-top: 3rem;
-            font-size: 0.875rem;
-            color: #475569;
-            font-weight: 400;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
         }
 
-        /* Float animation for the card */
-        .card {
-            animation: fadeInScale 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), float 6s ease-in-out infinite;
+        .footer a {
+            color: #ff4081;
+            text-decoration: none;
+            font-weight: 600;
+            transition: opacity 0.2s;
         }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+        .footer a:hover {
+            opacity: 0.8;
+        }
+
+        @media (max-width: 600px) {
+            .main-card {
+                padding: 2.5rem 1.5rem;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            .tagline {
+                font-size: 0.95rem;
+                margin-bottom: 2rem;
+            }
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="badge">Success!</div>
-        <div class="logo">NIMBUS</div>
-        <h1>$domain is Live.</h1>
-        <p>Your new digital space is ready and waiting. Log in to the Nimbus panel to start uploading your magic.</p>
-        <a href="#" class="btn">Get Started</a>
+    <div class="container">
+        
+        <!-- Branding Header -->
+        <div class="brand-header">
+            <a href="https://vmcore.in" target="_blank" class="brand-logo">
+                <span>nimbus</span>
+            </a>
+            <div class="brand-sub">by <a href="https://vmcore.in" target="_blank">VMCore</a></div>
+        </div>
+
+        <!-- Main Card -->
+        <div class="main-card">
+            <div class="badge-status">
+                <i class="material-symbols-rounded">check_circle</i>
+                Virtual Host Configured
+            </div>
+            
+            <h1>$domain is <span>Live</span></h1>
+            <p class="tagline">Your new website has been successfully provisioned. Nginx configuration, PHP pools, and directory logs are fully active and online.</p>
+
+            <!-- Dashboard Grid -->
+            <div class="features-grid">
+                <div class="grid-item">
+                    <div class="item-icon">
+                        <i class="material-symbols-rounded">folder</i>
+                    </div>
+                    <div class="item-title">File Uploads</div>
+                    <div class="item-desc">Drag & drop files, edit code online, or use Git integrations.</div>
+                </div>
+                <div class="grid-item">
+                    <div class="item-icon">
+                        <i class="material-symbols-rounded">storage</i>
+                    </div>
+                    <div class="item-title">Database Provision</div>
+                    <div class="item-desc">Create MySQL databases, users, and log in to phpMyAdmin with SSO.</div>
+                </div>
+                <div class="grid-item">
+                    <div class="item-icon">
+                        <i class="material-symbols-rounded">lock</i>
+                    </div>
+                    <div class="item-title">SSL Security</div>
+                    <div class="item-desc">Issue clean, one-click Let's Encrypt certificates with auto-renewal.</div>
+                </div>
+            </div>
+
+            <!-- Get Started Button -->
+            <a href="https://nimbus-docs.vmcore.in/" target="_blank" class="btn-action">
+                <i class="material-symbols-rounded">menu_book</i>
+                Read Documentation
+            </a>
+        </div>
+
+        <!-- Footer -->
         <div class="footer">
-            Powered by Nimbus Control Panel &bull; Premium Cloud Hosting
+            Powered by <a href="https://vmcore.in" target="_blank">nimbus by VMCore</a> &bull; Premium Server Control Panel
         </div>
     </div>
 </body>

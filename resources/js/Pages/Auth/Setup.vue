@@ -8,8 +8,8 @@
           <div class="logo-wrapper">
             <i class="material-symbols-rounded logo-icon">rocket_launch</i>
           </div>
-          <h1 class="brand-title">Welcome to Nimbus</h1>
-          <p class="brand-subtitle">Let's set up your control panel</p>
+          <h1 class="brand-title">Welcome to nimbus</h1>
+          <p class="brand-subtitle">by <a href="https://vmcore.in" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: 700;">VMCore</a></p>
           <div class="steps-list">
             <div class="step-item active">
               <div class="step-number">1</div>
