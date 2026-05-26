@@ -104,6 +104,7 @@ class ProfileController extends Controller
             'panel_domain' => $panelDomain,
             'panel_ssl' => $dbSettings['panel_ssl'] ?? (request()->isSecure() ? '1' : '0'),
             'allow_ip_access' => $dbSettings['allow_ip_access'] ?? '1',
+            'global_alert_emails' => $dbSettings['global_alert_emails'] ?? '',
         ];
 
         return response()->json([
@@ -122,6 +123,7 @@ class ProfileController extends Controller
             'timezone' => 'string|nullable',
             'auto_refresh' => 'boolean|nullable',
             'session_lifetime' => 'integer|nullable',
+            'global_alert_emails' => 'string|nullable',
         ]);
 
         foreach ($validated as $key => $value) {

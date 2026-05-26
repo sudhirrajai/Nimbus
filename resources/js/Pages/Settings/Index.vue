@@ -64,6 +64,29 @@
                     </div>
                 </div>
 
+                <!-- Notification Settings -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header pb-0">
+                            <h6 class="mb-0">
+                                <i class="material-symbols-rounded text-sm me-1">notifications</i>
+                                Notification Settings
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Global Alert Recipients</label>
+                                <input type="text" class="form-control" v-model="settings.global_alert_emails" placeholder="admin@domain.com, security@domain.com">
+                                <small class="text-muted">Comma-separated emails for system-wide alerts (SSL, Resources, Auth).</small>
+                            </div>
+                            <button class="btn bg-gradient-primary" @click="saveSettings" :disabled="saving">
+                                <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
+                                {{ saving ? 'Saving...' : 'Save Settings' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Security Settings -->
                 <div class="col-lg-6 mb-4">
                     <div class="card h-100">
@@ -437,7 +460,8 @@ const settings = ref({
     panel_name: 'Nimbus',
     timezone: 'UTC',
     auto_refresh: true,
-    session_lifetime: 120
+    session_lifetime: 120,
+    global_alert_emails: ''
 })
 
 const securityRules = ref([])

@@ -37,3 +37,6 @@ Schedule::command('shield:scan /var/www')
     ->when(function () {
         return Setting::where('key', 'shield_auto_scan')->value('value') === '1';
     });
+
+Schedule::command('monitor:resources')->everyFiveMinutes();
+

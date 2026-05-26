@@ -44,10 +44,30 @@ class AuthController extends Controller
                 ])->onlyInput('email');
             }
 
-            $user->update(['last_login_at' => now()]);
+            $currentIp = $request->ip();
+            $oldIp = $user->last_login_ip;
+
+            if ($oldIp && $oldIp !== $currentIp) {
+                \App\Services\NotificationService::send(
+                    "Security Alert: Successful Login from New IP",
+                    "<p>Hello,</p><p>A successful login to the Nimbus panel was detected from a new IP address.</p><p><strong>User:</strong> " . e($user->name) . " (" . e($user->email) . ")<br><strong>New IP Address:</strong> " . e($currentIp) . "<br><strong>Previous IP Address:</strong> " . e($oldIp) . "<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p><p>If this wasn't you, please secure your account immediately.</p>"
+                );
+            }
+
+            $user->update([
+                'last_login_at' => now(),
+                'last_login_ip' => $currentIp,
+            ]);
+
             $request->session()->regenerate();
             return redirect()->intended('/dashboard');
         }
+
+        // Send alert for failed login
+        \App\Services\NotificationService::send(
+            "Security Alert: Failed Login Attempt",
+            "<p>Hello,</p><p>A failed login attempt was detected on the Nimbus panel.</p><p><strong>Attempted Email:</strong> " . e($request->input('email')) . "<br><strong>IP Address:</strong> " . e($request->ip()) . "<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+        );
 
         return back()->withErrors([
             'email' => 'The provided credentials do not match our records.',
