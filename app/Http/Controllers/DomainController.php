@@ -605,13 +605,17 @@ class DomainController extends Controller
     
     <style>
         :root {
-            --primary: #ec4899;
-            --secondary: #e91e63;
-            --dark: #0f111a;
-            --card-bg: #1e2130;
-            --text-main: #ffffff;
-            --text-secondary: #8e94a9;
+            --primary: #cb0c9f;
+            --primary-gradient: linear-gradient(310deg, #7928ca, #ff007f);
+            --dark-gradient: linear-gradient(195deg, #42424a, #191919);
+            --dark: #344767;
+            --bg-gray: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #344767;
+            --text-secondary: #7b809a;
             --success: #4caf50;
+            --border-radius: 0.75rem;
+            --card-radius: 1rem;
         }
 
         * {
@@ -622,57 +626,34 @@ class DomainController extends Controller
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--dark);
+            background-color: var(--bg-gray);
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem 1rem;
+            padding: 3rem 1rem;
             position: relative;
             overflow-x: hidden;
         }
 
-        /* Ambient Glow */
-        body::before {
-            content: '';
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(233, 30, 99, 0.08) 0%, rgba(15, 17, 26, 0) 70%);
-            top: -100px;
-            right: -100px;
-            z-index: 1;
-        }
-
-        body::after {
-            content: '';
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(103, 116, 142, 0.05) 0%, rgba(15, 17, 26, 0) 70%);
-            bottom: -200px;
-            left: -200px;
-            z-index: 1;
-        }
-
         .container {
             width: 100%;
-            max-width: 850px;
+            max-width: 800px;
             position: relative;
             z-index: 10;
         }
 
         .brand-header {
             text-align: center;
-            margin-bottom: 2.5rem;
+            margin-bottom: 3.5rem;
         }
 
         .brand-logo {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 1.5rem;
+            font-size: 1.75rem;
             font-weight: 800;
             letter-spacing: -0.03em;
             text-transform: lowercase;
@@ -686,7 +667,7 @@ class DomainController extends Controller
         }
 
         .brand-logo span {
-            background: linear-gradient(to right, #ff4081, #e91e63);
+            background: var(--dark-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 900;
@@ -698,29 +679,52 @@ class DomainController extends Controller
             text-transform: uppercase;
             letter-spacing: 0.1em;
             margin-top: 0.25rem;
+            font-weight: 500;
         }
 
         .brand-sub a {
-            color: var(--text-secondary);
+            color: var(--text-main);
             text-decoration: none;
-            font-weight: 600;
+            font-weight: 700;
             transition: color 0.2s;
         }
 
         .brand-sub a:hover {
-            color: #ff4081;
+            color: var(--primary);
         }
 
         .main-card {
-            background: rgba(30, 33, 48, 0.6);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 1.5rem;
-            padding: 3.5rem 3rem;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            background: var(--card-bg);
+            border-radius: var(--card-radius);
+            padding: 3rem 2.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06), 0 20px 25px -5px rgba(0,0,0,0.05);
             text-align: center;
-            margin-bottom: 2rem;
+            position: relative;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            margin-bottom: 2.5rem;
+        }
+
+        /* Material Dashboard Offset Header style */
+        .card-offset-header {
+            background: var(--dark-gradient);
+            color: #ffffff;
+            padding: 1.25rem;
+            border-radius: var(--border-radius);
+            margin-top: -4.5rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.14), 0 7px 10px -5px rgba(0, 0, 0, 0.4);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+        }
+
+        .card-offset-header i {
+            font-size: 16px;
         }
 
         .badge-status {
@@ -729,139 +733,153 @@ class DomainController extends Controller
             gap: 0.4rem;
             background: rgba(76, 175, 80, 0.1);
             border: 1px solid rgba(76, 175, 80, 0.2);
-            color: var(--success);
-            padding: 0.5rem 1.25rem;
+            color: #2e7d32;
+            padding: 0.4rem 1rem;
             border-radius: 2rem;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
         }
 
         .badge-status i {
-            font-size: 14px;
+            font-size: 12px;
         }
 
         h1 {
-            font-size: 2.75rem;
+            font-size: 2.5rem;
             font-weight: 800;
             letter-spacing: -0.02em;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
             line-height: 1.1;
+            color: var(--text-main);
         }
 
         h1 span {
-            color: #ff4081;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .tagline {
-            font-size: 1.1rem;
+            font-size: 1rem;
             color: var(--text-secondary);
-            line-height: 1.5;
+            line-height: 1.6;
             max-width: 580px;
-            margin: 0 auto 3rem;
+            margin: 0 auto 2.5rem;
         }
 
         /* Dashboard-like Grid */
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1.25rem;
-            margin-bottom: 3rem;
+            margin-bottom: 2.5rem;
             text-align: left;
         }
 
         .grid-item {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 1rem;
-            padding: 1.25rem;
+            background: #ffffff;
+            border: 1px solid #f0f2f5;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
             transition: all 0.25s ease;
         }
 
         .grid-item:hover {
-            background: rgba(255, 255, 255, 0.04);
-            transform: translateY(-3px);
-            border-color: rgba(233, 30, 99, 0.2);
+            background: #ffffff;
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            border-color: rgba(203, 12, 159, 0.2);
         }
 
         .item-icon {
-            width: 38px;
-            height: 38px;
-            background: rgba(233, 30, 99, 0.1);
-            color: #ff4081;
+            width: 42px;
+            height: 42px;
+            background: rgba(203, 12, 159, 0.08);
+            color: var(--primary);
             border-radius: 0.5rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
         }
 
         .item-icon i {
-            font-size: 20px;
+            font-size: 22px;
         }
 
         .item-title {
-            font-size: 0.875rem;
+            font-size: 0.95rem;
             font-weight: 700;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.4rem;
+            color: var(--text-main);
         }
 
         .item-desc {
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             color: var(--text-secondary);
-            line-height: 1.4;
+            line-height: 1.5;
         }
 
         .btn-action {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            background: linear-gradient(195deg, #42424a, #191919);
+            background: var(--dark-gradient);
             color: #ffffff;
-            font-weight: 600;
-            font-size: 0.875rem;
-            padding: 0.875rem 2.25rem;
-            border-radius: 0.75rem;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.9rem 2.25rem;
+            border-radius: 0.5rem;
             text-decoration: none;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
             transition: all 0.2s ease;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: none;
+            cursor: pointer;
         }
 
         .btn-action:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.4);
-            background: linear-gradient(195deg, #4f4f56, #222222);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2), 0 4px 6px -2px rgba(0,0,0,0.05);
         }
 
         .footer {
             text-align: center;
             font-size: 0.75rem;
             color: var(--text-secondary);
+            font-weight: 500;
         }
 
         .footer a {
-            color: #ff4081;
+            color: var(--text-main);
             text-decoration: none;
-            font-weight: 600;
-            transition: opacity 0.2s;
+            font-weight: 700;
+            transition: color 0.2s;
         }
 
         .footer a:hover {
-            opacity: 0.8;
+            color: var(--primary);
         }
 
         @media (max-width: 600px) {
             .main-card {
                 padding: 2.5rem 1.5rem;
+                margin-top: 2rem;
+            }
+            .card-offset-header {
+                margin-top: -3.75rem;
+                margin-bottom: 1.75rem;
             }
             h1 {
                 font-size: 2rem;
             }
             .tagline {
-                font-size: 0.95rem;
+                font-size: 0.9rem;
                 margin-bottom: 2rem;
             }
             .features-grid {
@@ -883,13 +901,19 @@ class DomainController extends Controller
 
         <!-- Main Card -->
         <div class="main-card">
+            <!-- Offset Floating Card Header -->
+            <div class="card-offset-header">
+                <i class="material-symbols-rounded">dns</i>
+                Virtual Host Active
+            </div>
+
             <div class="badge-status">
                 <i class="material-symbols-rounded">check_circle</i>
-                Virtual Host Configured
+                Site Provisioned Successfully
             </div>
             
             <h1>$domain is <span>Live</span></h1>
-            <p class="tagline">Your new website has been successfully provisioned. Nginx configuration, PHP pools, and directory logs are fully active and online.</p>
+            <p class="tagline">Your new website has been successfully configured. Nginx virtual host records, PHP-FPM pools, and system loggers are fully online.</p>
 
             <!-- Dashboard Grid -->
             <div class="features-grid">
@@ -897,22 +921,22 @@ class DomainController extends Controller
                     <div class="item-icon">
                         <i class="material-symbols-rounded">folder</i>
                     </div>
-                    <div class="item-title">File Uploads</div>
-                    <div class="item-desc">Drag & drop files, edit code online, or use Git integrations.</div>
+                    <div class="item-title">File Operations</div>
+                    <div class="item-desc">Drag & drop files, edit code online, or link external Git repositories for auto-deployment.</div>
                 </div>
                 <div class="grid-item">
                     <div class="item-icon">
                         <i class="material-symbols-rounded">storage</i>
                     </div>
                     <div class="item-title">Database Provision</div>
-                    <div class="item-desc">Create MySQL databases, users, and log in to phpMyAdmin with SSO.</div>
+                    <div class="item-desc">Easily manage MySQL databases, create database users, and access phpMyAdmin with Single Sign-On (SSO).</div>
                 </div>
                 <div class="grid-item">
                     <div class="item-icon">
                         <i class="material-symbols-rounded">lock</i>
                     </div>
                     <div class="item-title">SSL Security</div>
-                    <div class="item-desc">Issue clean, one-click Let's Encrypt certificates with auto-renewal.</div>
+                    <div class="item-desc">Instantly secure your website with free Let's Encrypt SSL certificates featuring full auto-renewals.</div>
                 </div>
             </div>
 
