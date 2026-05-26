@@ -107,9 +107,12 @@ class ProfileController extends Controller
             'global_alert_emails' => $dbSettings['global_alert_emails'] ?? '',
         ];
 
+        $users = User::select('id', 'name', 'email')->get();
+
         return response()->json([
             'success' => true,
-            'settings' => $settings
+            'settings' => $settings,
+            'users' => $users
         ]);
     }
 

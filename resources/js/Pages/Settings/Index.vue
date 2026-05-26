@@ -75,9 +75,26 @@
                         </div>
                         <div class="card-body">
                             <div class="mb-3">
-                                <label class="form-label">Global Alert Recipients</label>
-                                <input type="text" class="form-control" v-model="settings.global_alert_emails" placeholder="admin@domain.com, security@domain.com">
-                                <small class="text-muted">Comma-separated emails for system-wide alerts (SSL, Resources, Auth).</small>
+                                <label class="form-label d-block">Select Recipient Users</label>
+                                <div class="border rounded p-3 bg-light mb-3" style="max-height: 180px; overflow-y: auto;">
+                                    <div v-for="user in availableUsers" :key="user.id" class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" 
+                                            :id="'user_email_' + user.id" 
+                                            :checked="selectedEmails.includes(user.email)"
+                                            @change="toggleUserEmail(user.email)">
+                                        <label class="form-check-label text-sm ms-2" :for="'user_email_' + user.id">
+                                            <strong>{{ user.name }}</strong> <span class="text-muted">({{ user.email }})</span>
+                                        </label>
+                                    </div>
+                                    <div v-if="availableUsers.length === 0" class="text-muted text-xs">
+                                        No users found.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Global Alert Recipients (Comma-separated)</label>
+                                <input type="text" class="form-control" v-model="settings.global_alert_emails" placeholder="admin@domain.com, security@domain.com" @input="syncSelectedEmails">
+                                <small class="text-muted">Emails of selected users above or custom external email addresses.</small>
                             </div>
                             <button class="btn bg-gradient-primary" @click="saveSettings" :disabled="saving">
                                 <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
@@ -464,6 +481,25 @@ const settings = ref({
     global_alert_emails: ''
 })
 
+const availableUsers = ref([])
+const selectedEmails = ref([])
+
+const toggleUserEmail = (email) => {
+    const idx = selectedEmails.value.indexOf(email)
+    if (idx > -1) {
+        selectedEmails.value.splice(idx, 1)
+    } else {
+        selectedEmails.value.push(email)
+    }
+    settings.value.global_alert_emails = selectedEmails.value.join(', ')
+}
+
+const syncSelectedEmails = () => {
+    selectedEmails.value = settings.value.global_alert_emails
+        ? settings.value.global_alert_emails.split(',').map(e => e.trim()).filter(Boolean)
+        : []
+}
+
 const securityRules = ref([])
 const securityMode = ref('off')
 const currentIp = ref('')
@@ -506,6 +542,10 @@ const loadSettings = async () => {
         const response = await axios.get('/settings/data')
         if (response.data.success) {
             settings.value = { ...settings.value, ...response.data.settings }
+            availableUsers.value = response.data.users || []
+            selectedEmails.value = settings.value.global_alert_emails
+                ? settings.value.global_alert_emails.split(',').map(e => e.trim()).filter(Boolean)
+                : []
         }
     } catch (error) {
         console.error('Failed to load settings:', error)
