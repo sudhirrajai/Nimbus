@@ -322,13 +322,14 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/scan', [\App\Http\Controllers\ShieldController::class, 'startScan'])->name('scan');
             Route::post('/stop', [\App\Http\Controllers\ShieldController::class, 'stopScan'])->name('stop');
             Route::post('/quarantine', [\App\Http\Controllers\ShieldController::class, 'quarantine'])->name('quarantine');
+            Route::post('/restore', [\App\Http\Controllers\ShieldController::class, 'restoreQuarantine'])->name('restore');
             Route::post('/delete', [\App\Http\Controllers\ShieldController::class, 'deleteThreat'])->name('delete');
-            
             // Firewall management
             Route::get('/firewall/rules', [\App\Http\Controllers\ShieldController::class, 'getFirewallRules'])->name('firewall.rules');
             Route::post('/firewall/add', [\App\Http\Controllers\ShieldController::class, 'addFirewallRule'])->name('firewall.add');
             Route::post('/firewall/delete', [\App\Http\Controllers\ShieldController::class, 'deleteFirewallRule'])->name('firewall.delete');
             Route::post('/firewall/toggle', [\App\Http\Controllers\ShieldController::class, 'toggleFirewall'])->name('firewall.toggle');
+
             Route::post('/install-tools', [\App\Http\Controllers\ShieldController::class, 'installTools'])->name('install-tools');
             Route::post('/settings', [\App\Http\Controllers\ShieldController::class, 'updateSettings'])->name('settings.update');
         });

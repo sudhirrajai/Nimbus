@@ -24,6 +24,7 @@ class User extends Authenticatable
         'linux_user',
         'status',
         'last_login_at',
+        'last_login_ip',
     ];
 
     /**

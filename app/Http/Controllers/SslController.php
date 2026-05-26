@@ -657,6 +657,12 @@ class SslController extends Controller
             \Log::info("Certbot output: " . $outputStr);
 
             if ($returnCode !== 0) {
+                // Send failure notification
+                \App\Services\NotificationService::send(
+                    "SSL Certificate Installation Failed",
+                    "<p>Hello,</p><p>An attempt to install an SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($outputStr) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+                );
+
                 // Check for common errors
                 if (strpos($outputStr, 'too many certificates') !== false) {
                     return response()->json([
@@ -688,12 +694,24 @@ class SslController extends Controller
             // Reload nginx to apply changes
             exec("sudo systemctl reload nginx 2>&1");
 
+            // Send success notification
+            \App\Services\NotificationService::send(
+                "SSL Certificate Installed Successfully",
+                "<p>Hello,</p><p>An SSL certificate has been successfully installed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            );
+
             return response()->json([
                 'message' => "SSL certificate installed successfully for {$domain}",
                 'details' => $outputStr
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to install SSL: " . $e->getMessage());
+
+            \App\Services\NotificationService::send(
+                "SSL Certificate Installation Failed",
+                "<p>Hello,</p><p>An attempt to install an SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($e->getMessage()) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            );
+
             return response()->json([
                 'error' => $e->getMessage()
             ], 500);
@@ -793,6 +811,12 @@ class SslController extends Controller
             \Log::info("Certbot renew output: " . $outputStr);
 
             if ($returnCode !== 0) {
+                // Send failure notification
+                \App\Services\NotificationService::send(
+                    "SSL Certificate Renewal Failed",
+                    "<p>Hello,</p><p>An attempt to renew the SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($outputStr) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+                );
+
                 return response()->json([
                     'error' => 'Failed to renew SSL certificate',
                     'details' => $outputStr
@@ -802,12 +826,24 @@ class SslController extends Controller
             // Reload nginx
             exec("sudo systemctl reload nginx 2>&1");
 
+            // Send success notification
+            \App\Services\NotificationService::send(
+                "SSL Certificate Renewed Successfully",
+                "<p>Hello,</p><p>The SSL certificate has been successfully renewed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            );
+
             return response()->json([
                 'message' => "SSL certificate renewed successfully for {$domain}",
                 'details' => $outputStr
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to renew SSL: " . $e->getMessage());
+
+            \App\Services\NotificationService::send(
+                "SSL Certificate Renewal Failed",
+                "<p>Hello,</p><p>An attempt to renew the SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($e->getMessage()) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            );
+
             return response()->json([
                 'error' => $e->getMessage()
             ], 500);

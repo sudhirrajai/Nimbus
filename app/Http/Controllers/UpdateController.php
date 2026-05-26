@@ -46,11 +46,25 @@ class UpdateController extends Controller
             });
             
             $currentVersion = $this->getCurrentVersion();
+            $latestVersion = $updateInfo['version'] ?? $currentVersion;
+            $hasUpdate = version_compare($latestVersion, $currentVersion, '>');
+
+            if ($hasUpdate) {
+                $cacheKey = "update_alert_sent_{$latestVersion}";
+                if (!Cache::has($cacheKey)) {
+                    \App\Services\NotificationService::send(
+                        "Nimbus Update Available: v{$latestVersion}",
+                        "<p>Hello,</p><p>A new version of the Nimbus control panel is available for update.</p><p><strong>Current Version:</strong> v{$currentVersion}<br><strong>Latest Version:</strong> v{$latestVersion}<br><strong>Release URL:</strong> <a href=\"" . e($updateInfo['releaseUrl'] ?? '') . "\">" . e($updateInfo['releaseUrl'] ?? 'View on GitHub') . "</a></p><p>You can upgrade your installation via the System Updates panel in Nimbus.</p>"
+                    );
+                    Cache::put($cacheKey, true, now()->addDays(1));
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'currentVersion' => $currentVersion,
-                'latestVersion' => $updateInfo['version'] ?? $currentVersion,
-                'hasUpdate' => version_compare($updateInfo['version'] ?? $currentVersion, $currentVersion, '>'),
+                'latestVersion' => $latestVersion,
+                'hasUpdate' => $hasUpdate,
                 'changelog' => $updateInfo['changelog'] ?? [],
                 'releaseDate' => $updateInfo['releaseDate'] ?? null,
                 'releaseUrl' => $updateInfo['releaseUrl'] ?? null
