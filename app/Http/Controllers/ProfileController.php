@@ -92,7 +92,7 @@ class ProfileController extends Controller
         $panelDomain = $dbSettings['panel_domain'] ?? '';
         
         // Auto-detect domain if not set but accessed via hostname
-        if (empty($panelDomain) && !request()->isIp()) {
+        if (empty($panelDomain) && !filter_var(request()->getHost(), FILTER_VALIDATE_IP)) {
             $panelDomain = request()->getHost();
         }
 
