@@ -5,10 +5,10 @@
       <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
         id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
 
-      <a class="navbar-brand px-4 py-3 m-0" href="https://vmcore.in" target="_blank" style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1;">
+      <Link class="navbar-brand px-4 py-3 m-0" href="/dashboard" style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1;">
         <span class="ms-1 text-sm text-dark font-weight-bold" style="letter-spacing: -0.03em;">nimbus</span>
         <span class="ms-1 text-xxs text-muted opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by VMCore</span>
-      </a>
+      </Link>
     </div>
 
     <hr class="horizontal dark mt-0 mb-2" />

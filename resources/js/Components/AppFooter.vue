@@ -8,7 +8,7 @@
           <div
             class="copyright text-center text-sm text-muted text-lg-start"
           >
-            © {{ new Date().getFullYear() }}, made with ❤️ by Sudhir Rajai
+            © {{ new Date().getFullYear() }}, made with ❤️ by <a href="https://vmcore.in" class="font-weight-bold text-dark" target="_blank">VMCore</a>
           </div>
         </div>
 
@@ -17,10 +17,10 @@
             class="nav nav-footer justify-content-center justify-content-lg-end"
           >
             <li class="nav-item">
-              <a href="https://sudhirrajai.com/" class="nav-link text-muted">Sudhir Rajai</a>
+              <a href="https://vmcore.in" class="nav-link text-muted" target="_blank">VMCore</a>
             </li>
             <li class="nav-item">
-              <a href="https://sudhirinsights.com/" class="nav-link text-muted">Blog</a>
+              <a href="https://vmcore.in/blog" class="nav-link text-muted" target="_blank">Blog</a>
             </li>
           </ul>
         </div>
