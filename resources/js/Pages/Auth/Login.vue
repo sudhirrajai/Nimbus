@@ -8,8 +8,8 @@
           <div class="logo-wrapper">
             <i class="material-symbols-rounded logo-icon">cloud_circle</i>
           </div>
-          <h1 class="brand-title">Nimbus</h1>
-          <p class="brand-subtitle">Server Control Panel</p>
+          <h1 class="brand-title">nimbus</h1>
+          <p class="brand-subtitle">by <a href="https://vmcore.in" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: 700;">VMCore</a></p>
           <div class="features-list">
             <div class="feature-item">
               <i class="material-symbols-rounded">dns</i>
@@ -95,7 +95,7 @@
           </form>
 
           <div class="form-footer">
-            <p>&copy; {{ new Date().getFullYear() }} Nimbus Control Panel</p>
+            <p>&copy; {{ new Date().getFullYear() }} <a href="https://vmcore.in" target="_blank" style="color: inherit; text-decoration: none;">nimbus by VMCore</a></p>
           </div>
         </div>
       </div>
