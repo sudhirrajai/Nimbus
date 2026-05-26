@@ -124,7 +124,7 @@
                   <div class="vr bg-gray-300 my-2" style="width: 1px;"></div>
                   <div class="search-input-box">
                     <i class="material-symbols-rounded text-sm text-secondary">search</i>
-                    <input v-model="searchQuery" type="text" class="form-control border-0 bg-transparent ps-1" 
+                    <input ref="searchInput" v-model="searchQuery" type="text" class="form-control border-0 bg-transparent ps-1" 
                       placeholder="Search files..." @keyup.enter="handleSearch" />
                     <button v-if="searchQuery" class="btn btn-link p-0 m-0 me-2" @click="searchQuery = ''; isSearching = false; loadFiles()">
                       <i class="material-symbols-rounded text-sm text-secondary">close</i>
@@ -143,6 +143,10 @@
                     <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="showHiddenToggle">Hidden</label>
                   </div>
                 </div>
+
+                <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)">
+                  <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
+                </button>
 
                 <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
                   <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
@@ -205,13 +209,14 @@
                 </thead>
                 <tbody>
                   <tr v-for="item in paginatedItems" :key="item.name + item.type"
+                    @click="toggleSelectItem(item, $event)"
                     @contextmenu.prevent="openContextMenu($event, item)" 
                     @dblclick="handleDoubleClick(item)"
                     class="file-row-modern"
                     :class="{ 'selected': isSelected(item), 'opacity-5': item.hidden }">
                     <td class="ps-3">
                       <div class="form-check mb-0">
-                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @change="toggleSelectItem(item, $event)">
+                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @click.stop @change="toggleSelectItem(item, $event)">
                       </div>
                     </td>
                     <td>
@@ -222,7 +227,7 @@
                           </i>
                         </div>
                         <div class="d-flex flex-column">
-                          <a v-if="item.type === 'directory'" href="#" @click.prevent="openDirectory(item.name)" class="text-sm font-weight-bold text-dark mb-0">
+                          <a v-if="item.type === 'directory'" href="#" @click.prevent.stop="openDirectory(item.name)" class="text-sm font-weight-bold text-dark mb-0">
                             {{ item.name }}
                           </a>
                           <span v-else class="text-sm font-weight-bold text-dark mb-0">{{ item.name }}</span>
@@ -240,15 +245,15 @@
                     <td><span class="text-xs text-secondary">{{ item.modified }}</span></td>
                     <td class="text-center">
                       <div class="d-flex justify-content-center gap-2">
-                        <button v-if="item.type === 'file' && item.editable" class="action-btn-circle" @click="editFile(item.name)" title="Edit">
+                        <button v-if="item.type === 'file' && item.editable" class="action-btn-circle" @click.stop="editFile(item.name)" title="Edit">
                           <i class="material-symbols-rounded text-sm">edit_note</i>
                         </button>
-                        <button v-if="item.type === 'file'" class="action-btn-circle" @click="downloadFile(item.name)" title="Download">
+                        <button v-if="item.type === 'file'" class="action-btn-circle" @click.stop="downloadFile(item.name)" title="Download">
                           <i class="material-symbols-rounded text-sm">download</i>
                         </button>
-                <button class="action-btn-circle" @click.stop="openContextMenu($event, item)" title="More options">
-                  <i class="material-symbols-rounded text-sm">more_vert</i>
-                </button>
+                        <button class="action-btn-circle" @click.stop="openContextMenu($event, item)" title="More options">
+                          <i class="material-symbols-rounded text-sm">more_vert</i>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -697,6 +702,77 @@
         </div>
       </div>
 
+      <!-- Keyboard Shortcuts Help Modal -->
+      <div class="modal-backdrop fade show" v-if="showShortcutsHelp" @click="showShortcutsHelp = false" style="z-index: 10050;"></div>
+      <div class="modal fade show d-block" v-if="showShortcutsHelp" style="z-index: 10051;">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="glass-card modal-content border-0 shadow-2xl bg-white p-4">
+            <div class="modal-header border-0 pb-0">
+              <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center">
+                <i class="material-symbols-rounded text-primary align-middle me-2">keyboard</i>
+                Keyboard Shortcuts Guide
+              </h5>
+              <button type="button" class="btn-close" @click="showShortcutsHelp = false" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body py-3">
+              <div class="shortcuts-grid">
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Rename Item</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">F2</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Refresh File List</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">F5</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Delete Selected Items</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Delete</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Go Up Directory Level</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Backspace</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Select All Items</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + A</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Copy Items to Clipboard</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + C</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Cut Items to Clipboard</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + X</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Paste from Clipboard</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + V</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Deselect All / Close Modals</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Escape</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Save inside Editor</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + S</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Search inside Editor</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + F</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-0 py-1">
+                  <span class="text-sm font-weight-bold text-dark">Toggle Keyboard Helper</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">F1 or ?</kbd>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn bg-gradient-primary w-100 mb-0 border-radius-lg text-white" @click="showShortcutsHelp = false">Got it!</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Uploading Modal -->
       <div v-if="uploading" class="modal-backdrop fade show"></div>
       <div v-if="uploading" class="modal fade show d-block">
@@ -772,6 +848,8 @@ const props = defineProps({
 })
 
 const webTerminalRef = ref(null)
+const searchInput = ref(null)
+const lastSelected = ref(null)
 const items = ref([])
 const searchQuery = ref('')
 const currentPage = ref(1)
@@ -824,6 +902,7 @@ const isBulkDelete = ref(false)
 const deleteProcessing = ref(false)
 const showEditorModal = ref(false)
 const showUnsavedConfirmModal = ref(false)
+const showShortcutsHelp = ref(false)
 const showPermissionsModal = ref(false)
 const showCopyMoveModal = ref(false)
 
@@ -969,14 +1048,44 @@ const onToggleHidden = () => {
 }
 
 const handleKeyboardShortcuts = (e) => {
+  // Global Ctrl + S: Save file in File Manager (if editor modal is open)
+  if (e.ctrlKey && e.key === 's' && showEditorModal.value) {
+    e.preventDefault()
+    saveFile()
+    return
+  }
+
+  // Escape — Close shortcuts guide, editor modal, or blur search input
   if (e.key === 'Escape') {
     e.preventDefault()
-    if (showEditorModal.value) {
+    if (showShortcutsHelp.value) {
+      showShortcutsHelp.value = false
+    } else if (showEditorModal.value) {
       closeEditorConfirm()
+    } else if (document.activeElement === searchInput.value) {
+      searchInput.value?.blur()
+    } else if (searchQuery.value) {
+      searchQuery.value = ''
+      isSearching.value = false
+      loadFiles()
     } else {
       selectedItems.value = []
       allSelected.value = false
     }
+    return
+  }
+
+  // F1 or '?' — Show Keyboard Shortcuts Help Modal
+  if (e.key === 'F1' || (e.key === '?' && e.shiftKey)) {
+    e.preventDefault()
+    showShortcutsHelp.value = !showShortcutsHelp.value
+    return
+  }
+
+  // Global Ctrl + F: Focus Search Input (if editor is NOT open)
+  if (e.ctrlKey && e.key === 'f' && !showEditorModal.value) {
+    e.preventDefault()
+    searchInput.value?.focus()
     return
   }
 
@@ -1411,6 +1520,15 @@ const initAceEditor = () => {
     }
   })
 
+  // Save editor content on pressing Ctrl + S / Cmd + S inside the Ace Editor
+  aceEditor.commands.addCommand({
+    name: 'saveFileOnCtrlS',
+    bindKey: {win: 'Ctrl-S', mac: 'Command-S'},
+    exec: function(editor) {
+      saveFile()
+    }
+  })
+
   aceEditor.on('change', () => {
     fileContent.value = aceEditor.getValue()
   })
@@ -1536,10 +1654,42 @@ const downloadFile = (name) => {
 }
 
 const isSelected = (item) => selectedItems.value.some(si => si.name === item.name)
-const toggleSelectItem = (item) => {
+const toggleSelectItem = (item, event = null) => {
+  const isShiftPressed = event && event.shiftKey
+  
+  if (isShiftPressed && lastSelected.value && paginatedItems.value.length > 0) {
+    const list = paginatedItems.value
+    const prevIdx = list.findIndex(i => i.name === lastSelected.value.name)
+    const currIdx = list.findIndex(i => i.name === item.name)
+    
+    if (prevIdx > -1 && currIdx > -1) {
+      const start = Math.min(prevIdx, currIdx)
+      const end = Math.max(prevIdx, currIdx)
+      
+      const itemsToToggle = list.slice(start, end + 1)
+      const shouldSelect = !selectedItems.value.some(si => si.name === item.name)
+      
+      itemsToToggle.forEach(it => {
+        const idx = selectedItems.value.findIndex(si => si.name === it.name)
+        if (shouldSelect) {
+          if (idx === -1) selectedItems.value.push({ name: it.name, type: it.type })
+        } else {
+          if (idx > -1) selectedItems.value.splice(idx, 1)
+        }
+      })
+      lastSelected.value = item
+      return
+    }
+  }
+  
   const idx = selectedItems.value.findIndex(si => si.name === item.name)
-  if (idx > -1) selectedItems.value.splice(idx, 1)
-  else selectedItems.value.push({ name: item.name, type: item.type })
+  if (idx > -1) {
+    selectedItems.value.splice(idx, 1)
+    lastSelected.value = selectedItems.value.length ? selectedItems.value[selectedItems.value.length - 1] : null
+  } else {
+    selectedItems.value.push({ name: item.name, type: item.type })
+    lastSelected.value = item
+  }
 }
 
 const toggleSelectAll = () => {

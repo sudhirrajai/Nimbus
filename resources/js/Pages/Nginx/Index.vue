@@ -59,9 +59,12 @@
                 <div class="d-flex align-items-center gap-3">
                   <div class="input-group input-group-sm">
                     <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
-                    <input v-model="searchQuery" type="text" class="form-control" placeholder="Search domains...">
+                    <input ref="searchInput" v-model="searchQuery" type="text" class="form-control" placeholder="Search domains...">
                   </div>
                   <span class="badge bg-gradient-primary">{{ filteredDomains.length }} domains</span>
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)" style="width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center;">
+                    <i class="material-symbols-rounded text-md text-dark">keyboard</i>
+                  </button>
                 </div>
               </div>
               <p class="text-sm text-secondary mb-0">Edit nginx configuration for each domain</p>
@@ -182,12 +185,18 @@
       <div class="modal fade show d-block" v-if="showEditorModal">
         <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 90vw;">
           <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header d-flex justify-content-between align-items-center">
               <div>
                 <h5 class="modal-title mb-0">Nginx Config: {{ editingDomain?.domain }}</h5>
                 <p class="text-sm text-secondary mb-0">{{ editingDomain?.configPath }}</p>
               </div>
-              <button type="button" class="btn-close" @click="closeEditorConfirm"></button>
+              <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-secondary mb-0 d-flex align-items-center py-1" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)">
+                  <i class="material-symbols-rounded text-sm me-1">keyboard</i>
+                  Shortcuts
+                </button>
+                <button type="button" class="btn-close" @click="closeEditorConfirm"></button>
+              </div>
             </div>
             <div class="modal-body">
               <transition name="fade">
@@ -233,6 +242,49 @@
                   Discard & Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keyboard Shortcuts Help Modal -->
+      <div class="modal-backdrop fade show" v-if="showShortcutsHelp" @click="showShortcutsHelp = false" style="z-index: 10060;"></div>
+      <div class="modal fade show d-block" v-if="showShortcutsHelp" style="z-index: 10061;">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="glass-card modal-content border-0 shadow-2xl bg-white p-4">
+            <div class="modal-header border-0 pb-0 d-flex justify-content-between align-items-center">
+              <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center mb-0">
+                <i class="material-symbols-rounded text-primary align-middle me-2">keyboard</i>
+                Nginx Editor Keyboard Shortcuts
+              </h5>
+              <button type="button" class="btn-close" @click="showShortcutsHelp = false" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body py-3">
+              <div class="shortcuts-grid">
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Save progress (Keep Editor open)</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + S</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Save, Test, & Close</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + Enter</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Search / Find inside Editor</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Ctrl + F</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 py-1 border-bottom">
+                  <span class="text-sm font-weight-bold text-dark">Deselect / Close Editor Modal</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">Escape</kbd>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-0 py-1">
+                  <span class="text-sm font-weight-bold text-dark">Toggle Keyboard Helper</span>
+                  <kbd class="badge bg-light text-dark font-monospace border shadow-sm">F1 or ?</kbd>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn bg-gradient-primary w-100 mb-0 border-radius-lg text-white" @click="showShortcutsHelp = false">Got it!</button>
             </div>
           </div>
         </div>
@@ -329,6 +381,8 @@ const showEditorModal = ref(false)
 const showUnsavedConfirmModal = ref(false)
 const showReloadModal = ref(false)
 const showTestModal = ref(false)
+const showShortcutsHelp = ref(false)
+const searchInput = ref(null)
 
 const editingDomain = ref(null)
 const editorContent = ref('')
@@ -342,9 +396,47 @@ const alert = ref({
 })
 
 const handleKeyboardShortcuts = (e) => {
-  if (e.key === 'Escape' && showEditorModal.value) {
+  // Global Ctrl + S / Cmd + S inside Nginx Editor
+  if (e.ctrlKey && e.key === 's' && showEditorModal.value) {
     e.preventDefault()
-    closeEditorConfirm()
+    saveAndTest(false)
+    return
+  }
+
+  // Global Ctrl + Enter inside Nginx Editor
+  if (e.ctrlKey && e.key === 'Enter' && showEditorModal.value) {
+    e.preventDefault()
+    saveAndTest(true)
+    return
+  }
+
+  // Escape — Close helper, close editor modal, or blur search input
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    if (showShortcutsHelp.value) {
+      showShortcutsHelp.value = false
+    } else if (showEditorModal.value) {
+      closeEditorConfirm()
+    } else if (document.activeElement === searchInput.value) {
+      searchInput.value?.blur()
+    } else if (searchQuery.value) {
+      searchQuery.value = ''
+    }
+    return
+  }
+
+  // F1 or '?' — Show Keyboard Shortcuts Help Modal
+  if (e.key === 'F1' || (e.key === '?' && e.shiftKey)) {
+    e.preventDefault()
+    showShortcutsHelp.value = !showShortcutsHelp.value
+    return
+  }
+
+  // Global Ctrl + F: Focus Search Input (if editor is NOT open)
+  if (e.ctrlKey && e.key === 'f' && !showEditorModal.value) {
+    e.preventDefault()
+    searchInput.value?.focus()
+    return
   }
 }
 
@@ -426,6 +518,24 @@ const initNginxEditor = () => {
     }
   })
 
+  // Save progress (keep open) on pressing Ctrl + S / Cmd + S inside the Ace Editor
+  aceEditor.commands.addCommand({
+    name: 'saveNginxOnCtrlS',
+    bindKey: {win: 'Ctrl-S', mac: 'Command-S'},
+    exec: function(editor) {
+      saveAndTest(false)
+    }
+  })
+
+  // Save progress and close modal on pressing Ctrl + Enter inside the Ace Editor
+  aceEditor.commands.addCommand({
+    name: 'saveNginxOnCtrlEnter',
+    bindKey: {win: 'Ctrl-Enter', mac: 'Command-Enter'},
+    exec: function(editor) {
+      saveAndTest(true)
+    }
+  })
+
   aceEditor.on('change', () => {
     editorContent.value = aceEditor.getValue()
   })
@@ -469,7 +579,7 @@ const closeEditorConfirm = () => {
   }
 }
 
-const saveAndTest = async () => {
+const saveAndTest = async (closeAfterSave = true) => {
   try {
     saving.value = true
     await axios.post('/nginx/config/save', {
@@ -478,7 +588,9 @@ const saveAndTest = async () => {
     })
     showAlert('success', 'Configuration saved and tested successfully')
     originalEditorContent.value = editorContent.value
-    closeEditor()
+    if (closeAfterSave) {
+      closeEditor()
+    }
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to save configuration')
   } finally {
@@ -655,6 +767,22 @@ const reloadAfterTest = async () => {
   border-radius: 12px;
   overflow: hidden;
   font-family: 'Fira Code', monospace;
+}
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 1rem;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+}
+.btn-icon-only.btn-rounded {
+  border-radius: 50% !important;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
 
