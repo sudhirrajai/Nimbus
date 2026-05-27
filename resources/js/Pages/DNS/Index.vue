@@ -71,13 +71,21 @@
                         </div>
                       </td>
                       <td>
-                        <span v-if="domain.is_connected" class="badge bg-gradient-success">Connected</span>
-                        <span v-else class="badge bg-gradient-secondary">Not Connected</span>
+                        <span v-if="domain.is_connected" class="status-pill status-active">
+                          <span class="pill-dot"></span>
+                          Connected
+                        </span>
+                        <span v-else class="status-pill status-secondary">
+                          <span class="pill-dot"></span>
+                          Not Connected
+                        </span>
                       </td>
                       <td class="text-center">
-                        <button class="btn btn-link text-primary mb-0 px-2" @click="selectDomain(domain)">
-                          Manage
-                        </button>
+                        <div class="d-flex justify-content-center">
+                          <button class="action-btn btn-view" @click="selectDomain(domain)" title="Manage DNS records">
+                            <i class="material-symbols-rounded">settings</i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     <tr v-if="domains.length === 0">
@@ -179,22 +187,30 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="record in paginatedRecords" :key="record.id">
+                      <tr v-for="record in paginatedRecords" :key="record.id" class="record-row">
                         <td><span class="badge bg-light text-dark border">{{ record.type }}</span></td>
-                        <td><span class="text-sm font-weight-bold">{{ record.name }}</span></td>
+                        <td><span class="text-sm font-weight-bold text-dark">{{ record.name }}</span></td>
                         <td><span class="text-sm text-truncate d-inline-block" style="max-width: 250px;">{{ record.content }}</span></td>
                         <td>
-                          <span v-if="record.proxied" class="badge bg-gradient-warning"><i class="material-symbols-rounded text-xs me-1">cloud</i> Proxied</span>
-                          <span v-else class="badge bg-gradient-secondary">DNS Only</span>
+                          <span v-if="record.proxied" class="status-pill status-configuring">
+                            <span class="pill-dot"></span>
+                            Proxied
+                          </span>
+                          <span v-else class="status-pill status-secondary">
+                            <span class="pill-dot"></span>
+                            DNS Only
+                          </span>
                         </td>
                         <td><span class="text-xs">{{ record.ttl === 1 ? 'Auto' : record.ttl }}</span></td>
                         <td class="text-center">
-                          <button class="btn btn-link text-primary mb-0 px-2" @click="editRecord(record)">
-                            <i class="material-symbols-rounded text-sm">edit</i>
-                          </button>
-                          <button class="btn btn-link text-danger mb-0 px-2" @click="deleteRecord(record)">
-                            <i class="material-symbols-rounded text-sm">delete</i>
-                          </button>
+                          <div class="d-flex justify-content-center gap-2">
+                            <button class="action-btn btn-edit" @click="editRecord(record)" title="Edit record">
+                              <i class="material-symbols-rounded">edit</i>
+                            </button>
+                            <button class="action-btn btn-delete" @click="deleteRecord(record)" title="Delete record">
+                              <i class="material-symbols-rounded">delete</i>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       <tr v-if="records.length === 0">
@@ -502,3 +518,97 @@ const deleteRecord = async (record) => {
   }
 }
 </script>
+
+<style scoped>
+.record-row {
+  transition: all 0.2s ease;
+}
+.record-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.status-active {
+  background: #e6f6ec;
+  color: #0c6b36;
+}
+.status-active .pill-dot {
+  background: #2dce89;
+  box-shadow: 0 0 0 2px rgba(45, 206, 137, 0.2);
+}
+
+.status-configuring {
+  background: #fff5e9;
+  color: #8a5a00;
+}
+.status-configuring .pill-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.2);
+}
+
+.status-secondary {
+  background: #f0f2f5;
+  color: #4b5563;
+}
+.status-secondary .pill-dot {
+  background: #9ca3af;
+  box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.2);
+}
+
+/* Action Buttons */
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  color: #67748e;
+}
+
+.action-btn i {
+  font-size: 1.25rem !important;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-view:hover {
+  background-color: #e0f2fe;
+  color: #0ea5e9;
+}
+
+.btn-edit:hover {
+  background-color: #f8fafc;
+  color: #64748b;
+}
+
+.btn-delete:hover {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+</style>

@@ -176,16 +176,22 @@
                           </span>
                         </td>
                         <td>
-                          <span class="badge badge-sm bg-gradient-success" v-if="ini.exists">
-                            <i class="material-symbols-rounded text-xs me-1">check</i> Exists
+                          <span v-if="ini.exists" class="status-pill status-active">
+                            <span class="pill-dot"></span>
+                            Exists
                           </span>
-                          <span class="badge badge-sm bg-gradient-danger" v-else>Missing</span>
+                          <span v-else class="status-pill status-error">
+                            <span class="pill-dot"></span>
+                            Missing
+                          </span>
                         </td>
                         <td class="text-center">
-                          <button class="btn btn-link text-primary mb-0 px-2" @click="openEditor(ini)" title="Edit file"
-                            :disabled="!ini.exists">
-                            <i class="material-symbols-rounded text-sm">edit</i>
-                          </button>
+                          <div class="d-flex justify-content-center">
+                            <button class="action-btn btn-edit" @click="openEditor(ini)" title="Edit file"
+                              :disabled="!ini.exists">
+                              <i class="material-symbols-rounded">edit</i>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       <tr v-if="iniFiles.length === 0">
@@ -468,4 +474,86 @@ const syncNginxLimits = async () => {
   }
 }
 </script>
+
+<style scoped>
+.quick-setting-item {
+  background: #f8fafc;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
+}
+
+.quick-setting-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-color: rgba(203, 12, 159, 0.15);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.status-active {
+  background: #e6f6ec;
+  color: #0c6b36;
+}
+.status-active .pill-dot {
+  background: #2dce89;
+  box-shadow: 0 0 0 2px rgba(45, 206, 137, 0.2);
+}
+
+.status-error {
+  background: #feeef2;
+  color: #9d174d;
+}
+.status-error .pill-dot {
+  background: #f5365c;
+  box-shadow: 0 0 0 2px rgba(245, 54, 92, 0.2);
+}
+
+/* Action Buttons */
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  color: #67748e;
+}
+
+.action-btn i {
+  font-size: 1.25rem !important;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-edit:hover {
+  background-color: #f8fafc;
+  color: #64748b;
+}
+</style>
 
