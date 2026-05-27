@@ -201,18 +201,88 @@ h2:has(~ #login) {
     display: none !important;
 }
 
-/* Links/Breadcrumbs area */
+/* Links/Breadcrumbs area & Segmented Action Tabs */
 p.links {
-    margin: 0 0 1.5rem !important;
-    background: #fff;
-    padding: 0.75rem 1.25rem;
-    border-radius: 0.5rem;
-    box-shadow: var(--shadow);
+    margin: 0 0 2rem !important;
+    background: #fff !important;
+    padding: 0.5rem !important;
+    border-radius: 0.75rem !important;
+    box-shadow: var(--shadow) !important;
+    display: inline-flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.375rem !important;
+    border: 1px solid var(--bs-gray-200) !important;
 }
 
-p.links a {
-    color: var(--bs-primary) !important;
-    font-weight: 600;
+p.links a,
+p.links b {
+    color: var(--bs-gray-700) !important;
+    font-weight: 600 !important;
+    font-size: 0.8rem !important;
+    text-decoration: none !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 0.5rem !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid transparent !important;
+}
+
+/* Hover and active states for tabs */
+p.links a:hover {
+    background-color: var(--bs-gray-100) !important;
+    color: var(--bs-gray-900) !important;
+}
+
+p.links b {
+    background-image: var(--gradient-primary) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 6px -1px rgba(233, 30, 99, 0.2), 0 2px 4px -1px rgba(233, 30, 99, 0.1) !important;
+    font-weight: 700 !important;
+}
+
+/* Back to Tables button styling */
+.back-to-tables-btn {
+    background-color: var(--bs-dark) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+    font-weight: 700 !important;
+}
+
+.back-to-tables-btn:hover {
+    background-color: #212529 !important;
+    color: #fff !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Sidebar Table Search styling */
+.table-search-box {
+    padding: 0 1rem 0.75rem !important;
+    box-sizing: border-box !important;
+}
+
+#nimbus-table-filter {
+    width: 100% !important;
+    background: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid var(--bs-gray-200) !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 0.75rem 0.5rem 2rem !important;
+    font-family: inherit !important;
+    font-size: 0.8rem !important;
+    color: var(--bs-gray-900) !important;
+    box-sizing: border-box !important;
+    transition: all 0.2s ease !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='16px' viewBox='0 -960 960 960' width='16px' fill='%237b809a'%3E%3Cpath d='M784-120 533-371q-30 24-74 37.5T370-320q-109 0-184.5-75.5T110-580q0-109 75.5-184.5T370-840q109 0 184.5 75.5T630-580q0 44-13.5 88T579-418l251 251-46 47ZM370-400q75 0 127.5-52.5T550-580q0-75-52.5-127.5T370-760q-75 0-127.5 52.5T190-580q0 75 52.5 127.5T370-400Z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: 8px center !important;
+}
+
+#nimbus-table-filter:focus {
+    background-color: #fff !important;
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.2) !important;
+    outline: none !important;
 }
 
 /* --- Tables --- */
