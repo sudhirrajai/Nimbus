@@ -89,43 +89,57 @@
                         </p>
                       </td>
                       <td>
-                        <span class="badge badge-sm bg-gradient-dark">{{ dep.branch }}</span>
+                        <span class="badge bg-light text-dark border">{{ dep.branch }}</span>
                       </td>
                       <td>
-                        <span :class="`badge badge-sm bg-gradient-${dep.status_color}`">
-                          {{ dep.status }}
-                        </span>
-                        <span v-if="dep.is_in_progress" class="ms-1">
-                          <span class="spinner-border spinner-border-sm text-warning" role="status"></span>
-                        </span>
+                        <div class="d-flex align-items-center">
+                          <span v-if="dep.is_in_progress" class="status-pill status-configuring">
+                            <span class="pill-dot"></span>
+                            Deploying
+                          </span>
+                          <span v-else-if="dep.status === 'completed'" class="status-pill status-active">
+                            <span class="pill-dot"></span>
+                            Completed
+                          </span>
+                          <span v-else-if="dep.status === 'failed'" class="status-pill status-error">
+                            <span class="pill-dot"></span>
+                            Failed
+                          </span>
+                          <span v-else class="status-pill status-secondary">
+                            <span class="pill-dot"></span>
+                            {{ dep.status }}
+                          </span>
+                        </div>
                       </td>
                       <td>
                         <p class="text-xs text-secondary mb-0">{{ dep.last_deployed_at || 'Never' }}</p>
                       </td>
                       <td class="align-middle text-center">
-                        <button
-                          class="btn btn-link text-success mb-0 px-2"
-                          @click="triggerDeploy(dep)"
-                          :disabled="dep.is_in_progress"
-                          :title="dep.is_in_progress ? 'Deploy in progress' : 'Deploy now'"
-                        >
-                          <i class="material-symbols-rounded text-sm">rocket_launch</i>
-                        </button>
-                        <button
-                          class="btn btn-link text-info mb-0 px-2"
-                          @click="viewLogs(dep)"
-                          title="View logs"
-                        >
-                          <i class="material-symbols-rounded text-sm">terminal</i>
-                        </button>
-                        <button
-                          class="btn btn-link text-danger mb-0 px-2"
-                          @click="confirmDelete(dep)"
-                          :disabled="dep.is_in_progress"
-                          title="Delete deployment"
-                        >
-                          <i class="material-symbols-rounded text-sm">delete</i>
-                        </button>
+                        <div class="d-flex justify-content-center gap-2">
+                          <button
+                            class="action-btn btn-update"
+                            @click="triggerDeploy(dep)"
+                            :disabled="dep.is_in_progress"
+                            :title="dep.is_in_progress ? 'Deploy in progress' : 'Deploy now'"
+                          >
+                            <i class="material-symbols-rounded">rocket_launch</i>
+                          </button>
+                          <button
+                            class="action-btn btn-info"
+                            @click="viewLogs(dep)"
+                            title="View logs"
+                          >
+                            <i class="material-symbols-rounded">terminal</i>
+                          </button>
+                          <button
+                            class="action-btn btn-delete"
+                            @click="confirmDelete(dep)"
+                            :disabled="dep.is_in_progress"
+                            title="Delete deployment"
+                          >
+                            <i class="material-symbols-rounded">delete</i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
 
@@ -543,4 +557,107 @@ watch(showBlacklistModal, (val) => {
 })
 </script>
 
+<style scoped>
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.status-active {
+  background: #e6f6ec;
+  color: #0c6b36;
+}
+.status-active .pill-dot {
+  background: #2dce89;
+  box-shadow: 0 0 0 2px rgba(45, 206, 137, 0.2);
+}
+
+.status-configuring {
+  background: #fff5e9;
+  color: #8a5a00;
+}
+.status-configuring .pill-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.2);
+}
+
+.status-error {
+  background: #feeef2;
+  color: #9d174d;
+}
+.status-error .pill-dot {
+  background: #f5365c;
+  box-shadow: 0 0 0 2px rgba(245, 54, 92, 0.2);
+}
+
+.status-secondary {
+  background: #f0f2f5;
+  color: #4b5563;
+}
+.status-secondary .pill-dot {
+  background: #9ca3af;
+  box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.2);
+}
+
+/* Action Buttons */
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  color: #67748e;
+}
+
+.action-btn i {
+  font-size: 1.25rem !important;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-update:hover {
+  background-color: #e6f6ec;
+  color: #2dce89;
+}
+
+.btn-info:hover {
+  background-color: #e0f2fe;
+  color: #0ea5e9;
+}
+
+.btn-delete:hover {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>
