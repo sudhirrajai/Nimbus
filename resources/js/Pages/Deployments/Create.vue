@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <MainLayout>
     <Head title="New Deployment" />
     <div class="container-fluid py-4">
@@ -653,6 +653,22 @@ env:
 nginx:
   root: public
   php_version: 8.2
+
+# Supervisor custom process configuration (optional)
+# Recommended for Node/React/Next.js/Svelte/etc. long-running background processes.
+# This prevents automated fallback crashes and gives you total process control.
+# supervisor:
+#   program: my_custom_app
+#   config: |
+#     [program:my_custom_app]
+#     command=node server.js
+#     directory={domainPath}
+#     autostart=true
+#     autorestart=true
+#     user=www-data
+#     numprocs=1
+#     redirect_stderr=true
+#     stdout_logfile={domainPath}/logs/supervisor.log
 `
   const blob = new Blob([content], { type: 'text/yaml' })
   const url = window.URL.createObjectURL(blob)
