@@ -49,9 +49,10 @@ function adminer_object() {
 }
 
 ob_start(function($buffer) {
-    // Replace text branding safely without breaking file paths
-    $buffer = str_replace('Adminer', 'Nimbus DB', $buffer);
-    $buffer = str_replace('<title>Nimbus DB', '<title>Nimbus Database', $buffer);
+    // Replace text branding safely without breaking file paths using the original 'System' placeholder
+    $buffer = str_replace('Adminer', 'System', $buffer);
+    $buffer = str_replace('<h1>System', '<h1>Nimbus DB', $buffer);
+    $buffer = str_replace('<title>System', '<title>Nimbus Database', $buffer);
     
     // Remove donation message and version info completely
     $buffer = preg_replace('/<i[^>]*>\s*Thanks for using.*?donating.*?<\/i>/is', '', $buffer);
