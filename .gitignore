@@ -24,3 +24,7 @@ Homestead.yaml
 Thumbs.db
 .credentials
 Implementing Secure Git Deployments.md
+
+# Graphify
+/graphify-out/
+/.agents/
