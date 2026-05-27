@@ -505,101 +505,71 @@ class GitDeploymentService
         $domainPath = $deployment->getDomainPath();
         $domain = $deployment->domain;
         
-        // Determine the start command
-        $startCommand = null;
-        if (isset($yamlConfig['start']) && is_string($yamlConfig['start'])) {
-            $startCommand = $yamlConfig['start'];
-        } elseif (isset($yamlConfig['runtime']['node'])) {
-            $startCommand = "npm start"; // Default for Node.js apps
-        }
-
-        if (!$startCommand) {
-            return; // No start command specified and not a Node app
-        }
-
-        // Use /usr/bin/env to resolve the command in the provided PATH
-        // This is more reliable than bash -c in some restricted environments
-        $fullCommand = "/usr/bin/env {$startCommand}";
-
-        $startTime = microtime(true);
-        $log = $this->createLog($deployment, 'supervisor_setup', 'running');
-
-        try {
-            // Ensure logs directory exists - Supervisor will fail to spawn if the log path is invalid
-            $this->executeCommand("sudo mkdir -p {$domainPath}/logs");
-            $this->executeCommand("sudo chown www-data:www-data {$domainPath}/logs");
-
-            // Generate safe program name
-            $programName = "nimbus_app_" . preg_replace('/[^a-zA-Z0-9_]/', '_', $domain);
-            $confPath = "/etc/supervisor/conf.d/{$programName}.conf";
-
-            $supervisorConf = "[program:{$programName}]\n";
-            $supervisorConf .= "process_name=%(program_name)s_%(process_num)02d\n";
-            $supervisorConf .= "command={$fullCommand}\n";
-            $supervisorConf .= "directory={$domainPath}\n";
-            $supervisorConf .= "autostart=true\n";
-            $supervisorConf .= "autorestart=true\n";
-            $supervisorConf .= "user=www-data\n";
-            $supervisorConf .= "numprocs=1\n";
-            $supervisorConf .= "redirect_stderr=true\n";
-            $supervisorConf .= "stdout_logfile={$domainPath}/logs/supervisor.log\n";
+        // Check if the user specified a custom supervisor configuration block
+        if (isset($yamlConfig['supervisor']) && is_array($yamlConfig['supervisor'])) {
+            $supConfig = $yamlConfig['supervisor'];
+            $programName = $supConfig['program'] ?? null;
+            $rawConf = $supConfig['config'] ?? null;
             
-            // Read environment variables to pass to Supervisor
-            $envString = "";
-            $envFile = "{$domainPath}/.env";
-            if (file_exists($envFile)) {
-                $lines = explode("\n", file_get_contents($envFile));
-                $envs = [
-                    'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"'
-                ];
-                foreach ($lines as $line) {
-                    $line = trim($line);
-                    if (empty($line) || str_starts_with($line, '#')) continue;
-                    $parts = explode('=', $line, 2);
-                    if (count($parts) === 2) {
-                        $key = trim($parts[0]);
-                        $val = trim($parts[1]);
-                        // Remove surrounding quotes if they exist in the .env file
-                        $val = trim($val, "'\"");
-                        // Supervisor environment values must have commas escaped with \,
-                        $val = str_replace(',', '\,', $val);
-                        $envs[] = "{$key}=\"{$val}\"";
-                    }
-                }
-                if (!empty($envs)) {
-                    // Filter out environment variables with commas to prevent Supervisor syntax errors
-                    // or handle them carefully. For now, let's just join with commas.
-                    $supervisorConf .= "environment=" . implode(",", $envs) . "\n";
-                }
+            if (!$programName || !$rawConf) {
+                // If it's incomplete, log it and return
+                $log = $this->createLog($deployment, 'supervisor_setup', 'failed');
+                $log->update([
+                    'output' => 'Failed to setup Supervisor: "supervisor" block must contain both "program" and "config" keys.',
+                    'duration_seconds' => 0
+                ]);
+                return;
             }
-
-            // Write config using sudo
-            $tempFile = "/tmp/supervisor_conf_" . time();
-            file_put_contents($tempFile, $supervisorConf);
-            $this->executeCommand("sudo mv {$tempFile} {$confPath}");
-            $this->executeCommand("sudo chown root:root {$confPath}");
             
-            // Apply changes
-            $this->executeCommand("sudo supervisorctl reread");
-            $this->executeCommand("sudo supervisorctl update");
+            // Clean program name to prevent path injection
+            $programName = preg_replace('/[^a-zA-Z0-9_]/', '_', $programName);
             
-            // Restart the app
-            $this->executeCommand("sudo supervisorctl restart {$programName}:*");
-
-            $duration = (int)(microtime(true) - $startTime);
-            $log->update([
-                'status' => 'success',
-                'output' => "Supervisor configured for {$domain}.\nProgram name: {$programName}\nCommand: {$startCommand}",
-                'duration_seconds' => $duration,
-            ]);
-        } catch (\Exception $e) {
-            $duration = (int)(microtime(true) - $startTime);
-            $log->update([
-                'status' => 'failed',
-                'output' => 'Failed to setup Supervisor: ' . $e->getMessage(),
-                'duration_seconds' => $duration,
-            ]);
+            // Replace templates {domainPath} and {domain} with actual values
+            $rawConf = str_replace('{domainPath}', $domainPath, $rawConf);
+            $rawConf = str_replace('{domain}', $domain, $rawConf);
+            
+            $startTime = microtime(true);
+            $log = $this->createLog($deployment, 'supervisor_setup', 'running');
+            
+            try {
+                // Ensure logs directory exists - Supervisor will fail to spawn if the log path is invalid
+                $this->executeCommand("sudo mkdir -p {$domainPath}/logs");
+                $this->executeCommand("sudo chown www-data:www-data {$domainPath}/logs");
+                
+                $confPath = "/etc/supervisor/conf.d/{$programName}.conf";
+                
+                // Write config using sudo
+                $tempFile = "/tmp/supervisor_conf_" . time();
+                file_put_contents($tempFile, $rawConf);
+                $this->executeCommand("sudo mv {$tempFile} {$confPath}");
+                $this->executeCommand("sudo chown root:root {$confPath}");
+                
+                // Apply changes
+                $this->executeCommand("sudo supervisorctl reread");
+                $this->executeCommand("sudo supervisorctl update");
+                
+                // Restart the app
+                $this->executeCommand("sudo supervisorctl restart {$programName}:*");
+                
+                $duration = (int)(microtime(true) - $startTime);
+                $log->update([
+                    'status' => 'success',
+                    'output' => "Supervisor configured successfully using custom nimbus.yaml configuration.\nProgram name: {$programName}",
+                    'duration_seconds' => $duration,
+                ]);
+            } catch (\Exception $e) {
+                $duration = (int)(microtime(true) - $startTime);
+                $log->update([
+                    'status' => 'failed',
+                    'output' => 'Failed to setup custom Supervisor: ' . $e->getMessage(),
+                    'duration_seconds' => $duration,
+                ]);
+            }
+            return;
         }
+
+        // If no supervisor block is defined in nimbus.yaml, skip Supervisor setup entirely!
+        return;
     }
 
     /**
