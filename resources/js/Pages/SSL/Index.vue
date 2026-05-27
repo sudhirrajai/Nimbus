@@ -12,7 +12,7 @@
               <p class="mb-0 text-sm">Manage SSL certificates for your domains (Let's Encrypt)</p>
             </div>
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-secondary mb-0" @click="loadDomains" :disabled="loading">
+              <button class="btn btn-outline-secondary mb-0" @click="loadDomains(true)" :disabled="loading">
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
               </button>
@@ -499,10 +499,12 @@ const paginatedDomains = computed(() => {
   return filteredDomains.value.slice(paginationStart.value, paginationEnd.value)
 })
 
-const loadDomains = async () => {
+const loadDomains = async (force = false) => {
   try {
     loading.value = true
-    const response = await axios.get('/ssl/domains')
+    const response = await axios.get('/ssl/domains', {
+      params: force ? { refresh: 1 } : {}
+    })
     domains.value = response.data.domains
     
     // Update certbot status from the response

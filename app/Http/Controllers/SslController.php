@@ -55,10 +55,24 @@ class SslController extends Controller
                 $directories->push($panelDomain);
             }
 
+            $refresh = request()->query('refresh') === '1';
+
             $domains = $directories->unique()
-                ->map(function ($domain) use ($serverIp) {
-                    $info = $this->getDomainSslInfo($domain);
-                    $info['is_active'] = $this->checkDomainDns($domain, $serverIp);
+                ->map(function ($domain) use ($serverIp, $refresh) {
+                    if ($refresh) {
+                        cache()->forget("ssl_info_{$domain}");
+                        cache()->forget("dns_active_{$domain}");
+                    }
+
+                    $info = cache()->remember("ssl_info_{$domain}", 86400, function () use ($domain) {
+                        return $this->getDomainSslInfo($domain);
+                    });
+
+                    $isActive = cache()->remember("dns_active_{$domain}", 3600, function () use ($domain, $serverIp) {
+                        return $this->checkDomainDns($domain, $serverIp);
+                    });
+
+                    $info['is_active'] = $isActive;
                     $info['server_ip'] = $serverIp;
                     return $info;
                 })
@@ -227,6 +241,11 @@ class SslController extends Controller
     private function checkLiveSsl($domain)
     {
         try {
+            // Fast pre-flight check: skip if domain does not resolve to an IP address
+            if (gethostbyname($domain) === $domain) {
+                return null;
+            }
+
             $streamContext = stream_context_create([
                 'ssl' => [
                     'capture_peer_cert' => true,
@@ -237,7 +256,7 @@ class SslController extends Controller
                 ]
             ]);
 
-            $client = @stream_socket_client("ssl://{$domain}:443", $errno, $errstr, 5, STREAM_CLIENT_CONNECT, $streamContext);
+            $client = @stream_socket_client("ssl://{$domain}:443", $errno, $errstr, 2, STREAM_CLIENT_CONNECT, $streamContext);
             
             if (!$client) {
                 return null;
@@ -694,6 +713,10 @@ class SslController extends Controller
             // Reload nginx to apply changes
             exec("sudo systemctl reload nginx 2>&1");
 
+            // Clear cache to reflect the new certificate immediately
+            cache()->forget("ssl_info_{$domain}");
+            cache()->forget("dns_active_{$domain}");
+
             // Send success notification
             \App\Services\NotificationService::send(
                 "SSL Certificate Installed Successfully",
@@ -826,6 +849,9 @@ class SslController extends Controller
             // Reload nginx
             exec("sudo systemctl reload nginx 2>&1");
 
+            // Clear cache to reflect renewal
+            cache()->forget("ssl_info_{$domain}");
+
             // Send success notification
             \App\Services\NotificationService::send(
                 "SSL Certificate Renewed Successfully",
@@ -876,6 +902,18 @@ class SslController extends Controller
             // Reload nginx
             exec("sudo systemctl reload nginx 2>&1");
 
+            // Clear cache for all domains
+            try {
+                if (File::exists($this->basePath)) {
+                    foreach (File::directories($this->basePath) as $path) {
+                        $d = basename($path);
+                        cache()->forget("ssl_info_{$d}");
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Failed to clear SSL cache for some domains in renewAll: " . $e->getMessage());
+            }
+
             return response()->json([
                 'message' => 'All certificates renewal process completed',
                 'details' => $outputStr,
@@ -923,6 +961,9 @@ class SslController extends Controller
                     'details' => $outputStr
                 ], 500);
             }
+
+            // Clear cache to reflect removal
+            cache()->forget("ssl_info_{$domain}");
 
             return response()->json([
                 'message' => "SSL certificate removed for {$domain}"
