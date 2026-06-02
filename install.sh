@@ -238,9 +238,21 @@ if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${PHP_PACKAGES[@]}"; t
     echo -e "${YELLOW}PHP ${PHP_VERSION} stack already installed. Skipping package install.${NC}"
 else
     add-apt-repository ppa:ondrej/php -y
+    # Fallback to previous LTS (noble) if the current Ubuntu codename is not supported by the PPA yet
+    CODENAME=$(lsb_release -sc)
+    if [ "$CODENAME" = "resolute" ] || ! curl -fsIL "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${CODENAME}/Release" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Warning: PPA ppa:ondrej/php may not support '${CODENAME}'. Falling back to 'noble'...${NC}"
+        for f in /etc/apt/sources.list.d/*ondrej*php*.sources; do
+            [ -f "$f" ] && sed -i "s/Suites: ${CODENAME}/Suites: noble/g" "$f"
+        done
+        for f in /etc/apt/sources.list.d/*ondrej*php*.list; do
+            [ -f "$f" ] && sed -i "s/${CODENAME}/noble/g" "$f"
+        done
+    fi
     apt-get update -y
     apt-get install -y "${PHP_PACKAGES[@]}"
 fi
+
 
 systemctl enable php${PHP_VERSION}-fpm
 systemctl start php${PHP_VERSION}-fpm

@@ -220,8 +220,19 @@ install_php() {
             wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
             echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
         }
+        # Fallback to previous LTS (noble) if the current Ubuntu codename is not supported by the PPA yet
+        CODENAME=$(lsb_release -sc)
+        if [ "$CODENAME" = "resolute" ] || ! curl -fsIL "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${CODENAME}/Release" >/dev/null 2>&1; then
+            for f in /etc/apt/sources.list.d/*ondrej*php*.sources; do
+                [ -f "$f" ] && sed -i "s/Suites: ${CODENAME}/Suites: noble/g" "$f"
+            done
+            for f in /etc/apt/sources.list.d/*ondrej*php*.list; do
+                [ -f "$f" ] && sed -i "s/${CODENAME}/noble/g" "$f"
+            done
+        fi
         apt-get update -qq
     fi
+
     
     # Install PHP and required extensions
     apt-get install -y -qq \
