@@ -604,15 +604,18 @@ sed -i 's/;opcache.enable=.*/opcache.enable=1/' $PHP_INI
 sed -i 's/;opcache.memory_consumption=.*/opcache.memory_consumption=256/' $PHP_INI
 sed -i 's/;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=20000/' $PHP_INI
 
-# Configure systemd override for PHP-FPM to allow writing to /usr/local/nimbus (ProtectSystem protection)
+# Configure systemd override for PHP-FPM to allow writing to /usr/local/nimbus and /usr/share/adminer (ProtectSystem protection)
 echo -e "${YELLOW}Configuring systemd override for PHP-FPM...${NC}"
+mkdir -p /usr/share/adminer
+chown -R ${NIMBUS_USER}:${NIMBUS_USER} /usr/share/adminer
 mkdir -p /etc/systemd/system/php${PHP_VERSION}-fpm.service.d
 cat << EOF > /etc/systemd/system/php${PHP_VERSION}-fpm.service.d/nimbus.conf
 [Service]
-ReadWritePaths=${NIMBUS_DIR} /var/www
+ReadWritePaths=${NIMBUS_DIR} /var/www /usr/share/adminer
 EOF
 systemctl daemon-reload
 systemctl restart php${PHP_VERSION}-fpm
+
 
 
 # Configure Supervisor for Nimbus Queue Worker
