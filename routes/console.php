@@ -31,11 +31,28 @@ Artisan::command('shield:scan-file {filePath}', function ($filePath) {
 
 use Illuminate\Support\Facades\Schedule;
 use App\Models\Setting;
+use Illuminate\Support\Facades\Schema;
+
+$scanTime = '03:00';
+try {
+    if (class_exists(Setting::class) && Schema::hasTable('settings')) {
+        $scanTime = Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00';
+    }
+} catch (\Throwable $e) {
+    // Fail-safe during installation / migrations
+}
 
 Schedule::command('shield:scan /var/www')
-    ->dailyAt(Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00')
+    ->dailyAt($scanTime)
     ->when(function () {
-        return Setting::where('key', 'shield_auto_scan')->value('value') === '1';
+        try {
+            if (class_exists(Setting::class) && Schema::hasTable('settings')) {
+                return Setting::where('key', 'shield_auto_scan')->value('value') === '1';
+            }
+        } catch (\Throwable $e) {
+            // Fail-safe
+        }
+        return false;
     });
 
 Schedule::command('monitor:resources')->everyFiveMinutes();
