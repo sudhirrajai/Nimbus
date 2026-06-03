@@ -8,7 +8,12 @@ use Illuminate\Support\Facades\DB;
 
 class LicenseService
 {
-    protected $apiUrl = 'http://localhost:8001/api/v1/verify'; // VMCORE Central URL (Adjust as needed)
+    protected $apiUrl;
+
+    public function __construct()
+    {
+        $this->apiUrl = rtrim(env('VMCORE_API_URL', 'http://localhost:8001'), '/') . '/api/v1/verify';
+    }
 
     /**
      * Check if the license is valid
