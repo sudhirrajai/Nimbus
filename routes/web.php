@@ -14,6 +14,7 @@ use App\Http\Controllers\EmailController;
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\GitDeploymentController;
+use App\Http\Controllers\ActivationController;
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -34,6 +35,10 @@ Route::get('/', function () {
 // Protected routes — all authenticated users
 // ═══════════════════════════════════════════════════════════════
 Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
+
+    // License Activation
+    Route::get('/activate', [ActivationController::class, 'index'])->name('activate.index');
+    Route::post('/activate', [ActivationController::class, 'activate'])->name('activate.submit');
 
     // Dashboard — all users can access
     Route::prefix('dashboard')->group(function () {
