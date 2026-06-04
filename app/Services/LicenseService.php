@@ -115,6 +115,27 @@ class LicenseService
      */
     public function deactivate()
     {
+        $licenseKey = $this->getLicenseKey();
+        
+        if ($licenseKey) {
+            try {
+                // Call VmCoreCentral to notify about deactivation
+                $deactivateUrl = rtrim(env('VMCORE_API_URL', 'http://localhost:8001'), '/') . '/api/v1/deactivate';
+                
+                // Enforce HTTPS for external domains
+                if (str_starts_with($deactivateUrl, 'http://') && !str_contains($deactivateUrl, 'localhost') && !str_contains($deactivateUrl, '127.0.0.1')) {
+                    $deactivateUrl = 'https://' . substr($deactivateUrl, 7);
+                }
+
+                Http::timeout(10)->post($deactivateUrl, [
+                    'license_key' => $licenseKey,
+                    'machine_id' => $this->getMachineId(),
+                ]);
+            } catch (\Exception $e) {
+                // Ignore connection errors during deactivation to ensure local panel is still reset successfully
+            }
+        }
+
         DB::table('settings')->where('key', 'license_key')->delete();
         $this->clearCache();
     }
