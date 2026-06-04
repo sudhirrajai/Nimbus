@@ -20,7 +20,7 @@ class LicenseService
      */
     public function checkLicense()
     {
-        return Cache::remember('license_status', 86400, function () {
+        return Cache::remember('license_status', 3600, function () {
             $licenseKey = $this->getLicenseKey();
 
             if (!$licenseKey) {
@@ -93,6 +93,23 @@ class LicenseService
         file_put_contents($path, $id);
         
         return $id;
+    }
+
+    /**
+     * Clear the cached license status
+     */
+    public function clearCache()
+    {
+        Cache::forget('license_status');
+    }
+
+    /**
+     * Deactivate and remove the license key
+     */
+    public function deactivate()
+    {
+        DB::table('settings')->where('key', 'license_key')->delete();
+        $this->clearCache();
     }
 }
 

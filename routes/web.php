@@ -292,6 +292,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/data', [\App\Http\Controllers\ProfileController::class, 'getSettings'])->name('data');
             Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateSettings'])->name('update');
 
+            // License Settings
+            Route::get('/license', [\App\Http\Controllers\ActivationController::class, 'showLicenseSettings'])->name('license.index');
+            Route::post('/license/sync', [\App\Http\Controllers\ActivationController::class, 'syncLicense'])->name('license.sync');
+            Route::post('/license/deactivate', [\App\Http\Controllers\ActivationController::class, 'deactivateLicense'])->name('license.deactivate');
+
             // Security Settings
             Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'index'])->name('security.index');
             Route::post('/security/rules', [\App\Http\Controllers\SecurityController::class, 'storeRule'])->name('security.rules.store');

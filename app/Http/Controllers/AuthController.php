@@ -36,6 +36,9 @@ class AuthController extends Controller
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $user = Auth::user();
 
+            // Clear license cache on login to force fresh check
+            app(\App\Services\LicenseService::class)->clearCache();
+
             // Block suspended users
             if ($user->status === 'suspended') {
                 Auth::logout();
@@ -123,6 +126,9 @@ class AuthController extends Controller
         ]);
 
         Auth::login($user);
+
+        // Clear license cache on setup to force fresh check
+        app(\App\Services\LicenseService::class)->clearCache();
 
         return redirect()->route('dashboard');
     }

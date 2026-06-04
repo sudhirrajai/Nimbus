@@ -213,6 +213,13 @@
         </li>
 
         <li v-if="isRoot" class="nav-item">
+          <Link href="/settings/license" class="nav-link" :class="isActive('/settings/license')">
+            <i class="material-symbols-rounded opacity-5">vpn_key</i>
+            <span class="nav-link-text ms-1">License Settings</span>
+          </Link>
+        </li>
+
+        <li v-if="isRoot" class="nav-item">
           <Link href="/updates" class="nav-link" :class="isActive('/updates')">
             <i class="material-symbols-rounded opacity-5">system_update</i>
             <span class="nav-link-text ms-1">Updates</span>
