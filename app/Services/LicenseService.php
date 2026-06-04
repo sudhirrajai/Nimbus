@@ -12,7 +12,14 @@ class LicenseService
 
     public function __construct()
     {
-        $this->apiUrl = rtrim(env('VMCORE_API_URL', 'http://localhost:8001'), '/') . '/api/v1/verify';
+        $url = env('VMCORE_API_URL', 'http://localhost:8001');
+        
+        // Upgrade http:// to https:// for external domains to avoid POST->GET redirect issues
+        if (str_starts_with($url, 'http://') && !str_contains($url, 'localhost') && !str_contains($url, '127.0.0.1')) {
+            $url = 'https://' . substr($url, 7);
+        }
+        
+        $this->apiUrl = rtrim($url, '/') . '/api/v1/verify';
     }
 
     /**
