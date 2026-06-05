@@ -192,6 +192,25 @@ class DomainController extends Controller
      */
     public function store(Request $request)
     {
+        // System resource allocation check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('domain')], 503);
+        }
+
+        // Domain limit enforcement from license token
+        $tokenData = app(\App\Services\LicenseService::class)->getLicenseToken();
+        if ($tokenData && isset($tokenData['max_domains'])) {
+            $currentCount = count(array_filter(
+                \Illuminate\Support\Facades\File::directories($this->basePath),
+                fn($p) => !in_array(strtolower(basename($p)), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])
+            ));
+            if ($currentCount >= $tokenData['max_domains']) {
+                return response()->json([
+                    'error' => "Domain limit reached ({$tokenData['max_domains']} domains). Please upgrade your plan to add more domains."
+                ], 403);
+            }
+        }
+
         $domain = null;
         $path = null;
         $createdDirs = false;

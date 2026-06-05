@@ -20,17 +20,20 @@ class ActivationController extends Controller
      */
     public function index()
     {
-        $license = $this->licenseService->checkLicense();
+        // Clear lock so we can attempt a fresh check
+        $this->licenseService->clearLock();
+
+        $license = $this->licenseService->checkLicense(force: true);
 
         if ($license['status']) {
             return redirect()->route('dashboard');
         }
 
         return Inertia::render('Auth/Activate', [
-            'status' => session('status'),
-            'error' => session('error') ?? $license['message'],
+            'status'    => session('status'),
+            'error'     => session('error') ?? $license['message'],
             'machineId' => $this->licenseService->getMachineId(),
-            'serverIp' => request()->server('SERVER_ADDR') ?? '127.0.0.1',
+            'serverIp'  => request()->server('SERVER_ADDR') ?? '127.0.0.1',
         ]);
     }
 
@@ -43,9 +46,13 @@ class ActivationController extends Controller
             'license_key' => 'required|string',
         ]);
 
+        // Clear any existing lock before attempting activation
+        $this->licenseService->clearLock();
+
         $this->licenseService->setLicenseKey($request->license_key);
-        
-        $license = $this->licenseService->checkLicense();
+
+        // Force a fresh check against VmCoreCentral
+        $license = $this->licenseService->checkLicense(force: true);
 
         if ($license['status']) {
             return redirect()->route('dashboard')->with('success', 'License activated successfully!');
@@ -61,12 +68,15 @@ class ActivationController extends Controller
     {
         $license = $this->licenseService->checkLicense();
         $licenseKey = $this->licenseService->getLicenseKey();
+        $tokenData = $this->licenseService->getLicenseToken();
 
         return Inertia::render('Settings/License', [
-            'license' => $license,
+            'license'    => $license,
             'licenseKey' => $licenseKey,
-            'machineId' => $this->licenseService->getMachineId(),
-            'serverIp' => request()->server('SERVER_ADDR') ?? '127.0.0.1',
+            'machineId'  => $this->licenseService->getMachineId(),
+            'serverIp'   => request()->server('SERVER_ADDR') ?? '127.0.0.1',
+            'plan'       => $tokenData['plan'] ?? null,
+            'maxDomains' => $tokenData['max_domains'] ?? null,
         ]);
     }
 
@@ -76,7 +86,7 @@ class ActivationController extends Controller
     public function syncLicense()
     {
         $this->licenseService->clearCache();
-        $license = $this->licenseService->checkLicense();
+        $license = $this->licenseService->checkLicense(force: true);
 
         if ($license['status']) {
             return back()->with('success', 'License status synchronized. ' . ($license['message'] ?? 'License is active.'));

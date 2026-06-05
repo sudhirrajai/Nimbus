@@ -57,3 +57,15 @@ Schedule::command('shield:scan /var/www')
 
 Schedule::command('monitor:resources')->everyFiveMinutes();
 
+// ─── License Security Checks ─────────────────────────────────────────────
+// Hourly full verification (forces network call to VmCoreCentral)
+Schedule::command('license:check')->hourly();
+
+// Lightweight heartbeat every 30 minutes
+Schedule::call(function () {
+    try {
+        app(\App\Services\LicenseService::class)->sendHeartbeat();
+    } catch (\Throwable $e) {
+        // Fail silently — the hourly check handles grace period
+    }
+})->everyThirtyMinutes();

@@ -39,6 +39,14 @@ class AuthController extends Controller
             // Clear license cache on login to force fresh check
             app(\App\Services\LicenseService::class)->clearCache();
 
+            // System integrity check
+            if (!\App\Support\LicenseGuard::ok()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('activate.index')->with('error', 'System integrity check failed.');
+            }
+
             // Block suspended users
             if ($user->status === 'suspended') {
                 Auth::logout();

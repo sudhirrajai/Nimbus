@@ -407,6 +407,11 @@ BASH;
      */
     public function createDatabase(Request $request)
     {
+        // Database provisioning service check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('database')], 503);
+        }
+
         try {
             $request->validate([
                 'name' => 'required|string|max:64|regex:/^[a-zA-Z][a-zA-Z0-9_]*$/'

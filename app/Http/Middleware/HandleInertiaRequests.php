@@ -66,6 +66,9 @@ class HandleInertiaRequests extends Middleware
                     'assigned_domains' => $user->isRoot() ? [] : $assignedDomains,
                 ] : null,
             ],
+            'license_warning' => \App\Support\LicenseGuard::shouldShowWarning()
+                ? \App\Support\LicenseGuard::warningMessage()
+                : null,
         ];
     }
 }

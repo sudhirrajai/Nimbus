@@ -28,12 +28,34 @@ class VerifyLicense
             return $next($request);
         }
 
+        // Fast path: check persistent lock flag BEFORE making any network calls.
+        // This flag survives cache clears and code restarts.
+        // The only way to clear it is via successful re-activation.
+        try {
+            if ($this->licenseService->isLocked()) {
+                $reason = \Illuminate\Support\Facades\DB::table('settings')
+                    ->where('key', 'license_lock_reason')
+                    ->value('value') ?? 'License verification failed.';
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'error'   => 'License required.',
+                        'message' => $reason,
+                    ], 402);
+                }
+
+                return redirect()->route('activate.index')->with('error', $reason);
+            }
+        } catch (\Exception $e) {
+            // If DB is unavailable during migration/install, don't block
+        }
+
         $license = $this->licenseService->checkLicense();
 
         if (!$license['status']) {
             if ($request->expectsJson()) {
                 return response()->json([
-                    'error' => 'License required.',
+                    'error'   => 'License required.',
                     'message' => $license['message']
                 ], 402);
             }
