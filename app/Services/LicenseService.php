@@ -50,7 +50,8 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
     public function checkLicense(bool $force = false): array
     {
         // 1. Check persistent lock first (survives cache clears, code restarts)
-        if ($this->isLocked()) {
+        // Bypass this check if we are forcing a fresh check (to allow unlocking)
+        if (!$force && $this->isLocked()) {
             $reason = $this->getSetting('license_lock_reason') ?? 'License verification failed.';
             return ['status' => false, 'message' => $reason];
         }
