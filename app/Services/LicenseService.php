@@ -129,6 +129,14 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
                 // Store the signed token for offline validation
                 if (!empty($data['signed_token'])) {
+                    // Cryptographically verify the token before storing it to avoid redirect loops if keys mismatch
+                    $decoded = $this->verifySignedToken($data['signed_token']);
+                    if (!$decoded) {
+                        Log::error('Signature verification failed for the license token received from VmCoreCentral.');
+                        $this->triggerDegradation('License token signature verification failed (key mismatch).');
+                        return ['status' => false, 'message' => 'License verification failed (signature verification mismatch). Please ensure the Nimbus public key matches VmCoreCentral\'s private key.'];
+                    }
+
                     $this->setSetting('license_token', $data['signed_token']);
                 }
 
