@@ -118,7 +118,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
             $response = Http::timeout(10)->post($this->apiBaseUrl . '/verify', [
                 'license_key' => $licenseKey,
-                'server_ip'   => request()->server('SERVER_ADDR') ?? '127.0.0.1',
+                'server_ip'   => $this->getServerIp(),
                 'machine_id'  => $this->getMachineId(),
                 'domain'      => request()->getHost(),
                 'admin_name'  => $rootUser ? $rootUser->name : null,
@@ -271,7 +271,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
             $response = Http::timeout(10)->post($this->apiBaseUrl . '/heartbeat', [
                 'license_key' => $licenseKey,
                 'machine_id'  => $this->getMachineId(),
-                'server_ip'   => request()->server('SERVER_ADDR') ?? gethostbyname(gethostname()),
+                'server_ip'   => $this->getServerIp(),
                 'version'     => $this->getPanelVersion(),
             ]);
 
@@ -442,6 +442,11 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
     }
 
     // ─── Internal Helpers ────────────────────────────────────────────
+
+    private function getServerIp(): string
+    {
+        return request()->server('SERVER_ADDR') ?? (gethostbyname(gethostname()) ?: '127.0.0.1');
+    }
 
     private function getSetting(string $key): ?string
     {
