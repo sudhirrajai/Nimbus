@@ -438,16 +438,24 @@ BASH;
             $dbName = 'roundcube';
             
             // Create database and user using sudo mysql (Laravel user 'nimbus' lacks global CREATE privileges)
-            exec("sudo mysql -e 'CREATE DATABASE IF NOT EXISTS `" . $dbName . "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'");
-            exec("sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'");
-            exec("sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'");
-            exec("sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"localhost\"'");
+            $dbCommands = [
+                "sudo mysql -e 'CREATE DATABASE IF NOT EXISTS `" . $dbName . "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'",
+                "sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"localhost\"'",
+                "sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"127.0.0.1\"'",
+                "sudo mysql -e 'FLUSH PRIVILEGES'"
+            ];
             
-            exec("sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'");
-            exec("sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'");
-            exec("sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"127.0.0.1\"'");
-            
-            exec("sudo mysql -e 'FLUSH PRIVILEGES'");
+            foreach ($dbCommands as $cmd) {
+                $output = [];
+                exec($cmd . " 2>&1", $output, $code);
+                if ($code !== 0) {
+                    throw new \Exception("Database setup command failed: {$cmd}. Exit code: {$code}. Output: " . implode("\n", $output));
+                }
+            }
 
             // Setup roundcube database connection dynamically in Laravel config
             config(['database.connections.roundcube' => array_merge(
@@ -476,9 +484,12 @@ BASH;
                     break;
                 } elseif (file_exists($path . '.gz')) {
                     // Decompress gzipped schema to storage path to bypass PrivateTmp isolation
-                    exec("gunzip -c " . escapeshellarg($path . '.gz') . " > " . escapeshellarg($decompressedPath), $output, $code);
+                    $output = [];
+                    exec("gunzip -c " . escapeshellarg($path . '.gz') . " > " . escapeshellarg($decompressedPath) . " 2>&1", $output, $code);
                     if ($code === 0 && file_exists($decompressedPath)) {
                         $schemaFile = $decompressedPath;
+                    } else {
+                        throw new \Exception("Failed to decompress schema file {$path}.gz. Exit code: {$code}. Output: " . implode("\n", $output));
                     }
                     break;
                 }
@@ -519,7 +530,9 @@ BASH;
 PHP;
 
             $configPath = storage_path('app/roundcube_config.inc.php');
-            file_put_contents($configPath, $config);
+            if (file_put_contents($configPath, $config) === false) {
+                throw new \Exception("Failed to write temporary Roundcube config file to: {$configPath}. Please check directory permissions.");
+            }
             
             // Move config to /etc/roundcube/config.inc.php and set permissions
             $commands = [
@@ -530,7 +543,8 @@ PHP;
             ];
             
             foreach ($commands as $cmd) {
-                exec($cmd, $output, $code);
+                $output = [];
+                exec($cmd . " 2>&1", $output, $code);
                 if ($code !== 0) {
                     throw new \Exception("Command failed: {$cmd}. Exit code: {$code}. Output: " . implode("\n", $output));
                 }
