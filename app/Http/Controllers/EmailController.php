@@ -142,6 +142,19 @@ wait_for_apt() {
     done
 }
 
+# Pre-emptively stop Apache2 if it is installed, to free up port 80
+if [ -f /usr/sbin/apache2 ]; then
+    echo "Stopping Apache2 pre-emptively to avoid Nginx port conflicts..."
+    sudo systemctl stop apache2 2>/dev/null || true
+    sudo systemctl disable apache2 2>/dev/null || true
+fi
+
+# Clean up any previously broken package installs
+echo "Fixing any existing broken package installations..."
+wait_for_apt
+sudo dpkg --configure -a 2>&1
+sudo apt-get install -f -y 2>&1
+
 echo "[1/8] Updating package list..."
 wait_for_apt
 sudo DEBIAN_FRONTEND=noninteractive apt-get update 2>&1
@@ -174,7 +187,7 @@ echo "roundcube-core roundcube/reconfigure-webserver multiselect none" | sudo de
 sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
 
 # Install roundcube PHP package for current version only (using noninteractive mode)
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
+sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
 
 # ====== PHP 8.5 CLEANUP ======
 # If PHP 8.5 got installed by accident, remove it and stick with intended version
