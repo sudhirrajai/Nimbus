@@ -418,6 +418,73 @@ BASH;
     }
 
     /**
+     * Configure Roundcube Webmail
+     */
+    public function configureRoundcube()
+    {
+        try {
+            $dbUser = 'roundcube';
+            $dbPass = Str::random(16);
+            $dbName = 'roundcube';
+            
+            // Create database and user
+            DB::statement("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
+            DB::statement("ALTER USER '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
+            DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'localhost'");
+            DB::statement("FLUSH PRIVILEGES");
+
+            // Setup roundcube database connection
+            config(['database.connections.roundcube' => array_merge(
+                config('database.connections.mysql'),
+                [
+                    'database' => $dbName,
+                    'username' => $dbUser,
+                    'password' => $dbPass
+                ]
+            )]);
+
+            // Import initial schema if tables don't exist
+            $schemaFile = '/usr/share/roundcube/SQL/mysql.initial.sql';
+            if (file_exists($schemaFile)) {
+                $tables = DB::connection('roundcube')->select('SHOW TABLES');
+                if (empty($tables)) {
+                    $sql = file_get_contents($schemaFile);
+                    DB::connection('roundcube')->unprepared($sql);
+                }
+            }
+
+            // Write config.inc.php
+            $desKey = Str::random(24);
+            $config = <<<PHP
+<?php
+\$config = [];
+\$config['db_dsnw'] = 'mysql://{$dbUser}:{$dbPass}@localhost/{$dbName}';
+\$config['default_host'] = 'localhost';
+\$config['smtp_server'] = 'localhost';
+\$config['smtp_port'] = 25;
+\$config['smtp_user'] = '%u';
+\$config['smtp_pass'] = '%p';
+\$config['support_url'] = '';
+\$config['product_name'] = 'Nimbus Webmail';
+\$config['des_key'] = '{$desKey}';
+\$config['plugins'] = ['archive', 'zipdownload'];
+\$config['skin'] = 'elastic';
+PHP;
+
+            $configPath = '/tmp/roundcube_config.inc.php';
+            file_put_contents($configPath, $config);
+            exec("sudo mv {$configPath} /etc/roundcube/config.inc.php");
+            exec("sudo chown root:www-data /etc/roundcube/config.inc.php");
+            exec("sudo chmod 640 /etc/roundcube/config.inc.php");
+            
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get email-enabled domains
      */
     public function getDomains()
