@@ -469,15 +469,17 @@ BASH;
                 '/var/lib/roundcube/SQL/mysql.initial.sql'
             ];
             
+            $decompressedPath = storage_path('app/roundcube_mysql_initial.sql');
             foreach ($possiblePaths as $path) {
                 if (file_exists($path)) {
                     $schemaFile = $path;
                     break;
                 } elseif (file_exists($path . '.gz')) {
-                    // Decompress gzipped schema to /tmp
-                    $decompressed = '/tmp/roundcube_mysql_initial.sql';
-                    exec("gunzip -c " . escapeshellarg($path . '.gz') . " > " . escapeshellarg($decompressed));
-                    $schemaFile = $decompressed;
+                    // Decompress gzipped schema to storage path to bypass PrivateTmp isolation
+                    exec("gunzip -c " . escapeshellarg($path . '.gz') . " > " . escapeshellarg($decompressedPath), $output, $code);
+                    if ($code === 0 && file_exists($decompressedPath)) {
+                        $schemaFile = $decompressedPath;
+                    }
                     break;
                 }
             }
@@ -489,8 +491,8 @@ BASH;
                     $sql = file_get_contents($schemaFile);
                     DB::connection('roundcube')->unprepared($sql);
                     
-                    // Clean up decompressed file if we created it in /tmp
-                    if ($schemaFile === '/tmp/roundcube_mysql_initial.sql') {
+                    // Clean up decompressed file if we created it
+                    if ($schemaFile === $decompressedPath) {
                         @unlink($schemaFile);
                     }
                 } else {
@@ -516,16 +518,23 @@ BASH;
 \$config['skin'] = 'elastic';
 PHP;
 
-            $configPath = '/tmp/roundcube_config.inc.php';
+            $configPath = storage_path('app/roundcube_config.inc.php');
             file_put_contents($configPath, $config);
             
-            // Move config to /etc/roundcube/config.inc.php
-            exec("sudo mv {$configPath} /etc/roundcube/config.inc.php");
-            exec("sudo chown root:www-data /etc/roundcube/config.inc.php");
-            exec("sudo chmod 640 /etc/roundcube/config.inc.php");
+            // Move config to /etc/roundcube/config.inc.php and set permissions
+            $commands = [
+                "sudo mv " . escapeshellarg($configPath) . " /etc/roundcube/config.inc.php",
+                "sudo chown root:www-data /etc/roundcube/config.inc.php",
+                "sudo chmod 640 /etc/roundcube/config.inc.php",
+                "sudo chmod 755 /etc/roundcube"
+            ];
             
-            // Ensure directory permissions allow www-data to read the file
-            exec("sudo chmod 755 /etc/roundcube");
+            foreach ($commands as $cmd) {
+                exec($cmd, $output, $code);
+                if ($code !== 0) {
+                    throw new \Exception("Command failed: {$cmd}. Exit code: {$code}. Output: " . implode("\n", $output));
+                }
+            }
             
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
