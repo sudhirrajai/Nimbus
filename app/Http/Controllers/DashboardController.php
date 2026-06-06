@@ -31,6 +31,9 @@ class DashboardController extends Controller
         $uptimeData = $this->getUptime();
         $processCount = $this->getProcessCount();
 
+        $postfixInstalled = file_exists('/etc/postfix/main.cf');
+        $dovecotInstalled = file_exists('/etc/dovecot/dovecot.conf');
+
         return [
             'cpu' => $cpuData,
             'memory' => $memoryData,
@@ -38,6 +41,7 @@ class DashboardController extends Controller
             'load' => $loadData,
             'uptime' => $uptimeData,
             'processes' => $processCount,
+            'mailServerInstalled' => $postfixInstalled && $dovecotInstalled,
         ];
     }
 

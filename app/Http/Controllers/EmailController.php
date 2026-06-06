@@ -83,6 +83,10 @@ class EmailController extends Controller
     public function installMailServer(Request $request)
     {
         try {
+            $request->validate([
+                'hostname' => 'required|string|regex:/^[a-zA-Z0-9.-]+$/|max:255'
+            ]);
+            
             $hostname = $request->input('hostname', gethostname());
             
             // Check if another installation is in progress
@@ -418,7 +422,7 @@ BASH;
     {
         try {
             $request->validate([
-                'domain' => 'required|string|max:255'
+                'domain' => 'required|string|regex:/^[a-zA-Z0-9.-]+$/|max:255'
             ]);
 
             $domain = $request->input('domain');
@@ -441,8 +445,8 @@ BASH;
             ]);
 
             // Create mail directory
-            $mailDir = "/var/mail/vhosts/{$domain}";
-            exec("sudo mkdir -p {$mailDir} && sudo chown -R vmail:vmail {$mailDir}");
+            $escapedMailDir = escapeshellarg("/var/mail/vhosts/{$domain}");
+            exec("sudo mkdir -p {$escapedMailDir} && sudo chown -R vmail:vmail {$escapedMailDir}");
 
             return response()->json([
                 'success' => true,
@@ -575,12 +579,13 @@ BASH;
 
             // Create maildir with all necessary folders
             $fullMaildir = "/var/mail/vhosts/{$domain}/{$username}";
-            exec("sudo mkdir -p {$fullMaildir}/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Sent/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Drafts/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Trash/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Junk/{cur,new,tmp}");
-            exec("sudo chown -R vmail:vmail {$fullMaildir}");
+            $escapedMaildir = escapeshellarg($fullMaildir);
+            exec("sudo mkdir -p {$escapedMaildir}/{cur,new,tmp}");
+            exec("sudo mkdir -p {$escapedMaildir}/.Sent/{cur,new,tmp}");
+            exec("sudo mkdir -p {$escapedMaildir}/.Drafts/{cur,new,tmp}");
+            exec("sudo mkdir -p {$escapedMaildir}/.Trash/{cur,new,tmp}");
+            exec("sudo mkdir -p {$escapedMaildir}/.Junk/{cur,new,tmp}");
+            exec("sudo chown -R vmail:vmail {$escapedMaildir}");
 
             // Send welcome email with configuration
             $this->sendWelcomeEmail($email, $domain);
