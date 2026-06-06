@@ -152,24 +152,24 @@ fi
 # Clean up any previously broken package installs
 echo "Fixing any existing broken package installations..."
 wait_for_apt
-sudo dpkg --configure -a 2>&1
-sudo apt-get install -f -y 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 dpkg --configure -a 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -f -y 2>&1
 
 echo "[1/8] Updating package list..."
 wait_for_apt
-sudo DEBIAN_FRONTEND=noninteractive apt-get update 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get update 2>&1
 
 echo ""
 echo "[2/8] Installing Postfix..."
 wait_for_apt
 echo "postfix postfix/mailname string {$hostname}" | sudo debconf-set-selections
 echo "postfix postfix/main_mailer_type string 'Internet Site'" | sudo debconf-set-selections
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix postfix-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix postfix-mysql 2>&1
 
 echo ""
 echo "[3/8] Installing Dovecot..."
 wait_for_apt
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
 
 echo ""
 echo "[4/8] Installing Roundcube (without Apache)..."
@@ -184,10 +184,10 @@ echo "roundcube-core roundcube/reconfigure-webserver multiselect none" | sudo de
 
 # Pin the current PHP version to prevent installing new PHP versions
 # Install only roundcube core without recommends to avoid pulling php dependencies
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
+sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
 
 # Install roundcube PHP package for current version only (using noninteractive mode)
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
+sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y --no-install-recommends php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
 
 # ====== PHP 8.5 CLEANUP ======
 # If PHP 8.5 got installed by accident, remove it and stick with intended version
