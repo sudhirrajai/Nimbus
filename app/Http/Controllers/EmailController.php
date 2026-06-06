@@ -571,19 +571,22 @@ PHP;
             }
             
             // Move config to /etc/roundcube/config.inc.php and set permissions
+            // Running via systemd-run is required because PHP-FPM has ProtectSystem/ReadWritePaths enabled,
+            // which mounts /etc as read-only inside PHP-FPM's systemd sandbox.
             $commands = [
-                "sudo mv " . escapeshellarg($configPath) . " /etc/roundcube/config.inc.php",
-                "sudo chown root:www-data /etc/roundcube/config.inc.php",
-                "sudo chmod 640 /etc/roundcube/config.inc.php",
-                "sudo chmod 755 /etc/roundcube"
+                "mv " . escapeshellarg($configPath) . " /etc/roundcube/config.inc.php",
+                "chown root:www-data /etc/roundcube/config.inc.php",
+                "chmod 640 /etc/roundcube/config.inc.php",
+                "chmod 755 /etc/roundcube"
             ];
             
-            foreach ($commands as $cmd) {
-                $output = [];
-                exec($cmd . " 2>&1", $output, $code);
-                if ($code !== 0) {
-                    throw new \Exception("Command failed: {$cmd}. Exit code: {$code}. Output: " . implode("\n", $output));
-                }
+            $combinedCmd = implode(" && ", $commands);
+            $systemdCmd = "sudo systemd-run --wait --collect bash -c " . escapeshellarg($combinedCmd) . " 2>&1";
+            
+            $output = [];
+            exec($systemdCmd, $output, $code);
+            if ($code !== 0) {
+                throw new \Exception("Systemd transient execution failed. Exit code: {$code}. Output: " . implode("\n", $output));
             }
             
             return response()->json(['success' => true]);
