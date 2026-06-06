@@ -6,7 +6,7 @@
       <div class="branding-section">
         <div class="brand-content">
           <div class="logo-wrapper" style="overflow: hidden; background: rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 12px; backdrop-filter: blur(10px);">
-            <img :src="'/assets/img/nimbus_logo.png'" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">
+            <img :src="'/assets/img/nimbus_logo.png?v=2'" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">
           </div>
           <h1 class="brand-title">Welcome to nimbus</h1>
           <p class="brand-subtitle">by <a href="https://vmcore.in" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: 700;">VMCore</a></p>

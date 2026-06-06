@@ -6,7 +6,7 @@
         id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
 
       <Link class="navbar-brand px-4 py-3 m-0" href="/dashboard" style="display: flex; align-items: center; line-height: 1; gap: 8px;">
-        <img :src="'/assets/img/nimbus_logo.png'" class="navbar-brand-img" alt="main_logo" style="width: 36px; height: 36px; border-radius: 6px;">
+        <img :src="'/assets/img/nimbus_logo.png?v=2'" class="navbar-brand-img" alt="main_logo" style="width: 36px; height: 36px; border-radius: 6px;">
         <div style="display: flex; flex-direction: column; align-items: flex-start;">
           <span class="text-sm text-dark font-weight-bold" style="letter-spacing: -0.03em;">nimbus</span>
           <span class="text-xxs text-muted opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by VMCore</span>
