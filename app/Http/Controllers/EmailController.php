@@ -27,8 +27,18 @@ class EmailController extends Controller
             // Check if Postfix is installed
             $postfixInstalled = file_exists('/etc/postfix/main.cf');
             $dovecotInstalled = file_exists('/etc/dovecot/dovecot.conf');
-            $roundcubeInstalled = file_exists('/etc/roundcube/config.inc.php') || 
-                                  file_exists('/var/lib/roundcube/config/config.inc.php');
+            
+            // Check if Roundcube is configured by Nimbus (must contain our custom signature)
+            $roundcubeInstalled = false;
+            foreach (['/etc/roundcube/config.inc.php', '/var/lib/roundcube/config/config.inc.php'] as $file) {
+                if (file_exists($file)) {
+                    $content = file_get_contents($file);
+                    if (strpos($content, 'Nimbus Webmail') !== false) {
+                        $roundcubeInstalled = true;
+                        break;
+                    }
+                }
+            }
 
             // Check if services are running
             $postfixRunning = false;
@@ -427,30 +437,65 @@ BASH;
             $dbPass = Str::random(16);
             $dbName = 'roundcube';
             
-            // Create database and user
+            // Create database and user for both localhost and 127.0.0.1 to ensure local socket/TCP connections work
             DB::statement("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            
             DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
             DB::statement("ALTER USER '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
             DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'localhost'");
+            
+            DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'127.0.0.1' IDENTIFIED BY '{$dbPass}'");
+            DB::statement("ALTER USER '{$dbUser}'@'127.0.0.1' IDENTIFIED BY '{$dbPass}'");
+            DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'127.0.0.1'");
+            
             DB::statement("FLUSH PRIVILEGES");
 
-            // Setup roundcube database connection
+            // Setup roundcube database connection dynamically in Laravel config
             config(['database.connections.roundcube' => array_merge(
                 config('database.connections.mysql'),
                 [
+                    'host' => '127.0.0.1',
                     'database' => $dbName,
                     'username' => $dbUser,
                     'password' => $dbPass
                 ]
             )]);
 
-            // Import initial schema if tables don't exist
-            $schemaFile = '/usr/share/roundcube/SQL/mysql.initial.sql';
-            if (file_exists($schemaFile)) {
-                $tables = DB::connection('roundcube')->select('SHOW TABLES');
-                if (empty($tables)) {
+            // Locate the schema file
+            $schemaFile = null;
+            $possiblePaths = [
+                '/usr/share/roundcube/SQL/mysql.initial.sql',
+                '/usr/share/dbconfig-common/data/roundcube/install/mysql',
+                '/usr/share/roundcube/program/resources/SQL/mysql.initial.sql',
+                '/var/lib/roundcube/SQL/mysql.initial.sql'
+            ];
+            
+            foreach ($possiblePaths as $path) {
+                if (file_exists($path)) {
+                    $schemaFile = $path;
+                    break;
+                } elseif (file_exists($path . '.gz')) {
+                    // Decompress gzipped schema to /tmp
+                    $decompressed = '/tmp/roundcube_mysql_initial.sql';
+                    exec("gunzip -c " . escapeshellarg($path . '.gz') . " > " . escapeshellarg($decompressed));
+                    $schemaFile = $decompressed;
+                    break;
+                }
+            }
+
+            // Check if tables exist
+            $tables = DB::connection('roundcube')->select('SHOW TABLES');
+            if (empty($tables)) {
+                if ($schemaFile && file_exists($schemaFile)) {
                     $sql = file_get_contents($schemaFile);
                     DB::connection('roundcube')->unprepared($sql);
+                    
+                    // Clean up decompressed file if we created it in /tmp
+                    if ($schemaFile === '/tmp/roundcube_mysql_initial.sql') {
+                        @unlink($schemaFile);
+                    }
+                } else {
+                    throw new \Exception("Roundcube initial SQL schema file not found. Checked: " . implode(', ', $possiblePaths));
                 }
             }
 
@@ -459,9 +504,9 @@ BASH;
             $config = <<<PHP
 <?php
 \$config = [];
-\$config['db_dsnw'] = 'mysql://{$dbUser}:{$dbPass}@localhost/{$dbName}';
-\$config['default_host'] = 'localhost';
-\$config['smtp_server'] = 'localhost';
+\$config['db_dsnw'] = 'mysql://{$dbUser}:{$dbPass}@127.0.0.1/{$dbName}';
+\$config['default_host'] = '127.0.0.1';
+\$config['smtp_server'] = '127.0.0.1';
 \$config['smtp_port'] = 25;
 \$config['smtp_user'] = '%u';
 \$config['smtp_pass'] = '%p';
@@ -474,9 +519,14 @@ PHP;
 
             $configPath = '/tmp/roundcube_config.inc.php';
             file_put_contents($configPath, $config);
+            
+            // Move config to /etc/roundcube/config.inc.php
             exec("sudo mv {$configPath} /etc/roundcube/config.inc.php");
             exec("sudo chown root:www-data /etc/roundcube/config.inc.php");
             exec("sudo chmod 640 /etc/roundcube/config.inc.php");
+            
+            // Ensure directory permissions allow www-data to read the file
+            exec("sudo chmod 755 /etc/roundcube");
             
             return response()->json(['success' => true]);
         } catch (\Exception $e) {

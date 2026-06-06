@@ -333,7 +333,7 @@
                           :disabled="configuringRoundcube"
                         >
                           <span v-if="configuringRoundcube" class="spinner-border spinner-border-sm me-1"></span>
-                          Configure Nginx
+                          Configure Webmail
                         </button>
                         <a 
                           v-else-if="status.roundcube.installed"
