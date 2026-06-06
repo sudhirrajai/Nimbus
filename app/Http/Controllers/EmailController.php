@@ -40,6 +40,19 @@ class EmailController extends Controller
                 }
             }
 
+            // Auto-configure Roundcube if mail server is installed but Roundcube config is missing signature
+            if ($postfixInstalled && $dovecotInstalled && !$roundcubeInstalled) {
+                try {
+                    $response = $this->configureRoundcube();
+                    $data = json_decode($response->getContent(), true);
+                    if (isset($data['success']) && $data['success']) {
+                        $roundcubeInstalled = true;
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Failed to auto-configure Roundcube in getStatus: " . $e->getMessage());
+                }
+            }
+
             // Check if services are running
             $postfixRunning = false;
             $dovecotRunning = false;
@@ -417,6 +430,27 @@ BASH;
         $isRunning = $status === 'running';
         $isComplete = $status === '0';
         $isFailed = !$isRunning && !$isComplete && $status !== 'unknown';
+        
+        // Auto-configure Roundcube on completion if not already configured
+        if ($isComplete) {
+            $roundcubeConfigured = false;
+            foreach (['/etc/roundcube/config.inc.php', '/var/lib/roundcube/config/config.inc.php'] as $file) {
+                if (file_exists($file)) {
+                    $content = file_get_contents($file);
+                    if (strpos($content, 'Nimbus Webmail') !== false) {
+                        $roundcubeConfigured = true;
+                        break;
+                    }
+                }
+            }
+            if (!$roundcubeConfigured) {
+                try {
+                    $this->configureRoundcube();
+                } catch (\Exception $e) {
+                    \Log::error("Failed to auto-configure Roundcube in getInstallLog: " . $e->getMessage());
+                }
+            }
+        }
         
         return response()->json([
             'log' => $log,
