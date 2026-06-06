@@ -28,12 +28,12 @@ class EmailController extends Controller
             $postfixInstalled = file_exists('/etc/postfix/main.cf');
             $dovecotInstalled = file_exists('/etc/dovecot/dovecot.conf');
             
-            // Check if Roundcube is configured by Nimbus (must contain our custom signature)
+            // Check if Roundcube is configured by Nimbus (must contain our custom signature and modern smtp_host)
             $roundcubeInstalled = false;
             foreach (['/etc/roundcube/config.inc.php', '/var/lib/roundcube/config/config.inc.php'] as $file) {
                 if (file_exists($file)) {
                     $content = file_get_contents($file);
-                    if (strpos($content, 'Nimbus Webmail') !== false) {
+                    if (strpos($content, 'Nimbus Webmail') !== false && strpos($content, 'smtp_host') !== false) {
                         $roundcubeInstalled = true;
                         break;
                     }
@@ -437,7 +437,7 @@ BASH;
             foreach (['/etc/roundcube/config.inc.php', '/var/lib/roundcube/config/config.inc.php'] as $file) {
                 if (file_exists($file)) {
                     $content = file_get_contents($file);
-                    if (strpos($content, 'Nimbus Webmail') !== false) {
+                    if (strpos($content, 'Nimbus Webmail') !== false && strpos($content, 'smtp_host') !== false) {
                         $roundcubeConfigured = true;
                         break;
                     }
