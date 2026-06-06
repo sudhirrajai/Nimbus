@@ -1070,21 +1070,22 @@ CONFIG;
         }
     }
 
-    /**
-     * Clear installation lock file
-     */
     public function clearInstallLock()
     {
         try {
             $lockFile = storage_path('logs/nimbus_install.lock');
             $statusFile = storage_path('logs/mailserver_install.status');
+            $logFile = storage_path('logs/mailserver_install.log');
             
             if (file_exists($lockFile)) {
                 unlink($lockFile);
             }
-            
-            // Set status to failed or reset so it doesn't show as running
-            file_put_contents($statusFile, 'failed');
+            if (file_exists($statusFile)) {
+                unlink($statusFile);
+            }
+            if (file_exists($logFile)) {
+                unlink($logFile);
+            }
             
             return response()->json([
                 'success' => true,

@@ -121,7 +121,7 @@
                   <div class="ms-auto" v-if="installIsComplete || installIsFailed">
                     <button 
                       class="btn bg-gradient-secondary mb-0 btn-sm" 
-                      @click="loadMailServerStatus"
+                      @click="resetSetup"
                     >
                       Back to Setup
                     </button>
@@ -1248,6 +1248,22 @@ const clearLock = async () => {
     }
   } catch (err) {
     showAlert('danger', err.response?.data?.error || 'An error occurred while clearing the lock.')
+  }
+}
+
+const resetSetup = async () => {
+  try {
+    const res = await axios.post('/email/clear-lock')
+    if (res.data.success) {
+      if (logInterval) clearInterval(logInterval)
+      installing.value = false
+      installIsFailed.value = false
+      installIsComplete.value = false
+      installLog.value = ''
+      loadMailServerStatus()
+    }
+  } catch (err) {
+    console.error(err)
   }
 }
 
