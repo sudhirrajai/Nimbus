@@ -110,13 +110,22 @@
                   style="height: 350px; overflow-y: auto; background-color: #0f172a; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); line-height: 1.5; white-space: pre-wrap;"
                 >{{ installLog }}</div>
 
-                <div class="d-flex justify-content-end mt-3" v-if="installIsComplete || installIsFailed">
+                <div class="d-flex justify-content-between mt-3">
                   <button 
-                    class="btn bg-gradient-secondary mb-0" 
-                    @click="loadMailServerStatus"
+                    v-if="installing" 
+                    class="btn btn-outline-danger mb-0 btn-sm"
+                    @click="clearLock"
                   >
-                    Back to Setup
+                    Force Reset / Clear Lock
                   </button>
+                  <div class="ms-auto" v-if="installIsComplete || installIsFailed">
+                    <button 
+                      class="btn bg-gradient-secondary mb-0 btn-sm" 
+                      @click="loadMailServerStatus"
+                    >
+                      Back to Setup
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1219,6 +1228,29 @@ const changeTab = (tab) => {
 }
 
 // Setup & Install
+const clearLock = async () => {
+  if (!confirm('Are you sure you want to force reset and clear the installation lock? Use this only if the installation is stuck.')) {
+    return
+  }
+  
+  try {
+    const res = await axios.post('/email/clear-lock')
+    if (res.data.success) {
+      showAlert('success', 'Installation lock cleared. You can now restart the installation.')
+      if (logInterval) clearInterval(logInterval)
+      installing.value = false
+      installIsFailed.value = false
+      installIsComplete.value = false
+      installLog.value = ''
+      loadMailServerStatus()
+    } else {
+      showAlert('danger', res.data.error || 'Failed to clear lock.')
+    }
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'An error occurred while clearing the lock.')
+  }
+}
+
 const triggerInstallation = async () => {
   if (!hostnameInput.value.trim()) {
     showAlert('danger', 'Please provide a valid hostname.')
