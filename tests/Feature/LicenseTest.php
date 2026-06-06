@@ -228,4 +228,110 @@ rtmnnObzqUeWMPffTvN1IQ==
             LicenseGuard::warningMessage()
         );
     }
+
+    /**
+     * Test that sendHeartbeat triggers a forced license check when status_changed_at is newer.
+     */
+    public function test_heartbeat_triggers_forced_license_check_when_newer_status_changed_at()
+    {
+        $service = app(LicenseService::class);
+
+        // Seed settings
+        DB::table('settings')->insert([
+            ['key' => 'license_key', 'value' => 'NIMB-1234-5678-ABCD', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'last_status_sync_at', 'value' => date('c', time() - 3600), 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        // Fake the HTTP requests
+        \Illuminate\Support\Facades\Http::fake([
+            '*/api/v1/heartbeat' => \Illuminate\Support\Facades\Http::response([
+                'status' => true,
+                'message' => 'OK',
+                'license_status' => 'active',
+                'status_changed_at' => date('c', time()), // newer than 1 hour ago
+            ], 200),
+            '*/api/v1/verify' => \Illuminate\Support\Facades\Http::response([
+                'status' => true,
+                'plan' => 'pro',
+                'expires_at' => 'Never',
+                'message' => 'License is valid.',
+                'signed_token' => $this->generateToken([
+                    'license_key' => 'NIMB-1234-5678-ABCD',
+                    'machine_id'  => $service->getMachineId(),
+                    'plan'        => 'pro',
+                    'max_domains' => 10,
+                    'valid_until' => date('Y-m-d H:i:s', time() + 3600),
+                ]),
+                'max_domains' => 10,
+                'status_changed_at' => date('c', time()),
+            ], 200),
+        ]);
+
+        $result = $service->sendHeartbeat();
+
+        $this->assertTrue($result);
+
+        // Verify that verify endpoint was hit (meaning force check was triggered)
+        \Illuminate\Support\Facades\Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/api/v1/verify');
+        });
+    }
+
+    /**
+     * Test that sendHeartbeat does not trigger a forced check when status_changed_at is older/same.
+     */
+    public function test_heartbeat_does_not_trigger_check_when_older_status_changed_at()
+    {
+        $service = app(LicenseService::class);
+
+        // Seed settings
+        $nowStr = date('c', time());
+        DB::table('settings')->insert([
+            ['key' => 'license_key', 'value' => 'NIMB-1234-5678-ABCD', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'last_status_sync_at', 'value' => $nowStr, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        // Fake the HTTP requests
+        \Illuminate\Support\Facades\Http::fake([
+            '*/api/v1/heartbeat' => \Illuminate\Support\Facades\Http::response([
+                'status' => true,
+                'message' => 'OK',
+                'license_status' => 'active',
+                'status_changed_at' => $nowStr, // same as local
+            ], 200),
+        ]);
+
+        $result = $service->sendHeartbeat();
+
+        $this->assertTrue($result);
+
+        // Verify that verify endpoint was NOT hit
+        \Illuminate\Support\Facades\Http::assertNotSent(function ($request) {
+            return str_contains($request->url(), '/api/v1/verify');
+        });
+    }
+
+    /**
+     * Test that sendHeartbeat triggers immediate degradation if status is suspended (403 or 200 non-active).
+     */
+    public function test_heartbeat_triggers_degradation_if_suspended()
+    {
+        $service = app(LicenseService::class);
+
+        DB::table('settings')->insert([
+            ['key' => 'license_key', 'value' => 'NIMB-1234-5678-ABCD', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake([
+            '*/api/v1/heartbeat' => \Illuminate\Support\Facades\Http::response([
+                'status' => false,
+                'message' => 'License is suspended.',
+            ], 403),
+        ]);
+
+        $result = $service->sendHeartbeat();
+
+        $this->assertFalse($result);
+        $this->assertTrue($service->isLocked());
+    }
 }

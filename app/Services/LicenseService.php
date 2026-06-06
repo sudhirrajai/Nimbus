@@ -144,6 +144,10 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                 // Record successful check
                 $this->setSetting('last_successful_license_check', now()->toIso8601String());
 
+                if (!empty($data['status_changed_at'])) {
+                    $this->setSetting('last_status_sync_at', $data['status_changed_at']);
+                }
+
                 // Clear any degradation state
                 $this->clearDegradation();
 
@@ -281,7 +285,28 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                 return false;
             }
 
-            return $response->successful();
+            if ($response->successful()) {
+                $data = $response->json();
+
+                if (isset($data['license_status']) && $data['license_status'] !== 'active') {
+                    $this->triggerDegradation($data['message'] ?? 'License is ' . $data['license_status'] . '.');
+                    return false;
+                }
+
+                if (!empty($data['status_changed_at'])) {
+                    $serverChangedAt = strtotime($data['status_changed_at']);
+                    $localSyncedAt = strtotime($this->getSetting('last_status_sync_at') ?? '');
+
+                    if (!$localSyncedAt || $serverChangedAt > $localSyncedAt) {
+                        Log::info("License status change detected on server. Triggering force check...");
+                        $this->checkLicense(force: true);
+                    }
+                }
+
+                return true;
+            }
+
+            return false;
         } catch (\Exception $e) {
             // Network error — don't degrade on heartbeat failure, the hourly check handles grace
             Log::info('Heartbeat failed: ' . $e->getMessage());

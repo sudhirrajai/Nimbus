@@ -61,11 +61,11 @@ Schedule::command('monitor:resources')->everyFiveMinutes();
 // Hourly full verification (forces network call to VmCoreCentral)
 Schedule::command('license:check')->hourly();
 
-// Lightweight heartbeat every 30 minutes
+// Lightweight heartbeat every 5 minutes
 Schedule::call(function () {
     try {
         app(\App\Services\LicenseService::class)->sendHeartbeat();
     } catch (\Throwable $e) {
         // Fail silently — the hourly check handles grace period
     }
-})->everyThirtyMinutes();
+})->everyFiveMinutes();
