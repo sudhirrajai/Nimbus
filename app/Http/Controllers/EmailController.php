@@ -217,12 +217,18 @@ if systemctl is-active --quiet apache2 2>/dev/null; then
 fi
 
 echo ""
-echo "[5/8] Creating mail directories..."
+echo "[5/8] Creating mail directories and linking webmail..."
 sudo mkdir -p /var/mail/vhosts
 sudo groupadd -g 5000 vmail 2>/dev/null || echo "Group vmail already exists"
 sudo useradd -g vmail -u 5000 vmail -d /var/mail 2>/dev/null || echo "User vmail already exists"
 sudo chown -R vmail:vmail /var/mail
-echo "Mail directories created"
+
+# Link Roundcube to Nimbus public directory so it can be served by Nginx
+if [ ! -L /usr/local/nimbus/public/roundcube ]; then
+    sudo ln -sf /var/lib/roundcube/public_html /usr/local/nimbus/public/roundcube
+fi
+
+echo "Mail directories created and webmail linked"
 
 echo ""
 echo "[6/8] Configuring Postfix..."
