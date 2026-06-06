@@ -129,6 +129,10 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export NEEDRESTART_SUSPEND=1
 
+# Prevent any services from restarting automatically during apt-get
+echo -e '#!/bin/sh\nexit 101' | sudo tee /usr/sbin/policy-rc.d > /dev/null
+sudo chmod +x /usr/sbin/policy-rc.d
+
 # Disable needrestart temporarily for this installation
 if [ -f /etc/needrestart/needrestart.conf ]; then
     sudo sed -i "s/^#\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
@@ -201,8 +205,9 @@ fi
 # Make sure we're still using the correct PHP version
 sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
 
-# Restart the correct PHP-FPM
-sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
+# Schedule PHP-FPM restart for 1 minute after the script finishes to avoid killing this script
+sudo bash -c "echo 'sleep 5 && systemctl restart php{$phpVersion}-fpm' | at now" 2>/dev/null || \
+sudo systemd-run --on-active=10 sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
 
 # Stop and disable Apache2 if it was installed as a dependency
 if systemctl is-active --quiet apache2 2>/dev/null; then
@@ -339,6 +344,8 @@ echo "Dovecot configured"
 
 echo ""
 echo "[8/8] Starting services..."
+sudo rm -f /usr/sbin/policy-rc.d
+
 sudo systemctl restart postfix
 sudo systemctl restart dovecot
 sudo systemctl enable postfix
@@ -362,9 +369,9 @@ BASH;
             file_put_contents($scriptPath, $script);
             chmod($scriptPath, 0755);
 
-            // Execute script in background, output to log file
-            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}";
-            exec("nohup bash -c '{$command}' > /dev/null 2>&1 &");
+            // Execute script completely detached using systemd-run to prevent PHP-FPM deadlocks
+            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}; rm -f {$scriptPath}";
+            exec("sudo systemd-run --unit=nimbus-mail-install-$(date +%s) bash -c '{$command}' > /dev/null 2>&1 &");
 
             return response()->json([
                 'success' => true,
