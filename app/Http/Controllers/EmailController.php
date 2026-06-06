@@ -551,11 +551,13 @@ BASH;
 <?php
 \$config = [];
 \$config['db_dsnw'] = 'mysql://{$dbUser}:{$dbPass}@127.0.0.1/{$dbName}';
+\$config['imap_host'] = '127.0.0.1:143';
 \$config['default_host'] = '127.0.0.1';
+\$config['smtp_host'] = '127.0.0.1:25';
 \$config['smtp_server'] = '127.0.0.1';
 \$config['smtp_port'] = 25;
-\$config['smtp_user'] = '%u';
-\$config['smtp_pass'] = '%p';
+\$config['smtp_user'] = '';
+\$config['smtp_pass'] = '';
 \$config['support_url'] = '';
 \$config['product_name'] = 'Nimbus Webmail';
 \$config['des_key'] = '{$desKey}';
