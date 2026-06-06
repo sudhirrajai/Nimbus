@@ -437,18 +437,17 @@ BASH;
             $dbPass = Str::random(16);
             $dbName = 'roundcube';
             
-            // Create database and user for both localhost and 127.0.0.1 to ensure local socket/TCP connections work
-            DB::statement("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            // Create database and user using sudo mysql (Laravel user 'nimbus' lacks global CREATE privileges)
+            exec("sudo mysql -e 'CREATE DATABASE IF NOT EXISTS `" . $dbName . "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'");
+            exec("sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'");
+            exec("sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'");
+            exec("sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"localhost\"'");
             
-            DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
-            DB::statement("ALTER USER '{$dbUser}'@'localhost' IDENTIFIED BY '{$dbPass}'");
-            DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'localhost'");
+            exec("sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'");
+            exec("sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'");
+            exec("sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"127.0.0.1\"'");
             
-            DB::statement("CREATE USER IF NOT EXISTS '{$dbUser}'@'127.0.0.1' IDENTIFIED BY '{$dbPass}'");
-            DB::statement("ALTER USER '{$dbUser}'@'127.0.0.1' IDENTIFIED BY '{$dbPass}'");
-            DB::statement("GRANT ALL PRIVILEGES ON `{$dbName}`.* TO '{$dbUser}'@'127.0.0.1'");
-            
-            DB::statement("FLUSH PRIVILEGES");
+            exec("sudo mysql -e 'FLUSH PRIVILEGES'");
 
             // Setup roundcube database connection dynamically in Laravel config
             config(['database.connections.roundcube' => array_merge(
