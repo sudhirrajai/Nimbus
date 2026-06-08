@@ -888,14 +888,14 @@ PHP;
                 'updated_at' => now()
             ]);
 
-            // Create maildir with all necessary folders
+            // Create maildir with all necessary folders (explicitly without braces for /bin/sh compatibility)
             $fullMaildir = "/var/mail/vhosts/{$domain}/{$username}";
             $escapedMaildir = escapeshellarg($fullMaildir);
-            exec("sudo mkdir -p {$escapedMaildir}/{cur,new,tmp}");
-            exec("sudo mkdir -p {$escapedMaildir}/.Sent/{cur,new,tmp}");
-            exec("sudo mkdir -p {$escapedMaildir}/.Drafts/{cur,new,tmp}");
-            exec("sudo mkdir -p {$escapedMaildir}/.Trash/{cur,new,tmp}");
-            exec("sudo mkdir -p {$escapedMaildir}/.Junk/{cur,new,tmp}");
+            exec("sudo mkdir -p {$escapedMaildir}/cur {$escapedMaildir}/new {$escapedMaildir}/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Sent/cur {$escapedMaildir}/.Sent/new {$escapedMaildir}/.Sent/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Drafts/cur {$escapedMaildir}/.Drafts/new {$escapedMaildir}/.Drafts/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Trash/cur {$escapedMaildir}/.Trash/new {$escapedMaildir}/.Trash/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Junk/cur {$escapedMaildir}/.Junk/new {$escapedMaildir}/.Junk/tmp");
             exec("sudo chown -R vmail:vmail {$escapedMaildir}");
 
             // Send welcome email with configuration
