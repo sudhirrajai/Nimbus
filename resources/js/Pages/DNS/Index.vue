@@ -432,7 +432,7 @@ const recordPaginationStart = computed(() => (recordCurrentPage.value - 1) * ite
 const recordPaginationEnd = computed(() => recordCurrentPage.value * itemsPerPage.value)
 
 const paginatedRecords = computed(() => {
-  return filteredRecords.value.slice(recordPaginationStart.value, recordPaginationEnd.value)
+  return filteredRecords.value
 })
 
 const selectDomain = (domain) => {
