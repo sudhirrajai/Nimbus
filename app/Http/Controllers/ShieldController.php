@@ -737,6 +737,8 @@ class ShieldController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
     /**
      * Get Fail2Ban status, active jails, and list of banned IPs
      */
