@@ -684,7 +684,9 @@ PHP;
                 "mv " . escapeshellarg($configPath) . " /etc/roundcube/config.inc.php",
                 "chown root:www-data /etc/roundcube/config.inc.php",
                 "chmod 640 /etc/roundcube/config.inc.php",
-                "chmod 755 /etc/roundcube"
+                "chmod 755 /etc/roundcube",
+                "cp /usr/local/nimbus/public/roundcube_sso.php /var/lib/roundcube/public_html/sso.php",
+                "chmod 644 /var/lib/roundcube/public_html/sso.php"
             ];
             
             $combinedCmd = implode(" && ", $commands);
