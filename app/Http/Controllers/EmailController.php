@@ -899,7 +899,7 @@ PHP;
             exec("sudo chown -R vmail:vmail {$escapedMaildir}");
 
             // Send welcome email with configuration
-            $this->sendWelcomeEmail($email, $domain);
+            $this->sendWelcomeEmail($email, $domain, $request->input('password'));
 
             return response()->json([
                 'success' => true,
@@ -914,37 +914,43 @@ PHP;
     /**
      * Send welcome email with mail client configuration
      */
-    private function sendWelcomeEmail(string $email, string $domain): void
+    private function sendWelcomeEmail(string $email, string $domain, string $password): void
     {
         try {
             $hostname = gethostname();
             $date = date('r');
             $messageId = uniqid() . "@{$domain}";
             
+            $server = strpos(strtolower($domain), 'mail.') === 0 ? $domain : 'mail.' . $domain;
+            
             $body = <<<EMAIL
 Welcome to your new email account!
 
 Your email address: {$email}
 
+=== Credentials ===
+Username: {$email}
+Password: {$password}
+
 === Email Client Configuration ===
 
 INCOMING MAIL (IMAP)
 --------------------
-Server: {$hostname}
+Server: {$server}
 Port: 993
 Security: SSL/TLS
 Username: {$email}
 
 INCOMING MAIL (POP3)
 --------------------
-Server: {$hostname}
+Server: {$server}
 Port: 995
 Security: SSL/TLS
 Username: {$email}
 
 OUTGOING MAIL (SMTP)
 --------------------
-Server: {$hostname}
+Server: {$server}
 Port: 587
 Security: STARTTLS
 Username: {$email}
@@ -952,7 +958,7 @@ Authentication: Required
 
 === Webmail Access ===
 You can also access your email via webmail at:
-https://{$hostname}/roundcube
+https://{$server}/roundcube
 
 === Tips ===
 - Use your full email address as username
@@ -1249,24 +1255,30 @@ EMAIL;
      */
     public function getClientSettings(Request $request)
     {
-        $hostname = gethostname();
+        $domain = $request->query('domain');
+        
+        if ($domain) {
+            $server = strpos(strtolower($domain), 'mail.') === 0 ? $domain : 'mail.' . $domain;
+        } else {
+            $server = gethostname();
+        }
         
         return response()->json([
             'incoming' => [
                 'imap' => [
-                    'server' => $hostname,
+                    'server' => $server,
                     'port' => 993,
                     'security' => 'SSL/TLS'
                 ],
                 'pop3' => [
-                    'server' => $hostname,
+                    'server' => $server,
                     'port' => 995,
                     'security' => 'SSL/TLS'
                 ]
             ],
             'outgoing' => [
                 'smtp' => [
-                    'server' => $hostname,
+                    'server' => $server,
                     'port' => 587,
                     'security' => 'STARTTLS'
                 ]

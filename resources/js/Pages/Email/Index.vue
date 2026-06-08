@@ -662,6 +662,25 @@
 
         <!-- Tab 5: Client Configuration -->
         <div v-if="activeTab === 'client'">
+          <div class="row mb-3">
+            <div class="col-12">
+              <div class="card shadow-sm">
+                <div class="card-body p-3 d-flex align-items-center gap-2">
+                  <h6 class="mb-0 font-weight-bold me-3">Select Domain for Settings:</h6>
+                  <select 
+                    v-model="selectedConfigDomain" 
+                    @change="loadClientSettings"
+                    class="form-select form-select-sm"
+                    style="max-width: 250px; border: 1px solid #d2d6da; border-radius: 4px; padding: 4px 8px; font-size: 0.875rem;"
+                  >
+                    <option value="">System Default (Hostname)</option>
+                    <option v-for="d in domains" :key="d.id" :value="d.name">{{ d.name }}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="row">
             <div class="col-lg-6 mb-4">
               <div class="card h-100 shadow-sm">
@@ -1200,6 +1219,7 @@ const aliasSubmitting = ref(false)
 const aliasValidationError = ref('')
 
 // Client Settings State
+const selectedConfigDomain = ref('')
 const clientSettings = ref({
   incoming: {
     imap: { server: 'fetching...', port: 993, security: 'SSL/TLS' },
@@ -1234,7 +1254,6 @@ const loadMailServerStatus = async () => {
     // If installed, load dynamic data based on active tab
     if (status.value.installed) {
       loadDataForActiveTab()
-      loadClientSettings()
     } else {
       // Check if installation is currently running
       checkInstallProgress()
@@ -1260,6 +1279,13 @@ const loadDataForActiveTab = () => {
   } else if (activeTab.value === 'status') {
     // Refresh stats
     loadMailServerStatusWithoutLoadingState()
+  } else if (activeTab.value === 'client') {
+    loadDomains().then(() => {
+      if (domains.value.length > 0 && !selectedConfigDomain.value) {
+        selectedConfigDomain.value = domains.value[0].name
+      }
+      loadClientSettings()
+    })
   }
 }
 
@@ -1275,7 +1301,9 @@ const loadMailServerStatusWithoutLoadingState = async () => {
 // Client Settings
 const loadClientSettings = async () => {
   try {
-    const res = await axios.get('/email/client-settings')
+    const res = await axios.get('/email/client-settings', {
+      params: { domain: selectedConfigDomain.value }
+    })
     clientSettings.value = res.data
   } catch (err) {
     console.error(err)
