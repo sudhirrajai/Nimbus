@@ -751,8 +751,8 @@ CODE;
                 
                 $dovecotCmds = [
                     "mv " . escapeshellarg($tempPwdFile) . " /etc/dovecot/nimbus_master.pwd",
-                    "chmod 600 /etc/dovecot/nimbus_master.pwd",
-                    "chown root:root /etc/dovecot/nimbus_master.pwd",
+                    "chmod 640 /etc/dovecot/nimbus_master.pwd",
+                    "chown root:www-data /etc/dovecot/nimbus_master.pwd",
                     
                     "mv " . escapeshellarg($tempUsersFile) . " /etc/dovecot/master-users",
                     "chmod 600 /etc/dovecot/master-users",
