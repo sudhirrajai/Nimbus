@@ -344,6 +344,13 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/firewall/delete', [\App\Http\Controllers\ShieldController::class, 'deleteFirewallRule'])->name('firewall.delete');
             Route::post('/firewall/toggle', [\App\Http\Controllers\ShieldController::class, 'toggleFirewall'])->name('firewall.toggle');
 
+            // Fail2Ban management
+            Route::get('/fail2ban', [\App\Http\Controllers\ShieldController::class, 'getFail2BanStatus'])->name('fail2ban.status');
+            Route::post('/fail2ban/install', [\App\Http\Controllers\ShieldController::class, 'installFail2Ban'])->name('fail2ban.install');
+            Route::post('/fail2ban/toggle', [\App\Http\Controllers\ShieldController::class, 'toggleFail2Ban'])->name('fail2ban.toggle');
+            Route::post('/fail2ban/ban', [\App\Http\Controllers\ShieldController::class, 'banIp'])->name('fail2ban.ban');
+            Route::post('/fail2ban/unban', [\App\Http\Controllers\ShieldController::class, 'unbanIp'])->name('fail2ban.unban');
+
             Route::post('/install-tools', [\App\Http\Controllers\ShieldController::class, 'installTools'])->name('install-tools');
             Route::post('/settings', [\App\Http\Controllers\ShieldController::class, 'updateSettings'])->name('settings.update');
         });
