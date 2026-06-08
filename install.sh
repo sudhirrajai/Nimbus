@@ -608,13 +608,32 @@ sed -i 's/;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=20000/
 echo -e "${YELLOW}Configuring systemd override for PHP-FPM...${NC}"
 mkdir -p /usr/share/adminer
 chown -R ${NIMBUS_USER}:${NIMBUS_USER} /usr/share/adminer
-mkdir -p /etc/systemd/system/php${PHP_VERSION}-fpm.service.d
-cat << EOF > /etc/systemd/system/php${PHP_VERSION}-fpm.service.d/nimbus.conf
+
+# Apply systemd override to all installed PHP-FPM versions
+for PHP_DIR in /etc/php/*; do
+    if [ -d "${PHP_DIR}/fpm" ]; then
+        V=$(basename "${PHP_DIR}")
+        mkdir -p "/etc/systemd/system/php${V}-fpm.service.d"
+        cat << EOF > "/etc/systemd/system/php${V}-fpm.service.d/nimbus.conf"
 [Service]
 ReadWritePaths=${NIMBUS_DIR} /var/www /usr/share/adminer
 EOF
+        echo -e "Applied PHP-FPM write override for PHP version ${V}"
+    fi
+done
+
 systemctl daemon-reload
-systemctl restart php${PHP_VERSION}-fpm
+
+# Restart all active PHP-FPM services
+for PHP_DIR in /etc/php/*; do
+    if [ -d "${PHP_DIR}/fpm" ]; then
+        V=$(basename "${PHP_DIR}")
+        if systemctl is-active --quiet "php${V}-fpm"; then
+            systemctl restart "php${V}-fpm"
+            echo -e "Restarted php${V}-fpm"
+        fi
+    fi
+done
 
 
 
