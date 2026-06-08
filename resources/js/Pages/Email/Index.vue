@@ -11,6 +11,12 @@
               <h4 class="font-weight-bolder mb-0">Mail Server Management</h4>
               <p class="mb-0 text-sm text-secondary">Configure virtual email hosting, manage secure user accounts, and setup forwarders.</p>
             </div>
+            <div v-if="status.installed && isRootOrAdmin">
+              <button class="btn bg-gradient-danger mb-0 btn-sm" @click="showUninstallModal = true">
+                <i class="material-symbols-rounded text-xs me-1">delete_forever</i>
+                Uninstall Mail Server
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1056,6 +1062,57 @@
         </div>
       </div>
 
+      <!-- Force Reset / Clear Lock Confirmation Modal -->
+      <div class="modal-backdrop fade show" v-if="showClearLockModal" @click="showClearLockModal = false"></div>
+      <div class="modal fade show d-block" tabindex="-1" v-if="showClearLockModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder text-danger">Force Reset Installation</h5>
+              <button type="button" class="btn-close text-dark" @click="showClearLockModal = false" style="background: none; border: none; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm">Are you sure you want to force reset and clear the installation lock?</p>
+              <p class="text-xs text-secondary">
+                Use this only if the installation or uninstallation is stuck. This will clean up active operation lock files.
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary mb-0" @click="showClearLockModal = false">Cancel</button>
+              <button class="btn bg-gradient-danger mb-0" @click="confirmClearLock">
+                Force Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Uninstall Mail Server Confirmation Modal -->
+      <div class="modal-backdrop fade show" v-if="showUninstallModal" @click="showUninstallModal = false"></div>
+      <div class="modal fade show d-block" tabindex="-1" v-if="showUninstallModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder text-danger">Uninstall Mail Server</h5>
+              <button type="button" class="btn-close text-dark" @click="showUninstallModal = false" style="background: none; border: none; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm">Are you sure you want to completely uninstall the mail server from this machine?</p>
+              <p class="text-xs text-danger">
+                <strong>Warning:</strong> This will stop Postfix/Dovecot services, purge mail packages, drop the Roundcube database, and permanently delete all virtual mailboxes and local emails. This action cannot be undone.
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary mb-0" @click="showUninstallModal = false" :disabled="uninstalling">Cancel</button>
+              <button class="btn bg-gradient-danger mb-0" @click="triggerUninstall" :disabled="uninstalling">
+                <span v-if="uninstalling" class="spinner-border spinner-border-sm me-1"></span>
+                Uninstall Mail Server
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
@@ -1086,10 +1143,13 @@ const status = ref({
 // Installation Wizard state
 const hostnameInput = ref(window.location.hostname || '')
 const installing = ref(false)
+const uninstalling = ref(false)
 const installLog = ref('')
 const installStatus = ref('unknown')
 const installIsComplete = ref(false)
 const installIsFailed = ref(false)
+const showUninstallModal = ref(false)
+const showClearLockModal = ref(false)
 let logInterval = null
 
 // Domains state
@@ -1228,17 +1288,19 @@ const changeTab = (tab) => {
 }
 
 // Setup & Install
-const clearLock = async () => {
-  if (!confirm('Are you sure you want to force reset and clear the installation lock? Use this only if the installation is stuck.')) {
-    return
-  }
-  
+const clearLock = () => {
+  showClearLockModal.value = true
+}
+
+const confirmClearLock = async () => {
+  showClearLockModal.value = false
   try {
     const res = await axios.post('/email/clear-lock')
     if (res.data.success) {
       showAlert('success', 'Installation lock cleared. You can now restart the installation.')
       if (logInterval) clearInterval(logInterval)
       installing.value = false
+      uninstalling.value = false
       installIsFailed.value = false
       installIsComplete.value = false
       installLog.value = ''
@@ -1248,6 +1310,29 @@ const clearLock = async () => {
     }
   } catch (err) {
     showAlert('danger', err.response?.data?.error || 'An error occurred while clearing the lock.')
+  }
+}
+
+const triggerUninstall = async () => {
+  showUninstallModal.value = false
+  try {
+    uninstalling.value = true
+    const res = await axios.post('/email/uninstall')
+    if (res.data.success) {
+      showAlert('info', 'Uninstallation process started successfully in background.')
+      status.value.installed = false
+      installing.value = true
+      installIsFailed.value = false
+      installIsComplete.value = false
+      installLog.value = 'Initializing uninstallation process...\n'
+      startPollingLog()
+    } else {
+      showAlert('danger', res.data.error || 'Failed to start uninstallation.')
+    }
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to start uninstallation.')
+  } finally {
+    uninstalling.value = false
   }
 }
 

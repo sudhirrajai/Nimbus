@@ -416,6 +416,113 @@ BASH;
     }
 
     /**
+     * Uninstall mail server (Postfix, Dovecot, Roundcube)
+     * Runs in background with log file for real-time output
+     */
+    public function uninstallMailServer(Request $request)
+    {
+        try {
+            // Check if another installation/uninstallation is in progress
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Another operation is in progress: {$lockContent}. Please wait for it to complete."
+                ], 409);
+            }
+            
+            // Create lock file
+            file_put_contents($lockFile, 'Mail Server uninstallation');
+            
+            // Log file paths
+            $logFile = storage_path('logs/mailserver_install.log');
+            $statusFile = storage_path('logs/mailserver_install.status');
+            
+            // Clear previous logs
+            file_put_contents($logFile, "=== Mail Server Uninstallation Started ===\n");
+            file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
+            file_put_contents($statusFile, 'running');
+
+            // Uninstallation script
+            $script = <<<BASH
+#!/bin/bash
+
+# Disable interactive prompts
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+# Pre-emptively remove policy-rc.d if it exists
+sudo rm -f /usr/sbin/policy-rc.d
+
+echo "[1/7] Stopping mail services..."
+sudo systemctl stop postfix dovecot 2>&1
+sudo systemctl disable postfix dovecot 2>&1
+
+echo ""
+echo "[2/7] Purging Postfix and Dovecot packages..."
+sudo apt-get purge -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+
+echo ""
+echo "[3/7] Purging Roundcube package..."
+sudo apt-get purge -y roundcube-core roundcube-mysql 2>&1
+
+echo ""
+echo "[4/7] Cleaning up database and configs..."
+# Drop Roundcube database and users
+sudo mysql -e "DROP DATABASE IF EXISTS roundcube;" 2>&1
+sudo mysql -e "DROP USER IF EXISTS 'roundcube'@'localhost';" 2>&1
+sudo mysql -e "DROP USER IF EXISTS 'roundcube'@'127.0.0.1';" 2>&1
+
+# Delete configuration directories
+sudo rm -rf /etc/postfix /etc/dovecot /etc/roundcube 2>&1
+sudo rm -f /usr/local/nimbus/public/roundcube 2>&1
+
+echo ""
+echo "[5/7] Deleting mail directory..."
+sudo rm -rf /var/mail/vhosts 2>&1
+# Delete user/group vmail
+sudo userdel vmail 2>&1
+sudo groupdel vmail 2>&1
+
+echo ""
+echo "[6/7] Autoremoving unused packages..."
+sudo apt-get autoremove -y 2>&1
+
+echo ""
+echo "[7/7] Cleaning local logs..."
+echo "Uninstallation script complete."
+
+# Remove lock file
+rm -f /usr/local/nimbus/storage/logs/nimbus_install.lock
+BASH;
+
+            // Write script to temp file
+            $scriptPath = '/tmp/uninstall_mailserver.sh';
+            file_put_contents($scriptPath, $script);
+            chmod($scriptPath, 0755);
+
+            // Clear DB tables
+            DB::table('virtual_domains')->delete();
+
+            // Execute script detached using systemd-run
+            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}; rm -f {$scriptPath}";
+            exec("sudo systemd-run --unit=nimbus-mail-uninstall-$(date +%s) bash -c '{$command}' > /dev/null 2>&1 &");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Uninstallation started',
+                'logFile' => 'mailserver_install.log'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get installation log content
      */
     public function getInstallLog()

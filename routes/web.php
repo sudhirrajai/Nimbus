@@ -31,14 +31,16 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
+// License Activation (publicly accessible so the admin can activate a fresh panel installation)
+Route::middleware([\App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
+    Route::get('/activate', [ActivationController::class, 'index'])->name('activate.index');
+    Route::post('/activate', [ActivationController::class, 'activate'])->name('activate.submit');
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Protected routes — all authenticated users
 // ═══════════════════════════════════════════════════════════════
 Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
-
-    // License Activation
-    Route::get('/activate', [ActivationController::class, 'index'])->name('activate.index');
-    Route::post('/activate', [ActivationController::class, 'activate'])->name('activate.submit');
 
     // Dashboard — all users can access
     Route::prefix('dashboard')->group(function () {
@@ -236,6 +238,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
             Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
             Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
+            Route::post('/uninstall', [EmailController::class, 'uninstallMailServer'])->name('uninstall');
         });
 
         // Supervisor Management routes
