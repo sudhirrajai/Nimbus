@@ -668,13 +668,106 @@ BASH;
 \$config['support_url'] = '';
 \$config['product_name'] = 'Nimbus Webmail';
 \$config['des_key'] = '{$desKey}';
-\$config['plugins'] = ['archive', 'zipdownload'];
+\$config['plugins'] = ['archive', 'zipdownload', 'nimbus_sso'];
 \$config['skin'] = 'elastic';
 PHP;
 
             $configPath = storage_path('app/roundcube_config.inc.php');
             if (file_put_contents($configPath, $config) === false) {
                 throw new \Exception("Failed to write temporary Roundcube config file to: {$configPath}. Please check directory permissions.");
+            }
+
+            // Write custom Roundcube autologin plugin code
+            $pluginCode = <<<'CODE'
+<?php
+class nimbus_sso extends rcube_plugin {
+    public $task = 'login';
+
+    public function init() {
+        $this->add_hook('startup', array($this, 'startup'));
+        $this->add_hook('authenticate', array($this, 'authenticate'));
+    }
+
+    public function startup($args) {
+        if (empty($_SESSION['user_id']) && isset($_GET['_sso_token'])) {
+            $args['action'] = 'login';
+        }
+        return $args;
+    }
+
+    public function authenticate($args) {
+        if (isset($_GET['_sso_token'])) {
+            $token = $_GET['_sso_token'];
+            
+            if (preg_match('/^[a-zA-Z0-9]+$/', $token)) {
+                $tokenFile = '/usr/local/nimbus/storage/app/roundcube_tokens/' . $token . '.json';
+                if (file_exists($tokenFile)) {
+                    $tokenData = json_decode(file_get_contents($tokenFile), true);
+                    @unlink($tokenFile);
+                    
+                    if ($tokenData && time() <= $tokenData['expires_at']) {
+                        $email = $tokenData['email'];
+                        
+                        $masterPwdFile = '/etc/dovecot/nimbus_master.pwd';
+                        if (file_exists($masterPwdFile)) {
+                            $masterPwd = trim(file_get_contents($masterPwdFile));
+                            
+                            $args['user'] = $email . '*nimbus_master';
+                            $args['pass'] = $masterPwd;
+                            $args['host'] = '127.0.0.1';
+                            $args['cookiecheck'] = false;
+                            $args['valid'] = true;
+                        }
+                    }
+                }
+            }
+        }
+        return $args;
+    }
+}
+CODE;
+            $pluginPath = storage_path('app/nimbus_sso_plugin.php');
+            file_put_contents($pluginPath, $pluginCode);
+
+            // Configure Dovecot Master User if not already configured
+            if (!file_exists('/etc/dovecot/nimbus_master.pwd')) {
+                $masterPass = \Illuminate\Support\Str::random(32);
+                $salt = '$6$' . substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./'), 0, 16) . '$';
+                $masterHash = crypt($masterPass, $salt);
+                
+                $tempPwdFile = storage_path('app/nimbus_master.pwd');
+                $tempUsersFile = storage_path('app/master-users');
+                $tempAuthConf = storage_path('app/10-auth.conf');
+                
+                file_put_contents($tempPwdFile, $masterPass);
+                file_put_contents($tempUsersFile, "nimbus_master:{$masterHash}\n");
+                
+                $authConfContent = "disable_plaintext_auth = yes\n" .
+                                   "auth_mechanisms = plain login\n" .
+                                   "auth_master_user_separator = *\n" .
+                                   "!include auth-sql.conf.ext\n" .
+                                   "!include auth-master.conf.ext\n";
+                file_put_contents($tempAuthConf, $authConfContent);
+                
+                $dovecotCmds = [
+                    "mv " . escapeshellarg($tempPwdFile) . " /etc/dovecot/nimbus_master.pwd",
+                    "chmod 600 /etc/dovecot/nimbus_master.pwd",
+                    "chown root:root /etc/dovecot/nimbus_master.pwd",
+                    
+                    "mv " . escapeshellarg($tempUsersFile) . " /etc/dovecot/master-users",
+                    "chmod 600 /etc/dovecot/master-users",
+                    "chown root:root /etc/dovecot/master-users",
+                    
+                    "mv " . escapeshellarg($tempAuthConf) . " /etc/dovecot/conf.d/10-auth.conf",
+                    "chmod 644 /etc/dovecot/conf.d/10-auth.conf",
+                    "chown root:root /etc/dovecot/conf.d/10-auth.conf",
+                    
+                    "systemctl restart dovecot"
+                ];
+                
+                foreach ($dovecotCmds as $dcmd) {
+                    exec("sudo systemd-run --wait --collect bash -c " . escapeshellarg($dcmd) . " > /dev/null 2>&1");
+                }
             }
             
             // Move config to /etc/roundcube/config.inc.php and set permissions
@@ -685,8 +778,16 @@ PHP;
                 "chown root:www-data /etc/roundcube/config.inc.php",
                 "chmod 640 /etc/roundcube/config.inc.php",
                 "chmod 755 /etc/roundcube",
+                
+                // Copy SSO script
                 "cp /usr/local/nimbus/public/roundcube_sso.php /var/lib/roundcube/public_html/sso.php",
-                "chmod 644 /var/lib/roundcube/public_html/sso.php"
+                "chmod 644 /var/lib/roundcube/public_html/sso.php",
+                
+                // Copy SSO plugin
+                "mkdir -p /var/lib/roundcube/plugins/nimbus_sso",
+                "mv " . escapeshellarg($pluginPath) . " /var/lib/roundcube/plugins/nimbus_sso/nimbus_sso.php",
+                "chmod 644 /var/lib/roundcube/plugins/nimbus_sso/nimbus_sso.php",
+                "chown -R www-data:www-data /var/lib/roundcube/plugins/nimbus_sso"
             ];
             
             $combinedCmd = implode(" && ", $commands);
