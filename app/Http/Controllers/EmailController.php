@@ -755,8 +755,9 @@ CODE;
                     "chown root:www-data /etc/dovecot/nimbus_master.pwd",
                     
                     "mv " . escapeshellarg($tempUsersFile) . " /etc/dovecot/master-users",
-                    "chmod 640 /etc/dovecot/master-users",
                     "chown root:dovecot /etc/dovecot/master-users",
+                    "chmod 640 /etc/dovecot/master-users",
+                    "setfacl -m u:dovecot:r,u:vmail:r /etc/dovecot/master-users 2>/dev/null || chmod 644 /etc/dovecot/master-users",
                     
                     "mv " . escapeshellarg($tempAuthConf) . " /etc/dovecot/conf.d/10-auth.conf",
                     "chmod 644 /etc/dovecot/conf.d/10-auth.conf",
