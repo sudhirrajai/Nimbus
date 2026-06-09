@@ -21,7 +21,7 @@
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
               </button>
-              <button class="btn bg-gradient-info mb-0" @click="openPhpMyAdminSSO" :disabled="openingPma">
+              <button class="btn bg-gradient-info mb-0" @click="openDatabaseViewerSSO" :disabled="openingPma">
                 <span v-if="openingPma" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">open_in_new</i>
                 Nimbus DB

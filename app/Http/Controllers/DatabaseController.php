@@ -12,9 +12,12 @@ class DatabaseController extends Controller
 {
     private $viewerPath = '/usr/share/adminer';
     private $adminerPublicPath = null;
-    private $credentialsPath = '/usr/local/nimbus/storage/app/nimbus_db_credentials.json';
+    private $credentialsPath = null;
 
-    public function __construct() { $this->adminerPublicPath = public_path('db'); }
+    public function __construct() {
+        $this->adminerPublicPath = public_path('db');
+        $this->credentialsPath = storage_path('app/nimbus_db_credentials.json');
+    }
 
     /**
      * Display database management page
