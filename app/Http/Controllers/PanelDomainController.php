@@ -68,6 +68,7 @@ class PanelDomainController extends Controller
         $panelPath = '/usr/local/nimbus/public';
         $configPath = "/etc/nginx/sites-available/nimbus_panel";
         $enabledPath = "/etc/nginx/sites-enabled/nimbus_panel";
+        $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
 
         $configContent = "
 server {
@@ -83,7 +84,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm-nimbus.sock;
     }
 
     location ~ /\.ht {
