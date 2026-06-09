@@ -88,30 +88,68 @@
                   </button>
                 </div>
 
-                <div v-else class="list-group">
-                  <label v-for="domain in availableDomains" :key="domain.name"
-                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-0 border-bottom"
-                    :class="{
-                      'active-domain': form.domain === domain.name,
-                      'opacity-50': domain.has_deployment
-                    }"
-                    style="cursor: pointer;"
-                  >
-                    <div class="d-flex align-items-center">
-                      <input type="radio" :value="domain.name" v-model="form.domain"
-                        :disabled="domain.has_deployment"
-                        class="form-check-input me-3"
-                      >
-                      <div>
-                        <span class="font-weight-bold">{{ domain.name }}</span>
-                        <br>
-                        <small class="text-secondary">/var/www/{{ domain.name }}</small>
-                      </div>
+                <div v-else>
+                  <!-- Search input -->
+                  <div class="mb-3">
+                    <div class="input-group input-group-outline">
+                      <input v-model="searchQuery" type="text" class="form-control" placeholder="Search domains...">
                     </div>
-                    <span v-if="domain.has_deployment" class="badge bg-gradient-warning">
-                      Has deployment
-                    </span>
-                  </label>
+                  </div>
+
+                  <!-- No Search Results Empty State -->
+                  <div v-if="filteredDomains.length === 0" class="text-center py-4">
+                    <i class="material-symbols-rounded text-secondary" style="font-size: 48px;">search_off</i>
+                    <p class="text-secondary mt-2">No domains match your search "{{ searchQuery }}".</p>
+                  </div>
+
+                  <!-- Domains List -->
+                  <div v-else class="list-group mb-3">
+                    <label v-for="domain in paginatedDomains" :key="domain.name"
+                      class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-0 border-bottom"
+                      :class="{
+                        'active-domain': form.domain === domain.name,
+                        'opacity-50': domain.has_deployment
+                      }"
+                      style="cursor: pointer;"
+                    >
+                      <div class="d-flex align-items-center">
+                        <input type="radio" :value="domain.name" v-model="form.domain"
+                          :disabled="domain.has_deployment"
+                          class="form-check-input me-3"
+                        >
+                        <div>
+                          <span class="font-weight-bold">{{ domain.name }}</span>
+                          <br>
+                          <small class="text-secondary">/var/www/{{ domain.name }}</small>
+                        </div>
+                      </div>
+                      <span v-if="domain.has_deployment" class="badge bg-gradient-warning">
+                        Has deployment
+                      </span>
+                    </label>
+                  </div>
+
+                  <!-- Pagination -->
+                  <div v-if="filteredDomains.length > itemsPerPage" class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="text-xs text-secondary">
+                      Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredDomains.length) }} of {{ filteredDomains.length }} entries
+                    </div>
+                    <ul class="pagination pagination-sm mb-0">
+                      <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                        <button class="page-link" @click="currentPage--" aria-label="Previous">
+                          <i class="material-symbols-rounded text-xs">chevron_left</i>
+                        </button>
+                      </li>
+                      <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                        <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                      </li>
+                      <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                        <button class="page-link" @click="currentPage++" aria-label="Next">
+                          <i class="material-symbols-rounded text-xs">chevron_right</i>
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
 
@@ -441,6 +479,24 @@ const fetchingBranches = ref(false)
 const showToken = ref(false)
 
 const availableDomains = ref([])
+const searchQuery = ref('')
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+
+const filteredDomains = computed(() => {
+  if (!searchQuery.value) return availableDomains.value
+  const q = searchQuery.value.toLowerCase()
+  return availableDomains.value.filter(domain => domain.name.toLowerCase().includes(q))
+})
+
+const totalPages = computed(() => Math.ceil(filteredDomains.value.length / itemsPerPage.value))
+const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const paginatedDomains = computed(() => {
+  return filteredDomains.value.slice(paginationStart.value, paginationEnd.value)
+})
+
 const branches = ref([])
 const repoValidation = ref(null)
 
@@ -622,6 +678,10 @@ watch(() => form.value.url_type, (newVal) => {
   if (newVal === 'ssh') {
     loadSshKey();
   }
+})
+
+watch(searchQuery, () => {
+  currentPage.value = 1
 })
 
 const downloadExampleYaml = () => {
