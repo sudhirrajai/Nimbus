@@ -388,10 +388,10 @@
                   </div>
                   <div class="col-md-6 d-flex gap-2 justify-content-md-end mt-2 mt-md-0 align-items-center">
                     <span class="text-xs font-weight-bold text-secondary">PHP Version:</span>
-                    <div class="input-group input-group-outline" style="max-width: 140px; margin-right: 10px;">
+                    <div class="input-group input-group-outline" style="max-width: 185px; margin-right: 10px;">
                       <select v-model="selectedExtensionVersion" @change="changeExtensionVersion" class="form-select form-control" style="padding: 0.35rem 0.5rem;">
-                        <option v-for="ver in phpVersions.filter(v => v.installed)" :key="ver.version" :value="ver.version">
-                          PHP {{ ver.version }}
+                        <option v-for="ver in phpVersions" :key="ver.version" :value="ver.version">
+                          PHP {{ ver.version }}{{ ver.installed ? '' : ' (Not Installed)' }}
                         </option>
                       </select>
                     </div>
@@ -429,7 +429,7 @@
                               v-else 
                               class="btn btn-xs bg-gradient-primary mb-0 d-flex align-items-center" 
                               @click="installExtension(ext.name)"
-                              :disabled="extInstalling"
+                              :disabled="extInstalling || !isPhpVersionInstalled(selectedExtensionVersion)"
                               style="padding: 4px 10px;"
                             >
                               <i class="material-symbols-rounded text-xxs me-1">download</i>
@@ -818,14 +818,15 @@ const loadPhpVersions = async () => {
     currentGlobalPhp.value = res.data.global_php_version || '8.2'
     selectedGlobalPhp.value = res.data.global_php_version || '8.2'
     
-    // Set default extension version to first installed version found
-    if (!selectedExtensionVersion.value) {
+    // Set default extension version to first installed version found if current is not installed or not set
+    const isCurrentInstalled = res.data.versions.some(v => v.version === selectedExtensionVersion.value && v.installed)
+    if (!selectedExtensionVersion.value || !isCurrentInstalled) {
       const firstInstalled = res.data.versions.find(v => v.installed)
       if (firstInstalled) {
         selectedExtensionVersion.value = firstInstalled.version
-        loadExtensions()
       }
     }
+    loadExtensions()
   } catch (err) {
     showAlert('danger', err.response?.data?.error || 'Failed to load PHP versions')
   } finally {
@@ -926,6 +927,11 @@ const loadExtensions = async () => {
 
 const changeExtensionVersion = () => {
   loadExtensions()
+}
+
+const isPhpVersionInstalled = (version) => {
+  const verObj = phpVersions.value.find(v => v.version === version)
+  return verObj ? verObj.installed : false
 }
 
 const filteredExtensions = computed(() => {

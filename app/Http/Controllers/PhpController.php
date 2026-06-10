@@ -401,7 +401,7 @@ BASH;
             $returnCode = 0;
             
             // Try using 'at' command (most reliable)
-            exec("echo 'bash " . escapeshellarg($scriptPath) . "' | at now + 2 seconds 2>&1", $output, $returnCode);
+            exec("echo 'bash " . escapeshellarg($scriptPath) . "' | sudo at now + 2 seconds 2>&1", $output, $returnCode);
             
             if ($returnCode !== 0) {
                 // Fallback: Use background process with nohup
@@ -767,7 +767,7 @@ BASH;
             chmod($scriptPath, 0755);
 
             // Execute script in background using at command (runs outside PHP-FPM systemd namespace)
-            exec("echo 'bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1' | at now 2>&1");
+            exec("echo 'bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1' | sudo at now 2>&1");
 
             return response()->json([
                 'success' => true,
@@ -820,16 +820,15 @@ BASH;
                 return response()->json(['error' => 'Invalid PHP version format'], 400);
             }
             
-            // Run phpX.Y -m to get loaded modules
-            $output = [];
-            $returnCode = 0;
-            exec("php{$version} -m 2>&1", $output, $returnCode);
-            
-            if ($returnCode !== 0) {
-                return response()->json(['error' => "PHP {$version} is not fully installed or CLI binary not found."], 400);
+            $modules = [];
+            if (File::exists("/etc/php/{$version}/fpm")) {
+                $output = [];
+                $returnCode = 0;
+                exec("php{$version} -m 2>&1", $output, $returnCode);
+                if ($returnCode === 0) {
+                    $modules = array_map('strtolower', $output);
+                }
             }
-            
-            $modules = array_map('strtolower', $output);
             
             $commonExtensions = [
                 ['name' => 'mysql', 'package' => 'mysql', 'modules' => ['mysqli', 'pdo_mysql'], 'description' => 'MySQL database support (mysqli, pdo_mysql)'],
@@ -950,7 +949,7 @@ BASH;
             chmod($scriptPath, 0755);
 
             // Execute script in background using at command (runs outside PHP-FPM systemd namespace)
-            exec("echo 'bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1' | at now 2>&1");
+            exec("echo 'bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1' | sudo at now 2>&1");
 
             return response()->json([
                 'success' => true,
