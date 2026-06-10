@@ -238,19 +238,19 @@
                                                 {{ threat.status }}
                                             </span>
                                         </td>
-                                        <td class="align-middle text-right px-4">
+                                         <td class="align-middle text-right px-4">
                                             <div class="d-flex gap-2 justify-content-end">
-                                                <button v-if="threat.status === 'detected'" @click="quarantineThreat(threat.id)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine">
+                                                <button v-if="threat.status === 'detected' || threat.status === 'ignored'" @click="confirmQuarantineThreat(threat)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine">
                                                     <i class="material-symbols-rounded">inventory_2</i>
                                                 </button>
-                                                <button v-if="threat.status === 'quarantined'" @click="restoreThreat(threat.id)" class="btn btn-link text-success text-gradient p-0 mb-0" title="Restore File">
+                                                <button v-if="threat.status === 'quarantined'" @click="confirmRestoreThreat(threat)" class="btn btn-link text-success text-gradient p-0 mb-0" title="Restore File">
                                                     <i class="material-symbols-rounded">restore_page</i>
                                                 </button>
                                                 <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient p-0 mb-0" title="Delete">
                                                     <i class="material-symbols-rounded">delete</i>
                                                 </button>
                                             </div>
-                                        </td>
+                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -594,6 +594,74 @@
                 </div>
             </div>
 
+            <!-- Quarantine Threat Confirmation Modal -->
+            <div v-if="showQuarantineModal" class="modal fade show d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-radius-lg shadow-lg border-0">
+                        <div class="modal-header bg-gradient-warning border-0">
+                            <h5 class="modal-title text-white">
+                                <i class="material-symbols-rounded me-2">warning</i>
+                                Confirm Quarantine
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" @click="showQuarantineModal = false"></button>
+                        </div>
+                        <div class="modal-body p-4 text-center">
+                            <div class="mb-4">
+                                <i class="material-symbols-rounded text-warning" style="font-size: 64px;">inventory_2</i>
+                            </div>
+                            <h5 class="mb-3">Isolate this file?</h5>
+                            <p class="text-secondary mb-0">You are about to quarantine:</p>
+                            <code class="d-block bg-light p-2 my-3 border-radius-md text-break text-warning">{{ threatToQuarantine?.file_path }}</code>
+                            <p class="text-sm text-muted">
+                                <i class="material-symbols-rounded text-xs me-1">info</i>
+                                The file will be moved to a secure location on the server and made inaccessible.
+                            </p>
+                        </div>
+                        <div class="modal-footer border-0 p-3 justify-content-center">
+                            <button type="button" class="btn btn-outline-secondary mb-0 px-4" @click="showQuarantineModal = false">Cancel</button>
+                            <button type="button" class="btn btn-warning text-white mb-0 px-4" @click="executeQuarantineThreat" :disabled="quarantiningThreat">
+                                <span v-if="quarantiningThreat" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                {{ quarantiningThreat ? 'Quarantining...' : 'Quarantine File' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Restore Threat Confirmation Modal -->
+            <div v-if="showRestoreModal" class="modal fade show d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-radius-lg shadow-lg border-0">
+                        <div class="modal-header bg-gradient-success border-0">
+                            <h5 class="modal-title text-white">
+                                <i class="material-symbols-rounded me-2">security</i>
+                                Confirm Restoration
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" @click="showRestoreModal = false"></button>
+                        </div>
+                        <div class="modal-body p-4 text-center">
+                            <div class="mb-4">
+                                <i class="material-symbols-rounded text-success" style="font-size: 64px;">restore_page</i>
+                            </div>
+                            <h5 class="mb-3">Restore this file?</h5>
+                            <p class="text-secondary mb-0">You are about to restore:</p>
+                            <code class="d-block bg-light p-2 my-3 border-radius-md text-break text-success">{{ threatToRestore?.file_path }}</code>
+                            <p class="text-sm text-muted">
+                                <i class="material-symbols-rounded text-xs me-1">info</i>
+                                The file will be returned to its original path and marked as ignored. Only do this if you are sure it is safe.
+                            </p>
+                        </div>
+                        <div class="modal-footer border-0 p-3 justify-content-center">
+                            <button type="button" class="btn btn-outline-secondary mb-0 px-4" @click="showRestoreModal = false">Cancel</button>
+                            <button type="button" class="btn btn-success mb-0 px-4" @click="executeRestoreThreat" :disabled="restoringThreat">
+                                <span v-if="restoringThreat" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                {{ restoringThreat ? 'Restoring...' : 'Restore File' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Add Rule Modal -->
             <div v-if="showAddRuleModal" class="modal fade show d-block" style="background: rgba(0,0,0,0.5)">
                 <div class="modal-dialog modal-dialog-centered">
@@ -733,6 +801,15 @@ const showAddRuleModal = ref(false)
 const showDeleteThreatModal = ref(false)
 const threatToDelete = ref(null)
 const deletingThreat = ref(false)
+
+const showQuarantineModal = ref(false)
+const threatToQuarantine = ref(null)
+const quarantiningThreat = ref(false)
+
+const showRestoreModal = ref(false)
+const threatToRestore = ref(null)
+const restoringThreat = ref(false)
+
 const newRule = ref({
     port: '',
     action: 'allow',
@@ -1008,29 +1085,47 @@ const stopScan = async () => {
     }
 }
 
-const quarantineThreat = async (id) => {
-    if (!confirm('Are you sure you want to quarantine this file? It will be moved to a secure location and made inaccessible.')) return
+const confirmQuarantineThreat = (threat) => {
+    threatToQuarantine.value = threat
+    showQuarantineModal.value = true
+}
+
+const executeQuarantineThreat = async () => {
+    if (!threatToQuarantine.value) return
+    quarantiningThreat.value = true
     try {
-        const response = await axios.post('/shield/quarantine', { id })
+        const response = await axios.post('/shield/quarantine', { id: threatToQuarantine.value.id })
         if (response.data.success) {
             showNotification('File quarantined', 'success')
+            showQuarantineModal.value = false
             await loadStatus()
         }
     } catch (error) {
         showNotification('Quarantine failed', 'danger')
+    } finally {
+        quarantiningThreat.value = false
     }
 }
 
-const restoreThreat = async (id) => {
-    if (!confirm('Are you sure you want to restore this file to its original location? Only do this if you are certain it is safe.')) return
+const confirmRestoreThreat = (threat) => {
+    threatToRestore.value = threat
+    showRestoreModal.value = true
+}
+
+const executeRestoreThreat = async () => {
+    if (!threatToRestore.value) return
+    restoringThreat.value = true
     try {
-        const response = await axios.post('/shield/restore', { id })
+        const response = await axios.post('/shield/restore', { id: threatToRestore.value.id })
         if (response.data.success) {
             showNotification('File restored successfully', 'success')
+            showRestoreModal.value = false
             await loadStatus()
         }
     } catch (error) {
         showNotification(error.response?.data?.error || 'Restore failed', 'danger')
+    } finally {
+        restoringThreat.value = false
     }
 }
 
@@ -1070,6 +1165,7 @@ const getStatusBadgeClass = (status) => {
         case 'detected': return 'border-danger text-danger'
         case 'quarantined': return 'border-warning text-warning'
         case 'deleted': return 'border-secondary text-secondary'
+        case 'ignored': return 'border-success text-success'
         default: return 'border-secondary text-secondary'
     }
 }

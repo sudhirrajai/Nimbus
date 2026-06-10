@@ -517,8 +517,9 @@ class ShieldController extends Controller
                 foreach ($relatedThreats as $rThreat) {
                     $cleanDetails = explode(' | Quarantined to:', $rThreat->details)[0];
                     $rThreat->update([
-                        'status' => 'detected',
-                        'details' => $cleanDetails
+                        'status' => 'ignored',
+                        'details' => $cleanDetails,
+                        'resolved_at' => now()
                     ]);
                 }
 
