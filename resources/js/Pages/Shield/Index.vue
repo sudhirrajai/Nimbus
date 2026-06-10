@@ -154,6 +154,11 @@
                                     </button>
                                 </li>
                                 <li class="nav-item">
+                                    <button @click="activeTab = 'fail2ban'" :class="activeTab === 'fail2ban' ? 'bg-white shadow text-dark' : 'text-secondary'" class="btn btn-link btn-sm mb-0 px-4 py-2 border-radius-md text-capitalize font-weight-bold">
+                                        <i class="material-symbols-rounded text-sm me-1">gavel</i> Fail2Ban
+                                    </button>
+                                </li>
+                                <li class="nav-item">
                                     <button @click="activeTab = 'settings'" :class="activeTab === 'settings' ? 'bg-white shadow text-dark' : 'text-secondary'" class="btn btn-link btn-sm mb-0 px-4 py-2 border-radius-md text-capitalize font-weight-bold">
                                         <i class="material-symbols-rounded text-sm me-1">settings</i> Settings
                                     </button>
@@ -171,6 +176,14 @@
                                 </button>
                                 <button @click="toggleFirewall" class="btn btn-sm mb-0 shadow-sm" :class="stats.firewall_status === 'Active' ? 'btn-outline-danger' : 'btn-success'">
                                     {{ stats.firewall_status === 'Active' ? 'Disable UFW' : 'Enable UFW' }}
+                                </button>
+                            </div>
+                            <div v-if="activeTab === 'fail2ban'" class="d-flex justify-content-end gap-2">
+                                <button v-if="fail2ban.installed && fail2ban.active" @click="showAddBanModal = true" class="btn btn-dark btn-sm mb-0 shadow-sm">
+                                    <i class="material-symbols-rounded text-sm me-1">add</i> Ban IP
+                                </button>
+                                <button v-if="fail2ban.installed" @click="toggleFail2Ban" class="btn btn-sm mb-0 shadow-sm" :class="fail2ban.active ? 'btn-outline-danger' : 'btn-success'">
+                                    {{ fail2ban.active ? 'Disable Fail2Ban' : 'Enable Fail2Ban' }}
                                 </button>
                             </div>
                         </div>
@@ -296,6 +309,156 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fail2Ban Tab -->
+                    <div v-if="activeTab === 'fail2ban'" class="p-4">
+                        <!-- If Fail2Ban is not installed -->
+                        <div v-if="!fail2ban.installed" class="text-center py-6">
+                            <div class="mb-3">
+                                <i class="material-symbols-rounded text-secondary" style="font-size: 64px;">gavel</i>
+                            </div>
+                            <h5 class="text-dark font-weight-bolder">Fail2Ban is not installed</h5>
+                            <p class="text-sm text-secondary max-width-500 mx-auto mb-4">
+                                Fail2Ban automatically protects your server against brute-force attacks by monitoring system logs (SSH, Nginx, Mail Server) and temporarily or permanently banning offending IP addresses.
+                            </p>
+                            <div>
+                                <button v-if="fail2ban.install_status !== 'installing'" @click="installFail2Ban" class="btn btn-dark btn-sm px-4 shadow-sm mb-0">
+                                    <i class="material-symbols-rounded text-sm me-1">download</i> Install Fail2Ban
+                                </button>
+                                <div v-else class="d-flex align-items-center justify-content-center">
+                                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                    <span class="text-sm font-weight-bold text-primary">Installing Fail2Ban in background... Please wait.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- If Fail2Ban is installed -->
+                        <div v-else>
+                            <!-- Summary Cards -->
+                            <div class="row mb-4">
+                                <div class="col-md-4 col-sm-6 mb-3">
+                                    <div class="card border shadow-none mb-0 h-100">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div>
+                                                    <p class="text-xs font-weight-bold text-secondary text-uppercase mb-0">Fail2Ban Service</p>
+                                                    <h6 class="font-weight-bolder mb-0" :class="fail2ban.active ? 'text-success' : 'text-danger'">
+                                                        {{ fail2ban.active ? 'Active & Running' : 'Stopped / Inactive' }}
+                                                    </h6>
+                                                </div>
+                                                <div class="form-check form-switch ps-0 mb-0">
+                                                    <input class="form-check-input ms-auto" type="checkbox" :checked="fail2ban.active" @change="toggleFail2Ban">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 col-sm-6 mb-3">
+                                    <div class="card border shadow-none mb-0 h-100">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div>
+                                                    <p class="text-xs font-weight-bold text-secondary text-uppercase mb-0">Active Jails</p>
+                                                    <h6 class="font-weight-bolder mb-0 text-dark">
+                                                        {{ fail2ban.jails.length }} monitored services
+                                                    </h6>
+                                                </div>
+                                                <div class="icon icon-shape bg-gradient-info text-center border-radius-md">
+                                                    <i class="material-symbols-rounded text-white" style="font-size: 20px;">shield</i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 col-sm-12 mb-3">
+                                    <div class="card border shadow-none mb-0 h-100">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div>
+                                                    <p class="text-xs font-weight-bold text-secondary text-uppercase mb-0">Total Banned IPs</p>
+                                                    <h6 class="font-weight-bolder mb-0 text-dark">
+                                                        {{ fail2ban.banned_ips.length }} IPs blocked
+                                                    </h6>
+                                                </div>
+                                                <div class="icon icon-shape bg-gradient-danger text-center border-radius-md">
+                                                    <i class="material-symbols-rounded text-white" style="font-size: 20px;">block</i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Jails Overview -->
+                            <div class="row">
+                                <div class="col-lg-4 mb-4">
+                                    <div class="card border shadow-none">
+                                        <div class="card-header pb-0 p-3 bg-white">
+                                            <h6 class="mb-0 font-weight-bold text-dark">Monitored Jails</h6>
+                                            <p class="text-xxs text-secondary mb-0">Individual jail status & failed attempts.</p>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div v-for="jail in fail2ban.jails" :key="jail.name" class="d-flex justify-content-between align-items-center p-2 border-bottom hover-bg-gray border-radius-md mb-2">
+                                                <div>
+                                                    <span class="badge bg-light text-dark border me-2">{{ jail.name }}</span>
+                                                    <span class="text-xxs text-secondary">Failed: {{ jail.total_failed }}</span>
+                                                </div>
+                                                <span class="badge badge-sm" :class="jail.currently_banned > 0 ? 'bg-gradient-danger' : 'bg-gradient-secondary'">
+                                                    {{ jail.currently_banned }} banned
+                                                </span>
+                                            </div>
+                                            <div v-if="fail2ban.jails.length === 0" class="text-center py-4 text-secondary text-xs">
+                                                No active jails detected.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-8">
+                                    <div class="card border shadow-none">
+                                        <div class="card-header pb-0 p-3 bg-white d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-0 font-weight-bold text-dark">Banned IP Addresses</h6>
+                                                <p class="text-xxs text-secondary mb-0">Currently blocked IPs in iptables/UFW by Fail2Ban.</p>
+                                            </div>
+                                            <button @click="showAddBanModal = true" class="btn btn-dark btn-xs mb-0">
+                                                <i class="material-symbols-rounded text-xs me-1">add</i> Ban IP Manually
+                                            </button>
+                                        </div>
+                                        <div class="card-body p-0 pt-3">
+                                            <div class="table-responsive">
+                                                <table class="table align-items-center mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-3">IP Address</th>
+                                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Jail</th>
+                                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr v-for="item in fail2ban.banned_ips" :key="item.ip + '-' + item.jail">
+                                                            <td class="ps-3"><span class="text-sm font-weight-bold text-dark">{{ item.ip }}</span></td>
+                                                            <td><span class="badge bg-light text-dark border">{{ item.jail }}</span></td>
+                                                            <td class="text-center">
+                                                                <button @click="unbanIp(item.ip, item.jail)" class="btn btn-link text-success text-gradient px-3 mb-0 py-1" title="Unban IP">
+                                                                    <i class="material-symbols-rounded text-sm me-1">check_circle</i> Unban
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                        <tr v-if="fail2ban.banned_ips.length === 0">
+                                                            <td colspan="3" class="text-center py-4 text-secondary text-xs">
+                                                                No IPs are currently banned.
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -467,6 +630,42 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Add Ban IP Modal -->
+            <div v-if="showAddBanModal" class="modal fade show d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-radius-lg shadow-lg border-0">
+                        <div class="modal-header">
+                            <h5 class="modal-title font-weight-bold">Ban IP Address Manually</h5>
+                            <button type="button" class="btn-close" @click="showAddBanModal = false"></button>
+                        </div>
+                        <div class="modal-body p-4">
+                            <div class="mb-3">
+                                <label class="form-label text-xs font-weight-bolder">IP Address</label>
+                                <div class="input-group input-group-outline">
+                                    <input v-model="newBan.ip" type="text" class="form-control" placeholder="e.g. 192.168.1.100">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-xs font-weight-bolder">Active Jail</label>
+                                <div class="input-group input-group-outline">
+                                    <select v-model="newBan.jail" class="form-control">
+                                        <option v-for="jail in fail2ban.jails" :key="jail.name" :value="jail.name">{{ jail.name }}</option>
+                                        <option v-if="fail2ban.jails.length === 0" value="sshd">sshd</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary mb-0 px-4" @click="showAddBanModal = false">Cancel</button>
+                            <button type="button" class="btn btn-danger mb-0 px-4" @click="banIp" :disabled="banningIp">
+                                <span v-if="banningIp" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Ban IP
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Toast Notifications -->
@@ -546,6 +745,20 @@ const toastMessage = ref('')
 const toastType = ref('success')
 let statusInterval = null
 
+const fail2ban = ref({
+    installed: false,
+    active: false,
+    jails: [],
+    banned_ips: [],
+    install_status: 'idle'
+})
+const showAddBanModal = ref(false)
+const banningIp = ref(false)
+const newBan = ref({
+    ip: '',
+    jail: ''
+})
+
 const loadStatus = async () => {
     try {
         const response = await axios.get('/shield/status')
@@ -556,11 +769,14 @@ const loadStatus = async () => {
             // Sync scanning state with backend
             scanning.value = stats.value.scan_status === 'running'
             
-            if (scanning.value) {
+            if (scanning.value || fail2ban.value.install_status === 'installing') {
                 startPolling()
             } else {
                 stopPolling()
             }
+        }
+        if (activeTab.value === 'fail2ban') {
+            await loadFail2BanStatus()
         }
     } catch (error) {
         // Only show error if not polling
@@ -634,8 +850,101 @@ import { watch } from 'vue';
 watch(activeTab, (newTab) => {
     if (newTab === 'firewall') {
         loadFirewallRules()
+    } else if (newTab === 'fail2ban') {
+        loadFail2BanStatus()
     }
 })
+
+const loadingFail2Ban = ref(false)
+const loadFail2BanStatus = async () => {
+    loadingFail2Ban.value = true
+    try {
+        const response = await axios.get('/shield/fail2ban')
+        if (response.data.success) {
+            fail2ban.value = {
+                installed: response.data.installed,
+                active: response.data.active,
+                jails: response.data.jails,
+                banned_ips: response.data.banned_ips,
+                install_status: response.data.install_status
+            }
+            if (fail2ban.value.install_status === 'installing') {
+                startPolling()
+            } else if (!scanning.value && statusInterval) {
+                stopPolling()
+            }
+        }
+    } catch (error) {
+        if (!statusInterval) {
+            showNotification('Failed to load Fail2Ban status', 'danger')
+        }
+    } finally {
+        loadingFail2Ban.value = false
+    }
+}
+
+const toggleFail2Ban = async () => {
+    const enable = !fail2ban.value.active
+    try {
+        const response = await axios.post('/shield/fail2ban/toggle', { enable })
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+            loadFail2BanStatus()
+        }
+    } catch (error) {
+        showNotification('Failed to toggle Fail2Ban', 'danger')
+    }
+}
+
+const installFail2Ban = async () => {
+    try {
+        const response = await axios.post('/shield/fail2ban/install')
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+            fail2ban.value.install_status = 'installing'
+            startPolling()
+        }
+    } catch (error) {
+        showNotification('Failed to start Fail2Ban installation', 'danger')
+    }
+}
+
+const unbanIp = async (ip, jail) => {
+    if (!confirm(`Are you sure you want to unban IP ${ip} from jail ${jail}?`)) return
+    try {
+        const response = await axios.post('/shield/fail2ban/unban', { ip, jail })
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+            loadFail2BanStatus()
+        }
+    } catch (error) {
+        showNotification('Failed to unban IP', 'danger')
+    }
+}
+
+const banIp = async () => {
+    if (!newBan.value.ip) {
+        showNotification('IP Address is required', 'warning')
+        return
+    }
+    if (!newBan.value.jail) {
+        newBan.value.jail = fail2ban.value.jails[0]?.name || 'sshd'
+    }
+    banningIp.value = true
+    try {
+        const response = await axios.post('/shield/fail2ban/ban', newBan.value)
+        if (response.data.success) {
+            showNotification(response.data.message, 'success')
+            showAddBanModal.value = false
+            newBan.value = { ip: '', jail: '' }
+            loadFail2BanStatus()
+        }
+    } catch (error) {
+        showNotification(error.response?.data?.error || 'Failed to ban IP', 'danger')
+    } finally {
+        banningIp.value = false
+    }
+}
 
 const startPolling = () => {
     if (statusInterval) return

@@ -27,8 +27,31 @@ class EmailController extends Controller
             // Check if Postfix is installed
             $postfixInstalled = file_exists('/etc/postfix/main.cf');
             $dovecotInstalled = file_exists('/etc/dovecot/dovecot.conf');
-            $roundcubeInstalled = file_exists('/etc/roundcube/config.inc.php') || 
-                                  file_exists('/var/lib/roundcube/config/config.inc.php');
+            
+            // Check if Roundcube is configured by Nimbus (must contain our custom signature and modern smtp_host)
+            $roundcubeInstalled = false;
+            foreach (['/etc/roundcube/config.inc.php', '/var/lib/roundcube/config/config.inc.php'] as $file) {
+                if (file_exists($file)) {
+                    $content = file_get_contents($file);
+                    if (strpos($content, 'Nimbus Webmail') !== false && strpos($content, 'smtp_host') !== false) {
+                        $roundcubeInstalled = true;
+                        break;
+                    }
+                }
+            }
+
+            // Auto-configure Roundcube if mail server is installed but Roundcube config is missing signature
+            if ($postfixInstalled && $dovecotInstalled && !$roundcubeInstalled) {
+                try {
+                    $response = $this->configureRoundcube();
+                    $data = json_decode($response->getContent(), true);
+                    if (isset($data['success']) && $data['success']) {
+                        $roundcubeInstalled = true;
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Failed to auto-configure Roundcube in getStatus: " . $e->getMessage());
+                }
+            }
 
             // Check if services are running
             $postfixRunning = false;
@@ -83,6 +106,10 @@ class EmailController extends Controller
     public function installMailServer(Request $request)
     {
         try {
+            $request->validate([
+                'hostname' => 'required|string|regex:/^[a-zA-Z0-9.-]+$/|max:255'
+            ]);
+            
             $hostname = $request->input('hostname', gethostname());
             
             // Check if another installation is in progress
@@ -125,6 +152,10 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export NEEDRESTART_SUSPEND=1
 
+# Prevent any services from restarting automatically during apt-get
+echo -e '#!/bin/sh\nexit 101' | sudo tee /usr/sbin/policy-rc.d > /dev/null
+sudo chmod +x /usr/sbin/policy-rc.d
+
 # Disable needrestart temporarily for this installation
 if [ -f /etc/needrestart/needrestart.conf ]; then
     sudo sed -i "s/^#\\\$nrconf{restart} = 'i';/\\\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf 2>/dev/null || true
@@ -138,21 +169,34 @@ wait_for_apt() {
     done
 }
 
+# Pre-emptively stop Apache2 if it is installed, to free up port 80
+if [ -f /usr/sbin/apache2 ]; then
+    echo "Stopping Apache2 pre-emptively to avoid Nginx port conflicts..."
+    sudo systemctl stop apache2 2>/dev/null || true
+    sudo systemctl disable apache2 2>/dev/null || true
+fi
+
+# Clean up any previously broken package installs
+echo "Fixing any existing broken package installations..."
+wait_for_apt
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 dpkg --configure -a 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -f -y 2>&1
+
 echo "[1/8] Updating package list..."
 wait_for_apt
-sudo DEBIAN_FRONTEND=noninteractive apt-get update 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get update 2>&1
 
 echo ""
 echo "[2/8] Installing Postfix..."
 wait_for_apt
 echo "postfix postfix/mailname string {$hostname}" | sudo debconf-set-selections
 echo "postfix postfix/main_mailer_type string 'Internet Site'" | sudo debconf-set-selections
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix postfix-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix postfix-mysql 2>&1
 
 echo ""
 echo "[3/8] Installing Dovecot..."
 wait_for_apt
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
 
 echo ""
 echo "[4/8] Installing Roundcube (without Apache)..."
@@ -167,10 +211,10 @@ echo "roundcube-core roundcube/reconfigure-webserver multiselect none" | sudo de
 
 # Pin the current PHP version to prevent installing new PHP versions
 # Install only roundcube core without recommends to avoid pulling php dependencies
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
+sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y --no-install-recommends roundcube-core roundcube-mysql 2>&1
 
 # Install roundcube PHP package for current version only (using noninteractive mode)
-sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
+sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y --no-install-recommends php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
 
 # ====== PHP 8.5 CLEANUP ======
 # If PHP 8.5 got installed by accident, remove it and stick with intended version
@@ -184,8 +228,9 @@ fi
 # Make sure we're still using the correct PHP version
 sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true
 
-# Restart the correct PHP-FPM
-sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
+# Schedule PHP-FPM restart for 1 minute after the script finishes to avoid killing this script
+sudo bash -c "echo 'sleep 5 && systemctl restart php{$phpVersion}-fpm' | at now" 2>/dev/null || \
+sudo systemd-run --on-active=10 sudo systemctl restart php{$phpVersion}-fpm 2>&1 || true
 
 # Stop and disable Apache2 if it was installed as a dependency
 if systemctl is-active --quiet apache2 2>/dev/null; then
@@ -195,12 +240,18 @@ if systemctl is-active --quiet apache2 2>/dev/null; then
 fi
 
 echo ""
-echo "[5/8] Creating mail directories..."
+echo "[5/8] Creating mail directories and linking webmail..."
 sudo mkdir -p /var/mail/vhosts
 sudo groupadd -g 5000 vmail 2>/dev/null || echo "Group vmail already exists"
 sudo useradd -g vmail -u 5000 vmail -d /var/mail 2>/dev/null || echo "User vmail already exists"
 sudo chown -R vmail:vmail /var/mail
-echo "Mail directories created"
+
+# Link Roundcube to Nimbus public directory so it can be served by Nginx
+if [ ! -L /usr/local/nimbus/public/roundcube ]; then
+    sudo ln -sf /var/lib/roundcube/public_html /usr/local/nimbus/public/roundcube
+fi
+
+echo "Mail directories created and webmail linked"
 
 echo ""
 echo "[6/8] Configuring Postfix..."
@@ -322,6 +373,8 @@ echo "Dovecot configured"
 
 echo ""
 echo "[8/8] Starting services..."
+sudo rm -f /usr/sbin/policy-rc.d
+
 sudo systemctl restart postfix
 sudo systemctl restart dovecot
 sudo systemctl enable postfix
@@ -345,13 +398,120 @@ BASH;
             file_put_contents($scriptPath, $script);
             chmod($scriptPath, 0755);
 
-            // Execute script in background, output to log file
-            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}";
-            exec("nohup bash -c '{$command}' > /dev/null 2>&1 &");
+            // Execute script completely detached using systemd-run to prevent PHP-FPM deadlocks
+            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}; rm -f {$scriptPath}";
+            exec("sudo systemd-run --unit=nimbus-mail-install-$(date +%s) bash -c '{$command}' > /dev/null 2>&1 &");
 
             return response()->json([
                 'success' => true,
                 'message' => 'Installation started',
+                'logFile' => 'mailserver_install.log'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Uninstall mail server (Postfix, Dovecot, Roundcube)
+     * Runs in background with log file for real-time output
+     */
+    public function uninstallMailServer(Request $request)
+    {
+        try {
+            // Check if another installation/uninstallation is in progress
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Another operation is in progress: {$lockContent}. Please wait for it to complete."
+                ], 409);
+            }
+            
+            // Create lock file
+            file_put_contents($lockFile, 'Mail Server uninstallation');
+            
+            // Log file paths
+            $logFile = storage_path('logs/mailserver_install.log');
+            $statusFile = storage_path('logs/mailserver_install.status');
+            
+            // Clear previous logs
+            file_put_contents($logFile, "=== Mail Server Uninstallation Started ===\n");
+            file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
+            file_put_contents($statusFile, 'running');
+
+            // Uninstallation script
+            $script = <<<BASH
+#!/bin/bash
+
+# Disable interactive prompts
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+# Pre-emptively remove policy-rc.d if it exists
+sudo rm -f /usr/sbin/policy-rc.d
+
+echo "[1/7] Stopping mail services..."
+sudo systemctl stop postfix dovecot 2>&1
+sudo systemctl disable postfix dovecot 2>&1
+
+echo ""
+echo "[2/7] Purging Postfix and Dovecot packages..."
+sudo apt-get purge -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+
+echo ""
+echo "[3/7] Purging Roundcube package..."
+sudo apt-get purge -y roundcube-core roundcube-mysql 2>&1
+
+echo ""
+echo "[4/7] Cleaning up database and configs..."
+# Drop Roundcube database and users
+sudo mysql -e "DROP DATABASE IF EXISTS roundcube;" 2>&1
+sudo mysql -e "DROP USER IF EXISTS 'roundcube'@'localhost';" 2>&1
+sudo mysql -e "DROP USER IF EXISTS 'roundcube'@'127.0.0.1';" 2>&1
+
+# Delete configuration directories
+sudo rm -rf /etc/postfix /etc/dovecot /etc/roundcube 2>&1
+sudo rm -f /usr/local/nimbus/public/roundcube 2>&1
+
+echo ""
+echo "[5/7] Deleting mail directory..."
+sudo rm -rf /var/mail/vhosts 2>&1
+# Delete user/group vmail
+sudo userdel vmail 2>&1
+sudo groupdel vmail 2>&1
+
+echo ""
+echo "[6/7] Autoremoving unused packages..."
+sudo apt-get autoremove -y 2>&1
+
+echo ""
+echo "[7/7] Cleaning local logs..."
+echo "Uninstallation script complete."
+
+# Remove lock file
+rm -f /usr/local/nimbus/storage/logs/nimbus_install.lock
+BASH;
+
+            // Write script to temp file
+            $scriptPath = '/tmp/uninstall_mailserver.sh';
+            file_put_contents($scriptPath, $script);
+            chmod($scriptPath, 0755);
+
+            // Clear DB tables
+            DB::table('virtual_domains')->delete();
+
+            // Execute script detached using systemd-run
+            $command = "sudo bash {$scriptPath} >> {$logFile} 2>&1; echo \$? > {$statusFile}; rm -f {$scriptPath}";
+            exec("sudo systemd-run --unit=nimbus-mail-uninstall-$(date +%s) bash -c '{$command}' > /dev/null 2>&1 &");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Uninstallation started',
                 'logFile' => 'mailserver_install.log'
             ]);
         } catch (\Exception $e) {
@@ -378,6 +538,27 @@ BASH;
         $isComplete = $status === '0';
         $isFailed = !$isRunning && !$isComplete && $status !== 'unknown';
         
+        // Auto-configure Roundcube on completion if not already configured
+        if ($isComplete) {
+            $roundcubeConfigured = false;
+            foreach (['/etc/roundcube/config.inc.php', '/var/lib/roundcube/config/config.inc.php'] as $file) {
+                if (file_exists($file)) {
+                    $content = file_get_contents($file);
+                    if (strpos($content, 'Nimbus Webmail') !== false && strpos($content, 'smtp_host') !== false) {
+                        $roundcubeConfigured = true;
+                        break;
+                    }
+                }
+            }
+            if (!$roundcubeConfigured) {
+                try {
+                    $this->configureRoundcube();
+                } catch (\Exception $e) {
+                    \Log::error("Failed to auto-configure Roundcube in getInstallLog: " . $e->getMessage());
+                }
+            }
+        }
+        
         return response()->json([
             'log' => $log,
             'status' => $status,
@@ -385,6 +566,244 @@ BASH;
             'isComplete' => $isComplete,
             'isFailed' => $isFailed
         ]);
+    }
+
+    /**
+     * Configure Roundcube Webmail
+     */
+    public function configureRoundcube()
+    {
+        try {
+            $dbUser = 'roundcube';
+            $dbPass = Str::random(16);
+            $dbName = 'roundcube';
+            
+            // Create database and user using sudo mysql (Laravel user 'nimbus' lacks global CREATE privileges)
+            $dbCommands = [
+                "sudo mysql -e 'CREATE DATABASE IF NOT EXISTS `" . $dbName . "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'",
+                "sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"localhost\"'",
+                "sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'ALTER USER \"" . $dbUser . "\"@\"127.0.0.1\" IDENTIFIED BY \"" . $dbPass . "\"'",
+                "sudo mysql -e 'GRANT ALL PRIVILEGES ON `" . $dbName . "`.* TO \"" . $dbUser . "\"@\"127.0.0.1\"'",
+                "sudo mysql -e 'FLUSH PRIVILEGES'"
+            ];
+            
+            foreach ($dbCommands as $cmd) {
+                $output = [];
+                exec($cmd . " 2>&1", $output, $code);
+                if ($code !== 0) {
+                    throw new \Exception("Database setup command failed: {$cmd}. Exit code: {$code}. Output: " . implode("\n", $output));
+                }
+            }
+
+            // Setup roundcube database connection dynamically in Laravel config
+            config(['database.connections.roundcube' => array_merge(
+                config('database.connections.mysql'),
+                [
+                    'host' => '127.0.0.1',
+                    'database' => $dbName,
+                    'username' => $dbUser,
+                    'password' => $dbPass
+                ]
+            )]);
+
+            // Locate the schema file
+            $schemaFile = null;
+            $possiblePaths = [
+                '/usr/share/roundcube/SQL/mysql.initial.sql',
+                '/usr/share/dbconfig-common/data/roundcube/install/mysql',
+                '/usr/share/roundcube/program/resources/SQL/mysql.initial.sql',
+                '/var/lib/roundcube/SQL/mysql.initial.sql'
+            ];
+            
+            $decompressedPath = storage_path('app/roundcube_mysql_initial.sql');
+            foreach ($possiblePaths as $path) {
+                if (file_exists($path)) {
+                    $schemaFile = $path;
+                    break;
+                } elseif (file_exists($path . '.gz')) {
+                    // Decompress gzipped schema to storage path to bypass PrivateTmp isolation
+                    $output = [];
+                    exec("gunzip -c " . escapeshellarg($path . '.gz') . " > " . escapeshellarg($decompressedPath) . " 2>&1", $output, $code);
+                    if ($code === 0 && file_exists($decompressedPath)) {
+                        $schemaFile = $decompressedPath;
+                    } else {
+                        throw new \Exception("Failed to decompress schema file {$path}.gz. Exit code: {$code}. Output: " . implode("\n", $output));
+                    }
+                    break;
+                }
+            }
+
+            // Check if tables exist
+            $tables = DB::connection('roundcube')->select('SHOW TABLES');
+            if (empty($tables)) {
+                if ($schemaFile && file_exists($schemaFile)) {
+                    $sql = file_get_contents($schemaFile);
+                    DB::connection('roundcube')->unprepared($sql);
+                    
+                    // Clean up decompressed file if we created it
+                    if ($schemaFile === $decompressedPath) {
+                        @unlink($schemaFile);
+                    }
+                } else {
+                    throw new \Exception("Roundcube initial SQL schema file not found. Checked: " . implode(', ', $possiblePaths));
+                }
+            }
+
+            // Write config.inc.php
+            $desKey = Str::random(24);
+            $config = <<<PHP
+<?php
+\$config = [];
+\$config['db_dsnw'] = 'mysql://{$dbUser}:{$dbPass}@127.0.0.1/{$dbName}';
+\$config['imap_host'] = '127.0.0.1:143';
+\$config['default_host'] = '127.0.0.1';
+\$config['smtp_host'] = '127.0.0.1:25';
+\$config['smtp_server'] = '127.0.0.1';
+\$config['smtp_port'] = 25;
+\$config['smtp_user'] = '';
+\$config['smtp_pass'] = '';
+\$config['support_url'] = '';
+\$config['product_name'] = 'Nimbus Webmail';
+\$config['des_key'] = '{$desKey}';
+\$config['plugins'] = ['archive', 'zipdownload', 'nimbus_sso'];
+\$config['skin'] = 'elastic';
+PHP;
+
+            $configPath = storage_path('app/roundcube_config.inc.php');
+            if (file_put_contents($configPath, $config) === false) {
+                throw new \Exception("Failed to write temporary Roundcube config file to: {$configPath}. Please check directory permissions.");
+            }
+
+            // Write custom Roundcube autologin plugin code
+            $pluginCode = <<<'CODE'
+<?php
+class nimbus_sso extends rcube_plugin {
+    public $task = 'login';
+
+    public function init() {
+        $this->add_hook('startup', array($this, 'startup'));
+        $this->add_hook('authenticate', array($this, 'authenticate'));
+    }
+
+    public function startup($args) {
+        if (empty($_SESSION['user_id']) && isset($_GET['_sso_token'])) {
+            $args['action'] = 'login';
+        }
+        return $args;
+    }
+
+    public function authenticate($args) {
+        if (isset($_GET['_sso_token'])) {
+            $token = $_GET['_sso_token'];
+            
+            if (preg_match('/^[a-zA-Z0-9]+$/', $token)) {
+                $tokenFile = '/usr/local/nimbus/storage/app/roundcube_tokens/' . $token . '.json';
+                if (file_exists($tokenFile)) {
+                    $tokenData = json_decode(file_get_contents($tokenFile), true);
+                    @unlink($tokenFile);
+                    
+                    if ($tokenData && time() <= $tokenData['expires_at']) {
+                        $email = $tokenData['email'];
+                        
+                        $masterPwdFile = '/etc/dovecot/nimbus_master.pwd';
+                        if (file_exists($masterPwdFile)) {
+                            $masterPwd = trim(file_get_contents($masterPwdFile));
+                            
+                            $args['user'] = $email . '*nimbus_master';
+                            $args['pass'] = $masterPwd;
+                            $args['host'] = '127.0.0.1';
+                            $args['cookiecheck'] = false;
+                            $args['valid'] = true;
+                        }
+                    }
+                }
+            }
+        }
+        return $args;
+    }
+}
+CODE;
+            $pluginPath = storage_path('app/nimbus_sso_plugin.php');
+            file_put_contents($pluginPath, $pluginCode);
+
+            // Configure Dovecot Master User if not already configured
+            if (!file_exists('/etc/dovecot/nimbus_master.pwd')) {
+                $masterPass = \Illuminate\Support\Str::random(32);
+                $salt = '$6$' . substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./'), 0, 16) . '$';
+                $masterHash = crypt($masterPass, $salt);
+                
+                $tempPwdFile = storage_path('app/nimbus_master.pwd');
+                $tempUsersFile = storage_path('app/master-users');
+                $tempAuthConf = storage_path('app/10-auth.conf');
+                
+                file_put_contents($tempPwdFile, $masterPass);
+                file_put_contents($tempUsersFile, "nimbus_master:{$masterHash}\n");
+                
+                $authConfContent = "disable_plaintext_auth = yes\n" .
+                                   "auth_mechanisms = plain login\n" .
+                                   "auth_master_user_separator = *\n" .
+                                   "!include auth-sql.conf.ext\n" .
+                                   "!include auth-master.conf.ext\n";
+                file_put_contents($tempAuthConf, $authConfContent);
+                
+                $dovecotCmds = [
+                    "mv " . escapeshellarg($tempPwdFile) . " /etc/dovecot/nimbus_master.pwd",
+                    "chmod 640 /etc/dovecot/nimbus_master.pwd",
+                    "chown root:www-data /etc/dovecot/nimbus_master.pwd",
+                    
+                    "mv " . escapeshellarg($tempUsersFile) . " /etc/dovecot/master-users",
+                    "chown root:dovecot /etc/dovecot/master-users",
+                    "chmod 640 /etc/dovecot/master-users",
+                    "setfacl -m u:dovecot:r,u:vmail:r /etc/dovecot/master-users 2>/dev/null || chmod 644 /etc/dovecot/master-users",
+                    
+                    "mv " . escapeshellarg($tempAuthConf) . " /etc/dovecot/conf.d/10-auth.conf",
+                    "chmod 644 /etc/dovecot/conf.d/10-auth.conf",
+                    "chown root:root /etc/dovecot/conf.d/10-auth.conf",
+                    
+                    "systemctl restart dovecot"
+                ];
+                
+                foreach ($dovecotCmds as $dcmd) {
+                    exec("sudo systemd-run --wait --collect bash -c " . escapeshellarg($dcmd) . " > /dev/null 2>&1");
+                }
+            }
+            
+            // Move config to /etc/roundcube/config.inc.php and set permissions
+            // Running via systemd-run is required because PHP-FPM has ProtectSystem/ReadWritePaths enabled,
+            // which mounts /etc as read-only inside PHP-FPM's systemd sandbox.
+            $commands = [
+                "mv " . escapeshellarg($configPath) . " /etc/roundcube/config.inc.php",
+                "chown root:www-data /etc/roundcube/config.inc.php",
+                "chmod 640 /etc/roundcube/config.inc.php",
+                "chmod 755 /etc/roundcube",
+                
+                // Copy SSO script
+                "cp /usr/local/nimbus/public/roundcube_sso.php /var/lib/roundcube/public_html/sso.php",
+                "chmod 644 /var/lib/roundcube/public_html/sso.php",
+                
+                // Copy SSO plugin
+                "mkdir -p /var/lib/roundcube/plugins/nimbus_sso",
+                "mv " . escapeshellarg($pluginPath) . " /var/lib/roundcube/plugins/nimbus_sso/nimbus_sso.php",
+                "chmod 644 /var/lib/roundcube/plugins/nimbus_sso/nimbus_sso.php",
+                "chown -R www-data:www-data /var/lib/roundcube/plugins/nimbus_sso"
+            ];
+            
+            $combinedCmd = implode(" && ", $commands);
+            $systemdCmd = "sudo systemd-run --wait --collect bash -c " . escapeshellarg($combinedCmd) . " 2>&1";
+            
+            $output = [];
+            exec($systemdCmd, $output, $code);
+            if ($code !== 0) {
+                throw new \Exception("Systemd transient execution failed. Exit code: {$code}. Output: " . implode("\n", $output));
+            }
+            
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -418,7 +837,7 @@ BASH;
     {
         try {
             $request->validate([
-                'domain' => 'required|string|max:255'
+                'domain' => 'required|string|regex:/^[a-zA-Z0-9.-]+$/|max:255'
             ]);
 
             $domain = $request->input('domain');
@@ -441,8 +860,8 @@ BASH;
             ]);
 
             // Create mail directory
-            $mailDir = "/var/mail/vhosts/{$domain}";
-            exec("sudo mkdir -p {$mailDir} && sudo chown -R vmail:vmail {$mailDir}");
+            $escapedMailDir = escapeshellarg("/var/mail/vhosts/{$domain}");
+            exec("sudo mkdir -p {$escapedMailDir} && sudo chown -R vmail:vmail {$escapedMailDir}");
 
             return response()->json([
                 'success' => true,
@@ -573,17 +992,18 @@ BASH;
                 'updated_at' => now()
             ]);
 
-            // Create maildir with all necessary folders
+            // Create maildir with all necessary folders (explicitly without braces for /bin/sh compatibility)
             $fullMaildir = "/var/mail/vhosts/{$domain}/{$username}";
-            exec("sudo mkdir -p {$fullMaildir}/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Sent/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Drafts/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Trash/{cur,new,tmp}");
-            exec("sudo mkdir -p {$fullMaildir}/.Junk/{cur,new,tmp}");
-            exec("sudo chown -R vmail:vmail {$fullMaildir}");
+            $escapedMaildir = escapeshellarg($fullMaildir);
+            exec("sudo mkdir -p {$escapedMaildir}/cur {$escapedMaildir}/new {$escapedMaildir}/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Sent/cur {$escapedMaildir}/.Sent/new {$escapedMaildir}/.Sent/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Drafts/cur {$escapedMaildir}/.Drafts/new {$escapedMaildir}/.Drafts/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Trash/cur {$escapedMaildir}/.Trash/new {$escapedMaildir}/.Trash/tmp");
+            exec("sudo mkdir -p {$escapedMaildir}/.Junk/cur {$escapedMaildir}/.Junk/new {$escapedMaildir}/.Junk/tmp");
+            exec("sudo chown -R vmail:vmail {$escapedMaildir}");
 
             // Send welcome email with configuration
-            $this->sendWelcomeEmail($email, $domain);
+            $this->sendWelcomeEmail($email, $domain, $request->input('password'));
 
             return response()->json([
                 'success' => true,
@@ -598,37 +1018,43 @@ BASH;
     /**
      * Send welcome email with mail client configuration
      */
-    private function sendWelcomeEmail(string $email, string $domain): void
+    private function sendWelcomeEmail(string $email, string $domain, string $password): void
     {
         try {
             $hostname = gethostname();
             $date = date('r');
             $messageId = uniqid() . "@{$domain}";
             
+            $server = strpos(strtolower($domain), 'mail.') === 0 ? $domain : 'mail.' . $domain;
+            
             $body = <<<EMAIL
 Welcome to your new email account!
 
 Your email address: {$email}
 
+=== Credentials ===
+Username: {$email}
+Password: {$password}
+
 === Email Client Configuration ===
 
 INCOMING MAIL (IMAP)
 --------------------
-Server: {$hostname}
+Server: {$server}
 Port: 993
 Security: SSL/TLS
 Username: {$email}
 
 INCOMING MAIL (POP3)
 --------------------
-Server: {$hostname}
+Server: {$server}
 Port: 995
 Security: SSL/TLS
 Username: {$email}
 
 OUTGOING MAIL (SMTP)
 --------------------
-Server: {$hostname}
+Server: {$server}
 Port: 587
 Security: STARTTLS
 Username: {$email}
@@ -636,7 +1062,7 @@ Authentication: Required
 
 === Webmail Access ===
 You can also access your email via webmail at:
-https://{$hostname}/roundcube
+https://{$server}/roundcube
 
 === Tips ===
 - Use your full email address as username
@@ -933,24 +1359,30 @@ EMAIL;
      */
     public function getClientSettings(Request $request)
     {
-        $hostname = gethostname();
+        $domain = $request->query('domain');
+        
+        if ($domain) {
+            $server = strpos(strtolower($domain), 'mail.') === 0 ? $domain : 'mail.' . $domain;
+        } else {
+            $server = gethostname();
+        }
         
         return response()->json([
             'incoming' => [
                 'imap' => [
-                    'server' => $hostname,
+                    'server' => $server,
                     'port' => 993,
                     'security' => 'SSL/TLS'
                 ],
                 'pop3' => [
-                    'server' => $hostname,
+                    'server' => $server,
                     'port' => 995,
                     'security' => 'SSL/TLS'
                 ]
             ],
             'outgoing' => [
                 'smtp' => [
-                    'server' => $hostname,
+                    'server' => $server,
                     'port' => 587,
                     'security' => 'STARTTLS'
                 ]
@@ -968,81 +1400,28 @@ EMAIL;
         return '{SHA512-CRYPT}' . crypt($password, $salt);
     }
 
-    /**
-     * Configure Roundcube in Nginx
-     */
-    public function configureRoundcube()
+
+
+    public function clearInstallLock()
     {
         try {
-            // Check if Roundcube is installed
-            $roundcubePath = '/var/lib/roundcube';
-            if (!is_dir($roundcubePath)) {
-                $roundcubePath = '/usr/share/roundcube';
+            $lockFile = storage_path('logs/nimbus_install.lock');
+            $statusFile = storage_path('logs/mailserver_install.status');
+            $logFile = storage_path('logs/mailserver_install.log');
+            
+            if (file_exists($lockFile)) {
+                unlink($lockFile);
             }
-
-            if (!is_dir($roundcubePath)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Roundcube is not installed'
-                ], 400);
+            if (file_exists($statusFile)) {
+                unlink($statusFile);
             }
-
-            // Nginx config for Roundcube
-            $nginxConfig = <<<'CONFIG'
-# Roundcube Webmail
-location /roundcube {
-    alias /var/lib/roundcube/public_html;
-    index index.php;
-    
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass unix:/var/run/php/php-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $request_filename;
-        fastcgi_intercept_errors on;
-    }
-    
-    location ~ /\. {
-        deny all;
-    }
-}
-CONFIG;
-
-            // Find the nimbus nginx config and add roundcube
-            $nimbusConfig = '/etc/nginx/sites-available/nimbus';
-            if (file_exists($nimbusConfig)) {
-                $currentConfig = file_get_contents($nimbusConfig);
-                
-                // Check if already configured
-                if (strpos($currentConfig, 'location /roundcube') === false) {
-                    // Find the last closing brace and insert before it
-                    $lastBrace = strrpos($currentConfig, '}');
-                    $newConfig = substr($currentConfig, 0, $lastBrace) . "\n    " . 
-                                 str_replace("\n", "\n    ", trim($nginxConfig)) . 
-                                 "\n" . substr($currentConfig, $lastBrace);
-                    
-                    // Write config
-                    $tempFile = '/tmp/nimbus_nginx.conf';
-                    file_put_contents($tempFile, $newConfig);
-                    exec("sudo mv {$tempFile} {$nimbusConfig}");
-                    
-                    // Test and reload nginx
-                    exec('sudo nginx -t 2>&1', $output, $code);
-                    if ($code !== 0) {
-                        return response()->json([
-                            'success' => false,
-                            'error' => 'Nginx config test failed',
-                            'details' => implode("\n", $output)
-                        ], 500);
-                    }
-                    
-                    exec('sudo systemctl reload nginx');
-                }
+            if (file_exists($logFile)) {
+                unlink($logFile);
             }
-
+            
             return response()->json([
                 'success' => true,
-                'message' => 'Roundcube configured successfully',
-                'url' => '/roundcube'
+                'message' => 'Installation lock cleared successfully.'
             ]);
         } catch (\Exception $e) {
             return response()->json([

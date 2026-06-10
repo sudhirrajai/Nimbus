@@ -83,6 +83,11 @@ class CronController extends Controller
      */
     public function createJob(Request $request)
     {
+        // Task scheduler availability check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('cron')], 503);
+        }
+
         try {
             $request->validate([
                 'user' => 'nullable|string|in:www-data,root',

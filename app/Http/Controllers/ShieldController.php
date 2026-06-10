@@ -739,6 +739,192 @@ class ShieldController extends Controller
         }
     }
 
+    /**
+     * Get Fail2Ban status, active jails, and list of banned IPs
+     */
+    public function getFail2BanStatus()
+    {
+        try {
+            $installed = !empty(shell_exec('which fail2ban-client'));
+            $active = false;
+            $jails = [];
+            $bannedIps = [];
+            
+            // Check background installation status
+            $installStatus = Setting::where('key', 'fail2ban_install_status')->value('value') ?: 'idle';
+            if ($installStatus === 'installing' && file_exists('/tmp/nimbus_fail2ban_install_done')) {
+                Setting::updateOrCreate(['key' => 'fail2ban_install_status'], ['value' => 'idle']);
+                if (file_exists('/tmp/nimbus_fail2ban_install_done')) {
+                    unlink('/tmp/nimbus_fail2ban_install_done');
+                }
+                $installStatus = 'idle';
+                $installed = true;
+            }
+
+            if ($installed) {
+                $statusActiveOutput = exec("systemctl is-active fail2ban");
+                $active = ($statusActiveOutput === 'active');
+
+                if ($active) {
+                    // Get list of jails
+                    $statusOutput = $this->executeSudoCommand("fail2ban-client status");
+                    $jailList = [];
+                    foreach ($statusOutput as $line) {
+                        $line = trim($line);
+                        if (preg_match('/Jail list:\s*(.*)/i', $line, $matches)) {
+                            $jailListStr = trim($matches[1]);
+                            if (!empty($jailListStr)) {
+                                // Split by space and/or comma
+                                $jailList = preg_split('/[\s,]+/', $jailListStr);
+                                $jailList = array_filter($jailList);
+                            }
+                        }
+                    }
+
+                    // Parse each jail
+                    foreach ($jailList as $jailName) {
+                        $jailName = trim($jailName);
+                        if (empty($jailName)) continue;
+                        
+                        $jailInfo = $this->parseJailStatus($jailName);
+                        $jails[] = $jailInfo;
+
+                        foreach ($jailInfo['banned_ips'] as $ip) {
+                            $bannedIps[] = [
+                                'ip' => $ip,
+                                'jail' => $jailName
+                            ];
+                        }
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'installed' => $installed,
+                'active' => $active,
+                'jails' => $jails,
+                'banned_ips' => $bannedIps,
+                'install_status' => $installStatus
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Parse the status of a single Fail2Ban jail
+     */
+    private function parseJailStatus($jailName)
+    {
+        $output = $this->executeSudoCommand("fail2ban-client status " . escapeshellarg($jailName));
+        $currentlyFailed = 0;
+        $totalFailed = 0;
+        $currentlyBanned = 0;
+        $bannedIps = [];
+
+        foreach ($output as $line) {
+            $line = trim($line);
+            if (preg_match('/Currently failed:\s*(\d+)/i', $line, $matches)) {
+                $currentlyFailed = (int)$matches[1];
+            } elseif (preg_match('/Total failed:\s*(\d+)/i', $line, $matches)) {
+                $totalFailed = (int)$matches[1];
+            } elseif (preg_match('/Currently banned:\s*(\d+)/i', $line, $matches)) {
+                $currentlyBanned = (int)$matches[1];
+            } elseif (preg_match('/Banned IP list:\s*(.*)/i', $line, $matches)) {
+                $ipListStr = trim($matches[1]);
+                if (!empty($ipListStr)) {
+                    $bannedIps = preg_split('/[\s,]+/', $ipListStr);
+                    $bannedIps = array_filter($bannedIps);
+                }
+            }
+        }
+
+        return [
+            'name' => $jailName,
+            'currently_failed' => $currentlyFailed,
+            'total_failed' => $totalFailed,
+            'currently_banned' => $currentlyBanned,
+            'banned_ips' => array_values($bannedIps)
+        ];
+    }
+
+    /**
+     * Trigger Fail2Ban background installation
+     */
+    public function installFail2Ban()
+    {
+        try {
+            $status = Setting::where('key', 'fail2ban_install_status')->value('value');
+            if ($status === 'installing') {
+                return response()->json(['error' => 'Installation already in progress'], 409);
+            }
+
+            Setting::updateOrCreate(['key' => 'fail2ban_install_status'], ['value' => 'installing']);
+
+            $installCmd = "sudo apt-get update && sudo apt-get install -y fail2ban && echo 'done' > /tmp/nimbus_fail2ban_install_done";
+            exec("nohup sh -c \"$installCmd\" > /dev/null 2>&1 &");
+
+            return response()->json(['success' => true, 'message' => 'Fail2Ban installation started in background']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Toggle Fail2Ban service (Start/Stop)
+     */
+    public function toggleFail2Ban(Request $request)
+    {
+        $enable = $request->input('enable');
+        $command = $enable ? "systemctl start fail2ban" : "systemctl stop fail2ban";
+        
+        try {
+            $this->executeSudoCommand($command);
+            return response()->json(['success' => true, 'message' => "Fail2Ban " . ($enable ? "started" : "stopped")]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Unban an IP address from a jail
+     */
+    public function unbanIp(Request $request)
+    {
+        $request->validate([
+            'ip' => 'required|ip',
+            'jail' => 'required|string|regex:/^[a-zA-Z0-9_-]+$/'
+        ]);
+
+        try {
+            $cmd = "fail2ban-client set " . escapeshellarg($request->jail) . " unbanip " . escapeshellarg($request->ip);
+            $this->executeSudoCommand($cmd);
+            return response()->json(['success' => true, 'message' => "IP {$request->ip} unbanned from jail {$request->jail}"]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Ban an IP address manually in a jail
+     */
+    public function banIp(Request $request)
+    {
+        $request->validate([
+            'ip' => 'required|ip',
+            'jail' => 'required|string|regex:/^[a-zA-Z0-9_-]+$/'
+        ]);
+
+        try {
+            $cmd = "fail2ban-client set " . escapeshellarg($request->jail) . " banip " . escapeshellarg($request->ip);
+            $this->executeSudoCommand($cmd);
+            return response()->json(['success' => true, 'message' => "IP {$request->ip} banned in jail {$request->jail}"]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     private function executeSudoCommand($command)
     {
         $output = [];

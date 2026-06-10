@@ -607,6 +607,11 @@ class SslController extends Controller
      */
     public function installCertificate(Request $request)
     {
+        // Certificate provisioning service check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('ssl')], 503);
+        }
+
         try {
             $request->validate([
                 'domain' => 'required|string|max:253'

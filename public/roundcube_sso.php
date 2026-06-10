@@ -27,23 +27,6 @@ if (!file_exists($tokenFile)) {
     exit;
 }
 
-$tokenData = json_decode(file_get_contents($tokenFile), true);
-
-// Delete token immediately (one-time use)
-@unlink($tokenFile);
-
-// Check expiration
-if (!$tokenData || time() > $tokenData['expires_at']) {
-    header('Location: /roundcube/');
-    exit;
-}
-
-$email = $tokenData['email'];
-
-// Redirect to Roundcube with username pre-filled via cookie
-// Roundcube remembers last username in a cookie
-setcookie('roundcube_username', $email, time() + 300, '/roundcube');
-
-// Redirect to Roundcube
-header('Location: /roundcube/?_user=' . urlencode($email));
+// Redirect to Roundcube with the SSO token parameter
+header('Location: /roundcube/?_sso_token=' . urlencode($token));
 exit;

@@ -12,9 +12,12 @@ class DatabaseController extends Controller
 {
     private $viewerPath = '/usr/share/adminer';
     private $adminerPublicPath = null;
-    private $credentialsPath = '/usr/local/nimbus/storage/app/nimbus_db_credentials.json';
+    private $credentialsPath = null;
 
-    public function __construct() { $this->adminerPublicPath = public_path('db'); }
+    public function __construct() {
+        $this->adminerPublicPath = public_path('db');
+        $this->credentialsPath = storage_path('app/nimbus_db_credentials.json');
+    }
 
     /**
      * Display database management page
@@ -407,6 +410,11 @@ BASH;
      */
     public function createDatabase(Request $request)
     {
+        // Database provisioning service check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('database')], 503);
+        }
+
         try {
             $request->validate([
                 'name' => 'required|string|max:64|regex:/^[a-zA-Z][a-zA-Z0-9_]*$/'

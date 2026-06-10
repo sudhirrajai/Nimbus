@@ -483,7 +483,7 @@ server {
     }
 
     location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm-nimbus.sock;
         fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
         include fastcgi_params;
         fastcgi_hide_header X-Powered-By;
@@ -586,12 +586,41 @@ chmod 0440 /etc/sudoers.d/nimbus
 
 # Configure PHP-FPM for better performance
 PHP_FPM_CONF="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
-sed -i 's/pm = .*/pm = dynamic/' $PHP_FPM_CONF
-sed -i 's/pm.max_children = .*/pm.max_children = 20/' $PHP_FPM_CONF
-sed -i 's/pm.start_servers = .*/pm.start_servers = 4/' $PHP_FPM_CONF
-sed -i 's/pm.min_spare_servers = .*/pm.min_spare_servers = 4/' $PHP_FPM_CONF
-sed -i 's/pm.max_spare_servers = .*/pm.max_spare_servers = 10/' $PHP_FPM_CONF
-sed -i 's/;pm.max_requests = .*/pm.max_requests = 500/' $PHP_FPM_CONF
+if [ -f "$PHP_FPM_CONF" ]; then
+    sed -i 's/pm = .*/pm = dynamic/' $PHP_FPM_CONF
+    sed -i 's/pm.max_children = .*/pm.max_children = 20/' $PHP_FPM_CONF
+    sed -i 's/pm.start_servers = .*/pm.start_servers = 4/' $PHP_FPM_CONF
+    sed -i 's/pm.min_spare_servers = .*/pm.min_spare_servers = 4/' $PHP_FPM_CONF
+    sed -i 's/pm.max_spare_servers = .*/pm.max_spare_servers = 10/' $PHP_FPM_CONF
+    sed -i 's/;pm.max_requests = .*/pm.max_requests = 500/' $PHP_FPM_CONF
+fi
+
+# Configure dedicated PHP-FPM pool for Nimbus to isolate it from sites
+echo -e "${YELLOW}Configuring dedicated PHP-FPM pool for Nimbus...${NC}"
+for PHP_DIR in /etc/php/*; do
+    if [ -d "${PHP_DIR}/fpm/pool.d" ]; then
+        V=$(basename "${PHP_DIR}")
+        cat << EOF > "${PHP_DIR}/fpm/pool.d/nimbus.conf"
+[nimbus]
+user = ${NIMBUS_USER}
+group = ${NIMBUS_USER}
+listen = /run/php/php\${V}-fpm-nimbus.sock
+listen.owner = ${NIMBUS_USER}
+listen.group = ${NIMBUS_USER}
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 10
+pm.start_servers = 2
+pm.min_spare_servers = 2
+pm.max_spare_servers = 5
+pm.max_requests = 500
+
+request_terminate_timeout = 300
+EOF
+        echo -e "Created dedicated pool 'nimbus' for PHP \${V}"
+    fi
+done
 
 # Configure PHP.ini
 PHP_INI="/etc/php/${PHP_VERSION}/fpm/php.ini"
@@ -608,13 +637,32 @@ sed -i 's/;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=20000/
 echo -e "${YELLOW}Configuring systemd override for PHP-FPM...${NC}"
 mkdir -p /usr/share/adminer
 chown -R ${NIMBUS_USER}:${NIMBUS_USER} /usr/share/adminer
-mkdir -p /etc/systemd/system/php${PHP_VERSION}-fpm.service.d
-cat << EOF > /etc/systemd/system/php${PHP_VERSION}-fpm.service.d/nimbus.conf
+
+# Apply systemd override to all installed PHP-FPM versions
+for PHP_DIR in /etc/php/*; do
+    if [ -d "${PHP_DIR}/fpm" ]; then
+        V=$(basename "${PHP_DIR}")
+        mkdir -p "/etc/systemd/system/php${V}-fpm.service.d"
+        cat << EOF > "/etc/systemd/system/php${V}-fpm.service.d/nimbus.conf"
 [Service]
-ReadWritePaths=${NIMBUS_DIR} /var/www /usr/share/adminer
+ReadWritePaths=${NIMBUS_DIR} /var/www /usr/share/adminer /etc/nginx /etc/php /etc/supervisor /etc/letsencrypt /etc/postfix /etc/dovecot
 EOF
+        echo -e "Applied PHP-FPM write override for PHP version ${V}"
+    fi
+done
+
 systemctl daemon-reload
-systemctl restart php${PHP_VERSION}-fpm
+
+# Restart all active PHP-FPM services
+for PHP_DIR in /etc/php/*; do
+    if [ -d "${PHP_DIR}/fpm" ]; then
+        V=$(basename "${PHP_DIR}")
+        if systemctl is-active --quiet "php${V}-fpm"; then
+            systemctl restart "php${V}-fpm"
+            echo -e "Restarted php${V}-fpm"
+        fi
+    fi
+done
 
 
 
@@ -636,6 +684,15 @@ supervisorctl reread
 supervisorctl update
 supervisorctl start nimbus-worker:*
 
+# Configure system cron for Nimbus
+echo -e "${YELLOW}Configuring system cron for Nimbus...${NC}"
+cat << EOF > /etc/cron.d/nimbus
+# Nimbus Control Panel - System Cron
+# Runs the Laravel scheduler every minute
+* * * * * root cd ${NIMBUS_DIR} && php artisan schedule:run >> /dev/null 2>&1
+EOF
+chmod 644 /etc/cron.d/nimbus
+systemctl restart cron || systemctl restart crond || true
 
 # Configure firewall
 if [ "$SKIP_EXISTING" = true ] && command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then

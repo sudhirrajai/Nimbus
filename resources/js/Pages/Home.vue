@@ -7,6 +7,31 @@
         <p class="mb-4">Real-time server monitoring and statistics</p>
       </div>
 
+      <!-- Mail Server Banner -->
+      <div v-if="!liveStats.mailServerInstalled" class="col-12 mb-4">
+        <div class="card bg-gradient-dark text-white shadow-dark border-radius-lg overflow-hidden position-relative" style="background: linear-gradient(135deg, #1f1f2e 0%, #11111f 100%); border: 1px solid rgba(255, 255, 255, 0.08);">
+          <div class="position-absolute start-0 top-0 h-100 w-100 opacity-2" style="background: radial-gradient(circle at 10% 20%, rgba(94, 114, 228, 0.15) 0%, transparent 50%); pointer-events: none;"></div>
+          <div class="card-body p-4 position-relative z-index-1">
+            <div class="row align-items-center">
+              <div class="col-lg-8 col-md-7">
+                <span class="badge bg-warning mb-2 text-dark font-weight-bold" style="letter-spacing: 0.5px;">RECOMMENDED SETUP</span>
+                <h4 class="text-white font-weight-bolder mb-1 d-flex align-items-center">
+                  <i class="material-symbols-rounded me-2 text-warning" style="font-size: 1.5rem;">mail</i> Setup Nimbus Mail Server
+                </h4>
+                <p class="text-white opacity-8 mb-lg-0 text-sm">
+                  Run a secure, private email server. Host virtual domains, create unlimited mailboxes, set custom storage quotas, and access premium Roundcube webmail directly.
+                </p>
+              </div>
+              <div class="col-lg-4 col-md-5 text-md-end text-start mt-3 mt-md-0">
+                <Link href="/email" class="btn btn-white btn-lg mb-0 text-dark font-weight-bold shadow-md">
+                  <i class="material-symbols-rounded text-sm me-1">settings</i> Install & Configure
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Server Stats Cards -->
       <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
         <div class="card h-100">
@@ -401,7 +426,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
 
 const props = defineProps({
