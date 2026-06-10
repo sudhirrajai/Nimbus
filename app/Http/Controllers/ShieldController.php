@@ -269,21 +269,31 @@ class ShieldController extends Controller
                 mkdir($quarantineDir, 0700, true);
             }
 
+            $quarantinedFiles = []; // Map of original_path => quarantined_path
+
             foreach ($findings as $finding) {
                 $status = 'detected';
                 $details = $finding['details'];
+                $filePath = $finding['file_path'];
 
                 if ($autoQuarantine) {
-                    $filename = basename($finding['file_path']) . '.' . time() . '.bak';
-                    $destination = $quarantineDir . '/' . $filename;
-                    
-                    try {
-                        $this->executeSudoCommand("mv " . escapeshellarg($finding['file_path']) . " " . escapeshellarg($destination));
-                        $this->executeSudoCommand("chmod 000 " . escapeshellarg($destination));
+                    if (isset($quarantinedFiles[$filePath])) {
+                        // File was already quarantined in this scan!
                         $status = 'quarantined';
-                        $details .= " | Quarantined to: $destination";
-                    } catch (\Exception $e) {
-                        \Log::warning("Auto-quarantine failed for {$finding['file_path']}: " . $e->getMessage());
+                        $details .= " | Quarantined to: " . $quarantinedFiles[$filePath];
+                    } else {
+                        $filename = basename($filePath) . '.' . time() . '_' . rand(1000, 9999) . '.bak';
+                        $destination = $quarantineDir . '/' . $filename;
+                        
+                        try {
+                            $this->executeSudoCommand("mv " . escapeshellarg($filePath) . " " . escapeshellarg($destination));
+                            $this->executeSudoCommand("chmod 000 " . escapeshellarg($destination));
+                            $status = 'quarantined';
+                            $details .= " | Quarantined to: $destination";
+                            $quarantinedFiles[$filePath] = $destination;
+                        } catch (\Exception $e) {
+                            \Log::warning("Auto-quarantine failed for {$filePath}: " . $e->getMessage());
+                        }
                     }
                 }
 
@@ -362,18 +372,41 @@ class ShieldController extends Controller
             mkdir($quarantineDir, 0700, true);
         }
 
-        $filename = basename($source) . '.' . time() . '.bak';
-        $destination = $quarantineDir . '/' . $filename;
+        // Check if there is another threat on the same file that is already quarantined
+        $existingQuarantine = SecurityThreat::where('file_path', $source)
+            ->where('status', 'quarantined')
+            ->where('details', 'like', '%Quarantined to:%')
+            ->first();
+
+        $destination = null;
+        if ($existingQuarantine) {
+            if (preg_match('/Quarantined to: (.+)$/', $existingQuarantine->details, $matches)) {
+                $destination = trim($matches[1]);
+            }
+        }
 
         try {
-            $this->executeSudoCommand("mv " . escapeshellarg($source) . " " . escapeshellarg($destination));
-            $this->executeSudoCommand("chmod 000 " . escapeshellarg($destination)); // Make it unreadable
+            if ($destination) {
+                // Already quarantined, just link this threat to the same file
+                $threat->update([
+                    'status' => 'quarantined',
+                    'details' => $threat->details . " | Quarantined to: $destination",
+                    'resolved_at' => now()
+                ]);
+            } else {
+                // Not quarantined yet, perform move
+                $filename = basename($source) . '.' . time() . '_' . rand(1000, 9999) . '.bak';
+                $destination = $quarantineDir . '/' . $filename;
+                
+                $this->executeSudoCommand("mv " . escapeshellarg($source) . " " . escapeshellarg($destination));
+                $this->executeSudoCommand("chmod 000 " . escapeshellarg($destination)); // Make it unreadable
 
-            $threat->update([
-                'status' => 'quarantined',
-                'details' => $threat->details . " | Quarantined to: $destination",
-                'resolved_at' => now()
-            ]);
+                $threat->update([
+                    'status' => 'quarantined',
+                    'details' => $threat->details . " | Quarantined to: $destination",
+                    'resolved_at' => now()
+                ]);
+            }
 
             return response()->json(['success' => true, 'message' => 'File quarantined successfully']);
         } catch (\Exception $e) {
@@ -392,14 +425,44 @@ class ShieldController extends Controller
         if (!$threat) return response()->json(['error' => 'Threat not found'], 404);
 
         try {
-            if (File::exists($threat->file_path)) {
-                $this->executeSudoCommand("rm " . escapeshellarg($threat->file_path));
+            $quarantinedPath = null;
+            if (preg_match('/Quarantined to: (.+)$/', $threat->details, $matches)) {
+                $quarantinedPath = trim($matches[1]);
             }
 
-            $threat->update([
-                'status' => 'deleted',
-                'resolved_at' => now()
-            ]);
+            if ($quarantinedPath) {
+                // If it is quarantined, delete the quarantined file using sudo
+                $output = [];
+                $returnCode = 0;
+                exec("sudo test -f " . escapeshellarg($quarantinedPath), $output, $returnCode);
+                if ($returnCode === 0) {
+                    $this->executeSudoCommand("rm -f " . escapeshellarg($quarantinedPath));
+                }
+
+                // Update all threats pointing to the same quarantined file
+                $relatedThreats = SecurityThreat::where('details', 'like', "%Quarantined to: {$quarantinedPath}%")
+                    ->get();
+
+                foreach ($relatedThreats as $rThreat) {
+                    $rThreat->update([
+                        'status' => 'deleted',
+                        'resolved_at' => now()
+                    ]);
+                }
+            } else {
+                // If not quarantined, delete the original file if it exists
+                $output = [];
+                $returnCode = 0;
+                exec("sudo test -e " . escapeshellarg($threat->file_path), $output, $returnCode);
+                if ($returnCode === 0) {
+                    $this->executeSudoCommand("rm -rf " . escapeshellarg($threat->file_path));
+                }
+
+                $threat->update([
+                    'status' => 'deleted',
+                    'resolved_at' => now()
+                ]);
+            }
 
             return response()->json(['success' => true, 'message' => 'Threat deleted permanently']);
         } catch (\Exception $e) {
@@ -407,6 +470,9 @@ class ShieldController extends Controller
         }
     }
 
+    /**
+     * Restore quarantined file
+     */
     public function restoreQuarantine(Request $request)
     {
         $id = $request->input('id');
@@ -420,19 +486,29 @@ class ShieldController extends Controller
             $originalPath = $threat->file_path;
 
             try {
-                if (!File::exists($quarantinedPath)) {
+                // Check if file exists using sudo to bypass permissions on /tmp or quarantine directory
+                $output = [];
+                $returnCode = 0;
+                exec("sudo test -f " . escapeshellarg($quarantinedPath), $output, $returnCode);
+                if ($returnCode !== 0) {
                      return response()->json(['error' => 'Quarantined file missing'], 404);
                 }
 
                 $this->executeSudoCommand("mv " . escapeshellarg($quarantinedPath) . " " . escapeshellarg($originalPath));
                 $this->executeSudoCommand("chmod 644 " . escapeshellarg($originalPath));
 
-                $cleanDetails = explode(' | Quarantined to:', $threat->details)[0];
+                // Find all threats pointing to the same quarantined file and restore them in DB
+                $relatedThreats = SecurityThreat::where('status', 'quarantined')
+                    ->where('details', 'like', "%Quarantined to: {$quarantinedPath}%")
+                    ->get();
 
-                $threat->update([
-                    'status' => 'detected',
-                    'details' => $cleanDetails
-                ]);
+                foreach ($relatedThreats as $rThreat) {
+                    $cleanDetails = explode(' | Quarantined to:', $rThreat->details)[0];
+                    $rThreat->update([
+                        'status' => 'detected',
+                        'details' => $cleanDetails
+                    ]);
+                }
 
                 return response()->json(['success' => true, 'message' => 'File restored successfully']);
             } catch (\Exception $e) {
@@ -929,7 +1005,15 @@ class ShieldController extends Controller
     {
         $output = [];
         $returnCode = 0;
+        \Log::debug("Executing sudo command in Shield: sudo $command");
         exec("sudo $command 2>&1", $output, $returnCode);
+
+        if ($returnCode !== 0) {
+            $errorMsg = "Command execution failed: " . implode("\n", $output);
+            \Log::error($errorMsg);
+            throw new \Exception($errorMsg);
+        }
+
         return $output;
     }
 }
