@@ -2,9 +2,9 @@
 
 # Nimbus Control Panel - Installer Script
 # One-command installation for Ubuntu/Debian servers
-# Usage:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/install.sh | sudo bash
-# Smart:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/install.sh | sudo bash -s -- --skip-existing
-# Uninstall: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/dev/uninstall.sh | sudo bash
+# Usage:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash
+# Smart:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash -s -- --skip-existing
+# Uninstall: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | sudo bash
 
 set -e
 
@@ -22,6 +22,8 @@ NIMBUS_PORT="2095"
 PHP_VERSION="8.2"
 NODE_VERSION="20"
 GITHUB_REPO="https://github.com/sudhirrajai/Nimbus.git"
+INSTALL_MODE="git"
+VMCORE_URL="{{VMCORE_URL}}"
 SKIP_EXISTING=false
 PANEL_SYSTEM_USER=""
 DB_ENGINE="mariadb"
@@ -166,8 +168,12 @@ if [ "${1}" = "--uninstall" ] || [ "${1}" = "uninstall" ]; then
     if [ -f "${NIMBUS_DIR}/uninstall.sh" ]; then
         bash "${NIMBUS_DIR}/uninstall.sh"
     else
-        # Download and run from GitHub
-        curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | bash
+        if [ "$INSTALL_MODE" = "zip" ]; then
+            curl -sSL "${VMCORE_URL}/uninstall" | bash
+        else
+            # Download and run from GitHub
+            curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | bash
+        fi
     fi
     exit $?
 fi
@@ -409,13 +415,22 @@ fi
 systemctl enable supervisor
 systemctl start supervisor
 
-echo -e "${GREEN}[9/12]${NC} Cloning Nimbus Panel..."
+echo -e "${GREEN}[9/12]${NC} Installing Nimbus Panel..."
 if [ -d "$NIMBUS_DIR" ]; then
     echo -e "${YELLOW}Nimbus directory exists, backing up...${NC}"
     mv $NIMBUS_DIR ${NIMBUS_DIR}_backup_$(date +%Y%m%d_%H%M%S)
 fi
 
-git clone $GITHUB_REPO $NIMBUS_DIR
+if [ "$INSTALL_MODE" = "zip" ]; then
+    echo -e "Downloading zip package from ${VMCORE_URL}..."
+    mkdir -p "$NIMBUS_DIR"
+    wget -O /tmp/nimbus.zip "${VMCORE_URL}/nimbus.zip"
+    echo -e "Extracting zip package..."
+    unzip -o /tmp/nimbus.zip -d "$NIMBUS_DIR"
+    rm -f /tmp/nimbus.zip
+else
+    git clone $GITHUB_REPO $NIMBUS_DIR
+fi
 cd $NIMBUS_DIR
 
 # Create Nimbus database and user

@@ -18,6 +18,7 @@ NC='\033[0m' # No Color
 # Configuration (must match install.sh)
 NIMBUS_DIR="/usr/local/nimbus"
 PHP_VERSION="8.2"
+VMCORE_URL="{{VMCORE_URL}}"
 
 # ─────────────────────────────────────────────────────────────────
 # Helper functions
@@ -355,5 +356,9 @@ echo -e "${GREEN}${BOLD}✓ Nimbus uninstall completed successfully!${NC}"
 echo ""
 echo -e "${YELLOW}Notes:${NC}"
 echo -e "  • Standard system packages (curl, git, wget, etc.) were not removed."
-echo -e "  • If you reinstall later: ${CYAN}curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash${NC}"
+if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
+    echo -e "  • If you reinstall later: ${CYAN}curl -sSL ${VMCORE_URL}/install | sudo bash${NC}"
+else
+    echo -e "  • If you reinstall later: ${CYAN}curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash${NC}"
+fi
 echo ""
