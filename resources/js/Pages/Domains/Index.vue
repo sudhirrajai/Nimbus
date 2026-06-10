@@ -78,6 +78,9 @@
                           <div class="d-flex flex-column justify-content-center">
                             <h6 class="mb-0 text-sm font-weight-bold">
                               {{ domain.name }}
+                              <span v-if="domain.php_version" class="badge bg-light text-dark ms-2 text-xxs font-weight-bold" style="border: 1px solid #e9ecef; padding: 2px 6px;">
+                                PHP {{ domain.php_version }}
+                              </span>
                               <i v-if="domain.is_active === false" class="material-symbols-rounded text-xs text-warning ms-1" title="DNS not pointing to this server">warning</i>
                               <i v-if="domain.is_active === null" class="spinner-border spinner-border-sm ms-1" style="width: 10px; height: 10px; border-width: 1px;"></i>
                             </h6>
@@ -134,6 +137,14 @@
                             title="File Manager"
                           >
                             <i class="material-symbols-rounded">folder</i>
+                          </button>
+                          <button 
+                            v-if="isRootOrAdmin"
+                            class="action-btn btn-php" 
+                            @click="openPhpVersionModal(domain)"
+                            title="Switch PHP Version"
+                          >
+                            <i class="material-symbols-rounded">published_with_changes</i>
                           </button>
                           <button 
                             v-if="isRootOrAdmin"
@@ -247,6 +258,25 @@
                   {{ validationError }}
                 </div>
               </div>
+
+              <div v-if="!isEdit" class="form-group mt-3">
+                <label class="form-control-label">PHP Version</label>
+                <div class="input-group input-group-outline">
+                  <select 
+                    v-model="createPhpVersion" 
+                    class="form-select form-control"
+                    style="padding: 0.5rem 0.75rem;"
+                    :disabled="submitting"
+                  >
+                    <option value="8.2">PHP 8.2 (Default)</option>
+                    <option value="8.3">PHP 8.3</option>
+                    <option value="8.1">PHP 8.1</option>
+                    <option value="8.0">PHP 8.0</option>
+                    <option value="7.4">PHP 7.4</option>
+                    <option value="8.4">PHP 8.4</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div class="modal-footer">
@@ -270,6 +300,71 @@
           </div>
         </div>
       </div>
+      <!-- Switch PHP Version Modal -->
+      <div class="modal fade show" tabindex="-1" style="display:block" v-if="showPhpModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder">
+                Switch PHP Version
+              </h5>
+              <button type="button" class="btn-close" @click="closePhpModal" :disabled="submitting"></button>
+            </div>
+
+            <div class="modal-body">
+              <div class="alert alert-info py-2 mb-3 text-white">
+                <div class="d-flex align-items-center">
+                  <i class="material-symbols-rounded me-2 text-sm">info</i>
+                  <small>
+                    Switching PHP version will update the Nginx configuration for <strong>{{ selectedDomainName }}</strong> and reload Nginx.
+                  </small>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-control-label">Select PHP Version</label>
+                <div class="input-group input-group-outline">
+                  <select 
+                    v-model="selectedPhpVersion" 
+                    class="form-select form-control"
+                    style="padding: 0.5rem 0.75rem;"
+                    :disabled="submitting || loadingPhpVersions"
+                  >
+                    <option v-for="version in availablePhpVersions" :key="version.version" :value="version.version" :disabled="!version.installed">
+                      PHP {{ version.version }} {{ version.installed ? (version.version === currentDomainPhpVersion ? '(Active)' : '') : '(Not Installed)' }}
+                    </option>
+                  </select>
+                </div>
+                <div class="text-xs text-muted mt-2" v-if="loadingPhpVersions">
+                  <span class="spinner-border spinner-border-sm me-1" style="width: 10px; height: 10px; border-width: 1px;"></span>
+                  Loading available PHP versions from server...
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button 
+                class="btn btn-outline-secondary mb-0" 
+                @click="closePhpModal"
+                :disabled="submitting"
+              >
+                Cancel
+              </button>
+              <button 
+                class="btn bg-gradient-dark mb-0" 
+                @click="updatePhpVersion"
+                :disabled="submitting || loadingPhpVersions || selectedPhpVersion === currentDomainPhpVersion"
+              >
+                <span v-if="submitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                Switch Version
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
       <!-- Document Root Modal -->
       <div class="modal fade show" tabindex="-1" style="display:block" v-if="showRootModal">
         <div class="modal-dialog modal-dialog-centered">
@@ -402,8 +497,10 @@ const serverIp = ref("")
 const showModal = ref(false)
 const showDeleteModal = ref(false)
 const showRootModal = ref(false)
+const showPhpModal = ref(false)
 const isEdit = ref(false)
 const domainInput = ref("")
+const createPhpVersion = ref("8.2")
 const rootInput = ref("")
 const oldDomain = ref("")
 const domainToDelete = ref("")
@@ -411,6 +508,12 @@ const loading = ref(false)
 const submitting = ref(false)
 const validationError = ref("")
 const rootValidationError = ref("")
+
+const selectedDomainName = ref("")
+const currentDomainPhpVersion = ref("")
+const selectedPhpVersion = ref("")
+const availablePhpVersions = ref([])
+const loadingPhpVersions = ref(false)
 
 const alert = ref({
   show: false,
@@ -497,13 +600,15 @@ const fetchDetailsSequentially = async () => {
         ...domain,
         storage: res.data.storage,
         is_active: res.data.is_active,
-        server_ip: res.data.server_ip
+        server_ip: res.data.server_ip,
+        php_version: res.data.php_version
       }
     } catch (err) {
       console.error(`Failed to load details for ${domain.name}`, err)
       // Set some defaults so UI doesn't look broken
       domains.value[i].storage = '?'
       domains.value[i].is_active = false
+      domains.value[i].php_version = '8.2'
     }
   }
 }
@@ -543,7 +648,10 @@ const saveDomain = async () => {
 
   try {
     submitting.value = true
-    await axios.post('/domains', { domain: domainInput.value.trim().toLowerCase() })
+    await axios.post('/domains', { 
+      domain: domainInput.value.trim().toLowerCase(),
+      php_version: createPhpVersion.value
+    })
     showAlert('success', `Domain "${domainInput.value}" has been added successfully`)
     closeModal()
     loadDomains()
@@ -647,9 +755,59 @@ const closeRootModal = () => {
   rootValidationError.value = ""
 }
 
+const openPhpVersionModal = async (domain) => {
+  selectedDomainName.value = domain.name
+  currentDomainPhpVersion.value = domain.php_version || '8.2'
+  selectedPhpVersion.value = domain.php_version || '8.2'
+  showPhpModal.value = true
+  
+  try {
+    loadingPhpVersions.value = true
+    const res = await axios.get('/php/versions')
+    availablePhpVersions.value = res.data.versions || []
+  } catch (err) {
+    console.error('Failed to fetch PHP versions', err)
+    availablePhpVersions.value = [
+      { version: '7.4', installed: false },
+      { version: '8.0', installed: false },
+      { version: '8.1', installed: false },
+      { version: '8.2', installed: true },
+      { version: '8.3', installed: true },
+      { version: '8.4', installed: false }
+    ]
+  } finally {
+    loadingPhpVersions.value = false
+  }
+}
+
+const closePhpModal = () => {
+  showPhpModal.value = false
+  selectedDomainName.value = ""
+  currentDomainPhpVersion.value = ""
+  selectedPhpVersion.value = ""
+}
+
+const updatePhpVersion = async () => {
+  try {
+    submitting.value = true
+    const res = await axios.put(`/domains/${selectedDomainName.value}/php-version`, {
+      php_version: selectedPhpVersion.value
+    })
+    showAlert('success', res.data.message || `Switched PHP version successfully to ${selectedPhpVersion.value}`)
+    closePhpModal()
+    loadDomains()
+  } catch (err) {
+    const errorMsg = err.response?.data?.error || 'Failed to update PHP version'
+    showAlert('danger', errorMsg)
+  } finally {
+    submitting.value = false
+  }
+}
+
 const closeModal = () => {
   showModal.value = false
   domainInput.value = ""
+  createPhpVersion.value = "8.2"
   validationError.value = ""
 }
 </script>
@@ -731,6 +889,11 @@ const closeModal = () => {
 .btn-folder:hover {
   background-color: #f0fdf4;
   color: #22c55e;
+}
+
+.btn-php:hover {
+  background-color: #f5f3ff;
+  color: #8b5cf6;
 }
 
 .btn-edit:hover {

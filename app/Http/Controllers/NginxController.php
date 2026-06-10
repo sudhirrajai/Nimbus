@@ -251,7 +251,7 @@ BASH;
             // Try using 'at' command for delayed execution
             $output = [];
             $returnCode = 0;
-            exec("echo 'bash " . escapeshellarg($scriptPath) . "' | at now + 1 seconds 2>&1", $output, $returnCode);
+            exec("echo 'bash " . escapeshellarg($scriptPath) . "' | sudo at now + 1 seconds 2>&1", $output, $returnCode);
             
             if ($returnCode !== 0) {
                 // Fallback: Use background process with nohup

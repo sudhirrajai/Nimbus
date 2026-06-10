@@ -75,10 +75,10 @@
           </Link>
         </li>
 
-        <li v-if="isRoot" class="nav-item">
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/php" class="nav-link" :class="isActive('/php')">
             <i class="material-symbols-rounded opacity-5">code</i>
-            <span class="nav-link-text ms-1">PHP Configuration</span>
+            <span class="nav-link-text ms-1">PHP Manager</span>
           </Link>
         </li>
 

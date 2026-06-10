@@ -375,6 +375,22 @@ echo ""
 echo "[8/8] Starting services..."
 sudo rm -f /usr/sbin/policy-rc.d
 
+# Configure firewall rules for Mail Server
+echo "Configuring firewall rules for Mail Server..."
+if command -v ufw >/dev/null 2>&1; then
+    sudo ufw allow 25/tcp 2>/dev/null || true
+    sudo ufw allow 143/tcp 2>/dev/null || true
+    sudo ufw allow 993/tcp 2>/dev/null || true
+    sudo ufw allow 110/tcp 2>/dev/null || true
+    sudo ufw allow 995/tcp 2>/dev/null || true
+    sudo ufw allow 587/tcp 2>/dev/null || true
+    sudo ufw allow 465/tcp 2>/dev/null || true
+    sudo ufw reload 2>/dev/null || true
+    echo "Firewall ports 25, 143, 993, 110, 995, 587, and 465 auto-enabled."
+else
+    echo "ufw firewall not found, skipping port configuration."
+fi
+
 sudo systemctl restart postfix
 sudo systemctl restart dovecot
 sudo systemctl enable postfix

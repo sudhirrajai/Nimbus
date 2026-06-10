@@ -147,18 +147,38 @@ class DomainController extends Controller
                 return $this->checkDomainDns($domain, $serverIp);
             });
 
+            // Detect PHP version from Nginx config
+            $phpVersion = '8.2'; // default fallback
+            try {
+                $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+                $output = [];
+                exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+                if (isset($output[0]) && $output[0] === 'exists') {
+                    $catOutput = [];
+                    exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $catOutput);
+                    $configContent = implode("\n", $catOutput);
+                    if (preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-nimbus)?\.sock;/', $configContent, $matches)) {
+                        $phpVersion = $matches[1];
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Failed to detect PHP version for $domain: " . $e->getMessage());
+            }
+
             return response()->json([
                 'domain' => $domain,
                 'storage' => $storage,
                 'is_active' => $isActive,
-                'server_ip' => $serverIp
+                'server_ip' => $serverIp,
+                'php_version' => $phpVersion
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'domain' => $domain,
                 'storage' => '?',
                 'is_active' => false,
-                'server_ip' => ''
+                'server_ip' => '',
+                'php_version' => '8.2'
             ]);
         }
     }
@@ -294,8 +314,24 @@ class DomainController extends Controller
             file_put_contents("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n");
             file_put_contents("$path/.htaccess", "# Nimbus Control Panel - Default .htaccess\n# Powered by Nimbus\n\nOptions -Indexes\n");
 
+            // Resolve PHP version for the domain configuration
+            $defaultPhp = '8.2';
+            try {
+                $globalSetting = \App\Models\Setting::where('key', 'global_php_version')->first();
+                if ($globalSetting && $globalSetting->value) {
+                    $defaultPhp = $globalSetting->value;
+                }
+            } catch (\Exception $e) {
+                // Ignore
+            }
+
+            $phpVersion = $request->input('php_version', $defaultPhp);
+            if (!preg_match('/^[0-9]+\.[0-9]+$/', $phpVersion) || !File::exists("/etc/php/{$phpVersion}/fpm")) {
+                $phpVersion = '8.2'; // absolute fallback
+            }
+
             // Create Nginx configuration
-            $this->createNginxConfig($domain);
+            $this->createNginxConfig($domain, $phpVersion);
             $createdNginx = true;
 
             // Ensure all managed domains have the directories/files their nginx configs expect
@@ -1063,10 +1099,7 @@ HTML;
         }
     }
 
-    /**
-     * Create Nginx configuration for domain
-     */
-    private function createNginxConfig($domain)
+    private function createNginxConfig($domain, $phpVersion = '8.2')
     {
         $configPath = "/etc/nginx/sites-available/{$domain}";
         $symlinkPath = "/etc/nginx/sites-enabled/{$domain}";
@@ -1098,7 +1131,7 @@ server {
     # PHP handling
     location ~ \.php$ {
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
@@ -1361,6 +1394,91 @@ NGINX;
             \Log::info("Rollback completed for domain update");
         } catch (\Exception $e) {
             \Log::error("Rollback failed for domain update: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Update PHP version for a domain
+     */
+    public function updatePhpVersion(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'php_version' => 'required|string|regex:/^[0-9]+\.[0-9]+$/'
+            ]);
+
+            $phpVersion = $request->php_version;
+            
+            // Validate that FPM socket for this version exists or FPM service exists
+            $phpDir = "/etc/php/{$phpVersion}/fpm";
+            if (!File::exists($phpDir)) {
+                return response()->json([
+                    'error' => "PHP {$phpVersion} FPM is not installed on this server."
+                ], 400);
+            }
+
+            $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+            $output = [];
+            exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+            if (!isset($output[0]) || $output[0] !== 'exists') {
+                return response()->json(['error' => 'Nginx configuration not found for this domain'], 404);
+            }
+
+            // Create backup of nginx config first
+            $backupPath = $configPath . '.backup.' . date('Y-m-d-His');
+            $this->executeSudoCommand("cp " . escapeshellarg($configPath) . " " . escapeshellarg($backupPath));
+
+            // Read existing Nginx config
+            $output = [];
+            exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
+            $configContent = implode("\n", $output);
+
+            // Replace fastcgi_pass socket path
+            $pattern = '/(fastcgi_pass\s+unix:)(?:\/var)?(\/run\/php\/php)[0-9.]+(-fpm(?:-nimbus)?\.sock;)/';
+            $replacement = '${1}${2}' . $phpVersion . '${3}';
+            
+            // Double check if pattern matches
+            if (!preg_match($pattern, $configContent)) {
+                $pattern = '/(fastcgi_pass\s+unix:[^;]+\.sock;)/';
+                $replacement = "fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;";
+            }
+
+            $newConfigContent = preg_replace($pattern, $replacement, $configContent);
+
+            // Write updated config to a temp file, then move to Nginx directory
+            $tempPath = "/tmp/nginx_{$domain}_" . time() . ".conf";
+            file_put_contents($tempPath, $newConfigContent);
+            $this->executeSudoCommand("mv {$tempPath} {$configPath}");
+            $this->executeSudoCommand("chmod 644 {$configPath}");
+
+            // Verify with nginx -t
+            try {
+                $this->executeSudoCommand("nginx -t");
+            } catch (\Exception $e) {
+                // Rollback if Nginx test fails
+                $this->executeSudoCommand("cp " . escapeshellarg($backupPath) . " " . escapeshellarg($configPath));
+                $this->executeSudoCommand("rm -f " . escapeshellarg($backupPath));
+                return response()->json(['error' => 'Invalid Nginx configuration generated: ' . $e->getMessage()], 422);
+            }
+
+            // Clean up backup
+            $this->executeSudoCommand("rm -f " . escapeshellarg($backupPath));
+
+            // Reload Nginx
+            $this->executeSudoCommand("systemctl reload nginx");
+
+            \Log::info("Domain PHP version updated: $domain to PHP $phpVersion by user " . auth()->id());
+
+            return response()->json([
+                'message' => "Successfully switched domain '{$domain}' to PHP {$phpVersion}",
+                'php_version' => $phpVersion
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to update domain PHP version: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to update PHP version: ' . $e->getMessage()
+            ], 500);
         }
     }
 }
