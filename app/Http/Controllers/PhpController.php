@@ -704,6 +704,13 @@ BASH;
             // Create lock file
             file_put_contents($lockFile, "Installing PHP {$version}");
 
+            // Clean up any previous done file using sudo to bypass sticky bit
+            try {
+                $this->executeSudoCommand("rm -f /tmp/nimbus_php_install_done");
+            } catch (\Exception $e) {
+                \Log::warning("Could not delete old php install done file: " . $e->getMessage());
+            }
+
             // Log file paths
             $logFile = storage_path('logs/php_install.log');
             file_put_contents($logFile, "=== PHP {$version} Installation Started ===\n");
@@ -795,7 +802,11 @@ BASH;
         
         if ($status === 'installing' && file_exists('/tmp/nimbus_php_install_done')) {
             @unlink($lockFile);
-            @unlink('/tmp/nimbus_php_install_done');
+            try {
+                $this->executeSudoCommand("rm -f /tmp/nimbus_php_install_done");
+            } catch (\Exception $e) {
+                // Ignore
+            }
             $status = 'idle';
         }
         
@@ -902,6 +913,13 @@ BASH;
             // Create lock file
             file_put_contents($lockFile, "Installing {$extension} for PHP {$version}");
 
+            // Clean up any previous done file using sudo to bypass sticky bit
+            try {
+                $this->executeSudoCommand("rm -f /tmp/nimbus_php_ext_install_done");
+            } catch (\Exception $e) {
+                \Log::warning("Could not delete old php ext install done file: " . $e->getMessage());
+            }
+
             // Log file paths
             $logFile = storage_path('logs/php_ext_install.log');
             file_put_contents($logFile, "=== PHP {$version} Extension {$extension} Installation Started ===\n");
@@ -977,7 +995,11 @@ BASH;
         
         if ($status === 'installing' && file_exists('/tmp/nimbus_php_ext_install_done')) {
             @unlink($lockFile);
-            @unlink('/tmp/nimbus_php_ext_install_done');
+            try {
+                $this->executeSudoCommand("rm -f /tmp/nimbus_php_ext_install_done");
+            } catch (\Exception $e) {
+                // Ignore
+            }
             $status = 'idle';
         }
         
