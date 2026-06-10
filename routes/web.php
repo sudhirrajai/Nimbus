@@ -209,6 +209,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/versions', [PhpController::class, 'getPhpVersions'])->name('versions');
             Route::post('/versions/install', [PhpController::class, 'installPhpVersion'])->name('versions.install');
             Route::get('/versions/install-status', [PhpController::class, 'getPhpInstallStatus'])->name('versions.install-status');
+            Route::post('/versions/global', [PhpController::class, 'updateGlobalPhpVersion'])->name('versions.global');
             Route::get('/versions/{version}/extensions', [PhpController::class, 'getExtensions'])->name('versions.extensions');
             Route::post('/versions/{version}/extensions/install', [PhpController::class, 'installExtension'])->name('versions.extensions.install');
             Route::get('/versions/{version}/extensions/install-status', [PhpController::class, 'getExtensionInstallStatus'])->name('versions.extensions.install-status');

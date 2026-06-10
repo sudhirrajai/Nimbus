@@ -315,9 +315,19 @@ class DomainController extends Controller
             file_put_contents("$path/.htaccess", "# Nimbus Control Panel - Default .htaccess\n# Powered by Nimbus\n\nOptions -Indexes\n");
 
             // Resolve PHP version for the domain configuration
-            $phpVersion = $request->input('php_version', '8.2');
+            $defaultPhp = '8.2';
+            try {
+                $globalSetting = \App\Models\Setting::where('key', 'global_php_version')->first();
+                if ($globalSetting && $globalSetting->value) {
+                    $defaultPhp = $globalSetting->value;
+                }
+            } catch (\Exception $e) {
+                // Ignore
+            }
+
+            $phpVersion = $request->input('php_version', $defaultPhp);
             if (!preg_match('/^[0-9]+\.[0-9]+$/', $phpVersion) || !File::exists("/etc/php/{$phpVersion}/fpm")) {
-                $phpVersion = '8.2'; // default fallback
+                $phpVersion = '8.2'; // absolute fallback
             }
 
             // Create Nginx configuration

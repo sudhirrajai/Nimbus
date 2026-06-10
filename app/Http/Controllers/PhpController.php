@@ -652,7 +652,21 @@ BASH;
                 ];
             }
             
-            return response()->json(['versions' => $versions]);
+            // Get current global/default PHP version setting
+            $globalPhp = '8.2';
+            try {
+                $globalSetting = \App\Models\Setting::where('key', 'global_php_version')->first();
+                if ($globalSetting && $globalSetting->value) {
+                    $globalPhp = $globalSetting->value;
+                }
+            } catch (\Exception $e) {
+                // Ignore
+            }
+            
+            return response()->json([
+                'versions' => $versions,
+                'global_php_version' => $globalPhp
+            ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -752,8 +766,8 @@ BASH;
             File::put($scriptPath, $scriptContent);
             chmod($scriptPath, 0755);
 
-            // Execute script in background
-            exec("nohup bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1 &");
+            // Execute script in background using at command (runs outside PHP-FPM systemd namespace)
+            exec("echo 'bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1' | at now 2>&1");
 
             return response()->json([
                 'success' => true,
@@ -935,8 +949,8 @@ BASH;
             File::put($scriptPath, $scriptContent);
             chmod($scriptPath, 0755);
 
-            // Execute script in background
-            exec("nohup bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1 &");
+            // Execute script in background using at command (runs outside PHP-FPM systemd namespace)
+            exec("echo 'bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1' | at now 2>&1");
 
             return response()->json([
                 'success' => true,
@@ -977,5 +991,127 @@ BASH;
             'status' => $status,
             'log' => $log
         ]);
+    }
+
+    /**
+     * Update the global/default PHP version for all sites
+     */
+    public function updateGlobalPhpVersion(Request $request)
+    {
+        try {
+            $request->validate([
+                'php_version' => 'required|string|regex:/^[0-9]+\.[0-9]+$/'
+            ]);
+
+            $phpVersion = $request->php_version;
+
+            // Validate that the version exists
+            if (!File::exists("/etc/php/{$phpVersion}/fpm")) {
+                return response()->json([
+                    'error' => "PHP {$phpVersion} FPM is not installed on this server."
+                ], 400);
+            }
+
+            // Save version to settings
+            \App\Models\Setting::updateOrCreate(
+                ['key' => 'global_php_version'],
+                ['value' => $phpVersion]
+            );
+
+            // Get all website directories
+            $basePath = '/var/www/';
+            $directories = File::directories($basePath);
+            $updatedDomains = [];
+            $skippedDomains = [];
+            $failedDomains = [];
+
+            foreach ($directories as $dirPath) {
+                $domain = basename($dirPath);
+
+                // Exclude system/default directories
+                if (in_array(strtolower($domain), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
+                    continue;
+                }
+
+                // Check if Nginx configuration file exists for this domain
+                $configPath = "/etc/nginx/sites-available/{$domain}";
+                $output = [];
+                exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+                if (!isset($output[0]) || $output[0] !== 'exists') {
+                    $skippedDomains[] = $domain;
+                    continue;
+                }
+
+                try {
+                    // Create backup
+                    $backupPath = $configPath . '.backup.' . date('Y-m-d-His');
+                    $this->executeSudoCommand("cp " . escapeshellarg($configPath) . " " . escapeshellarg($backupPath));
+
+                    // Read Nginx config
+                    $output = [];
+                    exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
+                    $configContent = implode("\n", $output);
+
+                    // Replace fastcgi_pass socket path
+                    $pattern = '/(fastcgi_pass\s+unix:)(?:\/var)?(\/run\/php\/php)[0-9.]+(-fpm(?:-nimbus)?\.sock;)/';
+                    $replacement = '${1}${2}' . $phpVersion . '${3}';
+                    
+                    if (!preg_match($pattern, $configContent)) {
+                        $pattern = '/(fastcgi_pass\s+unix:[^;]+\.sock;)/';
+                        $replacement = "fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;";
+                    }
+
+                    $newConfigContent = preg_replace($pattern, $replacement, $configContent);
+
+                    // Write to temp file then move to Nginx config directory
+                    $tempPath = "/tmp/nginx_{$domain}_" . time() . ".conf";
+                    file_put_contents($tempPath, $newConfigContent);
+                    
+                    $this->executeSudoCommand("cp {$tempPath} {$configPath}");
+                    $this->executeSudoCommand("chmod 644 {$configPath}");
+                    unlink($tempPath);
+
+                    // Verify configuration
+                    try {
+                        $this->executeSudoCommand("nginx -t");
+                        $this->executeSudoCommand("rm -f " . escapeshellarg($backupPath));
+                        $updatedDomains[] = $domain;
+                    } catch (\Exception $nginxEx) {
+                        // Rollback on config error
+                        $this->executeSudoCommand("cp " . escapeshellarg($backupPath) . " " . escapeshellarg($configPath));
+                        $this->executeSudoCommand("rm -f " . escapeshellarg($backupPath));
+                        $failedDomains[] = "$domain (Nginx test failed)";
+                    }
+                } catch (\Exception $domainEx) {
+                    $failedDomains[] = "$domain (" . $domainEx->getMessage() . ")";
+                }
+            }
+
+            // Reload Nginx if any updates succeeded
+            if (count($updatedDomains) > 0) {
+                $this->executeSudoCommand("systemctl reload nginx");
+            }
+
+            $message = "Global PHP version set to {$phpVersion}. ";
+            if (count($updatedDomains) > 0) {
+                $message .= "Successfully updated " . count($updatedDomains) . " site(s). ";
+            }
+            if (count($failedDomains) > 0) {
+                $message .= "Failed for: " . implode(', ', $failedDomains);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'updated' => $updatedDomains,
+                'failed' => $failedDomains
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to update global PHP version: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to update global PHP version: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

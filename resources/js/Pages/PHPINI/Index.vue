@@ -55,24 +55,24 @@
       <template v-if="phpInfo">
         <!-- Tabs Navigation -->
         <div class="nav-wrapper position-relative end-0 mb-4">
-          <ul class="nav nav-pills nav-pills-primary nav-fill p-1 flex-row" role="tablist" style="background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-            <li class="nav-item">
-              <a class="nav-link mb-0 px-0 py-2 d-flex align-items-center justify-content-center text-sm font-weight-bold" :class="{ active: activeTab === 'settings' }" @click="activeTab = 'settings'" href="javascript:;" role="tab" style="border-radius: 8px; transition: all 0.2s;">
+          <ul class="nav nav-pills nav-pills-primary nav-fill p-1 flex-row" role="tablist" style="background-color: #f1f5f9; border-radius: 12px; border: 1px solid #e2e8f0; list-style: none;">
+            <li class="nav-item flex-fill">
+              <button class="nav-link-custom" :class="{ active: activeTab === 'settings' }" @click="activeTab = 'settings'" role="tab">
                 <i class="material-symbols-rounded text-sm me-2">tune</i>
                 INI Settings
-              </a>
+              </button>
             </li>
-            <li class="nav-item">
-              <a class="nav-link mb-0 px-0 py-2 d-flex align-items-center justify-content-center text-sm font-weight-bold" :class="{ active: activeTab === 'versions' }" @click="activeTab = 'versions'" href="javascript:;" role="tab" style="border-radius: 8px; transition: all 0.2s;">
+            <li class="nav-item flex-fill">
+              <button class="nav-link-custom" :class="{ active: activeTab === 'versions' }" @click="activeTab = 'versions'" role="tab">
                 <i class="material-symbols-rounded text-sm me-2">dns</i>
                 PHP Versions
-              </a>
+              </button>
             </li>
-            <li class="nav-item">
-              <a class="nav-link mb-0 px-0 py-2 d-flex align-items-center justify-content-center text-sm font-weight-bold" :class="{ active: activeTab === 'extensions' }" @click="activeTab = 'extensions'" href="javascript:;" role="tab" style="border-radius: 8px; transition: all 0.2s;">
+            <li class="nav-item flex-fill">
+              <button class="nav-link-custom" :class="{ active: activeTab === 'extensions' }" @click="activeTab = 'extensions'" role="tab">
                 <i class="material-symbols-rounded text-sm me-2">grid_view</i>
                 Extensions
-              </a>
+              </button>
             </li>
           </ul>
         </div>
@@ -249,6 +249,38 @@
                   <i class="material-symbols-rounded text-sm me-1">terminal</i>
                   View Live Terminal Output
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Global PHP Version Settings Card -->
+          <div class="col-12 mb-4">
+            <div class="card shadow-sm">
+              <div class="card-header pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0 font-weight-bold">Global PHP Version</h6>
+                  <span class="badge bg-gradient-success" style="font-size: 0.7rem; padding: 4px 8px; border-radius: 6px;">Server-wide</span>
+                </div>
+                <p class="text-xs text-secondary mb-0">Set the default PHP version for all hosted websites on this server.</p>
+              </div>
+              <div class="card-body pt-3">
+                <div class="d-flex align-items-center flex-wrap gap-3">
+                  <div class="input-group input-group-outline" style="max-width: 250px;">
+                    <select v-model="selectedGlobalPhp" class="form-select form-control" style="padding: 0.45rem 0.75rem;" :disabled="savingGlobalPhp || loadingVersions">
+                      <option v-for="ver in phpVersions.filter(v => v.installed)" :key="ver.version" :value="ver.version">
+                        PHP {{ ver.version }} (Installed)
+                      </option>
+                    </select>
+                  </div>
+                  <button class="btn bg-gradient-primary mb-0 d-flex align-items-center" @click="confirmGlobalPhpSwitch" :disabled="savingGlobalPhp || selectedGlobalPhp === currentGlobalPhp">
+                    <span v-if="savingGlobalPhp" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Update Global Version
+                  </button>
+                </div>
+                <small class="text-xxs text-secondary d-block mt-2">
+                  <i class="material-symbols-rounded text-xs me-1 align-middle" style="font-size: 10px;">info</i>
+                  This will rewrite Nginx configurations for all domains pointing to their active PHP socket and reload Nginx.
+                </small>
               </div>
             </div>
           </div>
@@ -513,6 +545,35 @@
         </div>
       </div>
 
+      <!-- Global PHP Switch Confirmation Modal -->
+      <div class="modal-backdrop fade show" v-if="showGlobalPhpModal" @click="showGlobalPhpModal = false"></div>
+      <div class="modal fade show d-block" v-if="showGlobalPhpModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder text-warning d-flex align-items-center">
+                <i class="material-symbols-rounded text-warning me-2" style="font-size: 1.5rem;">warning</i>
+                Confirm Global PHP Switch
+              </h5>
+              <button type="button" class="btn-close" @click="showGlobalPhpModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="mb-0">Are you sure you want to change the global PHP version to <strong>PHP {{ selectedGlobalPhp }}</strong>?</p>
+              <p class="text-xs text-secondary mb-0 mt-2">
+                This will rewrite the Nginx configuration for <strong>ALL websites</strong> on this server to use PHP {{ selectedGlobalPhp }} and reload Nginx. Active site sessions/connections may be briefly affected during the reload.
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary mb-0" @click="showGlobalPhpModal = false">Cancel</button>
+              <button class="btn bg-gradient-warning mb-0" @click="updateGlobalPhpVersion" :disabled="savingGlobalPhp">
+                <span v-if="savingGlobalPhp" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                Update All Sites
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
@@ -565,6 +626,12 @@ const extSearchQuery = ref('')
 const showLogModal = ref(false)
 const currentActiveLoggingType = ref('') // 'version' or 'extension'
 const currentInstallLogTitle = ref('')
+
+// Global PHP variables
+const selectedGlobalPhp = ref('8.2')
+const currentGlobalPhp = ref('8.2')
+const savingGlobalPhp = ref(false)
+const showGlobalPhpModal = ref(false)
 
 onMounted(() => {
   loadInfo()
@@ -748,17 +815,45 @@ const loadPhpVersions = async () => {
     loadingVersions.value = true
     const res = await axios.get('/php/versions')
     phpVersions.value = res.data.versions
+    currentGlobalPhp.value = res.data.global_php_version || '8.2'
+    selectedGlobalPhp.value = res.data.global_php_version || '8.2'
     
     // Set default extension version to first installed version found
-    const firstInstalled = res.data.versions.find(v => v.installed)
-    if (firstInstalled) {
-      selectedExtensionVersion.value = firstInstalled.version
-      loadExtensions()
+    if (!selectedExtensionVersion.value) {
+      const firstInstalled = res.data.versions.find(v => v.installed)
+      if (firstInstalled) {
+        selectedExtensionVersion.value = firstInstalled.version
+        loadExtensions()
+      }
     }
   } catch (err) {
     showAlert('danger', err.response?.data?.error || 'Failed to load PHP versions')
   } finally {
     loadingVersions.value = false
+  }
+}
+
+const confirmGlobalPhpSwitch = () => {
+  showGlobalPhpModal.value = true
+}
+
+const updateGlobalPhpVersion = async () => {
+  try {
+    savingGlobalPhp.value = true
+    showGlobalPhpModal.value = false
+    showAlert('info', `Updating global PHP version to ${selectedGlobalPhp.value}. Please wait...`)
+    
+    const res = await axios.post('/php/versions/global', {
+      php_version: selectedGlobalPhp.value
+    })
+    
+    showAlert('success', res.data.message || `Successfully updated all sites to PHP ${selectedGlobalPhp.value}`)
+    currentGlobalPhp.value = selectedGlobalPhp.value
+    await loadPhpVersions()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to update global PHP version')
+  } finally {
+    savingGlobalPhp.value = false
   }
 }
 
@@ -1006,6 +1101,32 @@ const openActiveLogViewer = (type) => {
 .status-muted .pill-dot {
   background: #94a3b8;
   box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+}
+
+.nav-link-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #67748e;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-decoration: none;
+}
+.nav-link-custom.active {
+  background-color: #ffffff;
+  color: #344767;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+}
+.nav-link-custom:hover:not(.active) {
+  background-color: rgba(0, 0, 0, 0.02);
+  color: #344767;
 }
 
 @keyframes blink {
