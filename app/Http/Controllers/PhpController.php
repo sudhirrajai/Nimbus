@@ -625,4 +625,357 @@ BASH;
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Get installed and available PHP versions
+     */
+    public function getPhpVersions()
+    {
+        try {
+            $supportedVersions = ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4'];
+            $versions = [];
+            
+            foreach ($supportedVersions as $v) {
+                $installed = File::exists("/etc/php/{$v}/fpm");
+                $active = false;
+                if ($installed) {
+                    $output = [];
+                    exec("systemctl is-active php{$v}-fpm 2>&1", $output);
+                    $active = isset($output[0]) && trim($output[0]) === 'active';
+                }
+                
+                $versions[] = [
+                    'version' => $v,
+                    'installed' => $installed,
+                    'active' => $active,
+                    'service' => "php{$v}-fpm"
+                ];
+            }
+            
+            return response()->json(['versions' => $versions]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Start background installation of a PHP version
+     */
+    public function installPhpVersion(Request $request)
+    {
+        try {
+            $request->validate([
+                'version' => 'required|string|regex:/^[0-9]+\.[0-9]+$/'
+            ]);
+
+            $version = $request->input('version');
+
+            // Validate that version is one of supported
+            if (!in_array($version, ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4'])) {
+                return response()->json(['error' => 'Unsupported PHP version'], 400);
+            }
+
+            if (File::exists("/etc/php/{$version}/fpm")) {
+                return response()->json(['error' => "PHP {$version} is already installed."], 400);
+            }
+
+            $lockFile = storage_path('logs/php_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Another PHP installation is in progress: {$lockContent}. Please wait for it to complete."
+                ], 409);
+            }
+
+            // Create lock file
+            file_put_contents($lockFile, "Installing PHP {$version}");
+
+            // Log file paths
+            $logFile = storage_path('logs/php_install.log');
+            file_put_contents($logFile, "=== PHP {$version} Installation Started ===\n");
+            file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
+
+            // Script path
+            $scriptPath = storage_path('app/install_php_' . $version . '.sh');
+
+            // Build bash script content
+            $scriptContent = <<<BASH
+#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+# Prevent services from restarting automatically during apt-get
+echo -e '#!/bin/sh\\nexit 101' | sudo tee /usr/sbin/policy-rc.d > /dev/null
+sudo chmod +x /usr/sbin/policy-rc.d
+
+# Wait for apt lock
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    echo "Waiting for other apt process to finish..."
+    sleep 2
+done
+
+# Clean up broken installations
+sudo dpkg --configure -a 2>&1
+sudo apt-get install -f -y 2>&1
+
+echo "Checking ondrej/php repository..."
+if ! grep -q "^deb .*ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+    echo "Adding ondrej/php repository..."
+    sudo add-apt-repository -y ppa:ondrej/php 2>&1
+fi
+
+echo "Updating package lists..."
+sudo apt-get update 2>&1
+
+echo "Installing PHP {$version}..."
+sudo apt-get install -y php{$version}-fpm php{$version}-cli php{$version}-mysql php{$version}-curl php{$version}-gd php{$version}-mbstring php{$version}-zip php{$version}-xml php{$version}-intl php{$version}-opcache php{$version}-sqlite3 2>&1
+
+echo "Configuring systemd override for PHP-FPM {$version}..."
+sudo mkdir -p "/etc/systemd/system/php{$version}-fpm.service.d"
+sudo tee "/etc/systemd/system/php{$version}-fpm.service.d/nimbus.conf" << 'SYSTEMD'
+[Service]
+ReadWritePaths=/usr/local/nimbus /var/www /usr/share/adminer /etc/nginx /etc/php /etc/supervisor /etc/letsencrypt /etc/postfix /etc/dovecot
+SYSTEMD
+
+# Clean up policy-rc.d
+sudo rm -f /usr/sbin/policy-rc.d
+
+sudo systemctl daemon-reload 2>&1
+sudo systemctl enable php{$version}-fpm 2>&1
+sudo systemctl restart php{$version}-fpm 2>&1
+
+echo "PHP {$version} installation complete!"
+echo "done" > /tmp/nimbus_php_install_done
+BASH;
+
+            File::put($scriptPath, $scriptContent);
+            chmod($scriptPath, 0755);
+
+            // Execute script in background
+            exec("nohup bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1 &");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Installation of PHP {$version} started in background."
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("PHP Install error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Poll PHP installation status
+     */
+    public function getPhpInstallStatus()
+    {
+        $lockFile = storage_path('logs/php_install.lock');
+        $logFile = storage_path('logs/php_install.log');
+        
+        $status = 'idle';
+        if (file_exists($lockFile)) {
+            $status = 'installing';
+        }
+        
+        if ($status === 'installing' && file_exists('/tmp/nimbus_php_install_done')) {
+            @unlink($lockFile);
+            @unlink('/tmp/nimbus_php_install_done');
+            $status = 'idle';
+        }
+        
+        $log = '';
+        if (file_exists($logFile)) {
+            $log = file_get_contents($logFile);
+        }
+        
+        return response()->json([
+            'status' => $status,
+            'log' => $log
+        ]);
+    }
+
+    /**
+     * List extensions for a specific PHP version
+     */
+    public function getExtensions($version)
+    {
+        try {
+            if (!preg_match('/^[0-9]+\.[0-9]+$/', $version)) {
+                return response()->json(['error' => 'Invalid PHP version format'], 400);
+            }
+            
+            // Run phpX.Y -m to get loaded modules
+            $output = [];
+            $returnCode = 0;
+            exec("php{$version} -m 2>&1", $output, $returnCode);
+            
+            if ($returnCode !== 0) {
+                return response()->json(['error' => "PHP {$version} is not fully installed or CLI binary not found."], 400);
+            }
+            
+            $modules = array_map('strtolower', $output);
+            
+            $commonExtensions = [
+                ['name' => 'mysql', 'package' => 'mysql', 'modules' => ['mysqli', 'pdo_mysql'], 'description' => 'MySQL database support (mysqli, pdo_mysql)'],
+                ['name' => 'curl', 'package' => 'curl', 'modules' => ['curl'], 'description' => 'Client URL Library support'],
+                ['name' => 'gd', 'package' => 'gd', 'modules' => ['gd'], 'description' => 'Image processing and generation library'],
+                ['name' => 'zip', 'package' => 'zip', 'modules' => ['zip'], 'description' => 'Zip archive compression and reading'],
+                ['name' => 'mbstring', 'package' => 'mbstring', 'modules' => ['mbstring'], 'description' => 'Multibyte string support (UTF-8, etc.)'],
+                ['name' => 'xml', 'package' => 'xml', 'modules' => ['xml', 'simplexml', 'dom'], 'description' => 'XML Parsing and DOM support'],
+                ['name' => 'intl', 'package' => 'intl', 'modules' => ['intl'], 'description' => 'Internationalization functions support'],
+                ['name' => 'imagick', 'package' => 'imagick', 'modules' => ['imagick'], 'description' => 'ImageMagick image processing support'],
+                ['name' => 'redis', 'package' => 'redis', 'modules' => ['redis'], 'description' => 'Redis key-value caching support'],
+                ['name' => 'bcmath', 'package' => 'bcmath', 'modules' => ['bcmath'], 'description' => 'Arbitrary precision mathematics support'],
+                ['name' => 'soap', 'package' => 'soap', 'modules' => ['soap'], 'description' => 'Simple Object Access Protocol (SOAP) support'],
+                ['name' => 'gmp', 'package' => 'gmp', 'modules' => ['gmp'], 'description' => 'GNU Multiple Precision arithmetic support'],
+                ['name' => 'sqlite3', 'package' => 'sqlite3', 'modules' => ['sqlite3', 'pdo_sqlite'], 'description' => 'SQLite3 database engine support'],
+                ['name' => 'opcache', 'package' => 'opcache', 'modules' => ['zend opcache'], 'description' => 'Zend OPcache bytecode caching support']
+            ];
+            
+            $extensions = [];
+            foreach ($commonExtensions as $ext) {
+                $installed = false;
+                foreach ($ext['modules'] as $m) {
+                    if (in_array(strtolower($m), $modules)) {
+                        $installed = true;
+                        break;
+                    }
+                }
+                
+                $extensions[] = [
+                    'name' => $ext['name'],
+                    'package' => "php{$version}-" . $ext['package'],
+                    'description' => $ext['description'],
+                    'installed' => $installed
+                ];
+            }
+            
+            return response()->json(['extensions' => $extensions]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Start background installation of a PHP extension
+     */
+    public function installExtension(Request $request, $version)
+    {
+        try {
+            $request->validate([
+                'extension' => 'required|string|regex:/^[a-zA-Z0-9_-]+$/'
+            ]);
+
+            $extension = $request->input('extension');
+
+            if (!preg_match('/^[0-9]+\.[0-9]+$/', $version)) {
+                return response()->json(['error' => 'Invalid PHP version format'], 400);
+            }
+
+            if (!File::exists("/etc/php/{$version}/fpm")) {
+                return response()->json(['error' => "PHP {$version} is not installed."], 400);
+            }
+
+            $lockFile = storage_path('logs/php_ext_install.lock');
+            if (file_exists($lockFile)) {
+                $lockContent = file_get_contents($lockFile);
+                return response()->json([
+                    'error' => "Another PHP extension installation is in progress: {$lockContent}. Please wait."
+                ], 409);
+            }
+
+            // Create lock file
+            file_put_contents($lockFile, "Installing {$extension} for PHP {$version}");
+
+            // Log file paths
+            $logFile = storage_path('logs/php_ext_install.log');
+            file_put_contents($logFile, "=== PHP {$version} Extension {$extension} Installation Started ===\n");
+            file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
+
+            // Script path
+            $scriptPath = storage_path('app/install_php_ext_' . $version . '_' . $extension . '.sh');
+
+            // Build bash script content
+            $scriptContent = <<<BASH
+#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+# Prevent services from restarting automatically during apt-get
+echo -e '#!/bin/sh\\nexit 101' | sudo tee /usr/sbin/policy-rc.d > /dev/null
+sudo chmod +x /usr/sbin/policy-rc.d
+
+# Wait for apt lock
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    echo "Waiting for other apt process to finish..."
+    sleep 2
+done
+
+# Clean up broken installations
+sudo dpkg --configure -a 2>&1
+sudo apt-get install -f -y 2>&1
+
+echo "Installing extension php{$version}-{$extension}..."
+sudo apt-get update 2>&1
+sudo apt-get install -y php{$version}-{$extension} 2>&1
+
+# Clean up policy-rc.d
+sudo rm -f /usr/sbin/policy-rc.d
+
+echo "Restarting PHP {$version} FPM..."
+sudo systemctl restart php{$version}-fpm 2>&1
+
+echo "Extension php{$version}-{$extension} installation complete!"
+echo "done" > /tmp/nimbus_php_ext_install_done
+BASH;
+
+            File::put($scriptPath, $scriptContent);
+            chmod($scriptPath, 0755);
+
+            // Execute script in background
+            exec("nohup bash " . escapeshellarg($scriptPath) . " > " . escapeshellarg($logFile) . " 2>&1 &");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Installation of php{$version}-{$extension} started in background."
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("PHP Extension Install error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Poll PHP extension installation status
+     */
+    public function getExtensionInstallStatus($version)
+    {
+        $lockFile = storage_path('logs/php_ext_install.lock');
+        $logFile = storage_path('logs/php_ext_install.log');
+        
+        $status = 'idle';
+        if (file_exists($lockFile)) {
+            $status = 'installing';
+        }
+        
+        if ($status === 'installing' && file_exists('/tmp/nimbus_php_ext_install_done')) {
+            @unlink($lockFile);
+            @unlink('/tmp/nimbus_php_ext_install_done');
+            $status = 'idle';
+        }
+        
+        $log = '';
+        if (file_exists($logFile)) {
+            $log = file_get_contents($logFile);
+        }
+        
+        return response()->json([
+            'status' => $status,
+            'log' => $log
+        ]);
+    }
 }

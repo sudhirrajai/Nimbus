@@ -78,6 +78,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
         Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
+        Route::put('/{domain}/php-version', [DomainController::class, 'updatePhpVersion'])->name('domain.update.php-version');
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
     });
 
@@ -203,6 +204,14 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/update-setting', [PhpController::class, 'updateSetting'])->name('update-setting');
             Route::post('/restart', [PhpController::class, 'restartPhp'])->name('restart');
             Route::post('/sync-nginx-limits', [PhpController::class, 'syncNginxLimits'])->name('sync-nginx-limits');
+
+            // PHP versions and extensions manager
+            Route::get('/versions', [PhpController::class, 'getPhpVersions'])->name('versions');
+            Route::post('/versions/install', [PhpController::class, 'installPhpVersion'])->name('versions.install');
+            Route::get('/versions/install-status', [PhpController::class, 'getPhpInstallStatus'])->name('versions.install-status');
+            Route::get('/versions/{version}/extensions', [PhpController::class, 'getExtensions'])->name('versions.extensions');
+            Route::post('/versions/{version}/extensions/install', [PhpController::class, 'installExtension'])->name('versions.extensions.install');
+            Route::get('/versions/{version}/extensions/install-status', [PhpController::class, 'getExtensionInstallStatus'])->name('versions.extensions.install-status');
         });
 
         // Nginx Configuration routes
