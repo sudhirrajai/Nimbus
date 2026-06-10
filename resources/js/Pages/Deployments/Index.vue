@@ -154,6 +154,13 @@
                       </td>
                     </tr>
 
+                    <tr v-else-if="filteredDeployments.length === 0 && !loading">
+                      <td colspan="6" class="text-center py-4">
+                        <i class="material-symbols-rounded text-secondary" style="font-size: 48px;">search_off</i>
+                        <p class="text-secondary mb-2">No deployments match your search "{{ searchQuery }}".</p>
+                      </td>
+                    </tr>
+
                     <tr v-if="loading">
                       <td colspan="6" class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
@@ -163,6 +170,28 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <!-- Pagination -->
+              <div v-if="filteredDeployments.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="text-xs text-secondary">
+                  Showing {{ paginationStart + 1 }} to {{ Math.min(paginationEnd, filteredDeployments.length) }} of {{ filteredDeployments.length }} entries
+                </div>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link" @click="currentPage--" aria-label="Previous">
+                      <i class="material-symbols-rounded text-xs">chevron_left</i>
+                    </button>
+                  </li>
+                  <li v-for="page in totalPages" :key="page" class="page-item" :class="{ active: currentPage === page }">
+                    <button class="page-link" @click="currentPage = page">{{ page }}</button>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link" @click="currentPage++" aria-label="Next">
+                      <i class="material-symbols-rounded text-xs">chevron_right</i>
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -554,6 +583,11 @@ const deleteBlacklistEntry = async (entry) => {
 import { watch } from 'vue'
 watch(showBlacklistModal, (val) => {
   if (val) loadBlacklist()
+})
+
+// Reset to page 1 on search
+watch(searchQuery, () => {
+  currentPage.value = 1
 })
 </script>
 

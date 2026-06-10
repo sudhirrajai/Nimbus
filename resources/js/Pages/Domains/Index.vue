@@ -59,6 +59,12 @@
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                         Document Root
                       </th>
+                      <th v-if="isRoot" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
+                        Created At
+                      </th>
+                      <th v-if="isRoot" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
+                        Created By
+                      </th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                         Actions
                       </th>
@@ -107,6 +113,12 @@
                           </button>
                         </div>
                       </td>
+                      <td v-if="isRoot">
+                        <span class="text-xs font-weight-bold text-dark">{{ domain.created_at || 'Unknown' }}</span>
+                      </td>
+                      <td v-if="isRoot">
+                        <span class="text-xs font-weight-bold text-dark">{{ domain.created_by || 'System' }}</span>
+                      </td>
                       <td class="align-middle text-center">
                         <div class="d-flex justify-content-center gap-2">
                           <button 
@@ -144,7 +156,7 @@
                     </tr>
 
                     <tr v-if="domains.length === 0 && !loading">
-                      <td colspan="5" class="text-center py-5">
+                      <td :colspan="isRoot ? 7 : 5" class="text-center py-5">
                         <div class="empty-state">
                           <i class="material-symbols-rounded text-secondary opacity-3" style="font-size: 64px;">language</i>
                           <p class="text-secondary mt-3">No domains found. Add your first domain to get started.</p>
@@ -153,7 +165,7 @@
                     </tr>
 
                     <tr v-if="loading">
-                      <td colspan="5" class="text-center py-5">
+                      <td :colspan="isRoot ? 7 : 5" class="text-center py-5">
                         <div class="spinner-border text-dark" role="status" style="width: 3rem; height: 3rem;">
                           <span class="visually-hidden">Loading...</span>
                         </div>
@@ -379,7 +391,8 @@ import { Head, router, usePage } from '@inertiajs/vue3'
 
 const page = usePage()
 const userRole = computed(() => page.props.auth?.user?.role || 'user')
-const isRootOrAdmin = computed(() => page.props.auth?.user?.is_root || userRole.value === 'root' || userRole.value === 'admin')
+const isRoot = computed(() => page.props.auth?.user?.is_root || userRole.value === 'root')
+const isRootOrAdmin = computed(() => isRoot.value || userRole.value === 'admin')
 
 const domains = ref([])
 const searchQuery = ref("")

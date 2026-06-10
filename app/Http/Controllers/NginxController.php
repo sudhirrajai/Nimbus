@@ -211,6 +211,11 @@ class NginxController extends Controller
      */
     public function reloadNginx()
     {
+        // Configuration service availability check
+        if (\App\Support\LicenseGuard::isBlocked('critical')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('nginx')], 503);
+        }
+
         try {
             // Check if user has permission to reload nginx
             $user = auth()->user();

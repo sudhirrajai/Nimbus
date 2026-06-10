@@ -58,23 +58,23 @@ class GitDeploymentService
                 }
             }
 
-            // Step 4: Run install commands
+            // Step 4: Setup environment variables
+            if ($yamlConfig && isset($yamlConfig['env'])) {
+                $this->setupEnvVariables($deployment, $yamlConfig['env']);
+            }
+
+            // Step 5: Run install commands
             if ($yamlConfig && isset($yamlConfig['install'])) {
                 if (!$this->runCommands($deployment, 'install', $yamlConfig['install'])) {
                     return false;
                 }
             }
 
-            // Step 5: Run build commands
+            // Step 6: Run build commands
             if ($yamlConfig && isset($yamlConfig['build'])) {
                 if (!$this->runCommands($deployment, 'build', $yamlConfig['build'])) {
                     return false;
                 }
-            }
-
-            // Step 6: Setup environment variables
-            if ($yamlConfig && isset($yamlConfig['env'])) {
-                $this->setupEnvVariables($deployment, $yamlConfig['env']);
             }
 
             // Step 7: Set proper permissions
@@ -453,6 +453,8 @@ class GitDeploymentService
             $envContent = '';
             if (file_exists($envFile)) {
                 $envContent = file_get_contents($envFile);
+            } elseif (file_exists($domainPath . '/.env.example')) {
+                $envContent = file_get_contents($domainPath . '/.env.example');
             }
 
             foreach ($envVars as $key => $value) {

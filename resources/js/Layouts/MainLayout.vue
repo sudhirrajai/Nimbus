@@ -5,6 +5,16 @@
     <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg d-flex flex-column min-vh-100">
       <Navbar />
 
+      <div v-if="$page.props.license_warning" class="container-fluid pt-3 pb-0">
+        <div class="alert alert-warning text-white alert-dismissible fade show d-flex align-items-center mb-0" role="alert">
+          <span class="material-symbols-rounded me-2">warning</span>
+          <span class="text-sm font-weight-bold">{{ $page.props.license_warning }}</span>
+          <button type="button" class="btn-close text-lg py-3 opacity-10" data-bs-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+      </div>
+
       <div class="container-fluid py-2 flex-grow-1">
         <slot />
       </div>

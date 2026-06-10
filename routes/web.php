@@ -14,6 +14,7 @@ use App\Http\Controllers\EmailController;
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\GitDeploymentController;
+use App\Http\Controllers\ActivationController;
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -28,6 +29,12 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout')->
 // Redirect root to dashboard
 Route::get('/', function () {
     return redirect()->route('dashboard');
+});
+
+// License Activation (publicly accessible so the admin can activate a fresh panel installation)
+Route::middleware([\App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
+    Route::get('/activate', [ActivationController::class, 'index'])->name('activate.index');
+    Route::post('/activate', [ActivationController::class, 'activate'])->name('activate.submit');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -215,6 +222,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/status', [EmailController::class, 'getStatus'])->name('status');
             Route::post('/install', [EmailController::class, 'installMailServer'])->name('install');
             Route::get('/install-log', [EmailController::class, 'getInstallLog'])->name('install-log');
+            Route::post('/clear-lock', [EmailController::class, 'clearInstallLock'])->name('clear-lock');
             Route::get('/domains', [EmailController::class, 'getDomains'])->name('domains');
             Route::post('/domain/enable', [EmailController::class, 'enableDomain'])->name('domain.enable');
             Route::post('/domain/disable', [EmailController::class, 'disableDomain'])->name('domain.disable');
@@ -230,6 +238,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
             Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
             Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
+            Route::post('/uninstall', [EmailController::class, 'uninstallMailServer'])->name('uninstall');
         });
 
         // Supervisor Management routes
@@ -287,6 +296,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/data', [\App\Http\Controllers\ProfileController::class, 'getSettings'])->name('data');
             Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateSettings'])->name('update');
 
+            // License Settings
+            Route::get('/license', [\App\Http\Controllers\ActivationController::class, 'showLicenseSettings'])->name('license.index');
+            Route::post('/license/sync', [\App\Http\Controllers\ActivationController::class, 'syncLicense'])->name('license.sync');
+            Route::post('/license/deactivate', [\App\Http\Controllers\ActivationController::class, 'deactivateLicense'])->name('license.deactivate');
+
             // Security Settings
             Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'index'])->name('security.index');
             Route::post('/security/rules', [\App\Http\Controllers\SecurityController::class, 'storeRule'])->name('security.rules.store');
@@ -329,6 +343,13 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::post('/firewall/add', [\App\Http\Controllers\ShieldController::class, 'addFirewallRule'])->name('firewall.add');
             Route::post('/firewall/delete', [\App\Http\Controllers\ShieldController::class, 'deleteFirewallRule'])->name('firewall.delete');
             Route::post('/firewall/toggle', [\App\Http\Controllers\ShieldController::class, 'toggleFirewall'])->name('firewall.toggle');
+
+            // Fail2Ban management
+            Route::get('/fail2ban', [\App\Http\Controllers\ShieldController::class, 'getFail2BanStatus'])->name('fail2ban.status');
+            Route::post('/fail2ban/install', [\App\Http\Controllers\ShieldController::class, 'installFail2Ban'])->name('fail2ban.install');
+            Route::post('/fail2ban/toggle', [\App\Http\Controllers\ShieldController::class, 'toggleFail2Ban'])->name('fail2ban.toggle');
+            Route::post('/fail2ban/ban', [\App\Http\Controllers\ShieldController::class, 'banIp'])->name('fail2ban.ban');
+            Route::post('/fail2ban/unban', [\App\Http\Controllers\ShieldController::class, 'unbanIp'])->name('fail2ban.unban');
 
             Route::post('/install-tools', [\App\Http\Controllers\ShieldController::class, 'installTools'])->name('install-tools');
             Route::post('/settings', [\App\Http\Controllers\ShieldController::class, 'updateSettings'])->name('settings.update');

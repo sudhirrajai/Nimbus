@@ -28,8 +28,11 @@ class DomainController extends Controller
             $user = auth()->user();
             $accessibleDomains = $user->accessibleDomains();
 
+            // Load assignments to identify creators and timestamps
+            $assignments = UserWebsite::with('user')->get()->groupBy('domain');
+
             $directories = collect(File::directories($this->basePath))
-                ->map(function ($path) {
+                ->map(function ($path) use ($assignments) {
                     $domain = basename($path);
 
                     // Quick nginx config check — just test file existence
@@ -57,13 +60,35 @@ class DomainController extends Controller
                         }
                     }
 
+                    $createdBy = 'System';
+                    $createdAt = null;
+
+                    if (isset($assignments[$domain])) {
+                        // Oldest assignment is the creator
+                        $oldest = $assignments[$domain]->sortBy('created_at')->first();
+                        if ($oldest && $oldest->user) {
+                            $createdBy = $oldest->user->name . ' (' . $oldest->user->role . ')';
+                            $createdAt = $oldest->created_at->toDateTimeString();
+                        }
+                    }
+
+                    if (!$createdAt) {
+                        try {
+                            $createdAt = date('Y-m-d H:i:s', filectime($path));
+                        } catch (\Exception $e) {
+                            $createdAt = 'Unknown';
+                        }
+                    }
+
                     return [
                         'name' => $domain,
                         'path' => $path,
                         'document_root' => $documentRoot,
                         'storage' => null,       // Loaded lazily
                         'is_active' => null,     // Loaded lazily
-                        'server_ip' => null
+                        'server_ip' => null,
+                        'created_by' => $createdBy,
+                        'created_at' => $createdAt
                     ];
                 })
                 ->filter(function ($item) use ($user, $accessibleDomains) {
@@ -192,6 +217,25 @@ class DomainController extends Controller
      */
     public function store(Request $request)
     {
+        // System resource allocation check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('domain')], 503);
+        }
+
+        // Domain limit enforcement from license token
+        $tokenData = app(\App\Services\LicenseService::class)->getLicenseToken();
+        if ($tokenData && isset($tokenData['max_domains'])) {
+            $currentCount = count(array_filter(
+                \Illuminate\Support\Facades\File::directories($this->basePath),
+                fn($p) => !in_array(strtolower(basename($p)), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])
+            ));
+            if ($currentCount >= $tokenData['max_domains']) {
+                return response()->json([
+                    'error' => "Domain limit reached ({$tokenData['max_domains']} domains). Please upgrade your plan to add more domains."
+                ], 403);
+            }
+        }
+
         $domain = null;
         $path = null;
         $createdDirs = false;
@@ -268,14 +312,14 @@ class DomainController extends Controller
 
             // ─── NEW: Auto-assign domain to user ──────────────────────
             $user = auth()->user();
-            if (!$user->isRoot()) {
-                // 1. Create database assignment
-                UserWebsite::create([
-                    'user_id' => $user->id,
-                    'domain' => $domain,
-                    'permissions' => ['files', 'deployments', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron'],
-                ]);
+            // 1. Create database assignment (all users including root to log creator)
+            UserWebsite::create([
+                'user_id' => $user->id,
+                'domain' => $domain,
+                'permissions' => ['files', 'deployments', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron'],
+            ]);
 
+            if (!$user->isRoot()) {
                 // 2. Grant Linux user ACL access
                 if ($user->linux_user) {
                     try {
@@ -381,6 +425,12 @@ class DomainController extends Controller
             // Test and reload Nginx
             $this->executeSudoCommand("nginx -t");
             $this->executeSudoCommand("systemctl reload nginx");
+
+            // Update database records referencing the old domain name
+            UserWebsite::where('domain', $oldDomain)->update(['domain' => $newDomain]);
+            \App\Models\DomainCloudflareSetting::where('domain', $oldDomain)->update(['domain' => $newDomain]);
+            \App\Models\WordPressSite::where('domain', $oldDomain)->update(['domain' => $newDomain]);
+            \App\Models\GitDeployment::where('domain', $oldDomain)->update(['domain' => $newDomain]);
 
             // Log the update
             \Log::info("Domain updated: $oldDomain -> $newDomain by user " . auth()->id());

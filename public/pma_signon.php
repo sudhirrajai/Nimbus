@@ -19,7 +19,7 @@ if (empty($token)) {
     exit;
 }
 
-$tokenDir  = '/usr/local/nimbus/storage/app/pma_tokens';
+$tokenDir  = dirname(__DIR__) . '/storage/app/pma_tokens';
 $tokenFile = $tokenDir . '/' . $token . '.json';
 
 if (!file_exists($tokenFile) || !is_file($tokenFile)) {
