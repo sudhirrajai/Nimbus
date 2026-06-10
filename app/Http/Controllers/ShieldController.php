@@ -266,7 +266,13 @@ class ShieldController extends Controller
             // Save findings to database and process auto-quarantine
             $quarantineDir = storage_path('app/quarantine');
             if ($autoQuarantine && !is_dir($quarantineDir)) {
-                mkdir($quarantineDir, 0700, true);
+                try {
+                    $this->executeSudoCommand("mkdir -p " . escapeshellarg($quarantineDir));
+                    $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($quarantineDir));
+                    $this->executeSudoCommand("chmod 770 " . escapeshellarg($quarantineDir));
+                } catch (\Exception $e) {
+                    \Log::warning("Could not create quarantine directory during scan: " . $e->getMessage());
+                }
             }
 
             $quarantinedFiles = []; // Map of original_path => quarantined_path
@@ -369,7 +375,13 @@ class ShieldController extends Controller
         $quarantineDir = storage_path('app/quarantine');
         
         if (!is_dir($quarantineDir)) {
-            mkdir($quarantineDir, 0700, true);
+            try {
+                $this->executeSudoCommand("mkdir -p " . escapeshellarg($quarantineDir));
+                $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($quarantineDir));
+                $this->executeSudoCommand("chmod 770 " . escapeshellarg($quarantineDir));
+            } catch (\Exception $e) {
+                \Log::warning("Could not create quarantine directory during manual quarantine: " . $e->getMessage());
+            }
         }
 
         // Check if there is another threat on the same file that is already quarantined
