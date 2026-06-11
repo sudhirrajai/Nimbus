@@ -660,7 +660,7 @@ for PHP_DIR in /etc/php/*; do
         mkdir -p "/etc/systemd/system/php${V}-fpm.service.d"
         cat << EOF > "/etc/systemd/system/php${V}-fpm.service.d/nimbus.conf"
 [Service]
-ReadWritePaths=${NIMBUS_DIR} /var/www /usr/share/adminer /etc/nginx /etc/php /etc/supervisor /etc/letsencrypt /etc/postfix /etc/dovecot
+ReadWritePaths=-${NIMBUS_DIR} -/var/www -/usr/share/adminer -/etc/nginx -/etc/php -/etc/supervisor -/etc/letsencrypt -/etc/postfix -/etc/dovecot
 EOF
         echo -e "Applied PHP-FPM write override for PHP version ${V}"
     fi
