@@ -426,7 +426,7 @@ if [ "$INSTALL_MODE" = "zip" ]; then
     mkdir -p "$NIMBUS_DIR"
     wget -O /tmp/nimbus.zip "${VMCORE_URL}/nimbus.zip"
     echo -e "Extracting zip package..."
-    unzip -o /tmp/nimbus.zip -d "$NIMBUS_DIR"
+    unzip -q -o /tmp/nimbus.zip -d "$NIMBUS_DIR"
     rm -f /tmp/nimbus.zip
 else
     git clone $GITHUB_REPO $NIMBUS_DIR
@@ -742,7 +742,7 @@ echo ""
 echo -e "${BLUE}First-time setup:${NC}"
 echo -e "  Create your admin account at the URL above"
 echo ""
-echo -e "${BLUE}Database credentials (saved to ${NIMBUS_DIR}/.credentials):${NC}"
+echo -e "${BLUE}Database credentials (saved to .credentials):${NC}"
 if [ "$SKIP_EXISTING" = false ]; then
     echo -e "  ${DB_ENGINE^} Root Password: ${YELLOW}${MYSQL_ROOT_PASS}${NC}"
 else
@@ -752,7 +752,6 @@ fi
 echo -e "  Nimbus DB Password:  ${YELLOW}${NIMBUS_DB_PASS}${NC}"
 echo ""
 echo -e "${BLUE}Important paths:${NC}"
-echo -e "  Panel:  ${NIMBUS_DIR}"
 echo -e "  Sites:  /var/www/"
 echo -e "  Nginx:  /etc/nginx/sites-available/"
 echo -e "  Git/Queue User: ${PANEL_SYSTEM_USER}"
