@@ -619,7 +619,7 @@ for PHP_DIR in /etc/php/*; do
 [nimbus]
 user = ${NIMBUS_USER}
 group = ${NIMBUS_USER}
-listen = /run/php/php\${V}-fpm-nimbus.sock
+listen = /run/php/php${V}-fpm-nimbus.sock
 listen.owner = ${NIMBUS_USER}
 listen.group = ${NIMBUS_USER}
 listen.mode = 0660
@@ -633,7 +633,7 @@ pm.max_requests = 500
 
 request_terminate_timeout = 300
 EOF
-        echo -e "Created dedicated pool 'nimbus' for PHP \${V}"
+        echo -e "Created dedicated pool 'nimbus' for PHP ${V}"
     fi
 done
 
