@@ -220,6 +220,10 @@ fi
 systemctl enable nginx
 systemctl start nginx
 
+# Clean up any stale or broken systemd overrides from previous runs to prevent apt-get install from crashing
+rm -f /etc/systemd/system/php*-fpm.service.d/nimbus.conf
+systemctl daemon-reload
+
 echo -e "${GREEN}[4/12]${NC} Installing PHP ${PHP_VERSION}..."
 PHP_PACKAGES=(
     php${PHP_VERSION}
