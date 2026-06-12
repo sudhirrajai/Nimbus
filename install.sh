@@ -464,6 +464,9 @@ sed -i "s|DB_DATABASE=.*|DB_DATABASE=nimbus|" .env
 sed -i "s|DB_USERNAME=.*|DB_USERNAME=nimbus|" .env
 sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${NIMBUS_DB_PASS}|" .env
 upsert_env "NIMBUS_GIT_USER" "${PANEL_SYSTEM_USER}" .env
+if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
+    upsert_env "VMCORE_API_URL" "${VMCORE_URL}" .env
+fi
 
 # Generate key and run migrations
 php artisan key:generate
