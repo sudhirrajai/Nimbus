@@ -31,7 +31,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
     public function __construct()
     {
-        $url = env('VMCORE_API_URL', 'http://localhost:8001');
+        $url = config('services.vmcore.api_url', 'http://localhost:8001');
 
         // Upgrade http:// to https:// for external domains to avoid POST->GET redirect issues
         if (str_starts_with($url, 'http://') && !str_contains($url, 'localhost') && !str_contains($url, '127.0.0.1')) {

@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'vmcore' => [
+        'api_url' => env('VMCORE_API_URL', 'http://localhost:8001'),
+    ],
+
 ];
