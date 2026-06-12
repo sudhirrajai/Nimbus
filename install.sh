@@ -362,14 +362,14 @@ for ATTEMPT in 1 2 3; do
     fi
     echo -e "  Attempt ${ATTEMPT}/3 via nodesource..."
     if curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" -o /tmp/nodesource_setup.sh; then
-        bash /tmp/nodesource_setup.sh && apt-get install -y nodejs npm && true
+        bash /tmp/nodesource_setup.sh && apt-get install -y nodejs && true
         # Only accept if we got the right major version
         if node_version_ok; then
             NODE_INSTALLED=true
             break
         else
-            echo -e "  ${YELLOW}nodesource installed wrong Node version ($(node -v)), trying again...${NC}"
-            apt-get purge -y nodejs npm libnode* 2>/dev/null || true
+            echo -e "  ${YELLOW}nodesource installed wrong Node version ($(node -v 2>/dev/null || echo 'none')), trying again...${NC}"
+            apt-get purge -y nodejs libnode* 2>/dev/null || true
             apt-get clean && rm -rf /var/lib/apt/lists/*
         fi
     fi
@@ -383,7 +383,7 @@ done
 if [ "$NODE_INSTALLED" = false ]; then
     echo -e "${YELLOW}nodesource unavailable, installing Node.js ${NODE_VERSION} via nvm...${NC}"
     # Remove any wrong-version node first
-    apt-get purge -y nodejs npm libnode* 2>/dev/null || true
+    apt-get purge -y nodejs libnode* 2>/dev/null || true
 
     export NVM_DIR="/root/.nvm"
     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
