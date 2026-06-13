@@ -191,19 +191,11 @@ class WordPressController extends Controller
             // 0. Ensure wp-cli is installed
             $this->execCmd("if ! command -v wp &> /dev/null; then sudo curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && sudo chmod +x wp-cli.phar && sudo mv wp-cli.phar /usr/local/bin/wp; fi", $output);
 
-            // 1. Create database using sudo mysql (Laravel user might not have global privileges)
-            $dbUserSafe = escapeshellarg($dbUser);
-            $dbPassSafe = escapeshellarg($dbPass);
-            $dbNameSafe = escapeshellarg($dbName); // For shell
-
-            $dbNameEscaped = "`" . str_replace("`", "``", $dbName) . "`";
-            $dbUserEscaped = "'" . str_replace("'", "''", $dbUser) . "'";
-            $dbPassEscaped = "'" . str_replace("'", "''", $dbPass) . "'";
-
-            $this->execCmd("sudo mysql -e \"CREATE DATABASE IF NOT EXISTS {$dbNameEscaped}\" 2>&1", $output);
-            $this->execCmd("sudo mysql -e \"CREATE USER IF NOT EXISTS {$dbUserSafe}@'localhost' IDENTIFIED BY {$dbPassSafe}\" 2>&1", $output);
-            $this->execCmd("sudo mysql -e \"GRANT ALL PRIVILEGES ON {$dbNameEscaped}.* TO {$dbUserSafe}@'localhost'\" 2>&1", $output);
-            $this->execCmd("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output);
+            // Execute database setup with safe shell quoting (single quotes)
+            $this->execCmd("sudo mysql -e 'CREATE DATABASE IF NOT EXISTS " . $dbName . "' 2>&1", $output);
+            $this->execCmd("sudo mysql -e 'CREATE USER IF NOT EXISTS " . $dbUser . "@localhost IDENTIFIED BY \"" . $dbPass . "\"' 2>&1", $output);
+            $this->execCmd("sudo mysql -e 'GRANT ALL PRIVILEGES ON " . $dbName . ".* TO " . $dbUser . "@localhost' 2>&1", $output);
+            $this->execCmd("sudo mysql -e 'FLUSH PRIVILEGES' 2>&1", $output);
 
             // 2. Download WordPress
             $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
@@ -391,10 +383,9 @@ class WordPressController extends Controller
             }
             if ($request->input('delete_database') && $site->db_name) {
                 // Must use sudo mysql instead of DB facade because nimbus DB user lacks DROP privileges
-                $this->execCmd("sudo mysql -e \"DROP DATABASE IF EXISTS \`{$site->db_name}\`\" 2>&1", $output);
+                $this->execCmd("sudo mysql -e 'DROP DATABASE IF EXISTS " . $site->db_name . "' 2>&1", $output);
                 if ($site->db_user) {
-                    $userSafe = escapeshellarg($site->db_user);
-                    $this->execCmd("sudo mysql -e \"DROP USER IF EXISTS {$userSafe}@'localhost'\" 2>&1", $output);
+                    $this->execCmd("sudo mysql -e 'DROP USER IF EXISTS " . $site->db_user . "@localhost' 2>&1", $output);
                 }
             }
 
