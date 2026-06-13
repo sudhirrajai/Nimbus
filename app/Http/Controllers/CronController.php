@@ -41,6 +41,11 @@ class CronController extends Controller
                         if (preg_match('/^([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+([\d\*\/\-,]+)\s+(.+)$/', $line, $matches)) {
                             $command = $matches[6];
                             
+                            // Skip internal nimbus scheduler
+                            if (str_contains($command, '/usr/local/nimbus')) {
+                                continue;
+                            }
+                            
                             // Check permission for this command
                             $hasPermission = $userModel->isRootOrAdmin();
                             if (!$hasPermission) {
