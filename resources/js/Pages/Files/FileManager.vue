@@ -786,9 +786,10 @@
             <div class="progress mb-2" style="height: 6px;">
               <div class="progress-bar bg-gradient-primary" :style="{ width: uploadProgress + '%' }"></div>
             </div>
-            <span class="text-xxs font-weight-bold text-dark">
+            <span class="text-xxs font-weight-bold text-dark d-block">
               {{ uploadProgress === 100 ? 'Analyzing file contents...' : uploadProgress + '%' }}
             </span>
+            <button class="btn btn-sm btn-link text-danger mt-3 mb-0" @click="cancelUpload">Cancel Upload</button>
           </div>
         </div>
       </div>
@@ -923,6 +924,7 @@ const recursivePermissions = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadFileName = ref('')
+const uploadController = ref(null)
 
 // Copy/Move modal state
 const copyMoveItem = ref(null)
@@ -1627,24 +1629,44 @@ const handleWindowDrop = (e) => {
   }
 }
 
+const cancelUpload = () => {
+  if (uploadController.value) {
+    uploadController.value.abort()
+  }
+  uploading.value = false
+}
+
 const processFilesUpload = async (files) => {
   if (!files.length) return
   uploading.value = true
+  
   for (let i = 0; i < files.length; i++) {
+    if (!uploading.value) break
+    
     const file = files[i]
     uploadFileName.value = file.name
     const formData = new FormData()
     formData.append('file', file)
     formData.append('path', currentPath.value || '')
+    
+    uploadController.value = new AbortController()
+    
     try {
       await axios.post(`/file-manager/${props.domain}/upload`, formData, {
+        signal: uploadController.value.signal,
         onUploadProgress: (p) => uploadProgress.value = Math.round((p.loaded * 100) / p.total)
       })
     } catch (err) {
-      showAlert('danger', `Upload failed: ${file.name}`)
+      if (axios.isCancel(err) || err.name === 'CanceledError') {
+        showAlert('warning', 'Upload cancelled')
+        break
+      } else {
+        showAlert('danger', `Upload failed: ${file.name}`)
+      }
     }
   }
   uploading.value = false
+  uploadController.value = null
   loadFiles()
 }
 
