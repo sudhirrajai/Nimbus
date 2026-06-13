@@ -79,7 +79,13 @@ class WordPressController extends Controller
                 }
 
                 // Check SSL
-                $sslEnabled = file_exists("/etc/letsencrypt/live/{$domain}/fullchain.pem");
+                $sslEnabled = false;
+                $sslOutput = [];
+                $sslReturn = 0;
+                exec("sudo test -f " . escapeshellarg("/etc/letsencrypt/live/{$domain}/fullchain.pem") . " && echo 'exists'", $sslOutput, $sslReturn);
+                if ($sslReturn === 0 && isset($sslOutput[0]) && $sslOutput[0] === 'exists') {
+                    $sslEnabled = true;
+                }
 
                 // Update or create record
                 $site = WordPressSite::updateOrCreate(
