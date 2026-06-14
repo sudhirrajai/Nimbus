@@ -1640,28 +1640,81 @@ const processFilesUpload = async (files) => {
   if (!files.length) return
   uploading.value = true
   
+  const CHUNK_SIZE = 10 * 1024 * 1024 // 10MB chunks
+  
   for (let i = 0; i < files.length; i++) {
     if (!uploading.value) break
     
     const file = files[i]
     uploadFileName.value = file.name
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('path', currentPath.value || '')
+    uploadProgress.value = 0
     
-    uploadController.value = new AbortController()
-    
-    try {
-      await axios.post(`/file-manager/${props.domain}/upload`, formData, {
-        signal: uploadController.value.signal,
-        onUploadProgress: (p) => uploadProgress.value = Math.round((p.loaded * 100) / p.total)
-      })
-    } catch (err) {
-      if (axios.isCancel(err) || err.name === 'CanceledError') {
-        showAlert('warning', 'Upload cancelled')
+    if (file.size <= CHUNK_SIZE) {
+      // Single upload fallback for small files
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('path', currentPath.value || '')
+      
+      uploadController.value = new AbortController()
+      
+      try {
+        await axios.post(`/file-manager/${props.domain}/upload`, formData, {
+          signal: uploadController.value.signal,
+          onUploadProgress: (p) => uploadProgress.value = Math.round((p.loaded * 100) / p.total)
+        })
+      } catch (err) {
+        if (axios.isCancel(err) || err.name === 'CanceledError') {
+          showAlert('warning', 'Upload cancelled')
+          break
+        } else {
+          showAlert('danger', `Upload failed: ${file.name}`)
+          break
+        }
+      }
+    } else {
+      // Chunked upload for files larger than 10MB
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+      let uploadError = false
+      
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        if (!uploading.value) break
+        
+        const start = chunkIndex * CHUNK_SIZE
+        const end = Math.min(start + CHUNK_SIZE, file.size)
+        const chunkFile = file.slice(start, end)
+        
+        const formData = new FormData()
+        formData.append('file', chunkFile, file.name)
+        formData.append('path', currentPath.value || '')
+        formData.append('isChunk', 'true')
+        formData.append('chunkIndex', chunkIndex.toString())
+        formData.append('totalChunks', totalChunks.toString())
+        formData.append('originalName', file.name)
+        
+        uploadController.value = new AbortController()
+        
+        try {
+          await axios.post(`/file-manager/${props.domain}/upload`, formData, {
+            signal: uploadController.value.signal,
+            onUploadProgress: (p) => {
+              const chunkProgress = (p.loaded / p.total) * (end - start)
+              const totalUploaded = start + chunkProgress
+              uploadProgress.value = Math.round((totalUploaded * 100) / file.size)
+            }
+          })
+        } catch (err) {
+          uploadError = true
+          if (axios.isCancel(err) || err.name === 'CanceledError') {
+            showAlert('warning', 'Upload cancelled')
+          } else {
+            showAlert('danger', `Upload failed: ${file.name} (Chunk ${chunkIndex + 1}/${totalChunks})`)
+          }
+          break
+        }
+      }
+      
+      if (uploadError || !uploading.value) {
         break
-      } else {
-        showAlert('danger', `Upload failed: ${file.name}`)
       }
     }
   }
