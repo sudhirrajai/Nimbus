@@ -51,6 +51,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
     // Global Search
     Route::get('/api/search', [\App\Http\Controllers\SearchController::class, 'search'])->name('api.search');
 
+    // Bug Reports
+    Route::post('/bug-reports', [\App\Http\Controllers\ReportController::class, 'store'])->name('bug-reports.store');
+
     // Profile — all users can manage their own profile
     Route::prefix('profile')->name('profile.')->group(function () {
         Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('index');

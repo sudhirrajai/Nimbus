@@ -23,8 +23,8 @@ class VerifyLicense
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Allow activation, login, setup, and static routes
-        if ($request->is('activate*') || $request->is('login*') || $request->is('logout*') || $request->is('_debugbar*') || $request->is('setup*')) {
+        // Allow activation, login, setup, static routes, and bug reporting
+        if ($request->is('activate*') || $request->is('login*') || $request->is('logout*') || $request->is('_debugbar*') || $request->is('setup*') || $request->is('bug-reports*')) {
             return $next($request);
         }
 
