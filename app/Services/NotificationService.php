@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Setting;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class NotificationService
 {
@@ -82,5 +83,70 @@ class NotificationService
         }
 
         return $success;
+    }
+
+    /**
+     * Resolve geographical location from an IP address.
+     *
+     * @param string $ip
+     * @return string
+     */
+    public static function resolveIpLocation(string $ip): string
+    {
+        // Check if it's a valid IP address
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return 'Unknown Location';
+        }
+
+        // Skip lookup for local/private/reserved IP ranges
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            return 'Local / Private Network';
+        }
+
+        // 1. Try ip-api.com (free tier, HTTP)
+        try {
+            $response = Http::timeout(3)
+                ->get("http://ip-api.com/json/{$ip}?fields=status,message,country,regionName,city");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                if (isset($data['status']) && $data['status'] === 'success') {
+                    $locationParts = array_filter([
+                        $data['city'] ?? null,
+                        $data['regionName'] ?? null,
+                        $data['country'] ?? null
+                    ]);
+
+                    if (!empty($locationParts)) {
+                        return implode(', ', $locationParts);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("IP Geolocation via ip-api.com failed for {$ip}: " . $e->getMessage());
+        }
+
+        // 2. Try ipinfo.io as fallback
+        try {
+            $response = Http::timeout(3)
+                ->get("https://ipinfo.io/{$ip}/json");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $locationParts = array_filter([
+                    $data['city'] ?? null,
+                    $data['region'] ?? null,
+                    $data['country'] ?? null
+                ]);
+
+                if (!empty($locationParts)) {
+                    return implode(', ', $locationParts);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("IP Geolocation via ipinfo.io failed for {$ip}: " . $e->getMessage());
+        }
+
+        return 'Unknown Location';
     }
 }
