@@ -141,7 +141,7 @@ const submitReport = async () => {
                             <span class="material-symbols-rounded text-md">check_circle</span>
                             <div class="alert-content">
                                 <p class="mb-0 text-sm font-weight-bold">Thank you!</p>
-                                <p class="mb-0 text-xs text-secondary-custom">Your bug report has been successfully transmitted to the VmCoreCentral dashboard.</p>
+                                <p class="mb-0 text-xs text-secondary-custom">Your bug report has been successfully transmitted to the Nimbus Developers.</p>
                             </div>
                         </div>
 
