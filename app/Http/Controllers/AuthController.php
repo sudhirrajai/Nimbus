@@ -59,9 +59,12 @@ class AuthController extends Controller
             $oldIp = $user->last_login_ip;
 
             if ($oldIp && $oldIp !== $currentIp) {
+                $newLocation = \App\Services\NotificationService::resolveIpLocation($currentIp);
+                $oldLocation = \App\Services\NotificationService::resolveIpLocation($oldIp);
+
                 \App\Services\NotificationService::send(
                     "Security Alert: Successful Login from New IP",
-                    "<p>Hello,</p><p>A successful login to the Nimbus panel was detected from a new IP address.</p><p><strong>User:</strong> " . e($user->name) . " (" . e($user->email) . ")<br><strong>New IP Address:</strong> " . e($currentIp) . "<br><strong>Previous IP Address:</strong> " . e($oldIp) . "<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p><p>If this wasn't you, please secure your account immediately.</p>"
+                    "<p>Hello,</p><p>A successful login to the Nimbus panel was detected from a new IP address.</p><p><strong>User:</strong> " . e($user->name) . " (" . e($user->email) . ")<br><strong>New IP Address:</strong> " . e($currentIp) . " (" . e($newLocation) . ")<br><strong>Previous IP Address:</strong> " . e($oldIp) . " (" . e($oldLocation) . ")<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p><p>If this wasn't you, please secure your account immediately.</p>"
                 );
             }
 
@@ -75,9 +78,12 @@ class AuthController extends Controller
         }
 
         // Send alert for failed login
+        $ip = $request->ip();
+        $location = \App\Services\NotificationService::resolveIpLocation($ip);
+
         \App\Services\NotificationService::send(
             "Security Alert: Failed Login Attempt",
-            "<p>Hello,</p><p>A failed login attempt was detected on the Nimbus panel.</p><p><strong>Attempted Email:</strong> " . e($request->input('email')) . "<br><strong>IP Address:</strong> " . e($request->ip()) . "<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            "<p>Hello,</p><p>A failed login attempt was detected on the Nimbus panel.</p><p><strong>Attempted Email:</strong> " . e($request->input('email')) . "<br><strong>IP Address:</strong> " . e($ip) . " (" . e($location) . ")<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
         );
 
         return back()->withErrors([
