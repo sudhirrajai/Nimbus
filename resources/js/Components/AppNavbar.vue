@@ -20,6 +20,19 @@
         </div>
 
         <ul class="navbar-nav d-flex align-items-center justify-content-end">
+          <!-- Report Bug Button -->
+          <li class="nav-item pe-3">
+            <button 
+              type="button" 
+              class="btn-report-header" 
+              @click="reportModalOpen = true"
+              title="Report an issue or bug"
+            >
+              <i class="material-symbols-rounded">bug_report</i>
+              <span class="d-md-inline d-none ms-1">Report</span>
+            </button>
+          </li>
+          
           <!-- User dropdown - Vue controlled -->
           <li class="nav-item dropdown pe-3" ref="dropdownRef">
             <a
@@ -68,17 +81,25 @@
     class="sidenav-overlay" 
     @click="closeSidebar"
   ></div>
+
+  <!-- Bug Reporting Dialog -->
+  <ReportBugModal 
+    :isOpen="reportModalOpen" 
+    @close="reportModalOpen = false" 
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import GlobalSearch from '@/Components/GlobalSearch.vue'
+import ReportBugModal from '@/Components/ReportBugModal.vue'
 
 const page = usePage()
 const sidebarOpen = ref(false)
 const dropdownOpen = ref(false)
 const dropdownRef = ref(null)
+const reportModalOpen = ref(false)
 
 const userName = computed(() => {
   return page.props.auth?.user?.name || 'Admin'
@@ -135,6 +156,34 @@ const logout = () => {
 </script>
 
 <style scoped>
+.btn-report-header {
+  background: none;
+  border: none;
+  color: #4b5563;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.btn-report-header:hover {
+  background-color: #f0f2f5;
+  color: #1f2937;
+}
+
+.btn-report-header i {
+  font-size: 20px;
+  color: #10b981;
+}
+
+.btn-report-header span {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .dropdown-menu {
   min-width: 180px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
