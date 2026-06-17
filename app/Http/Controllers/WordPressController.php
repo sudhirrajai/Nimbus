@@ -530,6 +530,91 @@ PHP;
     }
 
     /**
+     * Reset WordPress database (keeping themes and plugins deactivated)
+     */
+    public function reset(Request $request, $id)
+    {
+        $request->validate([
+            'site_title' => 'nullable|string|max:255',
+            'admin_user' => 'nullable|string|max:50',
+            'admin_password' => 'required|string|min:8',
+            'admin_email' => 'nullable|email',
+        ]);
+
+        $site = WordPressSite::findOrFail($id);
+        $output = '';
+
+        try {
+            $siteTitle = $request->input('site_title') ?: ($site->site_title ?: 'My WordPress Site');
+            $adminUser = $request->input('admin_user') ?: ($site->admin_user ?: 'admin');
+            $adminEmail = $request->input('admin_email') ?: ($site->admin_email ?: 'admin@' . $site->domain);
+
+            // 1. Reset Database tables
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp db reset --yes --allow-root 2>&1", $output);
+
+            // 2. Re-install default tables
+            $url = ($site->ssl_enabled ? 'https://' : 'http://') . $site->domain;
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core install --url=" . escapeshellarg($url) . " --title=" . escapeshellarg($siteTitle) . " --admin_user=" . escapeshellarg($adminUser) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($adminEmail) . " --allow-root 2>&1", $output);
+
+            // 3. Update local site info
+            $site->update([
+                'site_title' => $siteTitle,
+                'admin_user' => $adminUser,
+                'admin_email' => $adminEmail,
+                'last_checked_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'WordPress database reset and reinstalled successfully (themes and plugins preserved and deactivated).',
+                'output' => $output,
+                'site' => $site->fresh()
+            ]);
+        } catch (\Exception $e) {
+            Log::error("WordPress reset error on {$site->domain}: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Reinstall WordPress core files
+     */
+    public function reinstall(Request $request, $id)
+    {
+        $site = WordPressSite::findOrFail($id);
+        $output = '';
+
+        try {
+            // Re-download WordPress core files, forcing overwrite and skipping default content (themes/plugins)
+            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core download --force --skip-content --allow-root 2>&1", $output);
+
+            // Reset permissions to ensure everything is correct
+            $this->execCmd("sudo chown -R www-data:www-data " . escapeshellarg($site->path), $output);
+            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type d -exec chmod 755 {} \\;", $output);
+            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type f -exec chmod 644 {} \\;", $output);
+
+            // Re-check version in case it changed/was upgraded
+            $versionFile = $site->path . '/wp-includes/version.php';
+            if (file_exists($versionFile)) {
+                $content = file_get_contents($versionFile);
+                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                    $site->update(['wp_version' => $m[1], 'last_checked_at' => now()]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'WordPress core files reinstalled successfully.',
+                'output' => $output,
+                'site' => $site->fresh()
+            ]);
+        } catch (\Exception $e) {
+            Log::error("WordPress reinstall error on {$site->domain}: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Execute a shell command and append output
      */
     private function execCmd($command, &$output)

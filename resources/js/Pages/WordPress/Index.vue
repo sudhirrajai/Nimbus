@@ -252,6 +252,26 @@
                 Update available: WordPress {{ siteDetails.core_update.version }}
                 <button class="btn btn-sm btn-warning ms-auto" @click="updateCore(selectedSite)">Update Now</button>
               </div>
+
+              <!-- Maintenance & Tools -->
+              <div class="card bg-gray-100 border-0 mb-4">
+                <div class="card-body p-3">
+                  <h6 class="text-sm mb-1 d-flex align-items-center text-dark font-weight-bold">
+                    <i class="material-symbols-rounded text-sm me-1 text-danger">build</i>
+                    Maintenance & Tools
+                  </h6>
+                  <p class="text-xs text-secondary mb-3">Repair core files or perform a database clean-reset.</p>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-sm bg-gradient-warning mb-0" @click="openResetModal">
+                      <i class="material-symbols-rounded text-xs me-1">restart_alt</i> Reset WordPress
+                    </button>
+                    <button class="btn btn-sm bg-gradient-info mb-0" @click="openReinstallModal">
+                      <i class="material-symbols-rounded text-xs me-1">download_for_offline</i> Reinstall Core Files
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <!-- Users -->
               <h6 class="text-sm mb-2"><i class="material-symbols-rounded text-sm me-1">group</i>Users ({{ siteDetails.users.length }})</h6>
               <div class="table-responsive mb-3">
@@ -346,6 +366,92 @@
     </div>
   </div>
 
+  <!-- Reset Modal -->
+  <div v-if="showResetModal">
+    <div class="modal-backdrop fade show" @click="showResetModal = false"></div>
+    <div class="modal fade show" style="display:block">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-gradient-danger border-0">
+            <h5 class="modal-title text-white"><i class="material-symbols-rounded me-2">restart_alt</i>Reset WordPress Site</h5>
+            <button class="btn-close btn-close-white" @click="showResetModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-danger text-white py-2 mb-3">
+              <i class="material-symbols-rounded text-sm me-1">warning</i>
+              <strong>Warning:</strong> This will delete all database tables, posts, pages, comments, and settings. 
+              Your theme and plugin files will remain on disk but will be deactivated.
+            </div>
+            
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Site Title *</label>
+                <input type="text" class="form-control" v-model="resetForm.site_title" placeholder="My Website">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Admin Username *</label>
+                <input type="text" class="form-control" v-model="resetForm.admin_user" placeholder="admin">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Admin Password *</label>
+                <input type="password" class="form-control" v-model="resetForm.admin_password" placeholder="Min 8 chars">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Admin Email *</label>
+                <input type="email" class="form-control" v-model="resetForm.admin_email" placeholder="admin@example.com">
+              </div>
+              <div class="col-12 mb-3">
+                <label class="form-label text-danger font-weight-bold">Type "RESET" to confirm: *</label>
+                <input type="text" class="form-control border-danger" v-model="resetForm.confirm_text" placeholder="RESET">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer border-0">
+            <button class="btn btn-outline-secondary" @click="showResetModal = false">Cancel</button>
+            <button class="btn bg-gradient-danger" @click="resetWordPress" :disabled="resettingWp || resetForm.confirm_text !== 'RESET' || !resetForm.admin_password">
+              <span v-if="resettingWp" class="spinner-border spinner-border-sm me-1"></span>
+              Reset WordPress
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reinstall Modal -->
+  <div v-if="showReinstallModal">
+    <div class="modal-backdrop fade show" @click="showReinstallModal = false"></div>
+    <div class="modal fade show" style="display:block">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-gradient-info border-0">
+            <h5 class="modal-title text-white"><i class="material-symbols-rounded me-2">download_for_offline</i>Reinstall Core Files</h5>
+            <button class="btn-close btn-close-white" @click="showReinstallModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info text-white py-2 mb-3">
+              <i class="material-symbols-rounded text-sm me-1">info</i>
+              <strong>Notice:</strong> This will download and replace all core WordPress files with a clean copy. 
+              Your database, themes, plugins, and uploaded media will <strong>not</strong> be modified.
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label text-info font-weight-bold">Type the domain name (<strong>{{ selectedSite?.domain }}</strong>) to confirm: *</label>
+              <input type="text" class="form-control border-info" v-model="reinstallForm.confirm_text" :placeholder="selectedSite?.domain">
+            </div>
+          </div>
+          <div class="modal-footer border-0">
+            <button class="btn btn-outline-secondary" @click="showReinstallModal = false">Cancel</button>
+            <button class="btn bg-gradient-info" @click="reinstallWordPress" :disabled="reinstallingWp || reinstallForm.confirm_text !== selectedSite?.domain">
+              <span v-if="reinstallingWp" class="spinner-border spinner-border-sm me-1"></span>
+              Reinstall Core
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="position-fixed bottom-0 end-0 p-3" style="z-index:11">
     <div class="toast align-items-center border-0" :class="toastType === 'success' ? 'bg-success' : 'bg-danger'" :style="showToast ? 'display:block' : 'display:none'" role="alert">
@@ -378,8 +484,13 @@ const showInstallModal = ref(false)
 const showPasswordModal = ref(false)
 const showDetailsModal = ref(false)
 const showDeleteModal = ref(false)
+const showResetModal = ref(false)
+const showReinstallModal = ref(false)
 const selectedSite = ref(null)
 const siteDetails = ref({ plugins: [], themes: [], users: [], core_update: null })
+
+const resettingWp = ref(false)
+const reinstallingWp = ref(false)
 
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -388,6 +499,8 @@ const toastType = ref('success')
 const installForm = ref({ domain: '', site_title: '', admin_user: 'admin', admin_password: '', admin_email: '' })
 const passwordForm = ref({ username: '', new_password: '' })
 const deleteOptions = ref({ delete_files: false, delete_database: false })
+const resetForm = ref({ site_title: '', admin_user: '', admin_password: '', admin_email: '', confirm_text: '' })
+const reinstallForm = ref({ confirm_text: '' })
 
 const statsCards = computed(() => [
   { label: 'Total Sites', value: sites.value.length, icon: 'language', color: 'primary' },
@@ -456,6 +569,62 @@ const confirmDelete = (site) => { selectedSite.value = site; deleteOptions.value
 const deleteSite = async () => {
   deleting.value = true
   try { await axios.delete(`/wordpress/${selectedSite.value.id}`, { data: deleteOptions.value }); notify('Site removed'); showDeleteModal.value = false; await loadSites() } catch (e) { notify('Failed', 'error') } finally { deleting.value = false }
+}
+
+const openResetModal = () => {
+  resetForm.value = {
+    site_title: selectedSite.value.site_title || '',
+    admin_user: selectedSite.value.admin_user || 'admin',
+    admin_password: '',
+    admin_email: selectedSite.value.admin_email || '',
+    confirm_text: ''
+  }
+  showDetailsModal.value = false
+  showResetModal.value = true
+}
+
+const openReinstallModal = () => {
+  reinstallForm.value = {
+    confirm_text: ''
+  }
+  showDetailsModal.value = false
+  showReinstallModal.value = true
+}
+
+const resetWordPress = async () => {
+  if (resetForm.value.confirm_text !== 'RESET') {
+    notify('Please type RESET to confirm', 'error')
+    return
+  }
+  resettingWp.value = true
+  try {
+    const r = await axios.post(`/wordpress/${selectedSite.value.id}/reset`, resetForm.value)
+    notify(r.data.message)
+    showResetModal.value = false
+    await loadSites()
+  } catch (e) {
+    notify(e.response?.data?.error || 'Reset failed', 'error')
+  } finally {
+    resettingWp.value = false
+  }
+}
+
+const reinstallWordPress = async () => {
+  if (reinstallForm.value.confirm_text !== selectedSite.value.domain) {
+    notify('Domain name does not match', 'error')
+    return
+  }
+  reinstallingWp.value = true
+  try {
+    const r = await axios.post(`/wordpress/${selectedSite.value.id}/reinstall`)
+    notify(r.data.message)
+    showReinstallModal.value = false
+    await loadSites()
+  } catch (e) {
+    notify(e.response?.data?.error || 'Reinstall failed', 'error')
+  } finally {
+    reinstallingWp.value = false
+  }
 }
 
 const adminLogin = async (site) => {
