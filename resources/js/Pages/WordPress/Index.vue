@@ -377,10 +377,12 @@
             <button class="btn-close btn-close-white" @click="showResetModal = false"></button>
           </div>
           <div class="modal-body">
-            <div class="alert alert-danger text-white py-2 mb-3">
-              <i class="material-symbols-rounded text-sm me-1">warning</i>
-              <strong>Warning:</strong> This will delete all database tables, posts, pages, comments, and settings. 
-              Your theme and plugin files will remain on disk but will be deactivated.
+            <div class="alert alert-danger text-white py-2 mb-3 d-flex align-items-center">
+              <i class="material-symbols-rounded text-sm me-2">warning</i>
+              <span>
+                <strong>Warning:</strong> This will delete all database tables, posts, pages, comments, and settings. 
+                Your theme and plugin files will remain on disk but will be deactivated.
+              </span>
             </div>
             
             <div class="row">
@@ -429,10 +431,12 @@
             <button class="btn-close btn-close-white" @click="showReinstallModal = false"></button>
           </div>
           <div class="modal-body">
-            <div class="alert alert-info text-white py-2 mb-3">
-              <i class="material-symbols-rounded text-sm me-1">info</i>
-              <strong>Notice:</strong> This will download and replace all core WordPress files with a clean copy. 
-              Your database, themes, plugins, and uploaded media will <strong>not</strong> be modified.
+            <div class="alert alert-info text-white py-2 mb-3 d-flex align-items-center">
+              <i class="material-symbols-rounded text-sm me-2">info</i>
+              <span>
+                <strong>Notice:</strong> This will download and replace all core WordPress files with a clean copy. 
+                Your database, themes, plugins, and uploaded media will <strong>not</strong> be modified.
+              </span>
             </div>
             
             <div class="mb-3">
