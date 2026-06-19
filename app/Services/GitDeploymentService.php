@@ -796,11 +796,13 @@ NGINX;
         $output = [];
         $returnCode = 0;
 
-        // Ensure HOME is set so Git doesn't fail with "fatal: $HOME not set"
-        // We use /tmp as it is always writable and safe for temporary git config access
-        $fullCommand = "export HOME=/tmp && " . $command;
+        // Prevent parent environment variables (like panel DB credentials) from leaking into child commands.
+        // This forces the child command (like php artisan migrate) to read from its own local .env file.
+        $unsets = "unset DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD APP_KEY APP_ENV APP_DEBUG APP_URL MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_ENCRYPTION MAIL_FROM_ADDRESS LOG_CHANNEL SESSION_DRIVER CACHE_STORE QUEUE_CONNECTION";
+
+        $fullCommand = "{$unsets} && export HOME=/tmp && " . $command;
         if ($cwd) {
-            $fullCommand = "export HOME=/tmp && cd {$cwd} && {$command}";
+            $fullCommand = "{$unsets} && export HOME=/tmp && cd {$cwd} && {$command}";
         }
 
         Log::debug("Deployment command: {$fullCommand}");
