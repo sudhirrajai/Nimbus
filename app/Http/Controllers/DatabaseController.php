@@ -269,18 +269,18 @@ BASH;
     {
         try {
             // Get all databases using sudo mysql (to see all, not just nimbus user's)
-            $output = [];
-            exec("sudo mysql -N -e \"SHOW DATABASES\" 2>&1", $output, $code);
+            $res = $this->runMysqlQuery("SHOW DATABASES", true);
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to query databases: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to query databases: " . implode("\n", $res['output']));
             }
             
             $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
             
             $result = [];
+            $projectDbs = $this->scanProjectsForDatabases();
             
-            foreach ($output as $dbName) {
+            foreach ($res['output'] as $dbName) {
                 $dbName = trim($dbName);
                 if (empty($dbName) || in_array($dbName, $systemDbs)) {
                     continue;
@@ -289,10 +289,19 @@ BASH;
                 // Get users with access to this database
                 $users = $this->getDatabaseUsers($dbName);
                 
+                // Get creator metadata
+                $creatorInfo = \App\Models\NimbusDatabase::where('name', $dbName)->first();
+                
+                // Find projects using this database
+                $associatedProjects = $projectDbs[strtolower($dbName)] ?? [];
+                
                 $result[] = [
                     'name' => $dbName,
                     'users' => $users,
-                    'size' => $this->getDatabaseSize($dbName)
+                    'size' => $this->getDatabaseSize($dbName),
+                    'created_by' => $creatorInfo ? $creatorInfo->created_by : 'System',
+                    'created_at' => $creatorInfo ? $creatorInfo->created_at->toDateTimeString() : null,
+                    'projects' => $associatedProjects
                 ];
             }
 
@@ -309,19 +318,15 @@ BASH;
     private function getDatabaseUsers($dbName)
     {
         try {
-            // Use sudo mysql to query users with access to this database
-            $escapedDb = escapeshellarg($dbName);
-            $escapedDbWildcard = escapeshellarg(str_replace('_', '\\_', $dbName));
+            $sql = "SELECT DISTINCT User, Host FROM mysql.db WHERE Db = '" . str_replace("'", "''", $dbName) . "' OR Db = '" . str_replace("'", "''", str_replace('_', '\\_', $dbName)) . "'";
+            $res = $this->runMysqlQuery($sql, true);
             
-            $output = [];
-            exec("sudo mysql -N -e \"SELECT DISTINCT User, Host FROM mysql.db WHERE Db = {$escapedDb} OR Db = {$escapedDbWildcard}\" 2>&1", $output, $code);
-            
-            if ($code !== 0) {
+            if ($res['code'] !== 0) {
                 return [];
             }
 
             $result = [];
-            foreach ($output as $line) {
+            foreach ($res['output'] as $line) {
                 $parts = preg_split('/\s+/', trim($line));
                 if (count($parts) >= 2) {
                     $user = $parts[0];
@@ -351,19 +356,16 @@ BASH;
     private function getUserPrivileges($username, $host, $dbName)
     {
         try {
-            $escapedUser = escapeshellarg($username);
-            $escapedHost = escapeshellarg($host);
+            $sql = "SHOW GRANTS FOR '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "'";
+            $res = $this->runMysqlQuery($sql, true);
             
-            $output = [];
-            exec("sudo mysql -N -e \"SHOW GRANTS FOR {$escapedUser}@{$escapedHost}\" 2>&1", $output, $code);
-            
-            if ($code !== 0) {
+            if ($res['code'] !== 0) {
                 return [];
             }
             
             $privileges = [];
             
-            foreach ($output as $grantStr) {
+            foreach ($res['output'] as $grantStr) {
                 if (stripos($grantStr, $dbName) !== false || stripos($grantStr, '*.*') !== false) {
                     // Parse privileges from GRANT statement
                     if (preg_match('/GRANT (.+) ON/', $grantStr, $matches)) {
@@ -393,13 +395,15 @@ BASH;
     private function getDatabaseSize($dbName)
     {
         try {
-            $result = DB::selectOne("
-                SELECT SUM(data_length + index_length) as size 
-                FROM information_schema.tables 
-                WHERE table_schema = ?
-            ", [$dbName]);
+            $sql = "SELECT SUM(data_length + index_length) FROM information_schema.tables WHERE table_schema = '" . str_replace("'", "''", $dbName) . "'";
+            $res = $this->runMysqlQuery($sql, true);
             
-            return $this->formatBytes($result->size ?? 0);
+            $size = 0;
+            if ($res['code'] === 0 && !empty($res['output'])) {
+                $size = (int) trim($res['output'][0]);
+            }
+            
+            return $this->formatBytes($size);
         } catch (\Exception $e) {
             return '0 B';
         }
@@ -423,22 +427,34 @@ BASH;
             $dbName = $request->input('name');
             
             // Check if database exists using sudo mysql
-            $output = [];
-            exec("sudo mysql -N -e \"SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '{$dbName}'\" 2>&1", $output, $code);
-            if (!empty($output) && trim($output[0]) !== '') {
+            $checkSql = "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '" . str_replace("'", "''", $dbName) . "'";
+            $res = $this->runMysqlQuery($checkSql, true);
+            if ($res['code'] === 0 && !empty($res['output']) && trim($res['output'][0]) !== '') {
                 return response()->json(['error' => 'Database already exists'], 400);
             }
 
             // Create database using sudo mysql
-            $output = [];
-            exec("sudo mysql -e \"CREATE DATABASE \`{$dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci\" 2>&1", $output, $code);
+            $sql = "CREATE DATABASE `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+            $res = $this->runMysqlQuery($sql);
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to create database: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to create database: " . implode("\n", $res['output']));
             }
 
             // Grant access to nimbus_admin (Database Viewer user) so database shows in Database Viewer
-            exec("sudo mysql -e \"GRANT ALL PRIVILEGES ON \`{$dbName}\`.* TO 'nimbus_admin'@'localhost'; FLUSH PRIVILEGES;\" 2>&1");
+            $grantSql = "GRANT ALL PRIVILEGES ON `{$dbName}`.* TO 'nimbus_admin'@'localhost'";
+            $this->runMysqlQuery($grantSql);
+            $this->runMysqlQuery("FLUSH PRIVILEGES");
+
+            // Record in tracking table
+            try {
+                \App\Models\NimbusDatabase::create([
+                    'name' => $dbName,
+                    'created_by' => auth()->user() ? auth()->user()->email : 'System'
+                ]);
+            } catch (\Exception $e) {
+                \Log::warning("Failed to record database creation in tracking table: " . $e->getMessage());
+            }
 
             return response()->json([
                 'message' => "Database '{$dbName}' created successfully"
@@ -468,11 +484,18 @@ BASH;
             }
 
             // Delete database using sudo mysql
-            $output = [];
-            exec("sudo mysql -e \"DROP DATABASE IF EXISTS \`{$dbName}\`\" 2>&1", $output, $code);
+            $sql = "DROP DATABASE IF EXISTS `{$dbName}`";
+            $res = $this->runMysqlQuery($sql);
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to delete database: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to delete database: " . implode("\n", $res['output']));
+            }
+
+            // Remove from tracking table
+            try {
+                \App\Models\NimbusDatabase::where('name', $dbName)->delete();
+            } catch (\Exception $e) {
+                \Log::warning("Failed to remove database from tracking table: " . $e->getMessage());
             }
 
             return response()->json([
@@ -501,17 +524,18 @@ BASH;
             $host = $request->input('host', 'localhost');
 
             // Check if user exists using sudo mysql
-            $output = [];
-            exec("sudo mysql -N -e \"SELECT User FROM mysql.user WHERE User = '{$username}' AND Host = '{$host}'\" 2>&1", $output, $code);
-            if (!empty($output) && $code === 0 && trim($output[0]) !== '') {
+            $checkSql = "SELECT User FROM mysql.user WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $host) . "'";
+            $res = $this->runMysqlQuery($checkSql, true);
+            if ($res['code'] === 0 && !empty($res['output']) && trim($res['output'][0]) !== '') {
                 return response()->json(['error' => 'User already exists'], 400);
             }
 
             // Create user using sudo mysql
-            exec("sudo mysql -e \"CREATE USER '{$username}'@'{$host}' IDENTIFIED BY '{$password}'\" 2>&1", $output, $code);
+            $sql = "CREATE USER '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "' IDENTIFIED BY '" . str_replace("'", "''", $password) . "'";
+            $res = $this->runMysqlQuery($sql);
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to create user: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to create user: " . implode("\n", $res['output']));
             }
 
             return response()->json([
@@ -545,11 +569,11 @@ BASH;
             }
 
             // Delete user using sudo mysql
-            $output = [];
-            exec("sudo mysql -e \"DROP USER IF EXISTS '{$username}'@'{$host}'\" 2>&1", $output, $code);
+            $sql = "DROP USER IF EXISTS '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "'";
+            $res = $this->runMysqlQuery($sql);
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to delete user: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to delete user: " . implode("\n", $res['output']));
             }
 
             return response()->json([
@@ -590,14 +614,14 @@ BASH;
             $privilegeStr = implode(', ', $privileges);
             
             // Grant privileges using sudo mysql
-            $output = [];
-            exec("sudo mysql -e \"GRANT {$privilegeStr} ON \`{$database}\`.* TO '{$username}'@'{$host}'\" 2>&1", $output, $code);
+            $sql = "GRANT {$privilegeStr} ON `" . str_replace("`", "``", $database) . "`.* TO '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "'";
+            $res = $this->runMysqlQuery($sql);
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to grant privileges: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to grant privileges: " . implode("\n", $res['output']));
             }
             
-            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
+            $this->runMysqlQuery("FLUSH PRIVILEGES");
 
             return response()->json([
                 'message' => "User '{$username}' assigned to database '{$database}' with privileges: " . $privilegeStr
@@ -627,8 +651,8 @@ BASH;
             $privileges = $request->input('privileges');
 
             // Revoke all existing privileges on this database
-            $output = [];
-            exec("sudo mysql -e \"REVOKE ALL PRIVILEGES ON \`{$database}\`.* FROM '{$username}'@'{$host}'\" 2>&1", $output, $code);
+            $revokeSql = "REVOKE ALL PRIVILEGES ON `" . str_replace("`", "``", $database) . "`.* FROM '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "'";
+            $this->runMysqlQuery($revokeSql);
 
             // Grant new privileges
             if (!empty($privileges)) {
@@ -637,11 +661,12 @@ BASH;
                 
                 if (!empty($privileges)) {
                     $privilegeStr = implode(', ', $privileges);
-                    exec("sudo mysql -e \"GRANT {$privilegeStr} ON \`{$database}\`.* TO '{$username}'@'{$host}'\" 2>&1", $output, $code);
+                    $grantSql = "GRANT {$privilegeStr} ON `" . str_replace("`", "``", $database) . "`.* TO '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "'";
+                    $this->runMysqlQuery($grantSql);
                 }
             }
 
-            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
+            $this->runMysqlQuery("FLUSH PRIVILEGES");
 
             return response()->json([
                 'message' => "Permissions updated for user '{$username}' on database '{$database}'"
@@ -668,26 +693,21 @@ BASH;
             $host = $request->input('host', 'localhost');
             $password = $request->input('password');
 
-            $escapedUser = "`" . str_replace("`", "``", $username) . "`";
-            $escapedHost = "`" . str_replace("`", "``", $host) . "`";
-            $escapedPass = escapeshellarg($password);
+            // Try ALTER USER first
+            $sql1 = "ALTER USER '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "' IDENTIFIED BY '" . str_replace("'", "''", $password) . "'";
+            $res = $this->runMysqlQuery($sql1);
             
-            $output = [];
-            $code = 0;
-            
-            // Try ALTER USER first (Standard for MySQL 5.7+ and MariaDB 10.2+)
-            exec("sudo mysql -e \"ALTER USER '{$username}'@'{$host}' IDENTIFIED BY {$escapedPass}\" 2>&1", $output, $code);
-            
-            // If ALTER USER fails, try SET PASSWORD (Legacy/Compatibility)
-            if ($code !== 0) {
-                exec("sudo mysql -e \"SET PASSWORD FOR '{$username}'@'{$host}' = {$escapedPass}\" 2>&1", $output, $code);
+            // If ALTER USER fails, try SET PASSWORD (Legacy)
+            if ($res['code'] !== 0) {
+                $sql2 = "SET PASSWORD FOR '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "' = '" . str_replace("'", "''", $password) . "'";
+                $res = $this->runMysqlQuery($sql2);
             }
             
-            if ($code !== 0) {
-                throw new \Exception("Failed to update password: " . implode("\n", $output));
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to update password: " . implode("\n", $res['output']));
             }
             
-            exec("sudo mysql -e \"FLUSH PRIVILEGES\" 2>&1", $output, $code);
+            $this->runMysqlQuery("FLUSH PRIVILEGES");
 
             return response()->json([
                 'message' => "Password updated for user '{$username}'@'{$host}'"
@@ -1155,6 +1175,89 @@ PHP;
         
         // Ensure it's owned by the web user
         $this->executeSudoCommand("chown -R www-data:www-data " . dirname($wrapperPath));
+    }
+
+    /**
+     * Run a MySQL command via sudo mysql
+     *
+     * @param string $sql
+     * @param bool $noHeaders
+     * @return array ['code' => int, 'output' => array]
+     */
+    private function runMysqlQuery(string $sql, bool $noHeaders = false): array
+    {
+        $output = [];
+        $code = 0;
+        
+        $escapedSql = escapeshellarg($sql);
+        $flag = $noHeaders ? '-N ' : '';
+        exec("sudo mysql {$flag}-e {$escapedSql} 2>&1", $output, $code);
+        
+        return [
+            'code' => $code,
+            'output' => $output
+        ];
+    }
+
+    /**
+     * Scan directories in /var/www to find database associations
+     *
+     * @return array [dbName => [[project => string, type => string], ...]]
+     */
+    private function scanProjectsForDatabases(): array
+    {
+        $associations = [];
+        $basePath = '/var/www';
+
+        if (!File::exists($basePath)) {
+            return [];
+        }
+
+        try {
+            $directories = File::directories($basePath);
+            foreach ($directories as $dirPath) {
+                $dirName = basename($dirPath);
+                
+                // Ignore standard system directories
+                if (in_array(strtolower($dirName), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
+                    continue;
+                }
+
+                // Check .env file
+                $envPath = $dirPath . '/.env';
+                if (file_exists($envPath)) {
+                    $content = file_get_contents($envPath);
+                    if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                        $db = trim($matches[1], "\"' \r\n");
+                        if (!empty($db)) {
+                            $associations[strtolower($db)][] = [
+                                'project' => $dirName,
+                                'type' => 'Laravel / Env'
+                            ];
+                        }
+                    }
+                }
+
+                // Check wp-config.php file
+                $wpPath = $dirPath . '/wp-config.php';
+                if (file_exists($wpPath)) {
+                    $content = file_get_contents($wpPath);
+                    if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                        $db = trim($matches[1]);
+                        if (!empty($db)) {
+                            $associations[strtolower($db)][] = [
+                                'project' => $dirName,
+                                'type' => 'WordPress'
+                            ];
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("Failed to scan projects for databases: " . $e->getMessage());
+        }
+
+        return $associations;
     }
 
     /**
