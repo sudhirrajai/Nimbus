@@ -1546,7 +1546,7 @@ const saveFile = async () => {
     // We don't closeEditor here anymore, just keep editing
     loadFiles()
   } catch (error) {
-    showAlert('danger', 'Failed to save file')
+    showAlert('danger', error.response?.data?.error || error.response?.data?.message || 'Failed to save file')
   } finally {
     saving.value = false
   }
