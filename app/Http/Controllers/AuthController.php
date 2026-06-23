@@ -73,6 +73,17 @@ class AuthController extends Controller
                 'last_login_ip' => $currentIp,
             ]);
 
+            // Log successful login
+            \App\Models\ActivityLog::create([
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'action' => 'login',
+                'service' => 'auth',
+                'description' => 'Successfully logged in',
+                'ip_address' => $currentIp,
+                'user_agent' => $request->userAgent(),
+            ]);
+
             $request->session()->regenerate();
             return redirect()->intended('/dashboard');
         }
@@ -86,6 +97,17 @@ class AuthController extends Controller
             "<p>Hello,</p><p>A failed login attempt was detected on the Nimbus panel.</p><p><strong>Attempted Email:</strong> " . e($request->input('email')) . "<br><strong>IP Address:</strong> " . e($ip) . " (" . e($location) . ")<br><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
         );
 
+        // Log failed login
+        \App\Models\ActivityLog::create([
+            'user_id' => null,
+            'email' => $request->input('email'),
+            'action' => 'failed_login',
+            'service' => 'auth',
+            'description' => 'Failed login attempt',
+            'ip_address' => $ip,
+            'user_agent' => $request->userAgent(),
+        ]);
+
         return back()->withErrors([
             'email' => 'The provided credentials do not match our records.',
         ])->onlyInput('email');
@@ -96,6 +118,19 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+        $user = Auth::user();
+        if ($user) {
+            \App\Models\ActivityLog::create([
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'action' => 'logout',
+                'service' => 'auth',
+                'description' => 'Logged out',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
@@ -137,6 +172,17 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'root',
+        ]);
+
+        // Log setup completion
+        \App\Models\ActivityLog::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'action' => 'setup',
+            'service' => 'auth',
+            'description' => 'Completed initial system setup',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
 
         Auth::login($user);

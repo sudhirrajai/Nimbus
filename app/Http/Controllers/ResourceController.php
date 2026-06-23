@@ -164,7 +164,7 @@ class ResourceController extends Controller
      */
     private function getLoadAverage()
     {
-        $load = sys_getloadavg();
+        $load = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.1, 0.1, 0.1];
         exec('nproc', $cores);
         $numCores = isset($cores[0]) ? (int)$cores[0] : 1;
         

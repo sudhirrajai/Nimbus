@@ -47,7 +47,7 @@ class DashboardController extends Controller
 
     private function getCpuUsage()
     {
-        $load = sys_getloadavg();
+        $load = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.1, 0.1, 0.1];
         $cores = $this->getCpuCores();
         
         // Add some randomness for testing to see changes
@@ -184,7 +184,7 @@ class DashboardController extends Controller
 
     private function getLoadAverage()
     {
-        $load = sys_getloadavg();
+        $load = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.1, 0.1, 0.1];
         
         // Add some variation for testing
         $variation = (mt_rand(-10, 10) / 100);
