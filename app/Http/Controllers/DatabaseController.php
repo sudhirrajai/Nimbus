@@ -279,10 +279,15 @@ BASH;
             
             $result = [];
             $projectDbs = $this->scanProjectsForDatabases();
+            $user = auth()->user();
             
             foreach ($res['output'] as $dbName) {
                 $dbName = trim($dbName);
                 if (empty($dbName) || in_array($dbName, $systemDbs)) {
+                    continue;
+                }
+
+                if (!$user->canAccessDatabase($dbName)) {
                     continue;
                 }
 
@@ -483,6 +488,10 @@ BASH;
                 return response()->json(['error' => 'Cannot delete system database'], 403);
             }
 
+            if (!auth()->user()->canAccessDatabase($dbName)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
             // Delete database using sudo mysql
             $sql = "DROP DATABASE IF EXISTS `{$dbName}`";
             $res = $this->runMysqlQuery($sql);
@@ -563,9 +572,24 @@ BASH;
             $username = $request->input('username');
             $host = $request->input('host', 'localhost');
 
-            // Prevent deleting root
-            if ($username === 'root') {
-                return response()->json(['error' => 'Cannot delete root user'], 403);
+            // Prevent deleting system users
+            $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
+            if (in_array($username, $systemUsers)) {
+                return response()->json(['error' => 'Cannot delete system user'], 403);
+            }
+
+            if (!auth()->user()->isRoot()) {
+                $sql = "SELECT DISTINCT Db FROM mysql.db WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $host) . "'";
+                $res = $this->runMysqlQuery($sql, true);
+                if ($res['code'] === 0) {
+                    foreach ($res['output'] as $line) {
+                        $dbName = trim($line);
+                        $dbName = str_replace('\\_', '_', $dbName);
+                        if (!empty($dbName) && !auth()->user()->canAccessDatabase($dbName)) {
+                            return response()->json(['error' => 'Permission denied: This MySQL user has access to databases you do not own.'], 403);
+                        }
+                    }
+                }
             }
 
             // Delete user using sudo mysql
@@ -602,6 +626,10 @@ BASH;
             $username = $request->input('username');
             $host = $request->input('host', 'localhost');
             $privileges = $request->input('privileges');
+
+            if (!auth()->user()->canAccessDatabase($database)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
 
             // Validate privileges
             $allowedPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EXECUTE', 'CREATE VIEW', 'SHOW VIEW', 'CREATE ROUTINE', 'ALTER ROUTINE', 'EVENT', 'TRIGGER', 'REFERENCES'];
@@ -650,6 +678,10 @@ BASH;
             $host = $request->input('host', 'localhost');
             $privileges = $request->input('privileges');
 
+            if (!auth()->user()->canAccessDatabase($database)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
             // Revoke all existing privileges on this database
             $revokeSql = "REVOKE ALL PRIVILEGES ON `" . str_replace("`", "``", $database) . "`.* FROM '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "'";
             $this->runMysqlQuery($revokeSql);
@@ -692,6 +724,26 @@ BASH;
             $username = $request->input('username');
             $host = $request->input('host', 'localhost');
             $password = $request->input('password');
+
+            // Prevent changing system users password
+            $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
+            if (in_array($username, $systemUsers)) {
+                return response()->json(['error' => 'Cannot modify system user'], 403);
+            }
+
+            if (!auth()->user()->isRoot()) {
+                $sql = "SELECT DISTINCT Db FROM mysql.db WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $host) . "'";
+                $res = $this->runMysqlQuery($sql, true);
+                if ($res['code'] === 0) {
+                    foreach ($res['output'] as $line) {
+                        $dbName = trim($line);
+                        $dbName = str_replace('\\_', '_', $dbName);
+                        if (!empty($dbName) && !auth()->user()->canAccessDatabase($dbName)) {
+                            return response()->json(['error' => 'Permission denied: This MySQL user has access to databases you do not own.'], 403);
+                        }
+                    }
+                }
+            }
 
             // Try ALTER USER first
             $sql1 = "ALTER USER '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $host) . "' IDENTIFIED BY '" . str_replace("'", "''", $password) . "'";
@@ -869,6 +921,27 @@ BASH;
                     $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
                     if (in_array($username, $systemUsers)) continue;
                     
+                    // Check if non-root user is allowed to see this MySQL user
+                    if (!auth()->user()->isRoot()) {
+                        // Get databases this user has access to
+                        $sql = "SELECT DISTINCT Db FROM mysql.db WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $host) . "'";
+                        $dbRes = $this->runMysqlQuery($sql, true);
+                        if ($dbRes['code'] === 0) {
+                            $hasForbiddenDb = false;
+                            foreach ($dbRes['output'] as $dbLine) {
+                                $dbName = trim($dbLine);
+                                $dbName = str_replace('\\_', '_', $dbName);
+                                if (!empty($dbName) && !auth()->user()->canAccessDatabase($dbName)) {
+                                    $hasForbiddenDb = true;
+                                    break;
+                                }
+                            }
+                            if ($hasForbiddenDb) {
+                                continue;
+                            }
+                        }
+                    }
+
                     $result[] = [
                         'username' => $username,
                         'host' => $host

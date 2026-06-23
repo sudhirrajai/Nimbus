@@ -68,9 +68,28 @@ class EmailController extends Controller
             }
 
             // Get stats
-            $domainCount = DB::table('virtual_domains')->where('active', true)->count();
-            $accountCount = DB::table('virtual_users')->where('active', true)->count();
-            $aliasCount = DB::table('virtual_aliases')->where('active', true)->count();
+            $user = auth()->user();
+            if ($user && !$user->isRoot()) {
+                $accessibleDomains = $user->accessibleDomains();
+                $domainCount = DB::table('virtual_domains')
+                    ->where('active', true)
+                    ->whereIn('name', $accessibleDomains)
+                    ->count();
+                $accountCount = DB::table('virtual_users')
+                    ->join('virtual_domains', 'virtual_users.domain_id', '=', 'virtual_domains.id')
+                    ->where('virtual_users.active', true)
+                    ->whereIn('virtual_domains.name', $accessibleDomains)
+                    ->count();
+                $aliasCount = DB::table('virtual_aliases')
+                    ->join('virtual_domains', 'virtual_aliases.domain_id', '=', 'virtual_domains.id')
+                    ->where('virtual_aliases.active', true)
+                    ->whereIn('virtual_domains.name', $accessibleDomains)
+                    ->count();
+            } else {
+                $domainCount = DB::table('virtual_domains')->where('active', true)->count();
+                $accountCount = DB::table('virtual_users')->where('active', true)->count();
+                $aliasCount = DB::table('virtual_aliases')->where('active', true)->count();
+            }
 
             return response()->json([
                 'installed' => $postfixInstalled && $dovecotInstalled,
@@ -828,10 +847,15 @@ CODE;
     public function getDomains()
     {
         try {
-            $domains = DB::table('virtual_domains')
-                ->select('id', 'name', 'active', 'created_at')
-                ->orderBy('name')
-                ->get();
+            $user = auth()->user();
+            $query = DB::table('virtual_domains')
+                ->select('id', 'name', 'active', 'created_at');
+
+            if (!$user->isRoot()) {
+                $query->whereIn('name', $user->accessibleDomains());
+            }
+
+            $domains = $query->orderBy('name')->get();
 
             // Get account counts per domain
             foreach ($domains as $domain) {
@@ -857,6 +881,10 @@ CODE;
             ]);
 
             $domain = $request->input('domain');
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
 
             // Check if already exists
             $existing = DB::table('virtual_domains')->where('name', $domain)->first();
@@ -898,8 +926,14 @@ CODE;
                 'domain' => 'required|string'
             ]);
 
+            $domain = $request->input('domain');
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
             DB::table('virtual_domains')
-                ->where('name', $request->input('domain'))
+                ->where('name', $domain)
                 ->delete();
 
             return response()->json([
@@ -918,6 +952,7 @@ CODE;
     {
         try {
             $domain = $request->input('domain');
+            $user = auth()->user();
             
             $query = DB::table('virtual_users')
                 ->join('virtual_domains', 'virtual_users.domain_id', '=', 'virtual_domains.id')
@@ -930,7 +965,14 @@ CODE;
                     'virtual_domains.name as domain'
                 );
 
+            if (!$user->isRoot()) {
+                $query->whereIn('virtual_domains.name', $user->accessibleDomains());
+            }
+
             if ($domain) {
+                if (!$user->isRoot() && !in_array($domain, $user->accessibleDomains())) {
+                    return response()->json(['error' => 'Permission denied'], 403);
+                }
                 $query->where('virtual_domains.name', $domain);
             }
 
@@ -971,6 +1013,10 @@ CODE;
             $domain = $request->input('domain');
             $email = "{$username}@{$domain}";
             $quota = $request->input('quota', 1024);
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
 
             // Check if domain exists
             $domainRecord = DB::table('virtual_domains')->where('name', $domain)->first();
@@ -1131,7 +1177,11 @@ EMAIL;
             $email = $request->input('email');
             $parts = explode('@', $email);
             $username = $parts[0];
-            $domain = $parts[1];
+            $domain = $parts[1] ?? '';
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
 
             // Delete from database
             DB::table('virtual_users')->where('email', $email)->delete();
@@ -1160,10 +1210,18 @@ EMAIL;
                 'password' => 'required|string|min:8'
             ]);
 
+            $email = $request->input('email');
+            $parts = explode('@', $email);
+            $domain = $parts[1] ?? '';
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
             $passwordHash = $this->generateDovecotPassword($request->input('password'));
 
             DB::table('virtual_users')
-                ->where('email', $request->input('email'))
+                ->where('email', $email)
                 ->update([
                     'password' => $passwordHash,
                     'updated_at' => now()
@@ -1189,8 +1247,16 @@ EMAIL;
                 'quota' => 'required|integer|min:10|max:10240'
             ]);
 
+            $email = $request->input('email');
+            $parts = explode('@', $email);
+            $domain = $parts[1] ?? '';
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
             DB::table('virtual_users')
-                ->where('email', $request->input('email'))
+                ->where('email', $email)
                 ->update([
                     'quota' => $request->input('quota'),
                     'updated_at' => now()
@@ -1212,6 +1278,7 @@ EMAIL;
     {
         try {
             $domain = $request->input('domain');
+            $user = auth()->user();
 
             $query = DB::table('virtual_aliases')
                 ->join('virtual_domains', 'virtual_aliases.domain_id', '=', 'virtual_domains.id')
@@ -1223,7 +1290,14 @@ EMAIL;
                     'virtual_domains.name as domain'
                 );
 
+            if (!$user->isRoot()) {
+                $query->whereIn('virtual_domains.name', $user->accessibleDomains());
+            }
+
             if ($domain) {
+                if (!$user->isRoot() && !in_array($domain, $user->accessibleDomains())) {
+                    return response()->json(['error' => 'Permission denied'], 403);
+                }
                 $query->where('virtual_domains.name', $domain);
             }
 
@@ -1248,7 +1322,11 @@ EMAIL;
 
             $source = $request->input('source');
             $destination = $request->input('destination');
-            $domain = explode('@', $source)[1];
+            $domain = explode('@', $source)[1] ?? '';
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
 
             // Check domain exists
             $domainRecord = DB::table('virtual_domains')->where('name', $domain)->first();
@@ -1300,7 +1378,24 @@ EMAIL;
                 'id' => 'required|integer'
             ]);
 
-            DB::table('virtual_aliases')->where('id', $request->input('id'))->delete();
+            $id = $request->input('id');
+
+            // Verify permission on this alias
+            $alias = DB::table('virtual_aliases')
+                ->join('virtual_domains', 'virtual_aliases.domain_id', '=', 'virtual_domains.id')
+                ->where('virtual_aliases.id', $id)
+                ->select('virtual_domains.name as domain')
+                ->first();
+
+            if (!$alias) {
+                return response()->json(['error' => 'Alias not found'], 404);
+            }
+
+            if (!auth()->user()->isRoot() && !in_array($alias->domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            DB::table('virtual_aliases')->where('id', $id)->delete();
 
             return response()->json([
                 'success' => true,
@@ -1332,7 +1427,13 @@ EMAIL;
             ]);
 
             $email = $request->input('email');
-            
+            $parts = explode('@', $email);
+            $domain = $parts[1] ?? '';
+
+            if (!auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
             // Check if email exists
             $user = DB::table('virtual_users')->where('email', $email)->first();
             if (!$user) {
@@ -1376,6 +1477,10 @@ EMAIL;
     public function getClientSettings(Request $request)
     {
         $domain = $request->query('domain');
+
+        if ($domain && !auth()->user()->isRoot() && !in_array($domain, auth()->user()->accessibleDomains())) {
+            return response()->json(['error' => 'Permission denied'], 403);
+        }
         
         if ($domain) {
             $server = strpos(strtolower($domain), 'mail.') === 0 ? $domain : 'mail.' . $domain;

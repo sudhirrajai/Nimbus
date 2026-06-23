@@ -130,4 +130,81 @@ class User extends Authenticatable
 
         return $this->websites()->pluck('domain')->toArray();
     }
+
+    /**
+     * Get all databases this user can access
+     */
+    public function accessibleDatabases(): array
+    {
+        if ($this->isRoot()) {
+            try {
+                $output = [];
+                exec("sudo mysql -N -e 'SHOW DATABASES' 2>/dev/null", $output);
+                $systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
+                $dbs = [];
+                foreach ($output as $line) {
+                    $name = trim($line);
+                    if ($name && !in_array($name, $systemDbs)) {
+                        $dbs[] = $name;
+                    }
+                }
+                return array_unique(array_map('strtolower', $dbs));
+            } catch (\Exception $e) {
+                // Fallback to scan
+            }
+        }
+
+        $databases = [];
+        
+        // Databases created by this user
+        try {
+            $createdDbs = \App\Models\NimbusDatabase::where('created_by', $this->email)->pluck('name')->toArray();
+            $databases = array_merge($databases, $createdDbs);
+        } catch (\Exception $e) {
+            \Log::warning("Failed to fetch created databases for user {$this->email}: " . $e->getMessage());
+        }
+
+        // Databases associated with accessible domains
+        $domains = $this->accessibleDomains();
+        foreach ($domains as $domain) {
+            $path = "/var/www/{$domain}";
+            if (!is_dir($path)) continue;
+
+            // Check .env
+            $envPath = "{$path}/.env";
+            if (file_exists($envPath)) {
+                $content = file_get_contents($envPath);
+                if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                    $db = trim($matches[1], "\"' \r\n");
+                    if (!empty($db)) {
+                        $databases[] = $db;
+                    }
+                }
+            }
+
+            // Check wp-config.php
+            $wpPath = "{$path}/wp-config.php";
+            if (file_exists($wpPath)) {
+                $content = file_get_contents($wpPath);
+                if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                    $db = trim($matches[1]);
+                    if (!empty($db)) {
+                        $databases[] = $db;
+                    }
+                }
+            }
+        }
+
+        return array_unique(array_map('strtolower', $databases));
+    }
+
+    /**
+     * Check if user can access a database
+     */
+    public function canAccessDatabase(string $dbName): bool
+    {
+        if ($this->isRoot()) return true;
+
+        return in_array(strtolower($dbName), $this->accessibleDatabases());
+    }
 }
