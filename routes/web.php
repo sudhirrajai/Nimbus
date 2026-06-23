@@ -40,7 +40,7 @@ Route::middleware([\App\Http\Middleware\EnsureSetupComplete::class])->group(func
 // ═══════════════════════════════════════════════════════════════
 // Protected routes — all authenticated users
 // ═══════════════════════════════════════════════════════════════
-Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
+Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App\Http\Middleware\LogActivity::class])->group(function () {
 
     // Dashboard — all users can access
     Route::prefix('dashboard')->group(function () {
@@ -297,6 +297,12 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class])->gr
             Route::get('/read', [\App\Http\Controllers\LogsController::class, 'readLog'])->name('read');
             Route::post('/clear', [\App\Http\Controllers\LogsController::class, 'clearLog'])->name('clear');
             Route::get('/download', [\App\Http\Controllers\LogsController::class, 'downloadLog'])->name('download');
+        });
+
+        // Activity log routes
+        Route::prefix('activities')->name('activities.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\ActivityController::class, 'index'])->name('index');
+            Route::get('/list', [\App\Http\Controllers\ActivityController::class, 'getActivities'])->name('list');
         });
 
         // Resource usage routes

@@ -178,6 +178,13 @@
         </li>
 
         <li v-if="isRootOrAdmin" class="nav-item">
+          <Link href="/activities" class="nav-link" :class="isActive('/activities')">
+            <i class="material-symbols-rounded opacity-5">history</i>
+            <span class="nav-link-text ms-1">Activity Log</span>
+          </Link>
+        </li>
+
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/resources" class="nav-link" :class="isActive('/resources')">
             <i class="material-symbols-rounded opacity-5">monitoring</i>
             <span class="nav-link-text ms-1">Resource Usage</span>
