@@ -170,26 +170,42 @@ class User extends Authenticatable
             $path = "/var/www/{$domain}";
             if (!is_dir($path)) continue;
 
-            // Check .env
-            $envPath = "{$path}/.env";
-            if (file_exists($envPath)) {
-                $content = file_get_contents($envPath);
-                if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
-                    $db = trim($matches[1], "\"' \r\n");
-                    if (!empty($db)) {
-                        $databases[] = $db;
+            $pathsToCheck = [$path];
+            
+            // Check first-level subdirectories (1 level deep) for configs
+            $subDirs = glob($path . '/*', GLOB_ONLYDIR);
+            if (is_array($subDirs)) {
+                foreach ($subDirs as $subDir) {
+                    $subDirName = basename($subDir);
+                    if (in_array(strtolower($subDirName), ['node_modules', '.git', 'vendor', 'storage', 'tests', 'public', 'assets', 'dist', 'build'])) {
+                        continue;
                     }
+                    $pathsToCheck[] = $subDir;
                 }
             }
 
-            // Check wp-config.php
-            $wpPath = "{$path}/wp-config.php";
-            if (file_exists($wpPath)) {
-                $content = file_get_contents($wpPath);
-                if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
-                    $db = trim($matches[1]);
-                    if (!empty($db)) {
-                        $databases[] = $db;
+            foreach ($pathsToCheck as $checkPath) {
+                // Check .env
+                $envPath = "{$checkPath}/.env";
+                if (file_exists($envPath)) {
+                    $content = file_get_contents($envPath);
+                    if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                        $db = trim($matches[1], "\"' \r\n");
+                        if (!empty($db)) {
+                            $databases[] = $db;
+                        }
+                    }
+                }
+
+                // Check wp-config.php
+                $wpPath = "{$checkPath}/wp-config.php";
+                if (file_exists($wpPath)) {
+                    $content = file_get_contents($wpPath);
+                    if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                        $db = trim($matches[1]);
+                        if (!empty($db)) {
+                            $databases[] = $db;
+                        }
                     }
                 }
             }
