@@ -552,11 +552,11 @@ class FileManagerController extends Controller
         try {
             $request->validate([
                 'path' => 'required|string',
-                'content' => 'required|string'
+                'content' => 'present|string|nullable'
             ]);
 
             $path = $request->input('path');
-            $content = $request->input('content');
+            $content = $request->input('content') ?? '';
             $fullPath = $this->getFullPath($domain, $path);
 
             if (!$this->isValidPath($domain, $fullPath)) {

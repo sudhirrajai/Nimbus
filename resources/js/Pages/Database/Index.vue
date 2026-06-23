@@ -242,6 +242,7 @@
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Database</th>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Size</th>
                         <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Users</th>
+                        <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Associated Projects</th>
                         <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                           Actions</th>
                       </tr>
@@ -253,7 +254,13 @@
                           <div class="icon-box-db me-3">
                             <i class="material-symbols-rounded text-info">database</i>
                           </div>
-                          <h6 class="mb-0 text-sm font-weight-bold">{{ db.name }}</h6>
+                          <div>
+                            <h6 class="mb-0 text-sm font-weight-bold">{{ db.name }}</h6>
+                            <div class="text-xxs text-secondary mt-1">
+                              <span v-if="db.created_by">Created by: {{ db.created_by }} <span v-if="db.created_at">on {{ db.created_at }}</span></span>
+                              <span v-else>Created by: System</span>
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -271,6 +278,15 @@
                           </span>
                         </div>
                         <span v-else class="text-xs text-secondary opacity-7">No users assigned</span>
+                      </td>
+                      <td>
+                        <div v-if="db.projects && db.projects.length > 0" class="d-flex flex-wrap gap-1">
+                          <span v-for="p in db.projects" :key="p.project" class="badge bg-light text-dark text-xs border py-1 px-2 rounded">
+                            <i class="material-symbols-rounded text-xxs me-1 align-middle">folder</i>
+                            {{ p.project }} <span class="text-secondary text-xxs">({{ p.type }})</span>
+                          </span>
+                        </div>
+                        <span v-else class="text-xs text-secondary opacity-7">None</span>
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
@@ -290,7 +306,7 @@
                       </td>
                     </tr>
                       <tr v-if="filteredDatabases.length === 0">
-                        <td colspan="4" class="text-center py-5 text-secondary">
+                        <td colspan="5" class="text-center py-5 text-secondary">
                           <div class="empty-state">
                             <i class="material-symbols-rounded opacity-3" style="font-size: 64px;">database</i>
                             <p class="mt-3">No databases found matching your search.</p>

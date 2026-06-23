@@ -44,15 +44,17 @@ class SslController extends Controller
                         return false;
                     }
                     if (!$user->isRoot()) {
-                        return in_array($name, $accessibleDomains);
+                        return in_array($name, $accessibleDomains) && $user->hasDomainPermission($name, 'ssl');
                     }
                     return true;
                 });
 
-            // Add panel domain if set
+            // Add panel domain if set (only for root users)
             $panelDomain = \App\Models\Setting::where('key', 'panel_domain')->value('value');
             if ($panelDomain && !str_contains($panelDomain, ' ')) {
-                $directories->push($panelDomain);
+                if ($user->isRoot()) {
+                    $directories->push($panelDomain);
+                }
             }
 
             $refresh = request()->query('refresh') === '1';
@@ -623,6 +625,10 @@ class SslController extends Controller
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
             // Check if domain directory exists
             $domainPath = $this->basePath . $domain;
             if (!File::exists($domainPath)) {
@@ -787,6 +793,10 @@ class SslController extends Controller
                 return response()->json(['error' => 'Invalid domain name'], 400);
             }
 
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
             // Ensure certbot is available
             $certbotPath = $this->ensureCertbot();
 
@@ -887,6 +897,10 @@ class SslController extends Controller
     public function renewAll()
     {
         try {
+            if (!auth()->user()->isRoot()) {
+                return response()->json(['error' => 'Permission denied: Only root can perform global SSL renewals.'], 403);
+            }
+
             // Ensure certbot is available
             $certbotPath = $this->ensureCertbot();
 
@@ -946,6 +960,10 @@ class SslController extends Controller
 
             if (!$this->isValidDomain($domain)) {
                 return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
             // Ensure certbot is available

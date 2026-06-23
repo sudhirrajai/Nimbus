@@ -13,6 +13,34 @@ class SupervisorController extends Controller
         return env('NIMBUS_GIT_USER', 'www-data');
     }
 
+    private function canUserManageProcess(string $name): bool
+    {
+        $user = auth()->user();
+        if ($user->isRoot()) {
+            return true;
+        }
+
+        // 1. Check if the name/groupName matches an allowed domain
+        $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+        if ($user->hasDomainPermission($groupName, 'supervisor')) {
+            return true;
+        }
+
+        // 2. Check the config file to see if the directory is a domain they have permission for
+        $configPath = "/etc/supervisor/conf.d/{$groupName}.conf";
+        if (file_exists($configPath)) {
+            $content = file_get_contents($configPath);
+            if (preg_match('/^\s*directory\s*=\s*\/var\/www\/([^/]+)/m', $content, $m)) {
+                $domain = trim($m[1]);
+                if ($user->hasDomainPermission($domain, 'supervisor')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Display supervisor management page
      */
@@ -292,8 +320,8 @@ BASH;
             return response()->json([
                 'success' => true,
                 'groups' => array_values(array_filter($groups, function($group) use ($user) {
-                    // Root/Admin can see everything
-                    if ($user->isRootOrAdmin()) return true;
+                    // Root can see everything
+                    if ($user->isRoot()) return true;
                     
                     // For others, check if the group name (usually the project name or starts with it)
                     // or the directory in the config matches their allowed websites
@@ -322,9 +350,8 @@ BASH;
     {
         try {
             $name = $request->input('name');
-            $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
             
-            if (!auth()->user()->hasDomainPermission($groupName, 'supervisor')) {
+            if (!$this->canUserManageProcess($name)) {
                 return response()->json(['error' => 'Permission denied for this process'], 403);
             }
 
@@ -347,9 +374,8 @@ BASH;
     {
         try {
             $name = $request->input('name');
-            $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
             
-            if (!auth()->user()->hasDomainPermission($groupName, 'supervisor')) {
+            if (!$this->canUserManageProcess($name)) {
                 return response()->json(['error' => 'Permission denied for this process'], 403);
             }
 
@@ -372,9 +398,8 @@ BASH;
     {
         try {
             $name = $request->input('name');
-            $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
             
-            if (!auth()->user()->hasDomainPermission($groupName, 'supervisor')) {
+            if (!$this->canUserManageProcess($name)) {
                 return response()->json(['error' => 'Permission denied for this process'], 403);
             }
 
@@ -399,6 +424,24 @@ BASH;
             $name = $request->input('name');
             $manualMode = $request->input('manualMode', false);
             $rawConfig = $request->input('rawConfig');
+
+            if (!auth()->user()->isRoot()) {
+                $domain = null;
+                if ($manualMode && $rawConfig) {
+                    if (preg_match('/^\s*directory\s*=\s*\/var\/www\/([^/]+)/m', $rawConfig, $m)) {
+                        $domain = trim($m[1]);
+                    } else {
+                        $domain = $name;
+                    }
+                } else {
+                    $project = $request->input('project');
+                    $domain = $project ?: $name;
+                }
+
+                if (!$domain || !auth()->user()->hasDomainPermission($domain, 'supervisor')) {
+                    return response()->json(['error' => 'Permission denied: You do not have supervisor permission for this domain.'], 403);
+                }
+            }
 
             if ($manualMode && $rawConfig) {
                 $config = $rawConfig;
@@ -482,6 +525,10 @@ CONFIG;
         try {
             $name = $request->input('name');
             
+            if (!$this->canUserManageProcess($name)) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
             // Stop the process first
             exec("sudo supervisorctl stop {$name} 2>/dev/null");
             
@@ -509,6 +556,11 @@ CONFIG;
     {
         try {
             $name = $request->input('name');
+            
+            if (!$this->canUserManageProcess($name)) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
             $type = $request->input('type', 'stdout'); // stdout or stderr
             $lines = $request->input('lines', 100);
             
@@ -540,6 +592,10 @@ CONFIG;
     public function reloadConfig()
     {
         try {
+            if (!auth()->user()->isRoot()) {
+                return response()->json(['error' => 'Permission denied: Only root can reload supervisor configuration globally.'], 403);
+            }
+
             exec("sudo supervisorctl reread 2>&1", $output1);
             exec("sudo supervisorctl update 2>&1", $output2);
             
@@ -560,6 +616,10 @@ CONFIG;
         try {
             $name = $request->input('name');
             
+            if (!$this->canUserManageProcess($name)) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
             // If name is like "group:process", we want the "group" part for the config file
             $configName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
             $configPath = "/etc/supervisor/conf.d/{$configName}.conf";
@@ -662,6 +722,28 @@ CONFIG;
             $manualMode = $request->input('manualMode', false);
             $rawConfig = $request->input('rawConfig');
 
+            if (!$this->canUserManageProcess($name)) {
+                return response()->json(['error' => 'Permission denied for this process'], 403);
+            }
+
+            if (!auth()->user()->isRoot()) {
+                $domain = null;
+                if ($manualMode && $rawConfig) {
+                    if (preg_match('/^\s*directory\s*=\s*\/var\/www\/([^/]+)/m', $rawConfig, $m)) {
+                        $domain = trim($m[1]);
+                    } else {
+                        $domain = $name;
+                    }
+                } else {
+                    $project = $request->input('project');
+                    $domain = $project ?: $name;
+                }
+
+                if (!$domain || !auth()->user()->hasDomainPermission($domain, 'supervisor')) {
+                    return response()->json(['error' => 'Permission denied: You do not have supervisor permission for this domain.'], 403);
+                }
+            }
+
             if ($manualMode && $rawConfig) {
                 $config = $rawConfig;
                 // Ensure [program:name] matches the worker name
@@ -744,6 +826,10 @@ CONFIG;
     public function startAll()
     {
         try {
+            if (!auth()->user()->isRoot()) {
+                return response()->json(['error' => 'Permission denied: Only root can perform global supervisor actions.'], 403);
+            }
+
             exec("sudo supervisorctl start all 2>&1", $output, $code);
             return response()->json([
                 'success' => $code === 0,
@@ -760,6 +846,10 @@ CONFIG;
     public function stopAll()
     {
         try {
+            if (!auth()->user()->isRoot()) {
+                return response()->json(['error' => 'Permission denied: Only root can perform global supervisor actions.'], 403);
+            }
+
             exec("sudo supervisorctl stop all 2>&1", $output, $code);
             return response()->json([
                 'success' => $code === 0,
@@ -776,6 +866,10 @@ CONFIG;
     public function restartAll()
     {
         try {
+            if (!auth()->user()->isRoot()) {
+                return response()->json(['error' => 'Permission denied: Only root can perform global supervisor actions.'], 403);
+            }
+
             exec("sudo supervisorctl restart all 2>&1", $output, $code);
             return response()->json([
                 'success' => $code === 0,

@@ -47,7 +47,7 @@ class CronController extends Controller
                             }
                             
                             // Check permission for this command
-                            $hasPermission = $userModel->isRootOrAdmin();
+                            $hasPermission = $userModel->isRoot();
                             if (!$hasPermission) {
                                 // Extract domain from command path like /var/www/domain
                                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
@@ -114,7 +114,7 @@ class CronController extends Controller
 
             // Check permission
             $userModel = auth()->user();
-            if (!$userModel->isRootOrAdmin()) {
+            if (!$userModel->isRoot()) {
                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
                         return response()->json(['error' => 'Permission denied for this domain path'], 403);
@@ -183,7 +183,7 @@ class CronController extends Controller
 
             // Check permission
             $userModel = auth()->user();
-            if (!$userModel->isRootOrAdmin()) {
+            if (!$userModel->isRoot()) {
                 // Check old command
                 if (preg_match('#/var/www/([^/\s]+)#', $oldCommand, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
@@ -253,7 +253,7 @@ class CronController extends Controller
 
             // Check permission
             $userModel = auth()->user();
-            if (!$userModel->isRootOrAdmin()) {
+            if (!$userModel->isRoot()) {
                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
                         return response()->json(['error' => 'Permission denied for this domain path'], 403);
@@ -309,7 +309,7 @@ class CronController extends Controller
             
             // Check permission
             $userModel = auth()->user();
-            if (!$userModel->isRootOrAdmin()) {
+            if (!$userModel->isRoot()) {
                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
                         return response()->json(['error' => 'Permission denied for this domain path'], 403);
