@@ -1296,32 +1296,55 @@ PHP;
                     continue;
                 }
 
-                // Check .env file
-                $envPath = $dirPath . '/.env';
-                if (file_exists($envPath)) {
-                    $content = file_get_contents($envPath);
-                    if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
-                        $db = trim($matches[1], "\"' \r\n");
-                        if (!empty($db)) {
-                            $associations[strtolower($db)][] = [
-                                'project' => $dirName,
-                                'type' => 'Laravel / Env'
-                            ];
+                // Gather paths to check: top-level first, then subdirectories (1 level deep)
+                $pathsToCheck = [
+                    $dirPath
+                ];
+
+                try {
+                    $subDirs = File::directories($dirPath);
+                    foreach ($subDirs as $subDir) {
+                        $subDirName = basename($subDir);
+                        // Skip common non-project subdirectories to keep scanning fast and resource-efficient
+                        if (in_array(strtolower($subDirName), ['node_modules', '.git', 'vendor', 'storage', 'tests', 'public', 'assets', 'dist', 'build'])) {
+                            continue;
                         }
+                        $pathsToCheck[] = $subDir;
                     }
+                } catch (\Exception $e) {
+                    // Ignore inaccessible subdirectories
                 }
 
-                // Check wp-config.php file
-                $wpPath = $dirPath . '/wp-config.php';
-                if (file_exists($wpPath)) {
-                    $content = file_get_contents($wpPath);
-                    if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
-                        $db = trim($matches[1]);
-                        if (!empty($db)) {
-                            $associations[strtolower($db)][] = [
-                                'project' => $dirName,
-                                'type' => 'WordPress'
-                            ];
+                foreach ($pathsToCheck as $checkPath) {
+                    $relativeProjectName = ($checkPath === $dirPath) ? $dirName : $dirName . '/' . basename($checkPath);
+
+                    // Check .env file
+                    $envPath = $checkPath . '/.env';
+                    if (file_exists($envPath)) {
+                        $content = file_get_contents($envPath);
+                        if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                            $db = trim($matches[1], "\"' \r\n");
+                            if (!empty($db)) {
+                                $associations[strtolower($db)][] = [
+                                    'project' => $relativeProjectName,
+                                    'type' => 'Laravel / Env'
+                                ];
+                            }
+                        }
+                    }
+
+                    // Check wp-config.php file
+                    $wpPath = $checkPath . '/wp-config.php';
+                    if (file_exists($wpPath)) {
+                        $content = file_get_contents($wpPath);
+                        if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                            $db = trim($matches[1]);
+                            if (!empty($db)) {
+                                $associations[strtolower($db)][] = [
+                                    'project' => $relativeProjectName,
+                                    'type' => 'WordPress'
+                                ];
+                            }
                         }
                     }
                 }
