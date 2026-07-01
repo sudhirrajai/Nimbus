@@ -682,6 +682,7 @@ class SslController extends Controller
 
             \Log::info("Running certbot: " . $cmd);
             exec($cmd, $output, $returnCode);
+            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
 
             $outputStr = implode("\n", $output);
             \Log::info("Certbot output: " . $outputStr);
@@ -844,6 +845,7 @@ class SslController extends Controller
 
             \Log::info("Running certbot renew: " . $cmd);
             exec($cmd, $output, $returnCode);
+            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
 
             $outputStr = implode("\n", $output);
             \Log::info("Certbot renew output: " . $outputStr);
@@ -914,6 +916,7 @@ class SslController extends Controller
 
             \Log::info("Running certbot renew all");
             exec($cmd, $output, $returnCode);
+            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
 
             $outputStr = implode("\n", $output);
             \Log::info("Certbot renew all output: " . $outputStr);
