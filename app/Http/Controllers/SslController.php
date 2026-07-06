@@ -642,6 +642,11 @@ class SslController extends Controller
             // This prevents nginx -t from throwing [emerg] file not found errors
             app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
 
+            // Clean up any stale temp_checkpoint left by a previous failed certbot run.
+            // Without this, certbot fails with "Unable to revert temporary config" on every
+            // subsequent attempt, even though the certificate itself is issued successfully.
+            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
+
             // Run certbot with nginx plugin
             $output = [];
             $returnCode = 0;
@@ -712,6 +717,27 @@ class SslController extends Controller
                 if (strpos($outputStr, 'not found') !== false || strpos($outputStr, 'No module named') !== false) {
                     return response()->json([
                         'error' => 'Certbot plugin error. Try reinstalling: sudo apt-get install --reinstall python3-certbot-nginx',
+                        'details' => $outputStr
+                    ], 500);
+                }
+
+                if (strpos($outputStr, 'overwrite challenge file') !== false || strpos($outputStr, 'Unable to revert temporary config') !== false) {
+                    // The cert may still have been issued — try to deploy it
+                    exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
+                    $installOutput = [];
+                    $installCode = 0;
+                    exec("sudo {$certbotPath} install --cert-name " . escapeshellarg($domain) . " --nginx --non-interactive 2>&1", $installOutput, $installCode);
+                    exec("sudo systemctl reload nginx 2>/dev/null");
+                    cache()->forget("ssl_info_{$domain}");
+                    cache()->forget("dns_active_{$domain}");
+                    if ($installCode === 0) {
+                        return response()->json([
+                            'message' => "SSL certificate installed successfully for {$domain}",
+                            'details' => $outputStr . "\n" . implode("\n", $installOutput)
+                        ]);
+                    }
+                    return response()->json([
+                        'error' => 'Certificate was issued but nginx deployment hit a conflict with another site config. Run: certbot install --cert-name ' . $domain,
                         'details' => $outputStr
                     ], 500);
                 }
@@ -803,6 +829,9 @@ class SslController extends Controller
 
             // Ensure all managed domain directories and log files exist before running certbot
             app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
+
+            // Clean up any stale temp_checkpoint from a previous failed run
+            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
 
             // Run certbot renew for specific domain
             $output = [];
@@ -908,6 +937,9 @@ class SslController extends Controller
 
             // Ensure all managed domain directories and log files exist before running certbot
             app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
+
+            // Clean up any stale temp_checkpoint from a previous failed run
+            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
 
             $output = [];
             $returnCode = 0;
