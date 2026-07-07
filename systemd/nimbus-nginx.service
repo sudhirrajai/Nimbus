@@ -1,0 +1,16 @@
+[Unit]
+Description=Nimbus Dedicated Nginx Server
+After=syslog.target network.target nimbus-php-fpm.service
+
+[Service]
+Type=forking
+PIDFile=/run/nimbus-nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -c /usr/local/nimbus/nginx/nimbus-nginx.conf
+ExecStart=/usr/sbin/nginx -c /usr/local/nimbus/nginx/nimbus-nginx.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
