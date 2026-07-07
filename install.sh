@@ -437,14 +437,13 @@ else
 fi
 cd $NIMBUS_DIR
 
-# Create Nimbus database and user
-# Use ALTER USER after CREATE to ensure password is always up-to-date (handles reinstalls)
-NIMBUS_DB_PASS=$(openssl rand -base64 24)
-run_db_command "CREATE DATABASE IF NOT EXISTS nimbus;"
-run_db_command "CREATE USER IF NOT EXISTS 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';"
-run_db_command "ALTER USER 'nimbus'@'localhost' IDENTIFIED BY '${NIMBUS_DB_PASS}';"
-run_db_command "GRANT ALL PRIVILEGES ON nimbus.* TO 'nimbus'@'localhost';"
-run_db_command "FLUSH PRIVILEGES;"
+# Create SQLite database for Nimbus
+echo -e "${YELLOW}Creating SQLite database for Nimbus...${NC}"
+mkdir -p /usr/local/nimbus/database
+touch /usr/local/nimbus/database/database.sqlite
+chown -R www-data:www-data /usr/local/nimbus/database
+chmod 750 /usr/local/nimbus/database
+chmod 660 /usr/local/nimbus/database/database.sqlite
 
 echo -e "${GREEN}[10/12]${NC} Setting up Nimbus..."
 cd $NIMBUS_DIR
@@ -460,9 +459,12 @@ npm ci --unsafe-perm
 # Setup environment
 cp .env.example .env
 sed -i "s|APP_URL=.*|APP_URL=http://localhost:${NIMBUS_PORT}|" .env
-sed -i "s|DB_DATABASE=.*|DB_DATABASE=nimbus|" .env
-sed -i "s|DB_USERNAME=.*|DB_USERNAME=nimbus|" .env
-sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${NIMBUS_DB_PASS}|" .env
+sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=sqlite|" .env
+sed -i "s|^DB_DATABASE=.*|DB_DATABASE=/usr/local/nimbus/database/database.sqlite|" .env
+sed -i "s|^DB_HOST=.*|#DB_HOST=127.0.0.1|" .env
+sed -i "s|^DB_PORT=.*|#DB_PORT=3306|" .env
+sed -i "s|^DB_USERNAME=.*|#DB_USERNAME=root|" .env
+sed -i "s|^DB_PASSWORD=.*|#DB_PASSWORD=|" .env
 upsert_env "NIMBUS_GIT_USER" "${PANEL_SYSTEM_USER}" .env
 if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
     upsert_env "VMCORE_API_URL" "${VMCORE_URL}" .env
@@ -475,69 +477,135 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo -e "${GREEN}[11/12]${NC} Configuring Nginx..."
-tee /etc/nginx/sites-available/nimbus > /dev/null << EOF
-server {
-    listen ${NIMBUS_PORT};
-    listen [::]:${NIMBUS_PORT};
-    server_name _;
+echo -e "${GREEN}[11/12]${NC} Configuring Isolated Panel Services (Nginx & PHP-FPM)..."
+mkdir -p /usr/local/nimbus/nginx
+mkdir -p /usr/local/nimbus/php/pool.d
 
-    root ${NIMBUS_DIR}/public;
-    index index.php index.html;
+# 1. Write isolated Nginx configuration
+tee /usr/local/nimbus/nginx/nimbus-nginx.conf > /dev/null << 'EOF'
+user www-data;
+worker_processes auto;
+pid /run/nimbus-nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
 
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+events {
+    worker_connections 1024;
+}
 
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    access_log /usr/local/nimbus/storage/logs/nginx_access.log;
+    error_log /usr/local/nimbus/storage/logs/nginx_error.log;
 
-    # Max upload size
-    client_max_body_size 100M;
+    sendfile on;
+    keepalive_timeout 65;
+    
+    server {
+        listen 2095 default_server;
+        listen [::]:2095 default_server;
+        server_name _;
 
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
+        root /usr/local/nimbus/public;
+        index index.php index.html;
 
-    location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm-nimbus.sock;
-        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_hide_header X-Powered-By;
-    }
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
 
-    # Deny access to sensitive files
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
+        client_max_body_size 100M;
 
-    location ~ /\.env {
-        deny all;
-    }
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
 
-    location ~ /\.git {
-        deny all;
-    }
+        location ~ \.php$ {
+            fastcgi_pass unix:/run/php/nimbus-php-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+            include /etc/nginx/fastcgi_params;
+            fastcgi_hide_header X-Powered-By;
+        }
 
-    # Cache static assets
-    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
+        # Deny access to sensitive files
+        location ~ /\.(?!well-known).* {
+            deny all;
+        }
     }
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/nimbus /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+# 2. Write isolated PHP-FPM configurations
+tee /usr/local/nimbus/php/nimbus-php-fpm.conf > /dev/null << 'EOF'
+[global]
+pid = /run/php/nimbus-php-fpm.pid
+error_log = /usr/local/nimbus/storage/logs/php-fpm.log
+include = /usr/local/nimbus/php/pool.d/*.conf
+EOF
 
-# Test and restart nginx
-nginx -t
-systemctl restart nginx
+tee /usr/local/nimbus/php/pool.d/nimbus.conf > /dev/null << 'EOF'
+[nimbus]
+user = www-data
+group = www-data
+listen = /run/php/nimbus-php-fpm.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 10
+pm.start_servers = 2
+pm.min_spare_servers = 2
+pm.max_spare_servers = 5
+pm.max_requests = 500
+
+request_terminate_timeout = 300
+EOF
+
+# 3. Write systemd service files
+tee /etc/systemd/system/nimbus-php-fpm.service > /dev/null << EOF
+[Unit]
+Description=Nimbus Dedicated PHP-FPM Instance
+After=syslog.target network.target
+
+[Service]
+Type=simple
+PIDFile=/run/php/nimbus-php-fpm.pid
+ExecStart=/usr/sbin/php-fpm${PHP_VERSION} -F -y /usr/local/nimbus/php/nimbus-php-fpm.conf
+ExecReload=/bin/kill -USR2 \$MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+tee /etc/systemd/system/nimbus-nginx.service > /dev/null << 'EOF'
+[Unit]
+Description=Nimbus Dedicated Nginx Server
+After=syslog.target network.target nimbus-php-fpm.service
+
+[Service]
+Type=forking
+PIDFile=/run/nimbus-nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -c /usr/local/nimbus/nginx/nimbus-nginx.conf
+ExecStart=/usr/sbin/nginx -c /usr/local/nimbus/nginx/nimbus-nginx.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 4. Enable and start isolated services
+systemctl daemon-reload
+systemctl enable nimbus-php-fpm.service --now
+systemctl enable nimbus-nginx.service --now
+
+rm -f /etc/nginx/sites-enabled/default
 
 echo -e "${GREEN}[12/12]${NC} Setting permissions..."
 
@@ -617,32 +685,8 @@ if [ -f "$PHP_FPM_CONF" ]; then
     sed -i 's/;pm.max_requests = .*/pm.max_requests = 500/' $PHP_FPM_CONF
 fi
 
-# Configure dedicated PHP-FPM pool for Nimbus to isolate it from sites
-echo -e "${YELLOW}Configuring dedicated PHP-FPM pool for Nimbus...${NC}"
-for PHP_DIR in /etc/php/*; do
-    if [ -d "${PHP_DIR}/fpm/pool.d" ]; then
-        V=$(basename "${PHP_DIR}")
-        cat << EOF > "${PHP_DIR}/fpm/pool.d/nimbus.conf"
-[nimbus]
-user = ${NIMBUS_USER}
-group = ${NIMBUS_USER}
-listen = /run/php/php${V}-fpm-nimbus.sock
-listen.owner = ${NIMBUS_USER}
-listen.group = ${NIMBUS_USER}
-listen.mode = 0660
-
-pm = dynamic
-pm.max_children = 10
-pm.start_servers = 2
-pm.min_spare_servers = 2
-pm.max_spare_servers = 5
-pm.max_requests = 500
-
-request_terminate_timeout = 300
-EOF
-        echo -e "Created dedicated pool 'nimbus' for PHP ${V}"
-    fi
-done
+# Isolated FPM service runs nimbus pool directly.
+echo -e "${GREEN}PHP-FPM pool is already running isolated via nimbus-php-fpm.service.${NC}"
 
 # Configure PHP.ini
 PHP_INI="/etc/php/${PHP_VERSION}/fpm/php.ini"
@@ -756,7 +800,7 @@ else
     echo -e "  ${DB_ENGINE^} Admin User:   ${YELLOW}${DB_ROOT_USER}${NC}"
     echo -e "  ${DB_ENGINE^} Auth Mode:    ${YELLOW}${DB_AUTH_MODE}${NC}"
 fi
-echo -e "  Nimbus DB Password:  ${YELLOW}${NIMBUS_DB_PASS}${NC}"
+echo -e "  Nimbus Database:     ${YELLOW}SQLite (Isolated)${NC}"
 echo ""
 echo -e "${BLUE}Important paths:${NC}"
 echo -e "  Sites:  /var/www/"
@@ -783,7 +827,7 @@ DB_ENGINE=${DB_ENGINE}
 DB_ROOT_USER=${DB_ROOT_USER}
 DB_AUTH_MODE=${DB_AUTH_MODE}
 MYSQL_ROOT_PASSWORD=$([ "$SKIP_EXISTING" = false ] && printf '%s' "${MYSQL_ROOT_PASS}")
-NIMBUS_DB_PASSWORD=${NIMBUS_DB_PASS}
+NIMBUS_DB_TYPE=sqlite
 EOF
 chmod 600 ${NIMBUS_DIR}/.credentials
 
