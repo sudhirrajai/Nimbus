@@ -303,6 +303,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::prefix('activities')->name('activities.')->group(function () {
             Route::get('/', [\App\Http\Controllers\ActivityController::class, 'index'])->name('index');
             Route::get('/list', [\App\Http\Controllers\ActivityController::class, 'getActivities'])->name('list');
+            Route::get('/settings', [\App\Http\Controllers\ActivityController::class, 'getSettings'])->name('settings');
+            Route::post('/settings', [\App\Http\Controllers\ActivityController::class, 'updateSettings'])->name('settings.update');
+            Route::post('/clean', [\App\Http\Controllers\ActivityController::class, 'cleanNow'])->name('clean');
+            Route::post('/clear-all', [\App\Http\Controllers\ActivityController::class, 'deleteAll'])->name('clear-all');
         });
 
         // Resource usage routes

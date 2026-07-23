@@ -17,7 +17,10 @@
                     Audit trail monitoring who is doing what, at what time, and across which services
                   </p>
                 </div>
-                <div class="col-4 text-end">
+                <div class="col-4 text-end d-flex align-items-center justify-content-end gap-2">
+                  <button class="btn btn-outline-light btn-sm mb-0" @click="showSettingsModal = true">
+                    <i class="material-symbols-rounded text-sm me-1">auto_delete</i> Auto Cleanup
+                  </button>
                   <button class="btn btn-link text-white p-0 mb-0" @click="fetchActivities" :disabled="loading">
                     <i class="material-symbols-rounded" :class="{ 'spin': loading }">refresh</i>
                   </button>
@@ -196,6 +199,69 @@
         </div>
       </div>
     </div>
+
+    <!-- Auto-Cleanup Settings Modal -->
+    <div v-if="showSettingsModal" class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title d-flex align-items-center">
+              <i class="material-symbols-rounded me-2 text-primary">auto_delete</i> Activity Log Auto-Cleanup
+            </h5>
+            <button type="button" class="btn-close text-dark" @click="showSettingsModal = false" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div v-if="feedbackMessage" :class="['alert', 'alert-' + feedbackType, 'text-white', 'py-2', 'px-3', 'mb-3', 'text-sm']">
+              {{ feedbackMessage }}
+            </div>
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="autoCleanSwitch" v-model="cleanupSettings.auto_clean">
+              <label class="form-check-label font-weight-bold" for="autoCleanSwitch">
+                Enable Daily Automatic Cleanup Cron
+              </label>
+              <small class="d-block text-muted">Automatically prunes activity logs daily at 00:00 UTC based on retention threshold.</small>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label font-weight-bold">Log Retention Period (Days)</label>
+              <select v-model="cleanupSettings.retention_days" class="form-select">
+                <option :value="1">1 Day</option>
+                <option :value="3">3 Days</option>
+                <option :value="7">7 Days</option>
+                <option :value="30">30 Days (1 Month)</option>
+                <option :value="60">60 Days (2 Months)</option>
+                <option :value="90">90 Days (3 Months)</option>
+                <option :value="0">Keep Forever (Disabled)</option>
+              </select>
+              <small class="text-muted d-block mt-1">Logs older than the selected retention period will be deleted.</small>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between flex-wrap gap-2">
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-danger btn-sm" @click="runCleanNow" :disabled="cleaningNow || cleanupSettings.retention_days <= 0">
+                <span v-if="cleaningNow" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">delete_sweep</i>
+                Clean Up Old
+              </button>
+              <button type="button" class="btn btn-danger btn-sm" @click="runClearAll" :disabled="clearingAll">
+                <span v-if="clearingAll" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">delete_forever</i>
+                Delete All Logs
+              </button>
+            </div>
+
+            <div>
+              <button type="button" class="btn btn-secondary btn-sm me-2" @click="showSettingsModal = false">Cancel</button>
+              <button type="button" class="btn btn-primary btn-sm" @click="saveSettings" :disabled="savingSettings">
+                <span v-if="savingSettings" class="spinner-border spinner-border-sm me-1"></span>
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </MainLayout>
 </template>
 
@@ -210,6 +276,17 @@ const activities = ref([])
 const uniqueServices = ref([])
 const uniqueActions = ref([])
 const expandedLogs = ref([])
+
+const showSettingsModal = ref(false)
+const savingSettings = ref(false)
+const cleaningNow = ref(false)
+const clearingAll = ref(false)
+const cleanupSettings = ref({
+  retention_days: 30,
+  auto_clean: true
+})
+const feedbackMessage = ref('')
+const feedbackType = ref('success')
 
 const filters = ref({
   search: '',
@@ -234,8 +311,86 @@ const totalPages = computed(() => {
   return pages
 })
 
+const fetchSettings = async () => {
+  try {
+    const response = await axios.get('/activities/settings')
+    if (response.data.success) {
+      cleanupSettings.value = {
+        retention_days: response.data.retention_days,
+        auto_clean: response.data.auto_clean
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch activity cleanup settings:', error)
+  }
+}
+
+const saveSettings = async () => {
+  savingSettings.value = true
+  feedbackMessage.value = ''
+  try {
+    const response = await axios.post('/activities/settings', cleanupSettings.value)
+    if (response.data.success) {
+      feedbackType.value = 'success'
+      feedbackMessage.value = response.data.message
+      setTimeout(() => {
+        showSettingsModal.value = false
+        feedbackMessage.value = ''
+      }, 1500)
+    }
+  } catch (error) {
+    feedbackType.value = 'danger'
+    feedbackMessage.value = error.response?.data?.error || 'Failed to update settings.'
+  } finally {
+    savingSettings.value = false
+  }
+}
+
+const runCleanNow = async () => {
+  if (!confirm(`Are you sure you want to delete activity logs older than ${cleanupSettings.value.retention_days} days? This action cannot be undone.`)) {
+    return
+  }
+  cleaningNow.value = true
+  feedbackMessage.value = ''
+  try {
+    const response = await axios.post('/activities/clean', { days: cleanupSettings.value.retention_days })
+    if (response.data.success) {
+      feedbackType.value = 'success'
+      feedbackMessage.value = response.data.message
+      fetchActivities()
+    }
+  } catch (error) {
+    feedbackType.value = 'danger'
+    feedbackMessage.value = error.response?.data?.error || error.response?.data?.message || 'Failed to perform cleanup.'
+  } finally {
+    cleaningNow.value = false
+  }
+}
+
+const runClearAll = async () => {
+  if (!confirm('WARNING: Are you sure you want to delete ALL activity logs? This action is permanent and cannot be undone!')) {
+    return
+  }
+  clearingAll.value = true
+  feedbackMessage.value = ''
+  try {
+    const response = await axios.post('/activities/clear-all')
+    if (response.data.success) {
+      feedbackType.value = 'success'
+      feedbackMessage.value = response.data.message
+      fetchActivities()
+    }
+  } catch (error) {
+    feedbackType.value = 'danger'
+    feedbackMessage.value = error.response?.data?.error || error.response?.data?.message || 'Failed to clear all logs.'
+  } finally {
+    clearingAll.value = false
+  }
+}
+
 onMounted(() => {
   fetchActivities()
+  fetchSettings()
 })
 
 let debounceTimeout = null
