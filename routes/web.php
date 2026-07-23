@@ -85,6 +85,17 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
     });
 
+    // File Manager shortcut — redirects to primary assigned domain or list
+    Route::get('/file-manager', function (\Illuminate\Http\Request $request) {
+        $user = $request->user();
+        if (!$user) return redirect()->route('auth.login');
+        $domains = $user->accessibleDomains();
+        if (!empty($domains)) {
+            return redirect()->route('file-manager.index', ['domain' => $domains[0]]);
+        }
+        return redirect()->route('domains.list');
+    })->name('file-manager.shortcut');
+
     // File Manager — domain-scoped access via middleware
     Route::middleware(['domain.access'])->prefix('file-manager')->name('file-manager.')->group(function () {
         Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
@@ -197,6 +208,51 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::delete('/{domain}/records/{recordId}', [\App\Http\Controllers\CloudflareDnsController::class, 'deleteRecord'])->name('records.delete');
     });
 
+    // Nginx Configuration — accessible to root, admin, or users with 'nginx' permission
+    Route::prefix('nginx')->name('nginx.')->group(function () {
+        Route::get('/', [NginxController::class, 'index'])->name('index');
+        Route::get('/domains', [NginxController::class, 'getDomains'])->name('domains');
+        Route::post('/config/read', [NginxController::class, 'getConfig'])->name('config.read');
+        Route::post('/config/save', [NginxController::class, 'saveConfig'])->name('config.save');
+        Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
+        Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
+        Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
+    });
+
+    // Supervisor Management — accessible to root, admin, or users with 'supervisor' permission
+    Route::prefix('supervisor')->name('supervisor.')->group(function () {
+        Route::get('/', [SupervisorController::class, 'index'])->name('index');
+        Route::get('/status', [SupervisorController::class, 'getStatus'])->name('status');
+        Route::post('/install', [SupervisorController::class, 'install'])->name('install');
+        Route::get('/install-log', [SupervisorController::class, 'getInstallLog'])->name('install-log');
+        Route::get('/processes', [SupervisorController::class, 'getProcesses'])->name('processes');
+        Route::post('/start', [SupervisorController::class, 'startProcess'])->name('start');
+        Route::post('/stop', [SupervisorController::class, 'stopProcess'])->name('stop');
+        Route::post('/restart', [SupervisorController::class, 'restartProcess'])->name('restart');
+        Route::post('/create', [SupervisorController::class, 'createProcess'])->name('create');
+        Route::post('/delete', [SupervisorController::class, 'deleteProcess'])->name('delete');
+        Route::get('/logs', [SupervisorController::class, 'viewLogs'])->name('logs');
+        Route::post('/reload', [SupervisorController::class, 'reloadConfig'])->name('reload');
+        Route::get('/users', [SupervisorController::class, 'getSystemUsers'])->name('users');
+        Route::get('/config', [SupervisorController::class, 'getProcessConfig'])->name('config');
+        Route::post('/update', [SupervisorController::class, 'updateProcess'])->name('update');
+        Route::post('/start-all', [SupervisorController::class, 'startAll'])->name('start-all');
+        Route::post('/stop-all', [SupervisorController::class, 'stopAll'])->name('stop-all');
+        Route::post('/restart-all', [SupervisorController::class, 'restartAll'])->name('restart-all');
+        Route::get('/projects', [SupervisorController::class, 'getProjects'])->name('projects');
+    });
+
+    // Cron Jobs — accessible to root, admin, or users with 'cron' permission
+    Route::prefix('cron')->name('cron.')->group(function () {
+        Route::get('/', [CronController::class, 'index'])->name('index');
+        Route::get('/jobs', [CronController::class, 'getJobs'])->name('jobs');
+        Route::post('/create', [CronController::class, 'createJob'])->name('create');
+        Route::post('/update', [CronController::class, 'updateJob'])->name('update');
+        Route::post('/delete', [CronController::class, 'deleteJob'])->name('delete');
+        Route::post('/run', [CronController::class, 'runNow'])->name('run');
+        Route::post('/describe', [CronController::class, 'describeSchedule'])->name('describe');
+    });
+
     // ─── ROOT & ADMIN — System Administration ───────────────────────
     Route::middleware(['role:root,admin'])->group(function () {
 
@@ -218,17 +274,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::get('/versions/{version}/extensions', [PhpController::class, 'getExtensions'])->name('versions.extensions');
             Route::post('/versions/{version}/extensions/install', [PhpController::class, 'installExtension'])->name('versions.extensions.install');
             Route::get('/versions/{version}/extensions/install-status', [PhpController::class, 'getExtensionInstallStatus'])->name('versions.extensions.install-status');
-        });
-
-        // Nginx Configuration routes
-        Route::prefix('nginx')->name('nginx.')->group(function () {
-            Route::get('/', [NginxController::class, 'index'])->name('index');
-            Route::get('/domains', [NginxController::class, 'getDomains'])->name('domains');
-            Route::post('/config/read', [NginxController::class, 'getConfig'])->name('config.read');
-            Route::post('/config/save', [NginxController::class, 'saveConfig'])->name('config.save');
-            Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
-            Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
-            Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
         });
 
         // Email Management routes
@@ -254,40 +299,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
             Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
             Route::post('/uninstall', [EmailController::class, 'uninstallMailServer'])->name('uninstall');
-        });
-
-        // Supervisor Management routes
-        Route::prefix('supervisor')->name('supervisor.')->group(function () {
-            Route::get('/', [SupervisorController::class, 'index'])->name('index');
-            Route::get('/status', [SupervisorController::class, 'getStatus'])->name('status');
-            Route::post('/install', [SupervisorController::class, 'install'])->name('install');
-            Route::get('/install-log', [SupervisorController::class, 'getInstallLog'])->name('install-log');
-            Route::get('/processes', [SupervisorController::class, 'getProcesses'])->name('processes');
-            Route::post('/start', [SupervisorController::class, 'startProcess'])->name('start');
-            Route::post('/stop', [SupervisorController::class, 'stopProcess'])->name('stop');
-            Route::post('/restart', [SupervisorController::class, 'restartProcess'])->name('restart');
-            Route::post('/create', [SupervisorController::class, 'createProcess'])->name('create');
-            Route::post('/delete', [SupervisorController::class, 'deleteProcess'])->name('delete');
-            Route::get('/logs', [SupervisorController::class, 'viewLogs'])->name('logs');
-            Route::post('/reload', [SupervisorController::class, 'reloadConfig'])->name('reload');
-            Route::get('/users', [SupervisorController::class, 'getSystemUsers'])->name('users');
-            Route::get('/config', [SupervisorController::class, 'getProcessConfig'])->name('config');
-            Route::post('/update', [SupervisorController::class, 'updateProcess'])->name('update');
-            Route::post('/start-all', [SupervisorController::class, 'startAll'])->name('start-all');
-            Route::post('/stop-all', [SupervisorController::class, 'stopAll'])->name('stop-all');
-            Route::post('/restart-all', [SupervisorController::class, 'restartAll'])->name('restart-all');
-            Route::get('/projects', [SupervisorController::class, 'getProjects'])->name('projects');
-        });
-
-        // Cron Jobs routes
-        Route::prefix('cron')->name('cron.')->group(function () {
-            Route::get('/', [CronController::class, 'index'])->name('index');
-            Route::get('/jobs', [CronController::class, 'getJobs'])->name('jobs');
-            Route::post('/create', [CronController::class, 'createJob'])->name('create');
-            Route::post('/update', [CronController::class, 'updateJob'])->name('update');
-            Route::post('/delete', [CronController::class, 'deleteJob'])->name('delete');
-            Route::post('/run', [CronController::class, 'runNow'])->name('run');
-            Route::post('/describe', [CronController::class, 'describeSchedule'])->name('describe');
         });
 
         // Logs routes
