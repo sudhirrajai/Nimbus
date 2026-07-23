@@ -16,7 +16,7 @@
 
     <hr class="horizontal dark mt-0 mb-2" />
 
-    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
+    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" style="max-height: calc(100vh - 170px); overflow-y: auto;">
       <ul class="navbar-nav">
 
         <li class="nav-item">
@@ -40,7 +40,14 @@
           </Link>
         </li>
 
-        <li class="nav-item">
+        <li v-if="isRootOrAdmin || hasPerm('files')" class="nav-item">
+          <Link :href="fileManagerLink" class="nav-link" :class="isActive('/file-manager')">
+            <i class="material-symbols-rounded opacity-5">folder</i>
+            <span class="nav-link-text ms-1">File Manager</span>
+          </Link>
+        </li>
+
+        <li v-if="isRootOrAdmin || hasPerm('dns')" class="nav-item">
           <Link href="/dns" class="nav-link" :class="isActive('/dns')">
             <i class="material-symbols-rounded opacity-5">dns</i>
             <span class="nav-link-text ms-1">DNS Management</span>
@@ -68,7 +75,7 @@
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li v-if="isRootOrAdmin || hasPerm('nginx')" class="nav-item">
           <Link href="/nginx" class="nav-link" :class="isActive('/nginx')">
             <i class="material-symbols-rounded opacity-5">settings_ethernet</i>
             <span class="nav-link-text ms-1">Nginx Configuration</span>
@@ -128,21 +135,21 @@
           </li>
         </template>
 
-        <!-- ═══ AUTOMATION (Root & Admin) ═══ -->
-        <li v-if="isRootOrAdmin" class="nav-item mt-3">
+        <!-- ═══ AUTOMATION ═══ -->
+        <li v-if="isRootOrAdmin || hasPerm('supervisor') || hasPerm('cron')" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Automation
           </h6>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li v-if="isRootOrAdmin || hasPerm('supervisor')" class="nav-item">
           <Link href="/supervisor" class="nav-link" :class="isActive('/supervisor')">
             <i class="material-symbols-rounded opacity-5">memory</i>
             <span class="nav-link-text ms-1">Supervisor</span>
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li v-if="isRootOrAdmin || hasPerm('cron')" class="nav-item">
           <Link href="/cron" class="nav-link" :class="isActive('/cron')">
             <i class="material-symbols-rounded opacity-5">schedule</i>
             <span class="nav-link-text ms-1">Cron Jobs</span>
@@ -261,6 +268,13 @@ const assignedDomains = computed(() => page.props.auth?.user?.assigned_domains |
 
 const hasPerm = (perm) => isRoot.value || userPermissions.value.includes(perm)
 
+const fileManagerLink = computed(() => {
+  if (assignedDomains.value.length > 0) {
+    return `/file-manager/${assignedDomains.value[0]}`
+  }
+  return '/file-manager'
+})
+
 const isActive = (path) => {
   const currentPath = page.url
 
@@ -288,10 +302,15 @@ const closeSidebar = () => {
 let removeListener = null
 
 onMounted(() => {
+  // Ensure sidebar scroll position resets to top on initial mount
+  const container = document.getElementById('sidenav-collapse-main')
+  if (container) container.scrollTop = 0
+
   removeListener = router.on('navigate', () => {
     closeSidebar()
-    // Extra safety: ensure body overflow is reset
+    // Extra safety: ensure body overflow is reset & sidebar container scrolled up
     document.body.style.overflow = ''
+    if (container) container.scrollTop = 0
   })
 })
 
