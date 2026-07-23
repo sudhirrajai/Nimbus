@@ -132,6 +132,7 @@
                             <i class="material-symbols-rounded">visibility</i>
                           </button>
                           <button 
+                            v-if="isRootOrAdmin || hasPerm('files')"
                             class="action-btn btn-folder" 
                             @click="openFileManager(domain.name)"
                             title="File Manager"
@@ -488,6 +489,8 @@ const page = usePage()
 const userRole = computed(() => page.props.auth?.user?.role || 'user')
 const isRoot = computed(() => page.props.auth?.user?.is_root || userRole.value === 'root')
 const isRootOrAdmin = computed(() => isRoot.value || userRole.value === 'admin')
+const userPermissions = computed(() => page.props.auth?.user?.permissions || [])
+const hasPerm = (perm) => isRoot.value || userPermissions.value.includes(perm)
 
 const domains = ref([])
 const searchQuery = ref("")

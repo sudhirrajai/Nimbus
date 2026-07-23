@@ -97,7 +97,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     })->name('file-manager.shortcut');
 
     // File Manager — domain-scoped access via middleware
-    Route::middleware(['domain.access'])->prefix('file-manager')->name('file-manager.')->group(function () {
+    Route::middleware(['domain.access', 'permission:files'])->prefix('file-manager')->name('file-manager.')->group(function () {
         Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
         Route::post('/{domain}/list', [FileManagerController::class, 'list'])->name('list');
         Route::post('/{domain}/read', [FileManagerController::class, 'read'])->name('read');
@@ -124,28 +124,30 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // Git Deployments — accessible to users with 'deployments' permission (controller filters)
-    Route::get('/deployments', [GitDeploymentController::class, 'index'])->name('deployments.index');
-    Route::get('/deployments/create', [GitDeploymentController::class, 'create'])->name('deployments.create');
-    Route::get('/deployments/{id}/view-logs', [GitDeploymentController::class, 'showLogs'])->name('deployments.view-logs');
+    Route::middleware(['permission:deployments'])->group(function () {
+        Route::get('/deployments', [GitDeploymentController::class, 'index'])->name('deployments.index');
+        Route::get('/deployments/create', [GitDeploymentController::class, 'create'])->name('deployments.create');
+        Route::get('/deployments/{id}/view-logs', [GitDeploymentController::class, 'showLogs'])->name('deployments.view-logs');
 
-    Route::prefix('deployments')->name('deployments.')->group(function () {
-        Route::get('/list', [GitDeploymentController::class, 'list'])->name('list');
-        Route::get('/domains', [GitDeploymentController::class, 'getDomains'])->name('domains');
-        Route::post('/', [GitDeploymentController::class, 'store'])->name('store');
-        Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
-        Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
-        Route::get('/ssh-key', [GitDeploymentController::class, 'getServerSshKey'])->name('ssh-key');
-        Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
-        Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
-        Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
-        Route::post('/{id}/redeploy', [GitDeploymentController::class, 'redeploy'])->name('redeploy');
-        Route::delete('/{id}', [GitDeploymentController::class, 'destroy'])->name('destroy');
-        Route::get('/blacklist', [GitDeploymentController::class, 'getBlacklist'])->name('blacklist');
-        Route::post('/blacklist', [GitDeploymentController::class, 'updateBlacklist'])->name('blacklist.update');
+        Route::prefix('deployments')->name('deployments.')->group(function () {
+            Route::get('/list', [GitDeploymentController::class, 'list'])->name('list');
+            Route::get('/domains', [GitDeploymentController::class, 'getDomains'])->name('domains');
+            Route::post('/', [GitDeploymentController::class, 'store'])->name('store');
+            Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
+            Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
+            Route::get('/ssh-key', [GitDeploymentController::class, 'getServerSshKey'])->name('ssh-key');
+            Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
+            Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
+            Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
+            Route::post('/{id}/redeploy', [GitDeploymentController::class, 'redeploy'])->name('redeploy');
+            Route::delete('/{id}', [GitDeploymentController::class, 'destroy'])->name('destroy');
+            Route::get('/blacklist', [GitDeploymentController::class, 'getBlacklist'])->name('blacklist');
+            Route::post('/blacklist', [GitDeploymentController::class, 'updateBlacklist'])->name('blacklist.update');
+        });
     });
 
     // SSL Certificates — accessible to users with 'ssl' permission (controller filters)
-    Route::prefix('ssl')->name('ssl.')->group(function () {
+    Route::middleware(['permission:ssl'])->prefix('ssl')->name('ssl.')->group(function () {
         Route::get('/', [SslController::class, 'index'])->name('index');
         Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
         Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
@@ -157,7 +159,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // Database Management — accessible to users with 'database' permission (controller filters)
-    Route::prefix('database')->name('database.')->group(function () {
+    Route::middleware(['permission:database'])->prefix('database')->name('database.')->group(function () {
         Route::get('/', [DatabaseController::class, 'index'])->name('index');
         Route::get('/status', [DatabaseController::class, 'getStatus'])->name('status');
         Route::post('/install-viewer', [DatabaseController::class, 'installDatabaseViewer'])->name('install-viewer');
@@ -181,7 +183,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)
-    Route::prefix('wordpress')->name('wordpress.')->group(function () {
+    Route::middleware(['permission:wordpress'])->prefix('wordpress')->name('wordpress.')->group(function () {
         Route::get('/', [\App\Http\Controllers\WordPressController::class, 'index'])->name('index');
         Route::get('/list', [\App\Http\Controllers\WordPressController::class, 'list'])->name('list');
         Route::post('/scan', [\App\Http\Controllers\WordPressController::class, 'scan'])->name('scan');
@@ -198,7 +200,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // DNS Management — domain-scoped access via Cloudflare
-    Route::prefix('dns')->name('dns.')->group(function () {
+    Route::middleware(['permission:dns'])->prefix('dns')->name('dns.')->group(function () {
         Route::get('/', [\App\Http\Controllers\CloudflareDnsController::class, 'index'])->name('index');
         Route::get('/domains', [\App\Http\Controllers\CloudflareDnsController::class, 'getDomains'])->name('domains');
         Route::post('/{domain}/credentials', [\App\Http\Controllers\CloudflareDnsController::class, 'saveCredentials'])->name('credentials');
@@ -209,7 +211,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // Nginx Configuration — accessible to root, admin, or users with 'nginx' permission
-    Route::prefix('nginx')->name('nginx.')->group(function () {
+    Route::middleware(['permission:nginx'])->prefix('nginx')->name('nginx.')->group(function () {
         Route::get('/', [NginxController::class, 'index'])->name('index');
         Route::get('/domains', [NginxController::class, 'getDomains'])->name('domains');
         Route::post('/config/read', [NginxController::class, 'getConfig'])->name('config.read');
@@ -220,7 +222,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // Supervisor Management — accessible to root, admin, or users with 'supervisor' permission
-    Route::prefix('supervisor')->name('supervisor.')->group(function () {
+    Route::middleware(['permission:supervisor'])->prefix('supervisor')->name('supervisor.')->group(function () {
         Route::get('/', [SupervisorController::class, 'index'])->name('index');
         Route::get('/status', [SupervisorController::class, 'getStatus'])->name('status');
         Route::post('/install', [SupervisorController::class, 'install'])->name('install');
@@ -243,7 +245,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     });
 
     // Cron Jobs — accessible to root, admin, or users with 'cron' permission
-    Route::prefix('cron')->name('cron.')->group(function () {
+    Route::middleware(['permission:cron'])->prefix('cron')->name('cron.')->group(function () {
         Route::get('/', [CronController::class, 'index'])->name('index');
         Route::get('/jobs', [CronController::class, 'getJobs'])->name('jobs');
         Route::post('/create', [CronController::class, 'createJob'])->name('create');

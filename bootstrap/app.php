@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'security' => \App\Http\Middleware\SecurityMiddleware::class,
             'role' => \App\Http\Middleware\CheckRole::class,
             'domain.access' => \App\Http\Middleware\CheckDomainAccess::class,
+            'permission' => \App\Http\Middleware\CheckPermission::class,
         ]);
 
         $middleware->web(prepend: [
