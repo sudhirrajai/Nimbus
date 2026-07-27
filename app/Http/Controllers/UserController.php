@@ -106,7 +106,7 @@ class UserController extends Controller
             foreach ($request->websites as $site) {
                 UserWebsite::create([
                     'user_id' => $user->id,
-                    'domain' => $site['domain'],
+                    'domain' => strtolower(trim($site['domain'])),
                     'permissions' => $site['permissions'] ?? ['files', 'deployments', 'wordpress'],
                 ]);
             }
@@ -192,7 +192,7 @@ class UserController extends Controller
         foreach ($request->websites as $site) {
             UserWebsite::create([
                 'user_id' => $user->id,
-                'domain' => $site['domain'],
+                'domain' => strtolower(trim($site['domain'])),
                 'permissions' => $site['permissions'] ?? ['files', 'deployments', 'wordpress'],
             ]);
         }

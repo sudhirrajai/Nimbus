@@ -103,7 +103,8 @@ class DomainController extends Controller
                     }
 
                     if (!$user->isRoot()) {
-                        return in_array($item['name'], $accessibleDomains);
+                        $lowerAccessible = array_map('strtolower', array_map('trim', $accessibleDomains));
+                        return in_array(strtolower(trim($item['name'])), $lowerAccessible);
                     }
 
                     return true;

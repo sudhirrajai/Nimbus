@@ -294,6 +294,10 @@
                             title="Open in Nimbus DB">
                             <i class="material-symbols-rounded">open_in_new</i>
                           </button>
+                          <button class="action-btn btn-link-proj" @click="openLinkProjectModal(db)"
+                            title="Link Project / Domain">
+                            <i class="material-symbols-rounded">link</i>
+                          </button>
                           <button class="action-btn btn-edit" @click="manageDatabase(db)"
                             title="Manage">
                             <i class="material-symbols-rounded">settings</i>
@@ -502,7 +506,42 @@
         </div>
       </div>
 
-      <!-- Nimbus DB SSO Access - no modal needed, opens directly via token -->
+      <!-- Link Project Modal -->
+      <div class="modal-backdrop fade show" v-if="showLinkModal" @click="showLinkModal = false"></div>
+      <div class="modal fade show d-block" v-if="showLinkModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="material-symbols-rounded text-primary me-2">link</i>
+                Link Database to Project: {{ linkingDb?.name }}
+              </h5>
+              <button type="button" class="btn-close" @click="showLinkModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm text-secondary mb-3">
+                Manually link this database to a hosted domain (project). Users with access to the domain will be able to manage this database.
+              </p>
+              <div class="form-group mb-3">
+                <label class="form-control-label">Select Domain / Project</label>
+                <select class="form-select form-control" v-model="selectedProjectDomain" style="padding: 0.5rem 0.75rem;">
+                  <option value="">-- No Project / Unlink --</option>
+                  <option v-for="dom in availableDomains" :key="dom.name" :value="dom.name">
+                    {{ dom.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary mb-0" @click="showLinkModal = false">Cancel</button>
+              <button class="btn bg-gradient-primary mb-0" @click="saveProjectLink" :disabled="assigningProject">
+                <span v-if="assigningProject" class="spinner-border spinner-border-sm me-1"></span>
+                Save Assignment
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </div>
   </MainLayout>
@@ -546,12 +585,17 @@ const showManageModal = ref(false)
 const showPasswordModal = ref(false)
 const showDeleteModal = ref(false)
 const showPmaModal = ref(false)
+const showLinkModal = ref(false)
 
 const managingDb = ref(null)
 const editingUser = ref(null)
 const dbToDelete = ref(null)
 const pmaAccess = ref(null)
 const newPassword = ref('')
+const linkingDb = ref(null)
+const selectedProjectDomain = ref('')
+const availableDomains = ref([])
+const assigningProject = ref(false)
 
 const availablePrivileges = [
   'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP',
@@ -925,6 +969,38 @@ const openPhpMyAdmin = async (db) => {
     window.open(response.data.url, '_blank')
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
+  }
+}
+
+const openLinkProjectModal = async (db) => {
+  linkingDb.value = db
+  selectedProjectDomain.value = db.domain || (db.projects && db.projects.length > 0 ? db.projects[0].project : '')
+  showLinkModal.value = true
+  if (availableDomains.value.length === 0) {
+    try {
+      const res = await axios.get('/domains/api')
+      availableDomains.value = res.data.domains || []
+    } catch (e) {
+      console.error('Failed to load available domains', e)
+    }
+  }
+}
+
+const saveProjectLink = async () => {
+  if (!linkingDb.value) return
+  try {
+    assigningProject.value = true
+    const res = await axios.post('/database/assign-project', {
+      name: linkingDb.value.name,
+      domain: selectedProjectDomain.value
+    })
+    showAlert('success', res.data.message || 'Project linked successfully')
+    showLinkModal.value = false
+    await loadData()
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to link project')
+  } finally {
+    assigningProject.value = false
   }
 }
 </script>

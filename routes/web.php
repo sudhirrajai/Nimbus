@@ -171,6 +171,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/users', [DatabaseController::class, 'getUsers'])->name('users');
         Route::post('/create', [DatabaseController::class, 'createDatabase'])->name('create');
         Route::post('/delete', [DatabaseController::class, 'deleteDatabase'])->name('delete');
+        Route::post('/assign-project', [DatabaseController::class, 'assignProject'])->name('assign-project');
         Route::post('/user/create', [DatabaseController::class, 'createUser'])->name('user.create');
         Route::post('/user/delete', [DatabaseController::class, 'deleteUser'])->name('user.delete');
         Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
