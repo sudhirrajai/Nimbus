@@ -67,7 +67,7 @@
         <!-- Tab 1: Browse Data & Schema -->
         <div v-if="activeTab === 'browse'" class="d-flex flex-grow-1 overflow-hidden h-100">
           
-          <!-- Left Sidebar: Tables List -->
+          <!-- Left Sidebar: Tables List (With wheel trap so scrolling sidebar does not scroll page) -->
           <div class="db-tables-sidebar border-end p-3 d-flex flex-column bg-gray-50 h-100" style="width: 280px; min-width: 250px;">
             <div class="search-box mb-3">
               <div class="input-group input-group-sm bg-white border-radius-lg overflow-hidden border shadow-sm">
@@ -79,7 +79,7 @@
               </div>
             </div>
 
-            <div class="tables-list-scroll flex-grow-1 overflow-y-auto pe-1">
+            <div class="tables-list-scroll flex-grow-1 pe-1" style="overflow-y: auto !important; overscroll-behavior: contain;" @wheel.stop>
               <div v-if="loadingTables" class="text-center py-4 text-secondary">
                 <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
                 <p class="text-xs mt-2 mb-0">Loading tables...</p>
@@ -298,7 +298,7 @@
               </div>
 
               <!-- SubView 2: Schema / Structure -->
-              <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto pe-2" style="max-height: 520px;">
+              <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto pe-2" style="max-height: 520px;" @wheel.stop>
                 <div v-if="loadingSchema" class="text-center py-5">
                   <div class="spinner-border text-primary" role="status"></div>
                   <p class="text-xs text-secondary mt-2">Loading schema details...</p>
@@ -424,7 +424,7 @@
           </div>
         </div>
 
-        <!-- Tab 2: ER Diagram / Database Designer (Fully Scrollable & Pannable Canvas) -->
+        <!-- Tab 2: ER Diagram / Database Designer (Wheel Trapped & Fully Scrollable Canvas) -->
         <div v-else-if="activeTab === 'designer'" class="flex-grow-1 p-3 bg-gray-100 overflow-hidden d-flex flex-column h-100 position-relative">
           <!-- Toolbar -->
           <div class="d-flex justify-content-between align-items-center mb-2 px-2 flex-shrink-0">
@@ -461,10 +461,10 @@
             </div>
           </div>
 
-          <!-- Interactive Designer Canvas Area (Scrollable container so all tables below top row are visible) -->
+          <!-- Interactive Designer Canvas Area (Wheel Trapped Container so scrolling ER diagram does not scroll page) -->
           <div class="designer-canvas-wrapper flex-grow-1 border border-radius-xl bg-white position-relative shadow-inner"
-            style="overflow: auto !important; height: 550px; min-height: 500px;"
-            @mousemove="handleCanvasMouseMove" @mouseup="handleCanvasMouseUp">
+            style="overflow: auto !important; height: 550px; min-height: 500px; overscroll-behavior: contain;"
+            @mousemove="handleCanvasMouseMove" @mouseup="handleCanvasMouseUp" @wheel.stop>
             
             <div v-if="loadingDesigner" class="text-center py-7">
               <div class="spinner-border text-primary" role="status"></div>
@@ -512,7 +512,7 @@
                 </div>
 
                 <!-- Table Columns List -->
-                <div class="card-body p-0 overflow-y-auto" style="max-height: 220px;">
+                <div class="card-body p-0 overflow-y-auto" style="max-height: 220px;" @wheel.stop>
                   <div v-for="col in t.columns" :key="col.name" 
                     class="designer-col-item px-2 py-1 border-bottom text-xxs d-flex align-items-center justify-content-between"
                     :class="{ 'bg-light-primary font-weight-bold': col.is_primary }">
@@ -531,7 +531,7 @@
         </div>
 
         <!-- Tab 3: Interactive SQL Console -->
-        <div v-else-if="activeTab === 'sql'" class="flex-grow-1 p-4 bg-white overflow-y-auto d-flex flex-column h-100">
+        <div v-else-if="activeTab === 'sql'" class="flex-grow-1 p-4 bg-white overflow-y-auto d-flex flex-column h-100" @wheel.stop>
           <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
               <h5 class="font-weight-bolder text-dark mb-0">SQL Query Console</h5>
@@ -555,7 +555,7 @@
           </div>
 
           <!-- Query Results Section -->
-          <div v-if="sqlResult" class="sql-results-container flex-grow-1 border border-radius-lg p-3 bg-gray-50 overflow-y-auto">
+          <div v-if="sqlResult" class="sql-results-container flex-grow-1 border border-radius-lg p-3 bg-gray-50 overflow-y-auto" @wheel.stop>
             <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
               <div class="d-flex align-items-center gap-2">
                 <span :class="sqlResult.success ? 'badge bg-success' : 'badge bg-danger'">
@@ -570,7 +570,7 @@
             </div>
 
             <!-- SELECT Grid Result -->
-            <div v-if="sqlResult.type === 'select' && sqlResult.rows" class="table-responsive border border-radius-lg bg-white overflow-y-auto" style="max-height: 350px;">
+            <div v-if="sqlResult.type === 'select' && sqlResult.rows" class="table-responsive border border-radius-lg bg-white overflow-y-auto" style="max-height: 350px;" @wheel.stop>
               <table class="table table-hover align-items-center mb-0">
                 <thead class="bg-gray-100 sticky-top">
                   <tr>
@@ -601,7 +601,7 @@
         </div>
 
         <!-- Tab 4: Create Table Form -->
-        <div v-else-if="activeTab === 'create_table'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100">
+        <div v-else-if="activeTab === 'create_table'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100" @wheel.stop>
           <h5 class="font-weight-bolder text-dark mb-1">Create New Table</h5>
           <p class="text-xs text-secondary mb-4">Define table name, columns, and properties for <code>{{ database }}</code></p>
 
@@ -630,7 +630,7 @@
 
           <!-- Columns Builder Grid -->
           <h6 class="font-weight-bolder text-dark mb-3">Columns Definition</h6>
-          <div class="table-responsive border border-radius-lg mb-4">
+          <div class="table-responsive border border-radius-lg mb-4" @wheel.stop>
             <table class="table align-items-center mb-0">
               <thead class="bg-gray-100">
                 <tr>
@@ -700,7 +700,7 @@
         </div>
 
         <!-- Tab 5: Export / Import -->
-        <div v-else-if="activeTab === 'export_import'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100">
+        <div v-else-if="activeTab === 'export_import'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100" @wheel.stop>
           <div class="row g-4">
             <!-- Export Section -->
             <div class="col-md-6">
