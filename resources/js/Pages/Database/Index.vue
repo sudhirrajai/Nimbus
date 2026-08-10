@@ -290,9 +290,9 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <button class="action-btn btn-view" @click="openNativeManager(db.name)"
-                            title="Open Database Workspace">
-                            <i class="material-symbols-rounded">table_chart</i>
+                          <button class="action-btn btn-view" @click="openNativeManager(db.name)" :disabled="openingManager[db.name]" title="Open Database Workspace">
+                            <span v-if="openingManager[db.name]" class="spinner-border spinner-border-sm"></span>
+                            <i v-else class="material-symbols-rounded">table_chart</i>
                           </button>
                           <button class="action-btn btn-link-proj" @click="openLinkProjectModal(db)"
                             title="Link Project / Domain">

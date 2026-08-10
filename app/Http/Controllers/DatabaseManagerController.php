@@ -785,6 +785,183 @@ class DatabaseManagerController extends Controller
     }
 
     /**
+     * Update/Modify an existing column structure in a table (ALTER TABLE ... CHANGE COLUMN)
+     */
+    public function updateColumn(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $oldName = $this->sanitizeIdentifier($request->input('column'));
+            $newName = $this->sanitizeIdentifier($request->input('new_name', $oldName));
+            $type = strtoupper(trim($request->input('type', 'VARCHAR')));
+            $length = trim($request->input('length', ''));
+            $nullable = $request->boolean('nullable', true) ? "NULL" : "NOT NULL";
+            $autoInc = $request->boolean('auto_increment', false) ? "AUTO_INCREMENT" : "";
+            $comment = $request->input('comment', '');
+
+            $typeSpec = !empty($length) ? "{$type}({$length})" : $type;
+            
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $defaultSql = "";
+            if ($request->has('default') && $request->input('default') !== null && $request->input('default') !== '') {
+                $defVal = $request->input('default');
+                if (in_array(strtoupper($defVal), ['CURRENT_TIMESTAMP', 'NULL'])) {
+                    $defaultSql = "DEFAULT {$defVal}";
+                } else {
+                    $defaultSql = "DEFAULT " . $pdo->quote($defVal);
+                }
+            }
+
+            $commentSql = !empty($comment) ? "COMMENT " . $pdo->quote($comment) : "";
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` CHANGE COLUMN `{$oldName}` `{$newName}` {$typeSpec} {$nullable} {$autoInc} {$defaultSql} {$commentSql}";
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Column '{$oldName}' updated successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Add a new column to an existing table (ALTER TABLE ... ADD COLUMN)
+     */
+    public function addColumn(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $name = $this->sanitizeIdentifier($request->input('name'));
+            $type = strtoupper(trim($request->input('type', 'VARCHAR')));
+            $length = trim($request->input('length', ''));
+            $nullable = $request->boolean('nullable', true) ? "NULL" : "NOT NULL";
+            $autoInc = $request->boolean('auto_increment', false) ? "AUTO_INCREMENT" : "";
+            $comment = $request->input('comment', '');
+            $position = $request->input('position', '');
+
+            $typeSpec = !empty($length) ? "{$type}({$length})" : $type;
+            
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $defaultSql = "";
+            if ($request->has('default') && $request->input('default') !== null && $request->input('default') !== '') {
+                $defVal = $request->input('default');
+                if (in_array(strtoupper($defVal), ['CURRENT_TIMESTAMP', 'NULL'])) {
+                    $defaultSql = "DEFAULT {$defVal}";
+                } else {
+                    $defaultSql = "DEFAULT " . $pdo->quote($defVal);
+                }
+            }
+
+            $commentSql = !empty($comment) ? "COMMENT " . $pdo->quote($comment) : "";
+            
+            $posSql = "";
+            if (strtoupper($position) === 'FIRST') {
+                $posSql = "FIRST";
+            } elseif (!empty($position)) {
+                $posSql = "AFTER `" . $this->sanitizeIdentifier($position) . "`";
+            }
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` ADD COLUMN `{$name}` {$typeSpec} {$nullable} {$autoInc} {$defaultSql} {$commentSql} {$posSql}";
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Column '{$name}' added to '{$table}' successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Drop a column from an existing table (ALTER TABLE ... DROP COLUMN)
+     */
+    public function dropColumn(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $column = $this->sanitizeIdentifier($request->input('column'));
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` DROP COLUMN `{$column}`";
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Column '{$column}' dropped from '{$table}' successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Alter table properties (Rename, Engine, Collation)
+     */
+    public function alterTableProps(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $alterParts = [];
+
+            if ($request->has('new_name') && !empty($request->input('new_name')) && $request->input('new_name') !== $table) {
+                $newName = $this->sanitizeIdentifier($request->input('new_name'));
+                $alterParts[] = "RENAME TO `{$safeDb}`.`{$newName}`";
+            }
+
+            if ($request->has('engine') && !empty($request->input('engine'))) {
+                $engine = preg_replace('/[^a-zA-Z0-9]/', '', $request->input('engine'));
+                $alterParts[] = "ENGINE = {$engine}";
+            }
+
+            if ($request->has('collation') && !empty($request->input('collation'))) {
+                $collation = preg_replace('/[^a-zA-Z0-9_]/', '', $request->input('collation'));
+                $alterParts[] = "CONVERT TO CHARACTER SET utf8mb4 COLLATE {$collation}";
+            }
+
+            if (empty($alterParts)) {
+                return response()->json(['error' => 'No alterations specified'], 400);
+            }
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` " . implode(', ', $alterParts);
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Table '{$table}' properties updated successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * 10. Execute raw SQL query (SQL Console)
      */
     public function executeQuery(Request $request, string $db)

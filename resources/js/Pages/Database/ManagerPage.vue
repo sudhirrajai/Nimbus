@@ -130,6 +130,12 @@
                   <button v-if="subView === 'data'" class="btn btn-sm bg-gradient-success mb-0 border-radius-lg" @click="openInsertRowModal">
                     <i class="material-symbols-rounded text-sm me-1">add_circle</i> Insert Row
                   </button>
+                  <button v-if="subView === 'schema'" class="btn btn-sm bg-gradient-primary mb-0 border-radius-lg" @click="openAddColumnModal">
+                    <i class="material-symbols-rounded text-sm me-1">add</i> Add Column
+                  </button>
+                  <button v-if="subView === 'schema'" class="btn btn-sm btn-outline-secondary mb-0 border-radius-lg" @click="openAlterTableModal">
+                    <i class="material-symbols-rounded text-sm me-1">settings</i> Table Settings
+                  </button>
                   <button class="btn btn-sm btn-outline-secondary mb-0 border-radius-lg" @click="loadTableData" :disabled="loadingData">
                     <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loadingData }">refresh</i> Refresh
                   </button>
@@ -268,7 +274,18 @@
 
                 <template v-else-if="tableSchema">
                   <!-- Columns Table -->
-                  <h6 class="font-weight-bolder text-dark mb-3">Columns Definition</h6>
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="font-weight-bolder text-dark mb-0">Columns Definition</h6>
+                    <div class="d-flex gap-2">
+                      <button class="btn btn-xs btn-outline-primary border-radius-lg mb-0" @click="openAddColumnModal">
+                        <i class="material-symbols-rounded text-xs me-1">add</i> Add Column
+                      </button>
+                      <button class="btn btn-xs btn-outline-secondary border-radius-lg mb-0" @click="openAlterTableModal">
+                        <i class="material-symbols-rounded text-xs me-1">settings</i> Table Settings
+                      </button>
+                    </div>
+                  </div>
+
                   <div class="table-responsive border border-radius-lg mb-4">
                     <table class="table align-items-center mb-0">
                       <thead class="bg-gray-100">
@@ -280,6 +297,7 @@
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Default</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Extra</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Comment</th>
+                          <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-8" style="width: 90px;">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -294,6 +312,16 @@
                           <td class="text-xs text-dark">{{ c.default !== null ? c.default : 'NULL' }}</td>
                           <td class="text-xs text-secondary">{{ c.extra || '-' }}</td>
                           <td class="text-xs text-muted">{{ c.comment || '-' }}</td>
+                          <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                              <button class="action-btn-sm" @click="openEditColumnModal(c)" title="Edit Column / Type">
+                                <i class="material-symbols-rounded text-sm text-info">edit</i>
+                              </button>
+                              <button class="action-btn-sm" @click="saveDropColumn(c.name)" title="Drop Column">
+                                <i class="material-symbols-rounded text-sm text-danger">delete</i>
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -633,6 +661,193 @@
       </div>
     </div>
 
+    <!-- Edit Column Modal -->
+    <div v-if="showEditColumnModal" class="modal-backdrop fade show" style="z-index: 10050;"></div>
+    <div v-if="showEditColumnModal" class="modal fade show d-block" style="z-index: 10051;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="glass-card modal-content border-0 shadow-2xl bg-white p-3">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bolder text-dark">
+              <i class="material-symbols-rounded text-info me-2 align-middle">edit</i>
+              Edit Column: {{ columnForm.column }}
+            </h5>
+            <button type="button" class="btn-close" @click="showEditColumnModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Column Name</label>
+              <input v-model="columnForm.new_name" type="text" class="form-control" />
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-md-6">
+                <label class="form-label text-xs font-weight-bold text-uppercase">Data Type</label>
+                <select v-model="columnForm.type" class="form-select">
+                  <option value="VARCHAR">VARCHAR</option>
+                  <option value="INT">INT</option>
+                  <option value="BIGINT">BIGINT</option>
+                  <option value="TINYINT">TINYINT (Bool)</option>
+                  <option value="TEXT">TEXT</option>
+                  <option value="LONGTEXT">LONGTEXT</option>
+                  <option value="DATETIME">DATETIME</option>
+                  <option value="TIMESTAMP">TIMESTAMP</option>
+                  <option value="DECIMAL">DECIMAL</option>
+                  <option value="JSON">JSON</option>
+                  <option value="ENUM">ENUM</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-xs font-weight-bold text-uppercase">Length / Values</label>
+                <input v-model="columnForm.length" type="text" class="form-control" placeholder="e.g. 255 or 10,2" />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Default Value</label>
+              <input v-model="columnForm.default" type="text" class="form-control" placeholder="NULL or default value" />
+            </div>
+            <div class="d-flex align-items-center gap-4 mb-3">
+              <div class="form-check mb-0">
+                <input v-model="columnForm.nullable" type="checkbox" class="form-check-input" id="colNull" />
+                <label class="form-check-label text-xs font-weight-bold" for="colNull">Allow NULL</label>
+              </div>
+              <div class="form-check mb-0">
+                <input v-model="columnForm.auto_increment" type="checkbox" class="form-check-input" id="colAi" />
+                <label class="form-check-label text-xs font-weight-bold" for="colAi">Auto Increment</label>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Comment</label>
+              <input v-model="columnForm.comment" type="text" class="form-control text-xs" placeholder="Optional column comment" />
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-link text-secondary mb-0" @click="showEditColumnModal = false">Cancel</button>
+            <button class="btn bg-gradient-primary mb-0 border-radius-lg px-4" @click="saveEditColumn" :disabled="savingColumn">
+              <span v-if="savingColumn" class="spinner-border spinner-border-sm me-1"></span>
+              Update Column Structure
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Column Modal -->
+    <div v-if="showAddColumnModal" class="modal-backdrop fade show" style="z-index: 10050;"></div>
+    <div v-if="showAddColumnModal" class="modal fade show d-block" style="z-index: 10051;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="glass-card modal-content border-0 shadow-2xl bg-white p-3">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bolder text-dark">
+              <i class="material-symbols-rounded text-primary me-2 align-middle">add_circle</i>
+              Add New Column to {{ selectedTable }}
+            </h5>
+            <button type="button" class="btn-close" @click="showAddColumnModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Column Name</label>
+              <input v-model="columnForm.name" type="text" class="form-control" placeholder="new_column_name" />
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-md-6">
+                <label class="form-label text-xs font-weight-bold text-uppercase">Data Type</label>
+                <select v-model="columnForm.type" class="form-select">
+                  <option value="VARCHAR">VARCHAR</option>
+                  <option value="INT">INT</option>
+                  <option value="BIGINT">BIGINT</option>
+                  <option value="TINYINT">TINYINT (Bool)</option>
+                  <option value="TEXT">TEXT</option>
+                  <option value="LONGTEXT">LONGTEXT</option>
+                  <option value="DATETIME">DATETIME</option>
+                  <option value="TIMESTAMP">TIMESTAMP</option>
+                  <option value="DECIMAL">DECIMAL</option>
+                  <option value="JSON">JSON</option>
+                  <option value="ENUM">ENUM</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-xs font-weight-bold text-uppercase">Length / Values</label>
+                <input v-model="columnForm.length" type="text" class="form-control" placeholder="e.g. 255" />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Position</label>
+              <select v-model="columnForm.position" class="form-select">
+                <option value="">At End of Table</option>
+                <option value="FIRST">At Beginning (FIRST)</option>
+                <option v-for="c in tableColumns" :key="c" :value="c">After {{ c }}</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Default Value</label>
+              <input v-model="columnForm.default" type="text" class="form-control" placeholder="NULL or default value" />
+            </div>
+            <div class="d-flex align-items-center gap-4 mb-3">
+              <div class="form-check mb-0">
+                <input v-model="columnForm.nullable" type="checkbox" class="form-check-input" id="addColNull" />
+                <label class="form-check-label text-xs font-weight-bold" for="addColNull">Allow NULL</label>
+              </div>
+              <div class="form-check mb-0">
+                <input v-model="columnForm.auto_increment" type="checkbox" class="form-check-input" id="addColAi" />
+                <label class="form-check-label text-xs font-weight-bold" for="addColAi">Auto Increment</label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-link text-secondary mb-0" @click="showAddColumnModal = false">Cancel</button>
+            <button class="btn bg-gradient-primary mb-0 border-radius-lg px-4" @click="saveAddColumn" :disabled="savingColumn || !columnForm.name.trim()">
+              <span v-if="savingColumn" class="spinner-border spinner-border-sm me-1"></span>
+              Add Column Now
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Settings Modal -->
+    <div v-if="showAlterTableModal" class="modal-backdrop fade show" style="z-index: 10050;"></div>
+    <div v-if="showAlterTableModal" class="modal fade show d-block" style="z-index: 10051;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="glass-card modal-content border-0 shadow-2xl bg-white p-3">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bolder text-dark">
+              <i class="material-symbols-rounded text-secondary me-2 align-middle">settings</i>
+              Table Settings: {{ selectedTable }}
+            </h5>
+            <button type="button" class="btn-close" @click="showAlterTableModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Rename Table</label>
+              <input v-model="alterTableForm.new_name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Engine</label>
+              <select v-model="alterTableForm.engine" class="form-select">
+                <option value="InnoDB">InnoDB</option>
+                <option value="MyISAM">MyISAM</option>
+                <option value="MEMORY">MEMORY</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Collation</label>
+              <select v-model="alterTableForm.collation" class="form-select">
+                <option value="utf8mb4_unicode_ci">utf8mb4_unicode_ci</option>
+                <option value="utf8mb4_general_ci">utf8mb4_general_ci</option>
+                <option value="utf8_general_ci">utf8_general_ci</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-link text-secondary mb-0" @click="showAlterTableModal = false">Cancel</button>
+            <button class="btn bg-gradient-primary mb-0 border-radius-lg px-4" @click="saveAlterTableProps" :disabled="savingTableProps">
+              <span v-if="savingTableProps" class="spinner-border spinner-border-sm me-1"></span>
+              Save Table Properties
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </MainLayout>
 </template>
 
@@ -674,6 +889,32 @@ const allRowsSelected = ref(false)
 // Schema
 const tableSchema = ref(null)
 const loadingSchema = ref(false)
+
+// Column & Structure Editing Modals
+const showAddColumnModal = ref(false)
+const showEditColumnModal = ref(false)
+const showAlterTableModal = ref(false)
+const savingColumn = ref(false)
+const savingTableProps = ref(false)
+
+const columnForm = ref({
+  column: '',
+  name: '',
+  new_name: '',
+  type: 'VARCHAR',
+  length: '255',
+  nullable: true,
+  default: null,
+  auto_increment: false,
+  comment: '',
+  position: ''
+})
+
+const alterTableForm = ref({
+  new_name: '',
+  engine: 'InnoDB',
+  collation: 'utf8mb4_unicode_ci'
+})
 
 // SQL Console
 const sqlQuery = ref('')
@@ -789,6 +1030,116 @@ const loadTableSchema = async () => {
     showAlert('danger', 'Failed to load schema')
   } finally {
     loadingSchema.value = false
+  }
+}
+
+// Column & Schema Editing Handlers
+const openAddColumnModal = () => {
+  columnForm.value = {
+    column: '',
+    name: '',
+    new_name: '',
+    type: 'VARCHAR',
+    length: '255',
+    nullable: true,
+    default: null,
+    auto_increment: false,
+    comment: '',
+    position: ''
+  }
+  showAddColumnModal.value = true
+}
+
+const openEditColumnModal = (col) => {
+  let rawType = col.type || 'VARCHAR'
+  let mainType = rawType.split('(')[0].toUpperCase()
+  let lenMatch = rawType.match(/\((.+)\)/)
+  let lengthStr = lenMatch ? lenMatch[1] : ''
+
+  columnForm.value = {
+    column: col.name,
+    name: col.name,
+    new_name: col.name,
+    type: mainType,
+    length: lengthStr,
+    nullable: col.null,
+    default: col.default,
+    auto_increment: col.is_auto_increment || false,
+    comment: col.comment || '',
+    position: ''
+  }
+  showEditColumnModal.value = true
+}
+
+const openAlterTableModal = () => {
+  const currentTableObj = tables.value.find(t => t.name === selectedTable.value)
+  alterTableForm.value = {
+    new_name: selectedTable.value,
+    engine: currentTableObj?.engine || 'InnoDB',
+    collation: currentTableObj?.collation || 'utf8mb4_unicode_ci'
+  }
+  showAlterTableModal.value = true
+}
+
+const saveAddColumn = async () => {
+  if (!columnForm.value.name.trim()) return
+  try {
+    savingColumn.value = true
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/column/add`, columnForm.value)
+    showAlert('success', `Column '${columnForm.value.name}' added successfully`)
+    showAddColumnModal.value = false
+    loadTableSchema()
+    loadTableData()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to add column')
+  } finally {
+    savingColumn.value = false
+  }
+}
+
+const saveEditColumn = async () => {
+  if (!columnForm.value.new_name.trim()) return
+  try {
+    savingColumn.value = true
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/column/update`, columnForm.value)
+    showAlert('success', `Column '${columnForm.value.column}' updated successfully`)
+    showEditColumnModal.value = false
+    loadTableSchema()
+    loadTableData()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to update column')
+  } finally {
+    savingColumn.value = false
+  }
+}
+
+const saveDropColumn = async (colName) => {
+  if (!confirm(`Drop column '${colName}' from table '${selectedTable.value}'? Data in this column will be permanently lost.`)) return
+  try {
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/column/drop`, {
+      column: colName
+    })
+    showAlert('success', `Column '${colName}' dropped`)
+    loadTableSchema()
+    loadTableData()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to drop column')
+  }
+}
+
+const saveAlterTableProps = async () => {
+  try {
+    savingTableProps.value = true
+    const response = await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/alter-props`, alterTableForm.value)
+    showAlert('success', response.data.message || 'Table properties updated')
+    showAlterTableModal.value = false
+    const oldName = selectedTable.value
+    await loadTables()
+    selectedTable.value = alterTableForm.value.new_name || oldName
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to update table properties')
+  } finally {
+    savingTableProps.value = false
   }
 }
 
