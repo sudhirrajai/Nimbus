@@ -627,27 +627,6 @@ CONFIG;
         }
     }
 
-    /**
-     * Reload supervisor configuration
-     */
-    public function reloadConfig()
-    {
-        try {
-            if (!auth()->user()->isRoot()) {
-                return response()->json(['error' => 'Permission denied: Only root can reload supervisor configuration globally.'], 403);
-            }
-
-            exec("sudo supervisorctl reread 2>&1", $output1);
-            exec("sudo supervisorctl update 2>&1", $output2);
-            
-            return response()->json([
-                'success' => true,
-                'message' => implode("\n", array_merge($output1, $output2))
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
 
     /**
      * Get process configuration
