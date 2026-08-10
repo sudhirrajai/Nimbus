@@ -98,7 +98,7 @@
                 </div>
               </div>
 
-              <!-- Right Panel: Data Grid & Schema Inspector (Fix internal scroll) -->
+              <!-- Right Panel: Data Grid & Schema Inspector -->
               <div class="db-main-content flex-grow-1 p-3 bg-white d-flex flex-column h-100 overflow-hidden">
                 <template v-if="selectedTable">
                   <!-- Table Sub-Header & Controls -->
@@ -174,7 +174,7 @@
                     </div>
                   </div>
 
-                  <!-- SubView 1: Data Grid (Dedicated internal scroll area) -->
+                  <!-- SubView 1: Data Grid (Dedicated internal scroll area with fixed height & wheel trap) -->
                   <div v-if="subView === 'data'" class="flex-grow-1 d-flex flex-column overflow-hidden">
                     <!-- Filters & Search Toolbar -->
                     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 flex-shrink-0">
@@ -211,7 +211,9 @@
                     </div>
 
                     <!-- Internal Table Scroll Container -->
-                    <div class="table-responsive flex-grow-1 border border-radius-lg position-relative internal-table-scroll" style="z-index: 1; overflow-y: auto; overscroll-behavior: contain;">
+                    <div class="table-responsive flex-grow-1 border border-radius-lg position-relative internal-table-scroll" 
+                      style="height: 480px; max-height: 480px; overflow-y: auto !important; overscroll-behavior: contain; z-index: 1;"
+                      @wheel.stop>
                       <div v-if="loadingData" class="text-center py-5">
                         <div class="spinner-border text-primary" role="status"></div>
                         <p class="text-xs text-secondary mt-2">Loading table rows...</p>
@@ -285,7 +287,7 @@
                   </div>
 
                   <!-- SubView 2: Schema / Structure -->
-                  <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto pe-2">
+                  <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto pe-2" style="max-height: 520px;">
                     <div v-if="loadingSchema" class="text-center py-5">
                       <div class="spinner-border text-primary" role="status"></div>
                       <p class="text-xs text-secondary mt-2">Loading schema details...</p>
@@ -411,10 +413,10 @@
               </div>
             </template>
 
-            <!-- Tab 2: ER Diagram / Database Designer -->
+            <!-- Tab 2: ER Diagram / Database Designer (Fully Scrollable & Pannable Canvas) -->
             <div v-else-if="activeTab === 'designer'" class="flex-grow-1 p-3 bg-gray-100 overflow-hidden d-flex flex-column h-100 position-relative">
               <!-- Toolbar -->
-              <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+              <div class="d-flex justify-content-between align-items-center mb-2 px-2 flex-shrink-0">
                 <div class="d-flex align-items-center gap-2">
                   <h6 class="font-weight-bolder text-dark mb-0 d-flex align-items-center gap-1">
                     <i class="material-symbols-rounded text-primary">hub</i>
@@ -448,8 +450,9 @@
                 </div>
               </div>
 
-              <!-- Interactive Designer Canvas Area -->
-              <div class="designer-canvas-wrapper flex-grow-1 border border-radius-xl bg-white position-relative overflow-hidden shadow-inner"
+              <!-- Interactive Designer Canvas Area (Scrollable container so all tables below top row are visible) -->
+              <div class="designer-canvas-wrapper flex-grow-1 border border-radius-xl bg-white position-relative shadow-inner"
+                style="overflow: auto !important; height: 550px; min-height: 500px;"
                 @mousemove="handleCanvasMouseMove" @mouseup="handleCanvasMouseUp">
                 
                 <div v-if="loadingDesigner" class="text-center py-7">
@@ -463,11 +466,11 @@
                   <p class="text-xs text-secondary mb-0">Create tables to view database relationship topology.</p>
                 </div>
 
-                <div v-else class="designer-viewport w-100 h-100 position-absolute top-0 start-0"
-                  :style="{ transform: `scale(${designerZoom})`, transformOrigin: 'top left', transition: isDraggingTable ? 'none' : 'transform 0.2s ease' }">
+                <div v-else class="designer-viewport position-relative"
+                  :style="{ width: designerCanvasWidth + 'px', height: designerCanvasHeight + 'px', transform: `scale(${designerZoom})`, transformOrigin: 'top left', transition: isDraggingTable ? 'none' : 'transform 0.2s ease' }">
                   
                   <!-- SVG Connector Layer -->
-                  <svg class="designer-svg-layer position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none; z-index: 1;">
+                  <svg class="designer-svg-layer position-absolute top-0 start-0" :style="{ width: designerCanvasWidth + 'px', height: designerCanvasHeight + 'px', pointerEvents: 'none', zIndex: 1 }">
                     <defs>
                       <marker id="arrowModal" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#5e72e4" />
@@ -1025,6 +1028,22 @@ const designerZoom = ref(1)
 const isDraggingTable = ref(false)
 const draggingTableName = ref(null)
 const dragOffset = ref({ x: 0, y: 0 })
+
+const designerCanvasWidth = computed(() => {
+  let maxX = 1200
+  Object.values(tablePositions.value).forEach(pos => {
+    if (pos.x + 300 > maxX) maxX = pos.x + 300
+  })
+  return maxX + 300
+})
+
+const designerCanvasHeight = computed(() => {
+  let maxY = 800
+  Object.values(tablePositions.value).forEach(pos => {
+    if (pos.y + 350 > maxY) maxY = pos.y + 350
+  })
+  return maxY + 300
+})
 
 // Column & Structure Editing Modals
 const showAddColumnModal = ref(false)
