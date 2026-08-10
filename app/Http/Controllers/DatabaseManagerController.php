@@ -38,26 +38,128 @@ class DatabaseManagerController extends Controller
     {
         $safeDb = preg_replace('/[^a-zA-Z0-9_]/', '', $dbName);
         
-        // Use default database credentials from env/config
-        $host = config('database.connections.mysql.host', '127.0.0.1');
-        $port = config('database.connections.mysql.port', '3306');
         $username = config('database.connections.mysql.username', 'root');
         $password = config('database.connections.mysql.password', '');
+        $host = config('database.connections.mysql.host', '127.0.0.1');
+        $port = config('database.connections.mysql.port', '3306');
         $socket = config('database.connections.mysql.unix_socket');
 
-        if (!empty($socket) && file_exists($socket)) {
-            $dsn = "mysql:dbname={$safeDb};unix_socket={$socket};charset=utf8mb4";
-        } else {
-            $dsn = "mysql:host={$host};port={$port};dbname={$safeDb};charset=utf8mb4";
+        // Check if nimbus_db_credentials.json exists (nimbus_admin user with full privileges)
+        $credentialsPath = storage_path('app/nimbus_db_credentials.json');
+        if (file_exists($credentialsPath)) {
+            $credentials = json_decode(file_get_contents($credentialsPath), true);
+            if (!empty($credentials['username'])) {
+                $username = $credentials['username'];
+            }
+            if (!empty($credentials['password'])) {
+                $password = $credentials['password'];
+            }
         }
 
-        $pdo = new PDO($dsn, $username, $password, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
+        try {
+            if (!empty($socket) && file_exists($socket)) {
+                $dsn = "mysql:dbname={$safeDb};unix_socket={$socket};charset=utf8mb4";
+            } else {
+                $dsn = "mysql:host={$host};port={$port};dbname={$safeDb};charset=utf8mb4";
+            }
 
-        return $pdo;
+            return new PDO($dsn, $username, $password, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+        } catch (\PDOException $e) {
+            Log::warning("Primary PDO connection as '{$username}' failed for DB '{$dbName}': " . $e->getMessage());
+
+            // Socket Fallbacks for Linux server (MariaDB / MySQL unix_socket root authentication)
+            $socketPaths = ['/var/run/mysqld/mysqld.sock', '/tmp/mysql.sock', '/var/lib/mysql/mysql.sock'];
+            foreach ($socketPaths as $sockPath) {
+                if (file_exists($sockPath)) {
+                    try {
+                        $dsn = "mysql:dbname={$safeDb};unix_socket={$sockPath};charset=utf8mb4";
+                        return new PDO($dsn, 'root', '', [
+                            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        ]);
+                    } catch (\Exception $sockErr) {
+                        // continue trying next socket
+                    }
+                }
+            }
+
+            throw new \Exception("Database Access Error for '{$dbName}': " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate temporary single-use session token for opening DB Manager in a new tab
+     */
+    public function generateToken(Request $request)
+    {
+        try {
+            $database = $request->input('database');
+            if (empty($database)) {
+                return response()->json(['error' => 'Database name is required'], 400);
+            }
+
+            if (!$this->checkDatabaseAccess($database)) {
+                return response()->json(['error' => 'Permission denied for this database.'], 403);
+            }
+
+            $token = Str::random(64);
+            $tokenDir = storage_path('app/db_tokens');
+            if (!is_dir($tokenDir)) {
+                mkdir($tokenDir, 0755, true);
+            }
+
+            $tokenData = [
+                'token' => $token,
+                'database' => $database,
+                'user_id' => auth()->id(),
+                'user_email' => auth()->user()->email ?? 'unknown',
+                'created_at' => time(),
+                'expires_at' => time() + 900 // 15 minutes validity
+            ];
+
+            file_put_contents("{$tokenDir}/{$token}.json", json_encode($tokenData));
+
+            return response()->json([
+                'success' => true,
+                'token' => $token,
+                'database' => $database,
+                'url' => "/database/manager/view/{$token}"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Render full standalone Database Manager page for a given single-use token
+     */
+    public function viewPage(string $token)
+    {
+        $tokenPath = storage_path("app/db_tokens/{$token}.json");
+        if (!file_exists($tokenPath)) {
+            return redirect()->route('database.index')->with('error', 'Database session expired or invalid token.');
+        }
+
+        $tokenData = json_decode(file_get_contents($tokenPath), true);
+        if (!$tokenData || (time() > ($tokenData['expires_at'] ?? 0))) {
+            @unlink($tokenPath);
+            return redirect()->route('database.index')->with('error', 'Database session token has expired.');
+        }
+
+        $database = $tokenData['database'];
+
+        if (!$this->checkDatabaseAccess($database)) {
+            return redirect()->route('database.index')->with('error', 'Permission denied for this database.');
+        }
+
+        return \Inertia\Inertia::render('Database/ManagerPage', [
+            'database' => $database,
+            'token' => $token
+        ]);
     }
 
     /**

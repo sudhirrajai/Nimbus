@@ -557,11 +557,19 @@ import DatabaseManagerModal from '@/Components/DatabaseManagerModal.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
-const showNativeManager = ref(false)
-const selectedDbForManager = ref('')
-const openNativeManager = (dbName) => {
-  selectedDbForManager.value = dbName
-  showNativeManager.value = true
+const openingManager = ref({})
+const openNativeManager = async (dbName) => {
+  try {
+    openingManager.value[dbName] = true
+    const response = await axios.post('/database/manager/token', { database: dbName })
+    if (response.data?.url) {
+      window.open(response.data.url, '_blank')
+    }
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to generate database session token')
+  } finally {
+    openingManager.value[dbName] = false
+  }
 }
 
 const loading = ref(false)

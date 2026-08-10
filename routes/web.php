@@ -183,7 +183,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
         Route::get('/viewer-view', [DatabaseController::class, 'DatabaseViewerView'])->name('viewer.view');
 
-        // Native Database Manager APIs
+        // Native Database Manager APIs & Single-Use Token SSO
+        Route::post('/manager/token', [DatabaseManagerController::class, 'generateToken'])->name('manager.token');
+        Route::get('/manager/view/{token}', [DatabaseManagerController::class, 'viewPage'])->name('manager.view');
         Route::get('/manager/{db}/tables', [DatabaseManagerController::class, 'getTables'])->name('manager.tables');
         Route::get('/manager/{db}/tables/{table}/schema', [DatabaseManagerController::class, 'getTableSchema'])->name('manager.schema');
         Route::post('/manager/{db}/tables/{table}/data', [DatabaseManagerController::class, 'getTableData'])->name('manager.data');
