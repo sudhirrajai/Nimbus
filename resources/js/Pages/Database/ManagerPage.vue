@@ -140,16 +140,43 @@
                     <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loadingData }">refresh</i> Refresh
                   </button>
                   <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-dark mb-0 border-radius-lg dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                      Actions
+                    <button class="btn btn-sm btn-outline-dark mb-0 border-radius-lg dropdown-toggle-custom d-flex align-items-center gap-1" type="button" data-bs-toggle="dropdown">
+                      <i class="material-symbols-rounded text-sm">construction</i>
+                      <span>Actions</span>
+                      <i class="material-symbols-rounded text-xs ms-1">expand_more</i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0">
-                      <li><a class="dropdown-item text-xs" href="#" @click.prevent="quickQuery(`SELECT * FROM \`${selectedTable}\` LIMIT 50`)"><i class="material-symbols-rounded text-xs me-2">terminal</i> Query Table</a></li>
-                      <li><a class="dropdown-item text-xs" href="#" @click.prevent="exportTableCsv(selectedTable)"><i class="material-symbols-rounded text-xs me-2">download</i> Export CSV</a></li>
-                      <li><a class="dropdown-item text-xs" href="#" @click.prevent="exportTableSql(selectedTable)"><i class="material-symbols-rounded text-xs me-2">code</i> Export SQL</a></li>
-                      <li><hr class="dropdown-divider"></li>
-                      <li><a class="dropdown-item text-xs text-warning" href="#" @click.prevent="confirmTruncateTable(selectedTable)"><i class="material-symbols-rounded text-xs me-2">cleaning_services</i> Truncate Table</a></li>
-                      <li><a class="dropdown-item text-xs text-danger" href="#" @click.prevent="confirmDropTable(selectedTable)"><i class="material-symbols-rounded text-xs me-2">delete_forever</i> Drop Table</a></li>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-2">
+                      <li>
+                        <a class="dropdown-item text-xs border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="quickQuery(`SELECT * FROM \`${selectedTable}\` LIMIT 50`)">
+                          <i class="material-symbols-rounded text-sm me-2 text-primary">terminal</i>
+                          Query Table
+                        </a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item text-xs border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="exportTableCsv(selectedTable)">
+                          <i class="material-symbols-rounded text-sm me-2 text-info">download</i>
+                          Export CSV
+                        </a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item text-xs border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="exportTableSql(selectedTable)">
+                          <i class="material-symbols-rounded text-sm me-2 text-info">code</i>
+                          Export SQL
+                        </a>
+                      </li>
+                      <li><hr class="dropdown-divider my-1"></li>
+                      <li>
+                        <a class="dropdown-item text-xs text-warning border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="confirmTruncateTable(selectedTable)">
+                          <i class="material-symbols-rounded text-sm me-2 text-warning">delete_sweep</i>
+                          Truncate Table
+                        </a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item text-xs text-danger border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="confirmDropTable(selectedTable)">
+                          <i class="material-symbols-rounded text-sm me-2 text-danger">delete_forever</i>
+                          Drop Table
+                        </a>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -1406,6 +1433,10 @@ const uploadImport = async () => {
 @keyframes rotate {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+.dropdown-toggle-custom::after {
+  display: none !important;
 }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
