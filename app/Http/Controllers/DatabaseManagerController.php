@@ -962,6 +962,78 @@ class DatabaseManagerController extends Controller
     }
 
     /**
+     * Get full database ER diagram schema topology (tables, columns, primary keys, foreign keys)
+     */
+    public function getDbDesignerSchema(string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+
+            // Get tables list
+            $tablesStmt = $pdo->query("SHOW TABLES FROM `{$safeDb}`");
+            $rawTables = $tablesStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $tables = [];
+            foreach ($rawTables as $tName) {
+                // Get columns
+                $colStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$tName}`");
+                $rawCols = $colStmt->fetchAll();
+
+                $cols = [];
+                foreach ($rawCols as $c) {
+                    $cols[] = [
+                        'name' => $c['Field'],
+                        'type' => $c['Type'],
+                        'null' => $c['Null'] === 'YES',
+                        'is_primary' => $c['Key'] === 'PRI',
+                        'key' => $c['Key'],
+                        'default' => $c['Default'],
+                        'extra' => $c['Extra']
+                    ];
+                }
+
+                $tables[] = [
+                    'name' => $tName,
+                    'columns' => $cols
+                ];
+            }
+
+            // Get all foreign key relationships from information_schema
+            $fkSql = "SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME, CONSTRAINT_NAME 
+                      FROM information_schema.KEY_COLUMN_USAGE 
+                      WHERE TABLE_SCHEMA = :db AND REFERENCED_TABLE_NAME IS NOT NULL";
+            $fkStmt = $pdo->prepare($fkSql);
+            $fkStmt->execute(['db' => $db]);
+            $rawFks = $fkStmt->fetchAll();
+
+            $relationships = [];
+            foreach ($rawFks as $fk) {
+                $relationships[] = [
+                    'constraint_name' => $fk['CONSTRAINT_NAME'],
+                    'from_table' => $fk['TABLE_NAME'],
+                    'from_column' => $fk['COLUMN_NAME'],
+                    'to_table' => $fk['REFERENCED_TABLE_NAME'],
+                    'to_column' => $fk['REFERENCED_COLUMN_NAME']
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'database' => $db,
+                'tables' => $tables,
+                'relationships' => $relationships
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * 10. Execute raw SQL query (SQL Console)
      */
     public function executeQuery(Request $request, string $db)

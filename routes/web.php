@@ -202,6 +202,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/manager/{db}/query', [DatabaseManagerController::class, 'executeQuery'])->name('manager.query');
         Route::get('/manager/{db}/export', [DatabaseManagerController::class, 'exportDatabase'])->name('manager.export');
         Route::post('/manager/{db}/import', [DatabaseManagerController::class, 'importDatabase'])->name('manager.import');
+        Route::get('/manager/{db}/designer', [DatabaseManagerController::class, 'getDbDesignerSchema'])->name('manager.designer');
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)

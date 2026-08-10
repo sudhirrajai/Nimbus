@@ -24,6 +24,9 @@
               <button class="nav-tab-btn" :class="{ active: activeTab === 'browse' }" @click="activeTab = 'browse'">
                 <i class="material-symbols-rounded text-sm me-1">table_chart</i> Data & Schema
               </button>
+              <button class="nav-tab-btn" :class="{ active: activeTab === 'designer' }" @click="activeTab = 'designer'; loadDesignerSchema()">
+                <i class="material-symbols-rounded text-sm me-1">hub</i> ER Diagram
+              </button>
               <button class="nav-tab-btn" :class="{ active: activeTab === 'sql' }" @click="activeTab = 'sql'">
                 <i class="material-symbols-rounded text-sm me-1">terminal</i> SQL Console
               </button>
@@ -60,7 +63,7 @@
             <!-- Tab 1: Browse Data & Schema -->
             <template v-if="activeTab === 'browse'">
               <!-- Left Sidebar: Tables List -->
-              <div class="db-tables-sidebar border-end p-3 d-flex flex-column bg-gray-50" style="width: 280px; min-width: 250px;">
+              <div class="db-tables-sidebar border-end p-3 d-flex flex-column bg-gray-50 h-100" style="width: 280px; min-width: 250px;">
                 <div class="search-box mb-3">
                   <div class="input-group input-group-sm bg-white border-radius-lg overflow-hidden border shadow-sm">
                     <span class="input-group-text border-0 bg-transparent text-secondary"><i class="material-symbols-rounded text-sm">search</i></span>
@@ -95,8 +98,8 @@
                 </div>
               </div>
 
-              <!-- Right Panel: Data Grid & Schema Inspector -->
-              <div class="db-main-content flex-grow-1 overflow-y-auto p-3 bg-white d-flex flex-column">
+              <!-- Right Panel: Data Grid & Schema Inspector (Fix internal scroll) -->
+              <div class="db-main-content flex-grow-1 p-3 bg-white d-flex flex-column h-100 overflow-hidden">
                 <template v-if="selectedTable">
                   <!-- Table Sub-Header & Controls -->
                   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 pb-2 border-bottom position-relative" style="z-index: 1050;">
@@ -171,10 +174,10 @@
                     </div>
                   </div>
 
-                  <!-- SubView 1: Data Grid -->
-                  <div v-if="subView === 'data'" class="flex-grow-1 d-flex flex-column">
+                  <!-- SubView 1: Data Grid (Dedicated internal scroll area) -->
+                  <div v-if="subView === 'data'" class="flex-grow-1 d-flex flex-column overflow-hidden">
                     <!-- Filters & Search Toolbar -->
-                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 flex-shrink-0">
                       <div class="d-flex align-items-center gap-2">
                         <div class="search-input-box bg-gray-100 px-2 py-1 border-radius-lg border d-flex align-items-center" style="width: 260px;">
                           <i class="material-symbols-rounded text-sm me-1 text-secondary">search</i>
@@ -207,8 +210,8 @@
                       </div>
                     </div>
 
-                    <!-- Data Table -->
-                    <div class="table-responsive flex-grow-1 border border-radius-lg overflow-y-auto position-relative" style="max-height: 450px; z-index: 1;">
+                    <!-- Internal Table Scroll Container -->
+                    <div class="table-responsive flex-grow-1 border border-radius-lg position-relative internal-table-scroll" style="z-index: 1; overflow-y: auto; overscroll-behavior: contain;">
                       <div v-if="loadingData" class="text-center py-5">
                         <div class="spinner-border text-primary" role="status"></div>
                         <p class="text-xs text-secondary mt-2">Loading table rows...</p>
@@ -265,7 +268,7 @@
                     </div>
 
                     <!-- Pagination Bar -->
-                    <div v-if="totalPages > 1" class="d-flex justify-content-between align-items-center pt-3 border-top">
+                    <div v-if="totalPages > 1" class="d-flex justify-content-between align-items-center pt-3 border-top mt-auto flex-shrink-0">
                       <span class="text-xs text-secondary font-weight-bold">
                         Showing {{ (currentPage - 1) * perPage + 1 }} to {{ Math.min(currentPage * perPage, totalRows) }} of {{ totalRows }} rows
                       </span>
@@ -282,7 +285,7 @@
                   </div>
 
                   <!-- SubView 2: Schema / Structure -->
-                  <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto">
+                  <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto pe-2">
                     <div v-if="loadingSchema" class="text-center py-5">
                       <div class="spinner-border text-primary" role="status"></div>
                       <p class="text-xs text-secondary mt-2">Loading schema details...</p>
@@ -408,8 +411,113 @@
               </div>
             </template>
 
-            <!-- Tab 2: Interactive SQL Console -->
-            <div v-else-if="activeTab === 'sql'" class="flex-grow-1 p-4 bg-white overflow-y-auto d-flex flex-column">
+            <!-- Tab 2: ER Diagram / Database Designer -->
+            <div v-else-if="activeTab === 'designer'" class="flex-grow-1 p-3 bg-gray-100 overflow-hidden d-flex flex-column h-100 position-relative">
+              <!-- Toolbar -->
+              <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+                <div class="d-flex align-items-center gap-2">
+                  <h6 class="font-weight-bolder text-dark mb-0 d-flex align-items-center gap-1">
+                    <i class="material-symbols-rounded text-primary">hub</i>
+                    ER Diagram Topology
+                  </h6>
+                  <span v-if="designerTables.length > 0" class="badge bg-white text-dark border text-xxs ms-1">
+                    {{ designerTables.length }} tables, {{ designerRelationships.length }} relations
+                  </span>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                  <div class="btn-group btn-group-sm bg-white border border-radius-lg p-1 shadow-sm">
+                    <button class="btn btn-xs btn-link text-dark mb-0 px-2" @click="designerZoom = Math.min(2, designerZoom + 0.15)" title="Zoom In">
+                      <i class="material-symbols-rounded text-xs">zoom_in</i>
+                    </button>
+                    <span class="text-xxs px-2 font-weight-bold text-secondary my-auto">{{ Math.round(designerZoom * 100) }}%</span>
+                    <button class="btn btn-xs btn-link text-dark mb-0 px-2" @click="designerZoom = Math.max(0.4, designerZoom - 0.15)" title="Zoom Out">
+                      <i class="material-symbols-rounded text-xs">zoom_out</i>
+                    </button>
+                    <button class="btn btn-xs btn-link text-dark mb-0 px-2" @click="resetDesignerLayout" title="Reset Layout">
+                      <i class="material-symbols-rounded text-xs">center_focus_strong</i>
+                    </button>
+                  </div>
+
+                  <button class="btn btn-xs bg-gradient-primary mb-0 border-radius-lg" @click="autoArrangeDesigner">
+                    <i class="material-symbols-rounded text-xs me-1">auto_awesome</i> Auto Layout
+                  </button>
+                  <button class="btn btn-xs btn-outline-secondary mb-0 border-radius-lg" @click="loadDesignerSchema" :disabled="loadingDesigner">
+                    <i class="material-symbols-rounded text-xs me-1" :class="{ 'spin-animation': loadingDesigner }">refresh</i> Refresh
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interactive Designer Canvas Area -->
+              <div class="designer-canvas-wrapper flex-grow-1 border border-radius-xl bg-white position-relative overflow-hidden shadow-inner"
+                @mousemove="handleCanvasMouseMove" @mouseup="handleCanvasMouseUp">
+                
+                <div v-if="loadingDesigner" class="text-center py-7">
+                  <div class="spinner-border text-primary" role="status"></div>
+                  <p class="text-xs text-secondary mt-2">Generating database schema topology graph...</p>
+                </div>
+
+                <div v-else-if="designerTables.length === 0" class="text-center py-7 text-muted">
+                  <i class="material-symbols-rounded text-secondary opacity-5 fs-1 mb-2">hub</i>
+                  <h6 class="text-dark font-weight-bold">No Tables Found</h6>
+                  <p class="text-xs text-secondary mb-0">Create tables to view database relationship topology.</p>
+                </div>
+
+                <div v-else class="designer-viewport w-100 h-100 position-absolute top-0 start-0"
+                  :style="{ transform: `scale(${designerZoom})`, transformOrigin: 'top left', transition: isDraggingTable ? 'none' : 'transform 0.2s ease' }">
+                  
+                  <!-- SVG Connector Layer -->
+                  <svg class="designer-svg-layer position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none; z-index: 1;">
+                    <defs>
+                      <marker id="arrowModal" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#5e72e4" />
+                      </marker>
+                    </defs>
+
+                    <g v-for="(rel, idx) in designerRelationships" :key="idx">
+                      <path :d="getRelationshipPath(rel)" 
+                        stroke="#5e72e4" stroke-width="2" fill="none" 
+                        stroke-dasharray="4" marker-end="url(#arrowModal)"
+                        class="designer-rel-line" />
+                    </g>
+                  </svg>
+
+                  <!-- Draggable Table Cards -->
+                  <div v-for="t in designerTables" :key="t.name"
+                    class="designer-table-card card shadow-lg border-radius-lg border position-absolute bg-white"
+                    :style="{ left: (tablePositions[t.name]?.x || 50) + 'px', top: (tablePositions[t.name]?.y || 50) + 'px', width: '230px', zIndex: draggingTableName === t.name ? 100 : 10 }"
+                    @mousedown="startDraggingTable(t.name, $event)">
+                    
+                    <!-- Table Header -->
+                    <div class="card-header p-2 bg-gradient-dark text-white border-radius-top-lg d-flex align-items-center justify-content-between cursor-grab">
+                      <div class="d-flex align-items-center text-truncate me-1">
+                        <i class="material-symbols-rounded text-xs text-info me-1">table_rows</i>
+                        <span class="text-xs font-weight-bold text-truncate">{{ t.name }}</span>
+                      </div>
+                      <span class="badge bg-white text-dark text-xxs">{{ t.columns.length }}</span>
+                    </div>
+
+                    <!-- Table Columns List -->
+                    <div class="card-body p-0 overflow-y-auto" style="max-height: 220px;">
+                      <div v-for="col in t.columns" :key="col.name" 
+                        class="designer-col-item px-2 py-1 border-bottom text-xxs d-flex align-items-center justify-content-between"
+                        :class="{ 'bg-light-primary font-weight-bold': col.is_primary }">
+                        <div class="d-flex align-items-center text-truncate me-1">
+                          <i v-if="col.is_primary" class="material-symbols-rounded text-warning text-xxs me-1" title="Primary Key">key</i>
+                          <i v-else-if="isColumnForeignKey(t.name, col.name)" class="material-symbols-rounded text-info text-xxs me-1" title="Foreign Key">link</i>
+                          <span class="text-dark font-weight-bold text-truncate">{{ col.name }}</span>
+                        </div>
+                        <code class="text-secondary font-monospace opacity-8" style="font-size: 10px;">{{ col.type }}</code>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 3: Interactive SQL Console -->
+            <div v-else-if="activeTab === 'sql'" class="flex-grow-1 p-4 bg-white overflow-y-auto d-flex flex-column h-100">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
                   <h5 class="font-weight-bolder text-dark mb-0">SQL Query Console</h5>
@@ -433,7 +541,7 @@
               </div>
 
               <!-- Query Results Section -->
-              <div v-if="sqlResult" class="sql-results-container flex-grow-1 border border-radius-lg p-3 bg-gray-50">
+              <div v-if="sqlResult" class="sql-results-container flex-grow-1 border border-radius-lg p-3 bg-gray-50 overflow-y-auto">
                 <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                   <div class="d-flex align-items-center gap-2">
                     <span :class="sqlResult.success ? 'badge bg-success' : 'badge bg-danger'">
@@ -478,8 +586,8 @@
               </div>
             </div>
 
-            <!-- Tab 3: Create Table Form -->
-            <div v-else-if="activeTab === 'create_table'" class="flex-grow-1 p-4 bg-white overflow-y-auto">
+            <!-- Tab 4: Create Table Form -->
+            <div v-else-if="activeTab === 'create_table'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100">
               <h5 class="font-weight-bolder text-dark mb-1">Create New Table</h5>
               <p class="text-xs text-secondary mb-4">Define table name, columns, and properties for <code>{{ databaseName }}</code></p>
 
@@ -577,8 +685,8 @@
               </div>
             </div>
 
-            <!-- Tab 4: Export / Import -->
-            <div v-else-if="activeTab === 'export_import'" class="flex-grow-1 p-4 bg-white overflow-y-auto">
+            <!-- Tab 5: Export / Import -->
+            <div v-else-if="activeTab === 'export_import'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100">
               <div class="row g-4">
                 <!-- Export Section -->
                 <div class="col-md-6">
@@ -908,6 +1016,16 @@ const allRowsSelected = ref(false)
 const tableSchema = ref(null)
 const loadingSchema = ref(false)
 
+// ER Designer
+const designerTables = ref([])
+const designerRelationships = ref([])
+const loadingDesigner = ref(false)
+const tablePositions = ref({})
+const designerZoom = ref(1)
+const isDraggingTable = ref(false)
+const draggingTableName = ref(null)
+const dragOffset = ref({ x: 0, y: 0 })
+
 // Column & Structure Editing Modals
 const showAddColumnModal = ref(false)
 const showEditColumnModal = ref(false)
@@ -1051,6 +1169,85 @@ const loadTableSchema = async () => {
   } finally {
     loadingSchema.value = false
   }
+}
+
+// ER Designer Methods
+const loadDesignerSchema = async () => {
+  if (!props.databaseName) return
+  try {
+    loadingDesigner.value = true
+    const response = await axios.get(`/database/manager/${props.databaseName}/designer`)
+    designerTables.value = response.data.tables || []
+    designerRelationships.value = response.data.relationships || []
+    autoArrangeDesigner()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to load ER diagram schema')
+  } finally {
+    loadingDesigner.value = false
+  }
+}
+
+const autoArrangeDesigner = () => {
+  const positions = {}
+  const cols = 4
+  const colWidth = 280
+  const rowHeight = 260
+  
+  designerTables.value.forEach((t, i) => {
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    positions[t.name] = {
+      x: 40 + col * colWidth,
+      y: 40 + row * rowHeight
+    }
+  })
+  tablePositions.value = positions
+}
+
+const resetDesignerLayout = () => {
+  designerZoom.value = 1
+  autoArrangeDesigner()
+}
+
+const isColumnForeignKey = (tableName, colName) => {
+  return designerRelationships.value.some(r => r.from_table === tableName && r.from_column === colName)
+}
+
+const startDraggingTable = (tName, e) => {
+  isDraggingTable.value = true
+  draggingTableName.value = tName
+  const currentPos = tablePositions.value[tName] || { x: 50, y: 50 }
+  dragOffset.value = {
+    x: e.clientX - currentPos.x * designerZoom.value,
+    y: e.clientY - currentPos.y * designerZoom.value
+  }
+}
+
+const handleCanvasMouseMove = (e) => {
+  if (!isDraggingTable.value || !draggingTableName.value) return
+  const name = draggingTableName.value
+  tablePositions.value[name] = {
+    x: Math.max(10, (e.clientX - dragOffset.value.x) / designerZoom.value),
+    y: Math.max(10, (e.clientY - dragOffset.value.y) / designerZoom.value)
+  }
+}
+
+const handleCanvasMouseUp = () => {
+  isDraggingTable.value = false
+  draggingTableName.value = null
+}
+
+const getRelationshipPath = (rel) => {
+  const fromPos = tablePositions.value[rel.from_table] || { x: 50, y: 50 }
+  const toPos = tablePositions.value[rel.to_table] || { x: 300, y: 50 }
+
+  const x1 = fromPos.x + 230
+  const y1 = fromPos.y + 60
+  const x2 = toPos.x
+  const y2 = toPos.y + 60
+
+  const dx = Math.abs(x2 - x1) / 2
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
 }
 
 // Column & Schema Editing Handlers
@@ -1477,8 +1674,27 @@ const uploadImport = async () => {
   to { transform: rotate(360deg); }
 }
 
-.dropdown-toggle-custom::after {
+.dropdown-toggle-custom::after,
+.dropdown-toggle::after {
   display: none !important;
+  content: none !important;
+}
+
+.designer-rel-line {
+  transition: all 0.2s ease;
+}
+
+.designer-rel-line:hover {
+  stroke-width: 3;
+  stroke: #2dce89;
+}
+
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grab:active {
+  cursor: grabbing;
 }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
