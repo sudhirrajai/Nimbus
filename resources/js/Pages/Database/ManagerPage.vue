@@ -110,7 +110,7 @@
           <div class="db-main-content flex-grow-1 overflow-y-auto p-4 bg-white d-flex flex-column">
             <template v-if="selectedTable">
               <!-- Table Sub-Header & Controls -->
-              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 pb-2 border-bottom position-relative" style="z-index: 100;">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 pb-2 border-bottom position-relative" style="z-index: 1050;">
                 <div class="d-flex align-items-center gap-2">
                   <h5 class="mb-0 font-weight-bolder text-dark">{{ selectedTable }}</h5>
                   <span v-if="tableSchema" class="badge bg-light text-secondary border text-xxs">{{ tableSchema.columns.length }} cols</span>
@@ -139,13 +139,13 @@
                   <button class="btn btn-sm btn-outline-secondary mb-0 border-radius-lg" @click="loadTableData" :disabled="loadingData">
                     <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loadingData }">refresh</i> Refresh
                   </button>
-                  <div class="dropdown position-relative">
+                  <div class="dropdown position-relative" style="z-index: 1051;">
                     <button class="btn btn-sm btn-dark mb-0 border-radius-lg dropdown-toggle-custom d-flex align-items-center gap-1 shadow-sm" type="button" data-bs-toggle="dropdown">
                       <i class="material-symbols-rounded text-sm">tune</i>
                       <span>Actions</span>
                       <i class="material-symbols-rounded text-xs ms-1">expand_more</i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-xl border-0 p-2 position-absolute" style="z-index: 9999 !important; min-width: 180px;">
+                    <ul class="dropdown-menu dropdown-menu-end shadow-xl border-0 p-2 position-absolute" style="z-index: 99999 !important; min-width: 180px;">
                       <li>
                         <a class="dropdown-item text-xs border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="quickQuery(`SELECT * FROM \`${selectedTable}\` LIMIT 50`)">
                           <i class="material-symbols-rounded text-sm me-2 text-primary">terminal</i>
@@ -219,7 +219,7 @@
                 </div>
 
                 <!-- Data Table -->
-                <div class="table-responsive flex-grow-1 border border-radius-lg overflow-y-auto position-relative" style="max-height: 520px;">
+                <div class="table-responsive flex-grow-1 border border-radius-lg overflow-y-auto position-relative" style="max-height: 520px; z-index: 1;">
                   <div v-if="loadingData" class="text-center py-5">
                     <div class="spinner-border text-primary" role="status"></div>
                     <p class="text-xs text-secondary mt-2">Loading table rows...</p>
@@ -233,7 +233,7 @@
                   </div>
 
                   <table v-else class="table table-hover align-items-center mb-0">
-                    <thead class="bg-gray-100 sticky-top">
+                    <thead class="bg-gray-100 sticky-top" style="z-index: 2;">
                       <tr>
                         <th style="width: 40px;" class="ps-3">
                           <input type="checkbox" class="form-check-input" :checked="allRowsSelected" @click.prevent="toggleSelectAllRows" />
