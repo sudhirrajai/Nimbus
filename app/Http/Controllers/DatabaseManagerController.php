@@ -32,29 +32,106 @@ class DatabaseManagerController extends Controller
     }
 
     /**
+     * Get valid MySQL credentials or auto-provision nimbus_admin user if needed
+     */
+    private function getValidMysqlCredentials(): array
+    {
+        $credentialsPath = storage_path('app/nimbus_db_credentials.json');
+
+        // 1. Check existing saved nimbus_admin credentials
+        if (file_exists($credentialsPath)) {
+            $data = json_decode(@file_get_contents($credentialsPath), true);
+            if (!empty($data['username']) && !empty($data['password'])) {
+                return [
+                    'username' => $data['username'],
+                    'password' => $data['password'],
+                    'host' => '127.0.0.1',
+                    'port' => '3306'
+                ];
+            }
+        }
+
+        // 2. Check Debian/Ubuntu system maintenance file /etc/mysql/debian.cnf
+        if (file_exists('/etc/mysql/debian.cnf')) {
+            $cnfContent = @file_get_contents('/etc/mysql/debian.cnf');
+            if (preg_match('/user\s*=\s*(.+)/', $cnfContent, $mUser) && preg_match('/password\s*=\s*(.+)/', $cnfContent, $mPass)) {
+                $user = trim($mUser[1]);
+                $pass = trim($mPass[1]);
+                if (!empty($user) && !empty($pass)) {
+                    return [
+                        'username' => $user,
+                        'password' => $pass,
+                        'host' => '127.0.0.1',
+                        'port' => '3306'
+                    ];
+                }
+            }
+        }
+
+        // 3. Check Laravel database configuration if password is set
+        $envUser = config('database.connections.mysql.username', 'root');
+        $envPass = config('database.connections.mysql.password', '');
+        if (!empty($envPass)) {
+            return [
+                'username' => $envUser,
+                'password' => $envPass,
+                'host' => config('database.connections.mysql.host', '127.0.0.1'),
+                'port' => config('database.connections.mysql.port', '3306')
+            ];
+        }
+
+        // 4. Auto-provision nimbus_admin user on server via sudo mysql
+        try {
+            $adminUser = 'nimbus_admin';
+            $adminPass = Str::random(16);
+
+            $cmd = "sudo mysql -e \"DROP USER IF EXISTS '{$adminUser}'@'localhost'; CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'; GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION; FLUSH PRIVILEGES;\" 2>&1";
+            exec($cmd, $out, $code);
+
+            if ($code === 0 || file_exists($credentialsPath)) {
+                $creds = [
+                    'username' => $adminUser,
+                    'password' => $adminPass,
+                    'created_at' => now()->toDateTimeString(),
+                    'url' => '/db/'
+                ];
+                $dir = dirname($credentialsPath);
+                if (!is_dir($dir)) mkdir($dir, 0755, true);
+                file_put_contents($credentialsPath, json_encode($creds, JSON_PRETTY_PRINT));
+
+                return [
+                    'username' => $adminUser,
+                    'password' => $adminPass,
+                    'host' => '127.0.0.1',
+                    'port' => '3306'
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning("Auto-provisioning nimbus_admin user failed: " . $e->getMessage());
+        }
+
+        // 5. Fallback default
+        return [
+            'username' => $envUser,
+            'password' => $envPass,
+            'host' => config('database.connections.mysql.host', '127.0.0.1'),
+            'port' => config('database.connections.mysql.port', '3306')
+        ];
+    }
+
+    /**
      * Helper to get a PDO instance connected to a specific database
      */
     private function getPdoConnection(string $dbName): PDO
     {
         $safeDb = preg_replace('/[^a-zA-Z0-9_]/', '', $dbName);
-        
-        $username = config('database.connections.mysql.username', 'root');
-        $password = config('database.connections.mysql.password', '');
-        $host = config('database.connections.mysql.host', '127.0.0.1');
-        $port = config('database.connections.mysql.port', '3306');
-        $socket = config('database.connections.mysql.unix_socket');
+        $creds = $this->getValidMysqlCredentials();
 
-        // Check if nimbus_db_credentials.json exists (nimbus_admin user with full privileges)
-        $credentialsPath = storage_path('app/nimbus_db_credentials.json');
-        if (file_exists($credentialsPath)) {
-            $credentials = json_decode(file_get_contents($credentialsPath), true);
-            if (!empty($credentials['username'])) {
-                $username = $credentials['username'];
-            }
-            if (!empty($credentials['password'])) {
-                $password = $credentials['password'];
-            }
-        }
+        $username = $creds['username'];
+        $password = $creds['password'];
+        $host = $creds['host'] ?? '127.0.0.1';
+        $port = $creds['port'] ?? '3306';
+        $socket = config('database.connections.mysql.unix_socket');
 
         try {
             if (!empty($socket) && file_exists($socket)) {
@@ -69,25 +146,35 @@ class DatabaseManagerController extends Controller
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
         } catch (\PDOException $e) {
-            Log::warning("Primary PDO connection as '{$username}' failed for DB '{$dbName}': " . $e->getMessage());
+            Log::warning("PDO connection as '{$username}' failed for DB '{$dbName}': " . $e->getMessage() . ". Attempting auto-provisioning.");
 
-            // Socket Fallbacks for Linux server (MariaDB / MySQL unix_socket root authentication)
-            $socketPaths = ['/var/run/mysqld/mysqld.sock', '/tmp/mysql.sock', '/var/lib/mysql/mysql.sock'];
-            foreach ($socketPaths as $sockPath) {
-                if (file_exists($sockPath)) {
-                    try {
-                        $dsn = "mysql:dbname={$safeDb};unix_socket={$sockPath};charset=utf8mb4";
-                        return new PDO($dsn, 'root', '', [
-                            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                        ]);
-                    } catch (\Exception $sockErr) {
-                        // continue trying next socket
-                    }
-                }
+            // Attempt emergency auto-provisioning of nimbus_admin user
+            try {
+                $adminUser = 'nimbus_admin';
+                $adminPass = Str::random(16);
+
+                $cmd = "sudo mysql -e \"DROP USER IF EXISTS '{$adminUser}'@'localhost'; CREATE USER '{$adminUser}'@'localhost' IDENTIFIED BY '{$adminPass}'; GRANT ALL PRIVILEGES ON *.* TO '{$adminUser}'@'localhost' WITH GRANT OPTION; FLUSH PRIVILEGES;\" 2>&1";
+                exec($cmd);
+
+                $credentialsPath = storage_path('app/nimbus_db_credentials.json');
+                $dir = dirname($credentialsPath);
+                if (!is_dir($dir)) mkdir($dir, 0755, true);
+                file_put_contents($credentialsPath, json_encode([
+                    'username' => $adminUser,
+                    'password' => $adminPass,
+                    'created_at' => now()->toDateTimeString(),
+                    'url' => '/db/'
+                ], JSON_PRETTY_PRINT));
+
+                $dsn = "mysql:host={$host};port={$port};dbname={$safeDb};charset=utf8mb4";
+                return new PDO($dsn, $adminUser, $adminPass, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ]);
+            } catch (\Exception $provErr) {
+                throw new \Exception("Database Connection Failed for '{$dbName}': " . $e->getMessage());
             }
-
-            throw new \Exception("Database Access Error for '{$dbName}': " . $e->getMessage());
         }
     }
 
