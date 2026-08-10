@@ -41,6 +41,11 @@ class SupervisorController extends Controller
         return false;
     }
 
+    private function isSupervisorInstalled(): bool
+    {
+        return file_exists('/usr/bin/supervisord') || file_exists('/usr/local/bin/supervisord');
+    }
+
     /**
      * Display supervisor management page
      */
@@ -54,7 +59,7 @@ class SupervisorController extends Controller
      */
     public function getStatus()
     {
-        $installed = file_exists('/usr/bin/supervisord') || file_exists('/usr/local/bin/supervisord');
+        $installed = $this->isSupervisorInstalled();
         $running = false;
         
         if ($installed) {
@@ -180,18 +185,23 @@ class SupervisorController extends Controller
 #!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 
-echo "[1/3] Installing Supervisor..."
+echo "[1/4] Preparing Supervisor configuration directory..."
+sudo mkdir -p /etc/supervisor/conf.d
+
+echo ""
+echo "[2/4] Installing Supervisor package..."
 sudo apt-get update
 sudo apt-get install -y supervisor
 
 echo ""
-echo "[2/3] Starting Supervisor service..."
+echo "[3/4] Starting Supervisor service..."
 sudo systemctl enable supervisor
-sudo systemctl start supervisor
+sudo systemctl start supervisor || sudo service supervisor start
 
 echo ""
-echo "[3/3] Verifying installation..."
-supervisorctl status
+echo "[4/4] Activating existing configurations..."
+sudo supervisorctl reread 2>&1 || true
+sudo supervisorctl update 2>&1 || true
 
 echo ""
 echo "=========================================="
@@ -242,77 +252,90 @@ BASH;
     {
         try {
             $groups = [];
+            $installed = $this->isSupervisorInstalled();
             
-            // Get process status from supervisorctl
-            exec('sudo supervisorctl status 2>/dev/null', $output, $code);
-            
-            foreach ($output as $line) {
-                if (empty(trim($line))) continue;
+            if ($installed) {
+                // Get process status from supervisorctl
+                exec('sudo supervisorctl status 2>/dev/null', $output, $code);
                 
-                // Parse line like: "myapp:myapp_00 RUNNING pid 12345, uptime 0:10:00"
-                if (preg_match('/^(\S+)\s+(RUNNING|STOPPED|STARTING|BACKOFF|STOPPING|EXITED|FATAL|UNKNOWN)\s*(.*)$/', $line, $matches)) {
-                    $fullName = $matches[1];
-                    $status = $matches[2];
-                    $info = $matches[3];
-                    
-                    // Split group and process name
-                    if (str_contains($fullName, ':')) {
-                        [$groupName, $processName] = explode(':', $fullName, 2);
-                    } else {
-                        $groupName = $fullName;
-                        $processName = $fullName;
-                    }
+                if (is_array($output)) {
+                    foreach ($output as $line) {
+                        if (empty(trim($line))) continue;
+                        
+                        // Parse line like: "myapp:myapp_00 RUNNING pid 12345, uptime 0:10:00"
+                        if (preg_match('/^(\S+)\s+(RUNNING|STOPPED|STARTING|BACKOFF|STOPPING|EXITED|FATAL|UNKNOWN)\s*(.*)$/', $line, $matches)) {
+                            $fullName = $matches[1];
+                            $status = $matches[2];
+                            $info = $matches[3];
+                            
+                            // Split group and process name
+                            if (str_contains($fullName, ':')) {
+                                [$groupName, $processName] = explode(':', $fullName, 2);
+                            } else {
+                                $groupName = $fullName;
+                                $processName = $fullName;
+                            }
 
-                    $pid = null;
-                    $uptime = null;
-                    
-                    if (preg_match('/pid\s+(\d+)/', $info, $pidMatch)) {
-                        $pid = $pidMatch[1];
-                    }
-                    if (preg_match('/uptime\s+([\d:]+)/', $info, $uptimeMatch)) {
-                        $uptime = $uptimeMatch[1];
-                    }
-                    
-                    if (!isset($groups[$groupName])) {
-                        $groups[$groupName] = [
-                            'name' => $groupName,
-                            'processes' => [],
-                            'status' => 'STOPPED', // Will be updated
-                            'count' => 0
-                        ];
-                    }
+                            $pid = null;
+                            $uptime = null;
+                            
+                            if (preg_match('/pid\s+(\d+)/', $info, $pidMatch)) {
+                                $pid = $pidMatch[1];
+                            }
+                            if (preg_match('/uptime\s+([\d:]+)/', $info, $uptimeMatch)) {
+                                $uptime = $uptimeMatch[1];
+                            }
+                            
+                            if (!isset($groups[$groupName])) {
+                                $groups[$groupName] = [
+                                    'name' => $groupName,
+                                    'processes' => [],
+                                    'status' => 'STOPPED', // Will be updated
+                                    'count' => 0
+                                ];
+                            }
 
-                    $groups[$groupName]['processes'][] = [
-                        'name' => $processName,
-                        'fullName' => $fullName,
-                        'status' => $status,
-                        'pid' => $pid,
-                        'uptime' => $uptime,
-                        'info' => $info
-                    ];
-                    $groups[$groupName]['count']++;
+                            $groups[$groupName]['processes'][] = [
+                                'name' => $processName,
+                                'fullName' => $fullName,
+                                'status' => $status,
+                                'pid' => $pid,
+                                'uptime' => $uptime,
+                                'info' => $info
+                            ];
+                            $groups[$groupName]['count']++;
 
-                    // If any process in group is running, group is considered "active"
-                    if ($status === 'RUNNING') {
-                        $groups[$groupName]['status'] = 'RUNNING';
+                            // If any process in group is running, group is considered "active"
+                            if ($status === 'RUNNING') {
+                                $groups[$groupName]['status'] = 'RUNNING';
+                            }
+                        }
                     }
                 }
             }
 
-            // Also get config files to ensure we show configs that might not have running processes
+            // Also get config files to ensure we show configs that might not have running processes or when uninstalled
             $configDir = '/etc/supervisor/conf.d';
+            $files = [];
             if (is_dir($configDir)) {
-                $files = glob("{$configDir}/*.conf");
-                foreach ($files as $file) {
-                    $configName = basename($file, '.conf');
-                    if (!isset($groups[$configName])) {
-                        $groups[$configName] = [
-                            'name' => $configName,
-                            'processes' => [],
-                            'status' => 'STOPPED',
-                            'count' => 0
-                        ];
-                    }
+                $files = glob("{$configDir}/*.conf") ?: [];
+            }
+            if (empty($files)) {
+                exec('sudo ls /etc/supervisor/conf.d/*.conf 2>/dev/null', $sudoFiles, $sudoCode);
+                if ($sudoCode === 0 && is_array($sudoFiles)) {
+                    $files = array_filter(array_map('trim', $sudoFiles));
+                }
+            }
+
+            foreach ($files as $file) {
+                $configName = basename($file, '.conf');
+                if (!isset($groups[$configName])) {
+                    $groups[$configName] = [
+                        'name' => $configName,
+                        'processes' => [],
+                        'status' => $installed ? 'STOPPED' : 'UNINSTALLED',
+                        'count' => 0
+                    ];
                 }
             }
 
@@ -349,6 +372,10 @@ BASH;
     public function startProcess(Request $request)
     {
         try {
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
+            }
+
             $name = $request->input('name');
             
             if (!$this->canUserManageProcess($name)) {
@@ -373,6 +400,10 @@ BASH;
     public function stopProcess(Request $request)
     {
         try {
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
+            }
+
             $name = $request->input('name');
             
             if (!$this->canUserManageProcess($name)) {
@@ -397,6 +428,10 @@ BASH;
     public function restartProcess(Request $request)
     {
         try {
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
+            }
+
             $name = $request->input('name');
             
             if (!$this->canUserManageProcess($name)) {
@@ -504,9 +539,11 @@ CONFIG;
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             $tempFile = "/tmp/{$name}.conf";
             file_put_contents($tempFile, $config);
-            exec("sudo mv {$tempFile} {$configPath}");
-            exec("sudo supervisorctl reread");
-            exec("sudo supervisorctl update");
+            exec("sudo mkdir -p /etc/supervisor/conf.d && sudo mv {$tempFile} {$configPath}");
+            if ($this->isSupervisorInstalled()) {
+                exec("sudo supervisorctl reread 2>&1");
+                exec("sudo supervisorctl update 2>&1");
+            }
 
             return response()->json([
                 'success' => true,
@@ -529,16 +566,20 @@ CONFIG;
                 return response()->json(['error' => 'Permission denied for this process'], 403);
             }
 
-            // Stop the process first
-            exec("sudo supervisorctl stop {$name} 2>/dev/null");
+            if ($this->isSupervisorInstalled()) {
+                // Stop the process first
+                exec("sudo supervisorctl stop {$name} 2>/dev/null");
+            }
             
             // Remove config file
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             exec("sudo rm -f {$configPath}");
             
             // Update supervisor
-            exec("sudo supervisorctl reread");
-            exec("sudo supervisorctl update");
+            if ($this->isSupervisorInstalled()) {
+                exec("sudo supervisorctl reread 2>&1");
+                exec("sudo supervisorctl update 2>&1");
+            }
 
             return response()->json([
                 'success' => true,
@@ -805,9 +846,11 @@ CONFIG;
             $configPath = "/etc/supervisor/conf.d/{$name}.conf";
             $tempFile = "/tmp/{$name}.conf";
             file_put_contents($tempFile, $config);
-            exec("sudo mv {$tempFile} {$configPath}");
-            exec("sudo supervisorctl reread");
-            exec("sudo supervisorctl update");
+            exec("sudo mkdir -p /etc/supervisor/conf.d && sudo mv {$tempFile} {$configPath}");
+            if ($this->isSupervisorInstalled()) {
+                exec("sudo supervisorctl reread 2>&1");
+                exec("sudo supervisorctl update 2>&1");
+            }
 
             return response()->json([
                 'success' => true,
@@ -818,7 +861,31 @@ CONFIG;
         }
     }
 
+    /**
+     * Reload supervisor configuration
+     */
+    public function reloadConfig()
+    {
+        try {
+            if (!auth()->user()->isRoot()) {
+                return response()->json(['error' => 'Permission denied: Only root can reload supervisor configuration globally.'], 403);
+            }
 
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
+            }
+
+            exec("sudo supervisorctl reread 2>&1", $output1);
+            exec("sudo supervisorctl update 2>&1", $output2);
+            
+            return response()->json([
+                'success' => true,
+                'message' => implode("\n", array_merge($output1, $output2))
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 
     /**
      * Start all processes
@@ -828,6 +895,10 @@ CONFIG;
         try {
             if (!auth()->user()->isRoot()) {
                 return response()->json(['error' => 'Permission denied: Only root can perform global supervisor actions.'], 403);
+            }
+
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
             }
 
             exec("sudo supervisorctl start all 2>&1", $output, $code);
@@ -850,6 +921,10 @@ CONFIG;
                 return response()->json(['error' => 'Permission denied: Only root can perform global supervisor actions.'], 403);
             }
 
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
+            }
+
             exec("sudo supervisorctl stop all 2>&1", $output, $code);
             return response()->json([
                 'success' => $code === 0,
@@ -868,6 +943,10 @@ CONFIG;
         try {
             if (!auth()->user()->isRoot()) {
                 return response()->json(['error' => 'Permission denied: Only root can perform global supervisor actions.'], 403);
+            }
+
+            if (!$this->isSupervisorInstalled()) {
+                return response()->json(['error' => 'Supervisor is not installed on this system. Please install Supervisor first.'], 400);
             }
 
             exec("sudo supervisorctl restart all 2>&1", $output, $code);

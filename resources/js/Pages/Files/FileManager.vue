@@ -200,7 +200,11 @@
               <table class="table align-items-center mb-0">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th style="width:48px" class="ps-3"></th>
+                    <th style="width:48px" class="ps-3">
+                      <div class="form-check mb-0">
+                        <input type="checkbox" class="form-check-input" :checked="allSelected" @click.prevent="toggleSelectAll" title="Select All / Deselect All">
+                      </div>
+                    </th>
                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Name</th>
                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Size</th>
                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Modified</th>
@@ -209,14 +213,13 @@
                 </thead>
                 <tbody>
                   <tr v-for="item in paginatedItems" :key="item.name + item.type"
-                    @click="toggleSelectItem(item, $event)"
                     @contextmenu.prevent="openContextMenu($event, item)" 
                     @dblclick="handleDoubleClick(item)"
                     class="file-row-modern"
                     :class="{ 'selected': isSelected(item), 'opacity-5': item.hidden }">
                     <td class="ps-3">
                       <div class="form-check mb-0">
-                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @click.stop @change="toggleSelectItem(item, $event)">
+                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @click.prevent.stop="toggleSelectItem(item, $event)">
                       </div>
                     </td>
                     <td>

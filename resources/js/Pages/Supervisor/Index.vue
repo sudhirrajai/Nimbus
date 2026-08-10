@@ -35,27 +35,67 @@
                 </div>
             </div>
 
-            <!-- Not Installed State -->
-            <div v-else-if="!status.installed" class="row">
+            <!-- Uninstalled Warning Banner -->
+            <div v-if="!status.installed" class="row mb-4">
                 <div class="col-12">
-                    <div class="card">
-                        <div class="card-body text-center py-5">
-                            <i class="material-symbols-rounded text-secondary mb-3" style="font-size: 64px;">memory</i>
-                            <h4>Supervisor Not Installed</h4>
-                            <p class="text-muted mb-4">
-                                Install Supervisor to manage long-running processes like queue workers.
-                            </p>
-                            <button class="btn bg-gradient-primary" @click="installSupervisor" :disabled="installing">
-                                <span v-if="installing" class="spinner-border spinner-border-sm me-2"></span>
-                                {{ installing ? 'Installing...' : 'Install Supervisor' }}
-                            </button>
+                    <div class="card bg-gradient-warning text-white border-0 shadow">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar avatar-lg bg-white text-warning rounded-circle me-3 flex-shrink-0 d-flex align-items-center justify-content-center shadow-sm">
+                                        <i class="material-symbols-rounded text-lg">warning</i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-white mb-1">Supervisor Is Not Installed</h5>
+                                        <p class="text-white text-sm mb-0 opacity-9">
+                                            Supervisor process manager is missing or uninstalled. Process controls (start/stop/restart) are disabled, but all saved process configurations are preserved below.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <button class="btn btn-white text-dark mb-0 font-weight-bold" @click="installSupervisor" :disabled="installing">
+                                        <span v-if="installing" class="spinner-border spinner-border-sm me-2"></span>
+                                        <i v-else class="material-symbols-rounded text-sm me-1">download</i>
+                                        {{ installing ? 'Installing...' : 'Install Supervisor' }}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Installed State -->
-            <template v-else>
+            <!-- Service Stopped Banner -->
+            <div v-else-if="!status.running" class="row mb-4">
+                <div class="col-12">
+                    <div class="card bg-gradient-info text-white border-0 shadow">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar avatar-lg bg-white text-info rounded-circle me-3 flex-shrink-0 d-flex align-items-center justify-content-center shadow-sm">
+                                        <i class="material-symbols-rounded text-lg">pause_circle</i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-white mb-1">Supervisor Service Is Stopped</h5>
+                                        <p class="text-white text-sm mb-0 opacity-9">
+                                            Supervisor is installed but the supervisord background service is currently not running.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <button class="btn btn-white text-dark mb-0 font-weight-bold" @click="loadStatus(); loadProcesses();">
+                                        <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                                        Refresh Status
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Installed & Configured Content -->
+            <template v-if="true">
                 <!-- Stats Row -->
                 <div class="row mb-4">
                     <div class="col-xl-4 col-sm-6 mb-xl-0 mb-4">
@@ -119,6 +159,10 @@
                                         <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                                         <input v-model="searchQuery" type="text" class="form-control" placeholder="Search processes or groups...">
                                     </div>
+                                    <button v-if="!status.installed" class="btn btn-sm bg-gradient-success mb-0" @click="installSupervisor" :disabled="installing">
+                                        <i class="material-symbols-rounded text-sm me-1">download</i>
+                                        Install Supervisor
+                                    </button>
                                     <button class="btn btn-sm btn-outline-primary mb-0" @click="loadProcesses">
                                         <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin': loading }">refresh</i>
                                         Reload
@@ -546,6 +590,10 @@ stdout_logfile=/var/www/mysite/worker.log"></textarea>
                             <pre class="terminal-output">{{ terminalLog }}</pre>
                         </div>
                         <div class="modal-footer">
+                            <button v-if="terminalStatus === 'failed'" type="button" class="btn btn-warning me-auto" @click="installSupervisor">
+                                <i class="material-symbols-rounded text-sm me-1">restart_alt</i>
+                                Retry Installation
+                            </button>
                             <button type="button" class="btn btn-secondary" @click="closeTerminal"
                                 :disabled="terminalStatus === 'running'">
                                 {{ terminalStatus === 'running' ? 'Please wait...' : 'Close' }}
@@ -735,9 +783,7 @@ stopwaitsecs=3600`
 onMounted(async () => {
     await loadStatus()
     await loadProjects()
-    if (status.value.installed) {
-        await loadProcesses()
-    }
+    await loadProcesses()
     loading.value = false
 })
 
@@ -818,11 +864,13 @@ const startLogPolling = () => {
                 clearInterval(pollInterval)
                 installing.value = false
                 await loadStatus()
-                if (status.value.installed) await loadProcesses()
+                await loadProcesses()
+                showNotification('Supervisor installed successfully!', 'success')
             } else if (response.data.isFailed) {
                 terminalStatus.value = 'failed'
                 clearInterval(pollInterval)
                 installing.value = false
+                showNotification('Supervisor installation failed. Please check log details.', 'error')
             }
         } catch (error) {
             console.error('Failed to poll log:', error)
@@ -836,6 +884,10 @@ const closeTerminal = async () => {
 }
 
 const startProcess = async (name) => {
+    if (!status.value.installed) {
+        showNotification('Supervisor is not installed. Please click "Install Supervisor" first.', 'error')
+        return
+    }
     try {
         await axios.post('/supervisor/start', { name })
         await loadProcesses()
@@ -846,6 +898,10 @@ const startProcess = async (name) => {
 }
 
 const stopProcess = async (name) => {
+    if (!status.value.installed) {
+        showNotification('Supervisor is not installed. Please click "Install Supervisor" first.', 'error')
+        return
+    }
     if (name.toLowerCase().includes('nimbus') && !confirm('Warning: Stopping the Nimbus process will make the control panel unreachable. Are you absolutely sure?')) return
     try {
         await axios.post('/supervisor/stop', { name })
@@ -857,6 +913,10 @@ const stopProcess = async (name) => {
 }
 
 const restartProcess = async (name) => {
+    if (!status.value.installed) {
+        showNotification('Supervisor is not installed. Please click "Install Supervisor" first.', 'error')
+        return
+    }
     if (name.toLowerCase().includes('nimbus') && !confirm('Warning: Restarting the Nimbus process may temporarily disconnect your session. Continue?')) return
     try {
         await axios.post('/supervisor/restart', { name })
@@ -1029,6 +1089,7 @@ const getStatusBadge = (status, isSmall = false) => {
     const badges = {
         'RUNNING': isSmall ? 'border-success text-success' : 'bg-gradient-success',
         'STOPPED': isSmall ? 'border-secondary text-secondary' : 'bg-gradient-secondary',
+        'UNINSTALLED': isSmall ? 'border-warning text-warning' : 'bg-gradient-warning',
         'STARTING': isSmall ? 'border-info text-info' : 'bg-gradient-info',
         'STOPPING': isSmall ? 'border-warning text-warning' : 'bg-gradient-warning',
         'EXITED': isSmall ? 'border-danger text-danger' : 'bg-gradient-danger',
