@@ -306,6 +306,7 @@ BASH;
                     'size' => $this->getDatabaseSize($dbName),
                     'created_by' => $creatorInfo ? $creatorInfo->created_by : 'System',
                     'created_at' => $creatorInfo ? $creatorInfo->created_at->toDateTimeString() : null,
+                    'domain' => $creatorInfo ? $creatorInfo->domain : null,
                     'projects' => $associatedProjects
                 ];
             }
@@ -1347,13 +1348,99 @@ PHP;
                             }
                         }
                     }
+
+                    // Check Core PHP config files
+                    $corePhpFiles = [
+                        $checkPath . '/config.php',
+                        $checkPath . '/config/config.php',
+                        $checkPath . '/config/database.php',
+                        $checkPath . '/inc/config.php',
+                        $checkPath . '/includes/config.php',
+                        $checkPath . '/db.php',
+                        $checkPath . '/configuration.php'
+                    ];
+
+                    foreach ($corePhpFiles as $phpFile) {
+                        if (file_exists($phpFile)) {
+                            $content = file_get_contents($phpFile);
+                            $foundDb = null;
+                            if (preg_match('/define\(\s*[\'"](?:DB_NAME|DB_DATABASE|DB_DB|DATABASE_NAME)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $content, $matches)) {
+                                $foundDb = trim($matches[1]);
+                            } elseif (preg_match('/\$(?:db_name|dbname|database|db_database|db)\s*=\s*[\'"]([^\'"]+)[\'"]/i', $content, $matches)) {
+                                $foundDb = trim($matches[1]);
+                            } elseif (preg_match('/[\'"](?:database|dbname|db_name)[\'"]\s*=>\s*[\'"]([^\'"]+)[\'"]/i', $content, $matches)) {
+                                $foundDb = trim($matches[1]);
+                            }
+
+                            if (!empty($foundDb)) {
+                                $associations[strtolower($foundDb)][] = [
+                                    'project' => $relativeProjectName,
+                                    'type' => 'Core PHP (' . basename($phpFile) . ')'
+                                ];
+                            }
+                        }
+                    }
                 }
+            }
+
+            // Include manually linked project associations from NimbusDatabase table
+            try {
+                $linkedRecords = \App\Models\NimbusDatabase::whereNotNull('domain')->where('domain', '!=', '')->get();
+                foreach ($linkedRecords as $record) {
+                    $lowerDb = strtolower(trim($record->name));
+                    $associations[$lowerDb][] = [
+                        'project' => $record->domain,
+                        'type' => 'Manually Assigned'
+                    ];
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Failed to include linked project databases in scan: " . $e->getMessage());
             }
         } catch (\Exception $e) {
             \Log::error("Failed to scan projects for databases: " . $e->getMessage());
         }
 
         return $associations;
+    }
+
+    /**
+     * Assign or unlink a database to/from a domain (project)
+     */
+    public function assignProject(Request $request)
+    {
+        try {
+            $request->validate([
+                'name' => 'required|string|max:64',
+                'domain' => 'nullable|string|max:255'
+            ]);
+
+            $dbName = $request->input('name');
+            $domain = $request->input('domain') ? strtolower(trim($request->input('domain'))) : null;
+
+            $user = auth()->user();
+            if (!$user->isRootOrAdmin() && !$user->canAccessDatabase($dbName)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $db = \App\Models\NimbusDatabase::firstOrCreate(
+                ['name' => $dbName],
+                ['created_by' => $user ? $user->email : 'System']
+            );
+
+            $db->domain = $domain;
+            $db->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => $domain 
+                    ? "Database '{$dbName}' assigned to project '{$domain}'." 
+                    : "Project assignment removed for database '{$dbName}'.",
+                'domain' => $domain
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to assign database project: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**

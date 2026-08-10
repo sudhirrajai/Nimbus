@@ -94,7 +94,10 @@ class User extends Authenticatable
     {
         if ($this->isRoot()) return true;
 
-        return $this->websites()->where('domain', $domain)->exists();
+        $targetDomain = strtolower(trim($domain));
+        return $this->websites()->get()->contains(function ($w) use ($targetDomain) {
+            return strtolower(trim($w->domain)) === $targetDomain;
+        });
     }
 
     /**
@@ -104,7 +107,11 @@ class User extends Authenticatable
     {
         if ($this->isRoot()) return true;
 
-        $website = $this->websites()->where('domain', $domain)->first();
+        $targetDomain = strtolower(trim($domain));
+        $website = $this->websites()->get()->first(function ($w) use ($targetDomain) {
+            return strtolower(trim($w->domain)) === $targetDomain;
+        });
+
         if (!$website) return false;
 
         return $website->hasPermission($permission);
@@ -128,7 +135,9 @@ class User extends Authenticatable
             return $domains;
         }
 
-        return $this->websites()->pluck('domain')->toArray();
+        return array_values(array_unique(array_filter(array_map(function ($d) {
+            return strtolower(trim($d));
+        }, $this->websites()->pluck('domain')->toArray()))));
     }
 
     /**
@@ -156,7 +165,7 @@ class User extends Authenticatable
 
         $databases = [];
         
-        // Databases created by this user
+        // 1. Databases created by this user
         try {
             $createdDbs = \App\Models\NimbusDatabase::where('created_by', $this->email)->pluck('name')->toArray();
             $databases = array_merge($databases, $createdDbs);
@@ -164,8 +173,22 @@ class User extends Authenticatable
             \Log::warning("Failed to fetch created databases for user {$this->email}: " . $e->getMessage());
         }
 
-        // Databases associated with accessible domains
-        $domains = $this->accessibleDomains();
+        // 2. Databases manually linked to user's accessible domains
+        $domains = array_map('strtolower', $this->accessibleDomains());
+        try {
+            $linkedDbs = \App\Models\NimbusDatabase::whereNotNull('domain')
+                ->get()
+                ->filter(function ($db) use ($domains) {
+                    return in_array(strtolower(trim($db->domain)), $domains);
+                })
+                ->pluck('name')
+                ->toArray();
+            $databases = array_merge($databases, $linkedDbs);
+        } catch (\Exception $e) {
+            \Log::warning("Failed to fetch linked databases for user {$this->email}: " . $e->getMessage());
+        }
+
+        // 3. Databases associated with accessible domains via configuration files
         foreach ($domains as $domain) {
             $path = "/var/www/{$domain}";
             if (!is_dir($path)) continue;
@@ -205,6 +228,35 @@ class User extends Authenticatable
                         $db = trim($matches[1]);
                         if (!empty($db)) {
                             $databases[] = $db;
+                        }
+                    }
+                }
+
+                // Check Core PHP config files
+                $corePhpFiles = [
+                    "{$checkPath}/config.php",
+                    "{$checkPath}/config/config.php",
+                    "{$checkPath}/config/database.php",
+                    "{$checkPath}/inc/config.php",
+                    "{$checkPath}/includes/config.php",
+                    "{$checkPath}/db.php",
+                    "{$checkPath}/configuration.php"
+                ];
+
+                foreach ($corePhpFiles as $phpFile) {
+                    if (file_exists($phpFile)) {
+                        $content = file_get_contents($phpFile);
+                        if (preg_match('/define\(\s*[\'"](?:DB_NAME|DB_DATABASE|DB_DB|DATABASE_NAME)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $content, $matches)) {
+                            $db = trim($matches[1]);
+                            if (!empty($db)) $databases[] = $db;
+                        }
+                        if (preg_match('/\$(?:db_name|dbname|database|db_database|db)\s*=\s*[\'"]([^\'"]+)[\'"]/i', $content, $matches)) {
+                            $db = trim($matches[1]);
+                            if (!empty($db)) $databases[] = $db;
+                        }
+                        if (preg_match('/[\'"](?:database|dbname|db_name)[\'"]\s*=>\s*[\'"]([^\'"]+)[\'"]/i', $content, $matches)) {
+                            $db = trim($matches[1]);
+                            if (!empty($db)) $databases[] = $db;
                         }
                     }
                 }
