@@ -10,6 +10,7 @@ use App\Http\Controllers\PhpController;
 use App\Http\Controllers\NginxController;
 use App\Http\Controllers\SslController;
 use App\Http\Controllers\DatabaseController;
+use App\Http\Controllers\DatabaseManagerController;
 use App\Http\Controllers\EmailController;
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\CronController;
@@ -181,6 +182,20 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/viewer/sso', [DatabaseController::class, 'openDatabaseViewerSSO'])->name('viewer.sso');
         Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
         Route::get('/viewer-view', [DatabaseController::class, 'DatabaseViewerView'])->name('viewer.view');
+
+        // Native Database Manager APIs
+        Route::get('/manager/{db}/tables', [DatabaseManagerController::class, 'getTables'])->name('manager.tables');
+        Route::get('/manager/{db}/tables/{table}/schema', [DatabaseManagerController::class, 'getTableSchema'])->name('manager.schema');
+        Route::post('/manager/{db}/tables/{table}/data', [DatabaseManagerController::class, 'getTableData'])->name('manager.data');
+        Route::post('/manager/{db}/tables/{table}/row/insert', [DatabaseManagerController::class, 'insertRow'])->name('manager.row.insert');
+        Route::post('/manager/{db}/tables/{table}/row/update', [DatabaseManagerController::class, 'updateRow'])->name('manager.row.update');
+        Route::post('/manager/{db}/tables/{table}/row/delete', [DatabaseManagerController::class, 'deleteRow'])->name('manager.row.delete');
+        Route::post('/manager/{db}/tables/create', [DatabaseManagerController::class, 'createTable'])->name('manager.table.create');
+        Route::post('/manager/{db}/tables/{table}/drop', [DatabaseManagerController::class, 'dropTable'])->name('manager.table.drop');
+        Route::post('/manager/{db}/tables/{table}/truncate', [DatabaseManagerController::class, 'truncateTable'])->name('manager.table.truncate');
+        Route::post('/manager/{db}/query', [DatabaseManagerController::class, 'executeQuery'])->name('manager.query');
+        Route::get('/manager/{db}/export', [DatabaseManagerController::class, 'exportDatabase'])->name('manager.export');
+        Route::post('/manager/{db}/import', [DatabaseManagerController::class, 'importDatabase'])->name('manager.import');
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)

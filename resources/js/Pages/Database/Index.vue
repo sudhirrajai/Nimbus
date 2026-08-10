@@ -290,9 +290,9 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <button class="action-btn btn-view" @click="openDatabaseViewer(db)"
-                            title="Open in Nimbus DB">
-                            <i class="material-symbols-rounded">open_in_new</i>
+                          <button class="action-btn btn-view" @click="openNativeManager(db.name)"
+                            title="Open Database Workspace">
+                            <i class="material-symbols-rounded">table_chart</i>
                           </button>
                           <button class="action-btn btn-link-proj" @click="openLinkProjectModal(db)"
                             title="Link Project / Domain">
@@ -543,6 +543,9 @@
         </div>
       </div>
 
+      <!-- Native Database Manager Workspace Modal -->
+      <DatabaseManagerModal :show="showNativeManager" :database-name="selectedDbForManager" @close="showNativeManager = false" />
+
     </div>
   </MainLayout>
 </template>
@@ -550,8 +553,16 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
+import DatabaseManagerModal from '@/Components/DatabaseManagerModal.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+
+const showNativeManager = ref(false)
+const selectedDbForManager = ref('')
+const openNativeManager = (dbName) => {
+  selectedDbForManager.value = dbName
+  showNativeManager.value = true
+}
 
 const loading = ref(false)
 const installing = ref(false)
