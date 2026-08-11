@@ -200,9 +200,9 @@
               <table class="table align-items-center mb-0">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th style="width:48px" class="ps-3">
-                      <div class="form-check mb-0">
-                        <input type="checkbox" class="form-check-input" :checked="allSelected" @click.prevent="toggleSelectAll" title="Select All / Deselect All">
+                    <th style="width:48px" class="ps-3 text-center align-middle cursor-pointer" @click="toggleSelectAll">
+                      <div class="form-check mb-0 d-flex align-items-center justify-content-center p-0">
+                        <input type="checkbox" class="form-check-input ms-0 me-0 cursor-pointer" :checked="allSelected" @change="toggleSelectAll" @click.stop style="width: 18px; height: 18px; cursor: pointer; float: none;" title="Select All / Deselect All">
                       </div>
                     </th>
                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Name</th>
@@ -217,9 +217,9 @@
                     @dblclick="handleDoubleClick(item)"
                     class="file-row-modern"
                     :class="{ 'selected': isSelected(item), 'opacity-5': item.hidden }">
-                    <td class="ps-3">
-                      <div class="form-check mb-0">
-                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @click.prevent.stop="toggleSelectItem(item, $event)">
+                    <td style="width:48px" class="ps-3 text-center align-middle cursor-pointer" @click.stop="toggleSelectItem(item, $event)">
+                      <div class="form-check mb-0 d-flex align-items-center justify-content-center p-0">
+                        <input type="checkbox" class="form-check-input ms-0 me-0 cursor-pointer" :checked="isSelected(item)" @change.stop="toggleSelectItem(item, $event)" @click.stop style="width: 18px; height: 18px; cursor: pointer; float: none;" title="Select item">
                       </div>
                     </td>
                     <td>
@@ -1768,12 +1768,23 @@ const toggleSelectItem = (item, event = null) => {
     selectedItems.value.push({ name: item.name, type: item.type })
     lastSelected.value = item
   }
+
+  // Update allSelected state automatically
+  if (items.value.length > 0 && selectedItems.value.length === items.value.length) {
+    allSelected.value = true
+  } else {
+    allSelected.value = false
+  }
 }
 
 const toggleSelectAll = () => {
-  if (allSelected.value) selectedItems.value = []
-  else selectedItems.value = items.value.map(i => ({ name: i.name, type: i.type }))
-  allSelected.value = !allSelected.value
+  if (allSelected.value) {
+    selectedItems.value = []
+    allSelected.value = false
+  } else {
+    selectedItems.value = items.value.map(i => ({ name: i.name, type: i.type }))
+    allSelected.value = true
+  }
 }
 
 const bulkDelete = () => { isBulkDelete.value = true; showDeleteModal.value = true }
@@ -2065,5 +2076,24 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+}
+
+.form-check-input {
+  cursor: pointer;
+  border: 1.5px solid #d2d6da !important;
+  border-radius: 4px !important;
+  transition: all 0.2s ease;
+  width: 18px !important;
+  height: 18px !important;
+  margin-top: 0 !important;
+}
+
+.form-check-input:checked {
+  background-color: #5e72e4 !important;
+  border-color: #5e72e4 !important;
+}
+
+.form-check-input:hover {
+  border-color: #5e72e4 !important;
 }
 </style>
