@@ -89,31 +89,37 @@
         <div class="col-lg-9 col-md-8">
           <!-- Toolbar -->
           <div class="glass-card mb-3 p-3">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <div class="btn-group shadow-sm border-radius-lg overflow-hidden">
-                <button class="btn btn-sm bg-white mb-0 border-end" @click="showCreateFileModal = true">
-                  <i class="material-symbols-rounded text-primary text-sm me-1">note_add</i>
-                  New File
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+              
+              <!-- Action Buttons Group -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group shadow-sm border-radius-lg overflow-hidden">
+                  <button class="btn btn-sm bg-white mb-0 border-end" @click="showCreateFileModal = true">
+                    <i class="material-symbols-rounded text-primary text-sm me-1">note_add</i>
+                    <span>New File</span>
+                  </button>
+                  <button class="btn btn-sm bg-white mb-0" @click="showCreateDirModal = true">
+                    <i class="material-symbols-rounded text-info text-sm me-1">create_new_folder</i>
+                    <span>Folder</span>
+                  </button>
+                </div>
+
+                <button class="btn btn-sm bg-gradient-primary mb-0 shadow-sm" @click="triggerUpload">
+                  <i class="material-symbols-rounded text-sm me-1">upload</i>
+                  <span>Upload</span>
                 </button>
-                <button class="btn btn-sm bg-white mb-0" @click="showCreateDirModal = true">
-                  <i class="material-symbols-rounded text-info text-sm me-1">create_new_folder</i>
-                  Folder
+                <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" multiple />
+
+                <button class="btn btn-sm bg-white mb-0 shadow-sm text-dark" @click="webTerminalRef?.openTerminal()">
+                  <i class="material-symbols-rounded text-sm me-1 text-success">terminal</i>
+                  <span>Terminal</span>
                 </button>
               </div>
 
-              <button class="btn btn-sm bg-gradient-primary mb-0 shadow-sm" @click="triggerUpload">
-                <i class="material-symbols-rounded text-sm me-1">upload</i>
-                Upload
-              </button>
-              <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" multiple />
-
-              <button class="btn btn-sm bg-white mb-0 shadow-sm text-dark" @click="webTerminalRef?.openTerminal()">
-                <i class="material-symbols-rounded text-sm me-1 text-success">terminal</i>
-                Terminal
-              </button>
-
-              <div class="ms-auto d-flex align-items-center gap-3">
-                <div class="search-wrapper-premium shadow-sm">
+              <!-- Search & Controls Group -->
+              <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1 flex-xl-grow-0 justify-content-start justify-content-md-end">
+                <!-- Search Box -->
+                <div class="search-wrapper-premium shadow-sm flex-grow-1 flex-md-grow-0">
                   <div class="search-type-selector">
                     <i class="material-symbols-rounded text-sm">filter_list</i>
                     <select v-model="searchType" class="form-select border-0 bg-transparent text-xxs font-weight-bold">
@@ -132,41 +138,47 @@
                   </div>
                 </div>
                 
-                <div class="d-flex align-items-center gap-3 bg-gray-100 px-3 py-1 border-radius-lg border">
-                  <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
-                    <input class="form-check-input ms-0" type="checkbox" id="deepSearchToggle" v-model="deepSearch">
-                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="deepSearchToggle">In-depth</label>
+                <!-- Toggle Switches Container (In-depth & Hidden) -->
+                <div class="toggle-switches-bar bg-gray-100 px-3 py-1 border-radius-lg border d-flex align-items-center gap-3">
+                  <div class="form-check form-switch mb-0 ps-0 d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0 me-1" type="checkbox" id="deepSearchToggle" v-model="deepSearch" style="width: 32px; height: 16px; min-width: 32px;">
+                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer user-select-none" for="deepSearchToggle">In-depth</label>
                   </div>
                   <div class="vr bg-gray-300" style="height: 15px;"></div>
-                  <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
-                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="onToggleHidden">
-                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="showHiddenToggle">Hidden</label>
+                  <div class="form-check form-switch mb-0 ps-0 d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0 me-1" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="onToggleHidden" style="width: 32px; height: 16px; min-width: 32px;">
+                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer user-select-none" for="showHiddenToggle">Hidden</label>
                   </div>
                 </div>
 
-                <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)">
-                  <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
-                </button>
+                <!-- Action Icon Buttons -->
+                <div class="d-flex align-items-center gap-1">
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)">
+                    <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
+                  </button>
 
-                <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
-                  <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
-                </button>
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
+                    <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
+                  </button>
+                </div>
               </div>
             </div>
 
             <!-- Bulk actions overlay -->
             <transition name="slide-up">
-              <div v-if="hasSelected" class="bulk-actions-overlay mt-3 p-2 border-radius-lg bg-gradient-dark d-flex align-items-center gap-2 shadow-lg">
+              <div v-if="hasSelected" class="bulk-actions-overlay mt-3 p-2 border-radius-lg bg-gradient-dark d-flex flex-wrap align-items-center gap-2 shadow-lg">
                 <span class="text-white text-xs font-weight-bold ms-3 me-auto">
                   <i class="material-symbols-rounded text-xs me-1">check_circle</i>
                   {{ selectedItems.length }} selected
                 </span>
-                <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('copy')">Copy</button>
-                <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('move')">Move</button>
-                <button class="btn btn-xs btn-link text-white mb-0" @click="bulkZip">Zip</button>
-                <button class="btn btn-xs btn-link text-danger mb-0" @click="bulkDelete">Delete</button>
-                <div class="vr bg-white opacity-2 mx-2" style="height: 20px;"></div>
-                <button class="btn btn-xs btn-link text-white mb-0 opacity-7" @click="selectedItems = []; allSelected = false">Cancel</button>
+                <div class="d-flex align-items-center gap-1 flex-wrap ms-auto">
+                  <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('copy')">Copy</button>
+                  <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('move')">Move</button>
+                  <button class="btn btn-xs btn-link text-white mb-0" @click="bulkZip">Zip</button>
+                  <button class="btn btn-xs btn-link text-danger mb-0" @click="bulkDelete">Delete</button>
+                  <div class="vr bg-white opacity-2 mx-1 d-none d-sm-block" style="height: 20px;"></div>
+                  <button class="btn btn-xs btn-link text-white mb-0 opacity-7" @click="selectedItems = []; allSelected = false">Cancel</button>
+                </div>
               </div>
             </transition>
           </div>
@@ -2095,5 +2107,48 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
 
 .form-check-input:hover {
   border-color: #5e72e4 !important;
+}
+
+/* Responsive Media Queries for All Screen Sizes */
+@media (max-width: 1199.98px) {
+  .search-wrapper-premium {
+    min-width: 250px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .search-wrapper-premium {
+    min-width: 220px;
+    width: 100%;
+  }
+  .toggle-switches-bar {
+    width: 100%;
+    justify-content: space-around;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .search-wrapper-premium {
+    min-width: 100%;
+    width: 100%;
+  }
+  .toggle-switches-bar {
+    width: 100%;
+    justify-content: space-between;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  .file-row-modern td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .bulk-actions-overlay {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .bulk-actions-overlay .d-flex {
+    justify-content: space-between;
+    width: 100%;
+  }
 }
 </style>
