@@ -290,9 +290,9 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <button class="action-btn btn-view" @click="openDatabaseViewer(db)"
-                            title="Open in Nimbus DB">
-                            <i class="material-symbols-rounded">open_in_new</i>
+                          <button class="action-btn btn-view" @click="openNativeManager(db.name)" :disabled="openingManager[db.name]" title="Open Database Workspace">
+                            <span v-if="openingManager[db.name]" class="spinner-border spinner-border-sm"></span>
+                            <i v-else class="material-symbols-rounded">table_chart</i>
                           </button>
                           <button class="action-btn btn-link-proj" @click="openLinkProjectModal(db)"
                             title="Link Project / Domain">
@@ -543,6 +543,9 @@
         </div>
       </div>
 
+      <!-- Native Database Manager Workspace Modal -->
+      <DatabaseManagerModal :show="showNativeManager" :database-name="selectedDbForManager" @close="showNativeManager = false" />
+
     </div>
   </MainLayout>
 </template>
@@ -550,8 +553,24 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
+import DatabaseManagerModal from '@/Components/DatabaseManagerModal.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+
+const openingManager = ref({})
+const openNativeManager = async (dbName) => {
+  try {
+    openingManager.value[dbName] = true
+    const response = await axios.post('/database/manager/token', { database: dbName })
+    if (response.data?.url) {
+      window.open(response.data.url, '_blank')
+    }
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to generate database session token')
+  } finally {
+    openingManager.value[dbName] = false
+  }
+}
 
 const loading = ref(false)
 const installing = ref(false)
