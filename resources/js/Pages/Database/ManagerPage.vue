@@ -67,7 +67,7 @@
         <!-- Tab 1: Browse Data & Schema -->
         <div v-if="activeTab === 'browse'" class="d-flex flex-grow-1 overflow-hidden h-100">
           
-          <!-- Left Sidebar: Tables List (With wheel trap so scrolling sidebar does not scroll page) -->
+          <!-- Left Sidebar: Tables List -->
           <div class="db-tables-sidebar border-end p-3 d-flex flex-column bg-gray-50 h-100" style="width: 280px; min-width: 250px;">
             <div class="search-box mb-3">
               <div class="input-group input-group-sm bg-white border-radius-lg overflow-hidden border shadow-sm">
@@ -169,13 +169,13 @@
                       </li>
                       <li><hr class="dropdown-divider my-1"></li>
                       <li>
-                        <a class="dropdown-item text-xs text-warning border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="confirmTruncateTable(selectedTable)">
+                        <a class="dropdown-item text-xs text-warning border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="openSafetyGuard('truncate', selectedTable)">
                           <i class="material-symbols-rounded text-sm me-2 text-warning">delete_sweep</i>
                           Truncate Table
                         </a>
                       </li>
                       <li>
-                        <a class="dropdown-item text-xs text-danger border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="confirmDropTable(selectedTable)">
+                        <a class="dropdown-item text-xs text-danger border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="openSafetyGuard('drop', selectedTable)">
                           <i class="material-symbols-rounded text-sm me-2 text-danger">delete_forever</i>
                           Drop Table
                         </a>
@@ -185,7 +185,7 @@
                 </div>
               </div>
 
-              <!-- SubView 1: Data Grid (Dedicated internal scroll area with fixed height & wheel trap) -->
+              <!-- SubView 1: Data Grid (With Inline Editing & FK Quick Lookup Popovers) -->
               <div v-if="subView === 'data'" class="flex-grow-1 d-flex flex-column overflow-hidden">
                 <!-- Filters & Search Toolbar -->
                 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 flex-shrink-0">
@@ -204,6 +204,7 @@
                   </div>
 
                   <div class="d-flex align-items-center gap-3">
+                    <small class="text-xxs text-muted"><i class="material-symbols-rounded text-xs align-middle">info</i> Double-click any cell to edit inline</small>
                     <div v-if="selectedRows.length > 0" class="d-flex align-items-center gap-2">
                       <span class="text-xs font-weight-bold text-primary">{{ selectedRows.length }} selected</span>
                       <button class="btn btn-xs btn-danger mb-0 border-radius-lg" @click="bulkDeleteRows">Delete Selected</button>
@@ -261,9 +262,33 @@
                         <td class="ps-3">
                           <input type="checkbox" class="form-check-input" :checked="isRowSelected(row)" @click.prevent.stop="toggleSelectRow(row)" />
                         </td>
-                        <td v-for="col in tableColumns" :key="col" class="text-xs text-dark font-weight-bold text-truncate" style="max-width: 250px;" :title="row[col]">
-                          <span v-if="row[col] === null" class="badge bg-light text-secondary font-monospace text-xxs opacity-7">NULL</span>
-                          <span v-else>{{ row[col] }}</span>
+                        <td v-for="col in tableColumns" :key="col" 
+                          class="text-xs text-dark font-weight-bold text-truncate cursor-pointer user-select-none position-relative" 
+                          style="max-width: 250px;" 
+                          :title="row[col]"
+                          @dblclick.stop="startInlineEdit(idx, col, row[col])">
+                          
+                          <!-- Inline Editing Box -->
+                          <div v-if="inlineEditCell.rowIndex === idx && inlineEditCell.colName === col" class="d-flex align-items-center gap-1">
+                            <input ref="inlineInputRef" v-model="inlineEditCell.value" type="text" 
+                              class="form-control form-control-sm text-xs py-0 px-1 border-primary" 
+                              @keyup.enter="saveInlineEdit(row, col)" 
+                              @keyup.esc="cancelInlineEdit" 
+                              @blur="saveInlineEdit(row, col)" />
+                          </div>
+
+                          <!-- Normal Display -->
+                          <template v-else>
+                            <span v-if="row[col] === null" class="badge bg-light text-secondary font-monospace text-xxs opacity-7">NULL</span>
+                            <span v-else>
+                              {{ row[col] }}
+                              <i v-if="getFkConstraint(selectedTable, col)" class="material-symbols-rounded text-info text-xxs ms-1 cursor-pointer" 
+                                title="Click for Foreign Key lookup preview"
+                                @click.stop="openFkLookup(getFkConstraint(selectedTable, col).REFERENCED_TABLE_NAME, getFkConstraint(selectedTable, col).REFERENCED_COLUMN_NAME, row[col], $event)">
+                                link
+                              </i>
+                            </span>
+                          </template>
                         </td>
                         <td class="text-center">
                           <div class="d-flex justify-content-center gap-1">
@@ -297,7 +322,7 @@
                 </div>
               </div>
 
-              <!-- SubView 2: Schema / Structure -->
+              <!-- SubView 2: Schema / Structure (Columns, Indexes & Foreign Key Builder) -->
               <div v-else-if="subView === 'schema'" class="flex-grow-1 overflow-y-auto pe-2" style="max-height: 520px;" @wheel.stop>
                 <div v-if="loadingSchema" class="text-center py-5">
                   <div class="spinner-border text-primary" role="status"></div>
@@ -360,7 +385,12 @@
                   </div>
 
                   <!-- Indexes Section -->
-                  <h6 class="font-weight-bolder text-dark mb-3">Indexes</h6>
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="font-weight-bolder text-dark mb-0">Indexes</h6>
+                    <button class="btn btn-xs btn-outline-primary border-radius-lg mb-0" @click="openAddIndexModal">
+                      <i class="material-symbols-rounded text-xs me-1">add</i> Add Index
+                    </button>
+                  </div>
                   <div class="table-responsive border border-radius-lg mb-4">
                     <table class="table align-items-center mb-0">
                       <thead class="bg-gray-100">
@@ -368,6 +398,7 @@
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8 ps-3">Index Name</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Type</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Columns</th>
+                          <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-8" style="width: 70px;">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -379,13 +410,23 @@
                             </span>
                           </td>
                           <td class="text-xs text-dark font-weight-bold">{{ idx.columns.join(', ') }}</td>
+                          <td class="text-center">
+                            <button v-if="idx.name !== 'PRIMARY'" class="action-btn-sm" @click="saveDropIndex(idx.name)" title="Drop Index">
+                              <i class="material-symbols-rounded text-sm text-danger">delete</i>
+                            </button>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
 
                   <!-- Foreign Keys Section -->
-                  <h6 class="font-weight-bolder text-dark mb-3">Foreign Keys</h6>
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="font-weight-bolder text-dark mb-0">Foreign Keys</h6>
+                    <button class="btn btn-xs btn-outline-primary border-radius-lg mb-0" @click="openAddFkModal">
+                      <i class="material-symbols-rounded text-xs me-1">add</i> Add Foreign Key
+                    </button>
+                  </div>
                   <div v-if="tableSchema.foreign_keys.length > 0" class="table-responsive border border-radius-lg">
                     <table class="table align-items-center mb-0">
                       <thead class="bg-gray-100">
@@ -394,6 +435,7 @@
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Column</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Referenced Table</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Referenced Column</th>
+                          <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-8" style="width: 70px;">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -402,6 +444,11 @@
                           <td class="text-xs text-primary font-weight-bold">{{ fk.COLUMN_NAME }}</td>
                           <td class="text-xs text-dark font-weight-bold">{{ fk.REFERENCED_TABLE_NAME }}</td>
                           <td class="text-xs text-info font-weight-bold">{{ fk.REFERENCED_COLUMN_NAME }}</td>
+                          <td class="text-center">
+                            <button class="action-btn-sm" @click="saveDropForeignKey(fk.CONSTRAINT_NAME)" title="Drop Foreign Key">
+                              <i class="material-symbols-rounded text-sm text-danger">delete</i>
+                            </button>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -424,7 +471,7 @@
           </div>
         </div>
 
-        <!-- Tab 2: ER Diagram / Database Designer (Wheel Trapped & Fully Scrollable Canvas) -->
+        <!-- Tab 2: ER Diagram / Database Designer (Layout Persistence & Export) -->
         <div v-else-if="activeTab === 'designer'" class="flex-grow-1 p-3 bg-gray-100 overflow-hidden d-flex flex-column h-100 position-relative">
           <!-- Toolbar -->
           <div class="d-flex justify-content-between align-items-center mb-2 px-2 flex-shrink-0">
@@ -452,6 +499,9 @@
                 </button>
               </div>
 
+              <button class="btn btn-xs btn-outline-info mb-0 border-radius-lg" @click="exportErDiagramSvg" title="Export diagram as SVG image">
+                <i class="material-symbols-rounded text-xs me-1">download</i> Export SVG
+              </button>
               <button class="btn btn-xs bg-gradient-primary mb-0 border-radius-lg" @click="autoArrangeDesigner">
                 <i class="material-symbols-rounded text-xs me-1">auto_awesome</i> Auto Layout
               </button>
@@ -461,7 +511,7 @@
             </div>
           </div>
 
-          <!-- Interactive Designer Canvas Area (Wheel Trapped Container so scrolling ER diagram does not scroll page) -->
+          <!-- Interactive Designer Canvas Area -->
           <div class="designer-canvas-wrapper flex-grow-1 border border-radius-xl bg-white position-relative shadow-inner"
             style="overflow: auto !important; height: 550px; min-height: 500px; overscroll-behavior: contain;"
             @mousemove="handleCanvasMouseMove" @mouseup="handleCanvasMouseUp" @wheel.stop>
@@ -477,7 +527,7 @@
               <p class="text-xs text-secondary mb-0">Create tables to view database relationship topology.</p>
             </div>
 
-            <div v-else class="designer-viewport position-relative"
+            <div v-else ref="designerCanvasRef" class="designer-viewport position-relative"
               :style="{ width: designerCanvasWidth + 'px', height: designerCanvasHeight + 'px', transform: `scale(${designerZoom})`, transformOrigin: 'top left', transition: isDraggingTable ? 'none' : 'transform 0.2s ease' }">
               
               <!-- SVG Connector Layer -->
@@ -530,7 +580,7 @@
           </div>
         </div>
 
-        <!-- Tab 3: Interactive SQL Console -->
+        <!-- Tab 3: Interactive SQL Console (Query History Drawer) -->
         <div v-else-if="activeTab === 'sql'" class="flex-grow-1 p-4 bg-white overflow-y-auto d-flex flex-column h-100" @wheel.stop>
           <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
@@ -538,6 +588,9 @@
               <small class="text-secondary">Execute raw SQL queries against <code>{{ database }}</code></small>
             </div>
             <div class="d-flex gap-2">
+              <button class="btn btn-xs btn-outline-secondary mb-0" @click="showSqlHistoryDrawer = !showSqlHistoryDrawer">
+                <i class="material-symbols-rounded text-xs me-1">history</i> Query History ({{ sqlHistory.length }})
+              </button>
               <button class="btn btn-xs btn-outline-secondary mb-0" @click="sqlQuery = `SELECT * FROM \`${selectedTable || 'tables'}\` LIMIT 25`">SELECT Template</button>
               <button class="btn btn-xs btn-outline-secondary mb-0" @click="sqlQuery = `SHOW TABLES`">SHOW TABLES</button>
               <button class="btn bg-gradient-primary mb-0 border-radius-lg px-4" @click="runQuery" :disabled="executingSql || !sqlQuery.trim()">
@@ -548,54 +601,81 @@
             </div>
           </div>
 
-          <!-- SQL Editor Box -->
-          <div class="sql-editor-container mb-4 shadow-inner border border-radius-lg bg-gradient-dark p-3">
-            <textarea v-model="sqlQuery" class="form-control bg-transparent border-0 text-white font-monospace text-sm" 
-              rows="6" placeholder="SELECT * FROM users WHERE active = 1;" @keydown.ctrl.enter="runQuery" @keydown.meta.enter="runQuery"></textarea>
-          </div>
-
-          <!-- Query Results Section -->
-          <div v-if="sqlResult" class="sql-results-container flex-grow-1 border border-radius-lg p-3 bg-gray-50 overflow-y-auto" @wheel.stop>
-            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-              <div class="d-flex align-items-center gap-2">
-                <span :class="sqlResult.success ? 'badge bg-success' : 'badge bg-danger'">
-                  {{ sqlResult.success ? 'Success' : 'Query Failed' }}
-                </span>
-                <span v-if="sqlResult.execution_time_ms !== undefined" class="text-xs font-weight-bold text-secondary">
-                  <i class="material-symbols-rounded text-xs align-middle">timer</i> {{ sqlResult.execution_time_ms }} ms
-                </span>
+          <div class="row g-3 flex-grow-1 overflow-hidden">
+            <!-- SQL Editor Box -->
+            <div :class="showSqlHistoryDrawer ? 'col-md-8' : 'col-12'" class="d-flex flex-column h-100">
+              <div class="sql-editor-container mb-3 shadow-inner border border-radius-lg bg-gradient-dark p-3">
+                <textarea v-model="sqlQuery" class="form-control bg-transparent border-0 text-white font-monospace text-sm" 
+                  rows="6" placeholder="SELECT * FROM users WHERE active = 1;" @keydown.ctrl.enter="runQuery" @keydown.meta.enter="runQuery"></textarea>
               </div>
-              <span v-if="sqlResult.type === 'select'" class="text-xs font-weight-bold text-dark">{{ sqlResult.count }} rows returned</span>
-              <span v-else-if="sqlResult.type === 'affected'" class="text-xs font-weight-bold text-dark">{{ sqlResult.affected_rows }} rows affected</span>
+
+              <!-- Query Results Section -->
+              <div v-if="sqlResult" class="sql-results-container flex-grow-1 border border-radius-lg p-3 bg-gray-50 overflow-y-auto" @wheel.stop>
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                  <div class="d-flex align-items-center gap-2">
+                    <span :class="sqlResult.success ? 'badge bg-success' : 'badge bg-danger'">
+                      {{ sqlResult.success ? 'Success' : 'Query Failed' }}
+                    </span>
+                    <span v-if="sqlResult.execution_time_ms !== undefined" class="text-xs font-weight-bold text-secondary">
+                      <i class="material-symbols-rounded text-xs align-middle">timer</i> {{ sqlResult.execution_time_ms }} ms
+                    </span>
+                  </div>
+                  <span v-if="sqlResult.type === 'select'" class="text-xs font-weight-bold text-dark">{{ sqlResult.count }} rows returned</span>
+                  <span v-else-if="sqlResult.type === 'affected'" class="text-xs font-weight-bold text-dark">{{ sqlResult.affected_rows }} rows affected</span>
+                </div>
+
+                <!-- SELECT Grid Result -->
+                <div v-if="sqlResult.type === 'select' && sqlResult.rows" class="table-responsive border border-radius-lg bg-white overflow-y-auto" style="max-height: 350px;" @wheel.stop>
+                  <table class="table table-hover align-items-center mb-0">
+                    <thead class="bg-gray-100 sticky-top">
+                      <tr>
+                        <th v-for="c in sqlResult.columns" :key="c" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8 ps-3">{{ c }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, ri) in sqlResult.rows" :key="ri">
+                        <td v-for="c in sqlResult.columns" :key="c" class="text-xs text-dark font-weight-bold ps-3">
+                          <span v-if="r[c] === null" class="badge bg-light text-secondary font-monospace text-xxs opacity-7">NULL</span>
+                          <span v-else>{{ r[c] }}</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Non-SELECT Result Message -->
+                <div v-else-if="sqlResult.message" class="alert alert-info py-2 px-3 text-xs text-white border-radius-lg mb-0">
+                  <i class="material-symbols-rounded text-sm me-1 align-middle">info</i> {{ sqlResult.message }}
+                </div>
+
+                <!-- Error Message -->
+                <div v-else-if="sqlResult.error" class="alert alert-danger py-2 px-3 text-xs text-white border-radius-lg mb-0 font-monospace">
+                  <i class="material-symbols-rounded text-sm me-1 align-middle">error</i> {{ sqlResult.error }}
+                </div>
+              </div>
             </div>
 
-            <!-- SELECT Grid Result -->
-            <div v-if="sqlResult.type === 'select' && sqlResult.rows" class="table-responsive border border-radius-lg bg-white overflow-y-auto" style="max-height: 350px;" @wheel.stop>
-              <table class="table table-hover align-items-center mb-0">
-                <thead class="bg-gray-100 sticky-top">
-                  <tr>
-                    <th v-for="c in sqlResult.columns" :key="c" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8 ps-3">{{ c }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(r, ri) in sqlResult.rows" :key="ri">
-                    <td v-for="c in sqlResult.columns" :key="c" class="text-xs text-dark font-weight-bold ps-3">
-                      <span v-if="r[c] === null" class="badge bg-light text-secondary font-monospace text-xxs opacity-7">NULL</span>
-                      <span v-else>{{ r[c] }}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Non-SELECT Result Message -->
-            <div v-else-if="sqlResult.message" class="alert alert-info py-2 px-3 text-xs text-white border-radius-lg mb-0">
-              <i class="material-symbols-rounded text-sm me-1 align-middle">info</i> {{ sqlResult.message }}
-            </div>
-
-            <!-- Error Message -->
-            <div v-else-if="sqlResult.error" class="alert alert-danger py-2 px-3 text-xs text-white border-radius-lg mb-0 font-monospace">
-              <i class="material-symbols-rounded text-sm me-1 align-middle">error</i> {{ sqlResult.error }}
+            <!-- SQL Query History Drawer Side-Panel -->
+            <div v-if="showSqlHistoryDrawer" class="col-md-4 d-flex flex-column h-100 border-start ps-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="font-weight-bolder text-dark mb-0 text-xs text-uppercase">Query History Log</h6>
+                <button class="btn btn-link text-danger p-0 m-0 text-xxs" @click="clearSqlHistory">Clear History</button>
+              </div>
+              
+              <div class="history-list flex-grow-1 overflow-y-auto pe-1" style="max-height: 480px;" @wheel.stop>
+                <div v-if="sqlHistory.length === 0" class="text-center py-5 text-muted text-xs">
+                  No past queries executed yet.
+                </div>
+                <div v-else v-for="(h, hi) in sqlHistory" :key="hi" 
+                  class="history-item p-2 mb-2 border border-radius-lg bg-gray-50 cursor-pointer"
+                  @click="sqlQuery = h.sql">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span :class="h.success ? 'badge bg-success text-xxs' : 'badge bg-danger text-xxs'">{{ h.success ? 'OK' : 'ERR' }}</span>
+                    <span class="text-xxs text-secondary">{{ h.time }}</span>
+                  </div>
+                  <code class="text-xxs text-dark font-monospace text-truncate d-block" :title="h.sql">{{ h.sql }}</code>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -763,6 +843,173 @@
 
       </div>
 
+    </div>
+
+    <!-- Floating Foreign Key Quick Lookup Popover Card -->
+    <div v-if="fkPopover.show" class="card shadow-2xl position-fixed bg-white border border-radius-xl p-3" 
+      :style="{ top: fkPopover.y + 'px', left: fkPopover.x + 'px', zIndex: 10090, width: '280px' }">
+      <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+        <span class="text-xs font-weight-bolder text-dark">
+          <i class="material-symbols-rounded text-info text-xs align-middle me-1">link</i>
+          {{ fkPopover.refTable }} ({{ fkPopover.refCol }} = {{ fkPopover.refVal }})
+        </span>
+        <button class="btn btn-link text-secondary p-0 m-0 text-xs" @click="fkPopover.show = false">
+          <i class="material-symbols-rounded text-xs">close</i>
+        </button>
+      </div>
+
+      <div v-if="fkPopover.loading" class="text-center py-3">
+        <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+        <span class="text-xxs text-secondary ms-2">Fetching referenced row...</span>
+      </div>
+      <div v-else-if="!fkPopover.data" class="text-center py-2 text-muted text-xs">
+        No matching parent record found.
+      </div>
+      <div v-else class="overflow-y-auto" style="max-height: 200px;">
+        <div v-for="(v, k) in fkPopover.data" :key="k" class="d-flex justify-content-between text-xxs py-1 border-bottom border-light">
+          <span class="font-weight-bold text-secondary text-truncate me-2" style="max-width: 100px;">{{ k }}:</span>
+          <span class="font-monospace text-dark text-truncate" :title="v">{{ v === null ? 'NULL' : v }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Index Modal -->
+    <div v-if="showAddIndexModal" class="modal-backdrop fade show" style="z-index: 10050;"></div>
+    <div v-if="showAddIndexModal" class="modal fade show d-block" style="z-index: 10051;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="glass-card modal-content border-0 shadow-2xl bg-white p-3">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bolder text-dark">
+              <i class="material-symbols-rounded text-primary me-2 align-middle">add_circle</i>
+              Add Index to {{ selectedTable }}
+            </h5>
+            <button type="button" class="btn-close" @click="showAddIndexModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Index Type</label>
+              <select v-model="indexForm.type" class="form-select">
+                <option value="INDEX">INDEX (Standard)</option>
+                <option value="UNIQUE">UNIQUE</option>
+                <option value="FULLTEXT">FULLTEXT</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Index Name (Optional)</label>
+              <input v-model="indexForm.name" type="text" class="form-control" placeholder="idx_col_name" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Select Column(s)</label>
+              <div class="p-2 border border-radius-lg max-height-150 overflow-y-auto">
+                <div v-for="c in tableColumns" :key="c" class="form-check mb-1">
+                  <input type="checkbox" class="form-check-input" :id="`idx_col_${c}`" :value="c" v-model="indexForm.columns" />
+                  <label class="form-check-label text-xs font-weight-bold" :for="`idx_col_${c}`">{{ c }}</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-link text-secondary mb-0" @click="showAddIndexModal = false">Cancel</button>
+            <button class="btn bg-gradient-primary mb-0 border-radius-lg px-4" @click="saveAddIndex" :disabled="savingIndex || indexForm.columns.length === 0">
+              <span v-if="savingIndex" class="spinner-border spinner-border-sm me-1"></span>
+              Create Index
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Foreign Key Modal -->
+    <div v-if="showAddFkModal" class="modal-backdrop fade show" style="z-index: 10050;"></div>
+    <div v-if="showAddFkModal" class="modal fade show d-block" style="z-index: 10051;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="glass-card modal-content border-0 shadow-2xl bg-white p-3">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bolder text-dark">
+              <i class="material-symbols-rounded text-info me-2 align-middle">link</i>
+              Add Foreign Key Constraint to {{ selectedTable }}
+            </h5>
+            <button type="button" class="btn-close" @click="showAddFkModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Local Column</label>
+              <select v-model="fkForm.column" class="form-select">
+                <option value="">Select column...</option>
+                <option v-for="c in tableColumns" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Referenced Table</label>
+              <select v-model="fkForm.ref_table" class="form-select">
+                <option value="">Select target table...</option>
+                <option v-for="t in tables" :key="t.name" :value="t.name">{{ t.name }}</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-xs font-weight-bold text-uppercase">Referenced Column</label>
+              <input v-model="fkForm.ref_column" type="text" class="form-control text-xs" placeholder="id" />
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-md-6">
+                <label class="form-label text-xs font-weight-bold text-uppercase">ON DELETE</label>
+                <select v-model="fkForm.on_delete" class="form-select text-xs">
+                  <option value="RESTRICT">RESTRICT</option>
+                  <option value="CASCADE">CASCADE</option>
+                  <option value="SET NULL">SET NULL</option>
+                  <option value="NO ACTION">NO ACTION</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-xs font-weight-bold text-uppercase">ON UPDATE</label>
+                <select v-model="fkForm.on_update" class="form-select text-xs">
+                  <option value="RESTRICT">RESTRICT</option>
+                  <option value="CASCADE">CASCADE</option>
+                  <option value="SET NULL">SET NULL</option>
+                  <option value="NO ACTION">NO ACTION</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-link text-secondary mb-0" @click="showAddFkModal = false">Cancel</button>
+            <button class="btn bg-gradient-info mb-0 border-radius-lg px-4" @click="saveAddForeignKey" :disabled="savingFk || !fkForm.column || !fkForm.ref_table">
+              <span v-if="savingFk" class="spinner-border spinner-border-sm me-1"></span>
+              Add Foreign Key
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Production Safety Guard Modal -->
+    <div v-if="safetyGuard.show" class="modal-backdrop fade show" style="z-index: 10050;"></div>
+    <div v-if="safetyGuard.show" class="modal fade show d-block" style="z-index: 10051;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="glass-card modal-content border-0 shadow-2xl bg-white p-3">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bolder text-danger">
+              <i class="material-symbols-rounded text-danger me-2 align-middle">warning</i>
+              Confirm Destructive Action
+            </h5>
+            <button type="button" class="btn-close" @click="safetyGuard.show = false"></button>
+          </div>
+          <div class="modal-body text-center py-4">
+            <p class="text-xs text-secondary mb-3">
+              You are about to <strong class="text-danger uppercase">{{ safetyGuard.action }}</strong> the table <code>{{ safetyGuard.targetTable }}</code>.
+              This action cannot be undone.
+            </p>
+            <label class="form-label text-xs font-weight-bold text-uppercase">Type <code>{{ safetyGuard.targetTable }}</code> to confirm:</label>
+            <input v-model="safetyGuard.confirmInput" type="text" class="form-control text-center font-weight-bold text-danger border-danger" placeholder="table_name" />
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-link text-secondary mb-0" @click="safetyGuard.show = false">Cancel</button>
+            <button class="btn bg-gradient-danger mb-0 border-radius-lg px-4" @click="executeSafetyAction" :disabled="safetyGuard.confirmInput !== safetyGuard.targetTable">
+              Confirm {{ safetyGuard.action.toUpperCase() }} Now
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Insert / Edit Row Modal -->
@@ -990,7 +1237,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import axios from 'axios'
@@ -1028,6 +1275,25 @@ const allRowsSelected = ref(false)
 const tableSchema = ref(null)
 const loadingSchema = ref(false)
 
+// Inline Editing
+const inlineEditCell = ref({ rowIndex: null, colName: null, value: '' })
+const inlineInputRef = ref(null)
+
+// Foreign Key Popover
+const fkPopover = ref({ show: false, x: 0, y: 0, refTable: '', refCol: '', refVal: '', data: null, loading: false })
+
+// Index & FK Builder Modals
+const showAddIndexModal = ref(false)
+const savingIndex = ref(false)
+const indexForm = ref({ name: '', type: 'INDEX', columns: [] })
+
+const showAddFkModal = ref(false)
+const savingFk = ref(false)
+const fkForm = ref({ constraint_name: '', column: '', ref_table: '', ref_column: 'id', on_delete: 'RESTRICT', on_update: 'RESTRICT' })
+
+// Destructive Action Safety Guard
+const safetyGuard = ref({ show: false, action: 'drop', targetTable: '', confirmInput: '' })
+
 // ER Designer
 const designerTables = ref([])
 const designerRelationships = ref([])
@@ -1037,6 +1303,7 @@ const designerZoom = ref(1)
 const isDraggingTable = ref(false)
 const draggingTableName = ref(null)
 const dragOffset = ref({ x: 0, y: 0 })
+const designerCanvasRef = ref(null)
 
 const designerCanvasWidth = computed(() => {
   let maxX = 1200
@@ -1080,10 +1347,12 @@ const alterTableForm = ref({
   collation: 'utf8mb4_unicode_ci'
 })
 
-// SQL Console
+// SQL Console & History
 const sqlQuery = ref('')
 const sqlResult = ref(null)
 const executingSql = ref(false)
+const showSqlHistoryDrawer = ref(false)
+const sqlHistory = ref([])
 
 // Create Table
 const newTable = ref({
@@ -1122,6 +1391,7 @@ const filteredTables = computed(() => {
 onMounted(() => {
   if (props.database) {
     loadTables()
+    loadSqlHistory()
   }
 })
 
@@ -1197,7 +1467,175 @@ const loadTableSchema = async () => {
   }
 }
 
-// ER Designer Methods
+// Inline Cell Editing
+const startInlineEdit = (rowIndex, colName, val) => {
+  inlineEditCell.value = { rowIndex, colName, value: val === null ? '' : val }
+  nextTick(() => {
+    if (inlineInputRef.value && inlineInputRef.value[0]) {
+      inlineInputRef.value[0].focus()
+    }
+  })
+}
+
+const cancelInlineEdit = () => {
+  inlineEditCell.value = { rowIndex: null, colName: null, value: '' }
+}
+
+const saveInlineEdit = async (row, colName) => {
+  if (inlineEditCell.value.rowIndex === null) return
+  const newVal = inlineEditCell.value.value
+  const oldVal = row[colName]
+  if (newVal === oldVal) {
+    cancelInlineEdit()
+    return
+  }
+
+  try {
+    let whereDict = {}
+    if (primaryKeys.value.length > 0) {
+      primaryKeys.value.forEach(pk => whereDict[pk] = row[pk])
+    } else {
+      whereDict = row
+    }
+
+    const updatedData = { ...row, [colName]: newVal }
+
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/row/update`, {
+      where: whereDict,
+      data: updatedData
+    })
+    row[colName] = newVal
+    showAlert('success', `Cell updated (${colName})`)
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Inline edit failed')
+  } finally {
+    cancelInlineEdit()
+  }
+}
+
+// Foreign Key Helper & Quick Lookup Popover
+const getFkConstraint = (tableName, colName) => {
+  if (!tableSchema.value || !tableSchema.value.foreign_keys) return null
+  return tableSchema.value.foreign_keys.find(fk => fk.COLUMN_NAME === colName)
+}
+
+const openFkLookup = async (refTable, refCol, val, e) => {
+  if (val === null || val === '') return
+  const rect = e.target.getBoundingClientRect()
+  fkPopover.value = {
+    show: true,
+    x: Math.min(window.innerWidth - 300, rect.left),
+    y: Math.min(window.innerHeight - 250, rect.bottom + 5),
+    refTable,
+    refCol,
+    refVal: val,
+    data: null,
+    loading: true
+  }
+
+  try {
+    const response = await axios.post(`/database/manager/${props.database}/tables/${refTable}/fk-lookup`, {
+      column: refCol,
+      val: val
+    })
+    fkPopover.value.data = response.data.row || null
+  } catch (err) {
+    fkPopover.value.data = null
+  } finally {
+    fkPopover.value.loading = false
+  }
+}
+
+// Index Builder Handlers
+const openAddIndexModal = () => {
+  indexForm.value = { name: '', type: 'INDEX', columns: [] }
+  showAddIndexModal.value = true
+}
+
+const saveAddIndex = async () => {
+  try {
+    savingIndex.value = true
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/index/add`, indexForm.value)
+    showAlert('success', 'Index created successfully')
+    showAddIndexModal.value = false
+    loadTableSchema()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to add index')
+  } finally {
+    savingIndex.value = false
+  }
+}
+
+const saveDropIndex = async (indexName) => {
+  if (!confirm(`Drop index '${indexName}' from table '${selectedTable.value}'?`)) return
+  try {
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/index/drop`, {
+      index_name: indexName
+    })
+    showAlert('success', `Index '${indexName}' dropped`)
+    loadTableSchema()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to drop index')
+  }
+}
+
+// Foreign Key Builder Handlers
+const openAddFkModal = () => {
+  fkForm.value = { constraint_name: '', column: '', ref_table: '', ref_column: 'id', on_delete: 'RESTRICT', on_update: 'RESTRICT' }
+  showAddFkModal.value = true
+}
+
+const saveAddForeignKey = async () => {
+  try {
+    savingFk.value = true
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/foreign-key/add`, fkForm.value)
+    showAlert('success', 'Foreign key constraint added')
+    showAddFkModal.value = false
+    loadTableSchema()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to add foreign key')
+  } finally {
+    savingFk.value = false
+  }
+}
+
+const saveDropForeignKey = async (constraintName) => {
+  if (!confirm(`Drop foreign key constraint '${constraintName}'?`)) return
+  try {
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/foreign-key/drop`, {
+      constraint_name: constraintName
+    })
+    showAlert('success', `Foreign key '${constraintName}' dropped`)
+    loadTableSchema()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to drop foreign key')
+  }
+}
+
+// Destructive Action Safety Guard
+const openSafetyGuard = (action, tName) => {
+  safetyGuard.value = {
+    show: true,
+    action: action, // 'drop' or 'truncate'
+    targetTable: tName,
+    confirmInput: ''
+  }
+}
+
+const executeSafetyAction = async () => {
+  if (safetyGuard.value.confirmInput !== safetyGuard.value.targetTable) return
+  const tName = safetyGuard.value.targetTable
+  const action = safetyGuard.value.action
+  safetyGuard.value.show = false
+
+  if (action === 'truncate') {
+    confirmTruncateTable(tName)
+  } else if (action === 'drop') {
+    confirmDropTable(tName)
+  }
+}
+
+// ER Designer Methods & Persistence & Export
 const loadDesignerSchema = async () => {
   if (!props.database) return
   try {
@@ -1205,7 +1643,18 @@ const loadDesignerSchema = async () => {
     const response = await axios.get(`/database/manager/${props.database}/designer`)
     designerTables.value = response.data.tables || []
     designerRelationships.value = response.data.relationships || []
-    autoArrangeDesigner()
+    
+    // Restore saved layout or auto arrange
+    const savedLayout = localStorage.getItem(`nimbus_er_layout_${props.database}`)
+    if (savedLayout) {
+      try {
+        tablePositions.value = JSON.parse(savedLayout)
+      } catch (e) {
+        autoArrangeDesigner()
+      }
+    } else {
+      autoArrangeDesigner()
+    }
   } catch (err) {
     showAlert('danger', err.response?.data?.error || 'Failed to load ER diagram schema')
   } finally {
@@ -1228,11 +1677,31 @@ const autoArrangeDesigner = () => {
     }
   })
   tablePositions.value = positions
+  saveErLayout()
+}
+
+const saveErLayout = () => {
+  localStorage.setItem(`nimbus_er_layout_${props.database}`, JSON.stringify(tablePositions.value))
 }
 
 const resetDesignerLayout = () => {
   designerZoom.value = 1
   autoArrangeDesigner()
+}
+
+const exportErDiagramSvg = () => {
+  if (!designerCanvasRef.value) return
+  const svgElem = designerCanvasRef.value.querySelector('svg')
+  if (!svgElem) return
+  const svgData = new XMLSerializer().serializeToString(svgElem)
+  const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${props.database}_er_diagram.svg`
+  a.click()
+  URL.revokeObjectURL(url)
+  showAlert('success', 'ER Diagram exported as SVG')
 }
 
 const isColumnForeignKey = (tableName, colName) => {
@@ -1259,6 +1728,9 @@ const handleCanvasMouseMove = (e) => {
 }
 
 const handleCanvasMouseUp = () => {
+  if (isDraggingTable.value) {
+    saveErLayout()
+  }
   isDraggingTable.value = false
   draggingTableName.value = null
 }
@@ -1500,19 +1972,41 @@ const bulkDeleteRows = async () => {
   }
 }
 
-// SQL Console
+// SQL Console & History
+const loadSqlHistory = () => {
+  const saved = localStorage.getItem(`nimbus_sql_history_${props.database}`)
+  if (saved) {
+    try { sqlHistory.value = JSON.parse(saved) } catch (e) { sqlHistory.value = [] }
+  }
+}
+
+const pushSqlHistory = (sql, success) => {
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  sqlHistory.value.unshift({ sql, success, time: timeStr })
+  if (sqlHistory.value.length > 50) sqlHistory.value.pop()
+  localStorage.setItem(`nimbus_sql_history_${props.database}`, JSON.stringify(sqlHistory.value))
+}
+
+const clearSqlHistory = () => {
+  sqlHistory.value = []
+  localStorage.removeItem(`nimbus_sql_history_${props.database}`)
+}
+
 const runQuery = async () => {
   if (!sqlQuery.value.trim()) return
+  const currentSql = sqlQuery.value.trim()
   try {
     executingSql.value = true
     const response = await axios.post(`/database/manager/${props.database}/query`, {
-      sql: sqlQuery.value.trim()
+      sql: currentSql
     })
     sqlResult.value = response.data
+    pushSqlHistory(currentSql, response.data.success)
     if (response.data.success) {
       loadTables()
     }
   } catch (err) {
+    pushSqlHistory(currentSql, false)
     sqlResult.value = {
       success: false,
       error: err.response?.data?.error || 'SQL query failed'
@@ -1553,7 +2047,6 @@ const createTableAction = async () => {
 
 // Drop / Truncate Table DDL
 const confirmTruncateTable = async (tName) => {
-  if (!confirm(`Truncate table '${tName}'? All rows will be permanently deleted.`)) return
   try {
     await axios.post(`/database/manager/${props.database}/tables/${tName}/truncate`)
     showAlert('success', `Table '${tName}' truncated`)
@@ -1564,7 +2057,6 @@ const confirmTruncateTable = async (tName) => {
 }
 
 const confirmDropTable = async (tName) => {
-  if (!confirm(`DROP table '${tName}' permanently? This action CANNOT be undone.`)) return
   try {
     await axios.post(`/database/manager/${props.database}/tables/${tName}/drop`)
     showAlert('success', `Table '${tName}' dropped`)
@@ -1676,4 +2168,12 @@ const uploadImport = async () => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.history-item {
+  transition: all 0.2s ease;
+}
+.history-item:hover {
+  background: #ffffff !important;
+  border-color: #5e72e4 !important;
+}
 </style>

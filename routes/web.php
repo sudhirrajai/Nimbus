@@ -203,6 +203,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/manager/{db}/export', [DatabaseManagerController::class, 'exportDatabase'])->name('manager.export');
         Route::post('/manager/{db}/import', [DatabaseManagerController::class, 'importDatabase'])->name('manager.import');
         Route::get('/manager/{db}/designer', [DatabaseManagerController::class, 'getDbDesignerSchema'])->name('manager.designer');
+        Route::post('/manager/{db}/tables/{table}/index/add', [DatabaseManagerController::class, 'addIndex'])->name('manager.index.add');
+        Route::post('/manager/{db}/tables/{table}/index/drop', [DatabaseManagerController::class, 'dropIndex'])->name('manager.index.drop');
+        Route::post('/manager/{db}/tables/{table}/foreign-key/add', [DatabaseManagerController::class, 'addForeignKey'])->name('manager.fk.add');
+        Route::post('/manager/{db}/tables/{table}/foreign-key/drop', [DatabaseManagerController::class, 'dropForeignKey'])->name('manager.fk.drop');
+        Route::post('/manager/{db}/tables/{table}/fk-lookup', [DatabaseManagerController::class, 'lookupForeignKey'])->name('manager.fk.lookup');
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)
