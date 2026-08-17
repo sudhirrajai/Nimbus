@@ -308,19 +308,31 @@
 
           <!-- Git Management Panel -->
           <div id="git-panel" class="glass-card p-4 shadow-lg mb-4">
-            <div class="d-flex justify-content-between align-items-start mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
               <div>
-                <h5 class="mb-1 font-weight-bolder">Git Repository Control</h5>
-                <p class="text-sm text-secondary mb-0">Manage versioning, branches, and deployment flows.</p>
+                <h5 class="mb-1 font-weight-bolder d-flex align-items-center gap-2">
+                  <i class="material-symbols-rounded text-primary">account_tree</i>
+                  Git Repository Control
+                </h5>
+                <p class="text-sm text-secondary mb-0">Manage branches, fetch from remote, commit, and deploy code directly.</p>
               </div>
-              <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-dark mb-0 border-radius-lg" @click="showGitTokenForm = !showGitTokenForm">
-                  <i class="material-symbols-rounded text-sm me-1">key</i>
-                  {{ showGitTokenForm ? 'Hide Token' : 'Auth Token' }}
+              <div class="d-flex flex-wrap gap-2">
+                <button v-if="gitInfo.available" class="btn btn-sm bg-gradient-info mb-0 border-radius-lg text-white" @click="runGitFetch" :disabled="gitActionLoading">
+                  <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': gitActionLoading }">cloud_sync</i>
+                  Fetch Remote
+                </button>
+                <button v-if="gitInfo.available" class="btn btn-sm bg-gradient-success mb-0 border-radius-lg text-white" @click="runGitPull" :disabled="gitActionLoading">
+                  <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': gitActionLoading }">cloud_download</i>
+                  Pull Latest
+                </button>
+                <button class="btn btn-sm btn-outline-dark mb-0 border-radius-lg d-flex align-items-center gap-1" @click="showGitTokenForm = !showGitTokenForm">
+                  <i class="material-symbols-rounded text-sm">key</i>
+                  <span>{{ showGitTokenForm ? 'Hide Token' : 'Auth Token' }}</span>
+                  <span v-if="gitTokenExists" class="badge badge-xs bg-success rounded-circle ms-1" style="width: 8px; height: 8px; padding: 0;" title="Token Active"></span>
                 </button>
                 <button class="btn btn-sm bg-gradient-dark mb-0 border-radius-lg" @click="loadGitStatus" :disabled="gitLoading">
                   <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': gitLoading }">refresh</i>
-                  Sync Status
+                  Sync
                 </button>
               </div>
             </div>
@@ -328,105 +340,163 @@
             <!-- Token Form -->
             <transition name="fade">
               <div v-if="showGitTokenForm" class="bg-gray-100 p-3 border-radius-lg mb-4 border border-white shadow-inner">
-                <label class="form-label text-xs font-weight-bolder text-uppercase opacity-7">Personal Access Token (GitHub/GitLab)</label>
-                <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden">
-                  <input v-model="gitTokenInput" :type="showTokenText ? 'text' : 'password'" class="form-control border-0 ps-3" placeholder="ghp_xxxx..." />
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label text-xs font-weight-bolder text-uppercase opacity-7 mb-0">Personal Access Token (GitHub / GitLab / GCP)</label>
+                  <span v-if="gitTokenExists" class="badge badge-sm bg-gradient-success">✓ Token Configured</span>
+                  <span v-else class="badge badge-sm bg-gradient-secondary">No Token Set</span>
+                </div>
+                <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden mb-2">
+                  <input v-model="gitTokenInput" :type="showTokenText ? 'text' : 'password'" class="form-control border-0 ps-3" placeholder="ghp_xxxx / GCP token..." />
                   <button class="btn btn-link text-dark mb-0 px-3 border-start" @click="showTokenText = !showTokenText">
                     <i class="material-symbols-rounded text-sm">{{ showTokenText ? 'visibility_off' : 'visibility' }}</i>
                   </button>
-                  <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="saveGitToken" :disabled="gitTokenSaving">
+                  <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="saveGitToken" :disabled="gitTokenSaving || !gitTokenInput.trim()">
                     <span v-if="gitTokenSaving" class="spinner-border spinner-border-sm"></span>
-                    <span v-else>Save</span>
+                    <span v-else>Save Token</span>
                   </button>
                 </div>
-                <small class="text-muted mt-2 d-block">
-                  <i class="material-symbols-rounded text-xs align-middle me-1">info</i>
-                  Required for authenticated operations like Pull and Push over HTTPS.
+                <small class="text-muted d-block">
+                  <i class="material-symbols-rounded text-xs align-middle me-1">lock</i>
+                  Stored securely on server in <code>.git-token</code> (chmod 600). Used automatically for HTTPS Fetch, Pull, and Push without prompting for credentials.
                 </small>
               </div>
             </transition>
 
             <div v-if="gitInfo.available">
+              <!-- Info Cards Row -->
               <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                  <div class="p-3 bg-white border-radius-lg shadow-sm border">
-                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Branch</p>
-                    <h6 class="mb-0 text-primary font-weight-bold">
-                      <i class="material-symbols-rounded text-sm me-1">account_tree</i>
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Active Branch</p>
+                    <h6 class="mb-0 text-primary font-weight-bold d-flex align-items-center text-truncate">
+                      <i class="material-symbols-rounded text-sm me-1">fork_right</i>
                       {{ gitInfo.branch }}
                     </h6>
+                    <span class="badge badge-sm bg-light text-dark border mt-1">
+                      {{ gitInfo.branches.length }} local / {{ gitInfo.remoteBranches.length }} remote
+                    </span>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="p-3 bg-white border-radius-lg shadow-sm border">
-                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Tree Status</p>
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Working Tree</p>
                     <h6 class="mb-0 font-weight-bold" :class="gitInfo.dirty ? 'text-warning' : 'text-success'">
                       <i class="material-symbols-rounded text-sm me-1">{{ gitInfo.dirty ? 'warning' : 'check_circle' }}</i>
-                      {{ gitInfo.dirty ? 'Dirty' : 'Clean' }}
+                      {{ gitInfo.dirty ? 'Uncommitted Changes' : 'Clean (Up to date)' }}
                     </h6>
+                    <span class="text-xxs text-secondary">{{ gitInfo.statusLines.length }} file(s) changed</span>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="p-3 bg-white border-radius-lg shadow-sm border">
-                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Root Path</p>
-                    <h6 class="mb-0 text-xs text-truncate text-dark font-weight-bold" :title="gitInfo.repoRoot">
-                      <i class="material-symbols-rounded text-sm me-1 text-secondary">folder_shared</i>
-                      /var/www/{{ domain }}{{ gitInfo.repoRoot ? '/' + gitInfo.repoRoot : '' }}
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Last Commit</p>
+                    <div v-if="gitInfo.lastCommit" class="text-truncate">
+                      <span class="badge badge-xs bg-dark font-monospace me-1">{{ gitInfo.lastCommit.hash }}</span>
+                      <span class="text-xs font-weight-bold text-dark" :title="gitInfo.lastCommit.subject">{{ gitInfo.lastCommit.subject }}</span>
+                      <p class="text-xxs text-muted mb-0 mt-1">{{ gitInfo.lastCommit.author }} • {{ gitInfo.lastCommit.date }}</p>
+                    </div>
+                    <div v-else class="text-xs text-muted">No commits yet</div>
+                  </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Authentication</p>
+                    <h6 class="mb-0 font-weight-bold" :class="gitTokenExists ? 'text-success' : 'text-secondary'">
+                      <i class="material-symbols-rounded text-sm me-1">{{ gitTokenExists ? 'verified_user' : 'no_encryption' }}</i>
+                      {{ gitTokenExists ? 'Token Active' : 'No Token Set' }}
                     </h6>
+                    <span class="text-xxs text-secondary">Auto-injected for remote ops</span>
                   </div>
                 </div>
               </div>
 
-              <div class="row mb-4">
+              <!-- Action Controls Row -->
+              <div class="row g-3 mb-4">
+                <!-- Branch Management Column -->
                 <div class="col-lg-6">
-                  <div class="form-group mb-3">
-                    <label class="form-label text-xs font-weight-bold text-uppercase opacity-7">Commit Changes</label>
-                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm">
-                      <input v-model="gitCommitMessage" type="text" class="form-control border-0 ps-3" placeholder="Message..." />
-                      <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="runGitCommit" :disabled="!gitCommitMessage.trim() || gitActionLoading">
-                        Commit
+                  <div class="p-3 bg-white border-radius-lg border shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label text-xs font-weight-bold text-uppercase opacity-7 mb-0">Switch / Checkout Branch</label>
+                      <button class="btn btn-link text-primary text-xs p-0 mb-0 font-weight-bold" @click="showNewBranchModal = true">
+                        <i class="material-symbols-rounded text-xs align-middle me-1">add_circle</i>
+                        New Branch
                       </button>
                     </div>
-                  </div>
-                  <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-sm btn-outline-success mb-0 border-radius-lg px-3" @click="performGitAction('pull')" :disabled="gitActionLoading">
-                      <i class="material-symbols-rounded text-sm me-1">south</i> Pull
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary mb-0 border-radius-lg px-3" @click="performGitAction('push')" :disabled="gitActionLoading">
-                      <i class="material-symbols-rounded text-sm me-1">north</i> Push
-                    </button>
-                  </div>
-                </div>
-                <div class="col-lg-6">
-                  <div class="form-group mb-3">
-                    <label class="form-label text-xs font-weight-bold text-uppercase opacity-7">Switch Branch</label>
-                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm">
+                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm mb-3">
                       <select v-model="gitSelectedBranch" class="form-select border-0 ps-3">
-                        <option v-for="branch in gitInfo.branches" :key="branch" :value="branch">{{ branch }}</option>
+                        <optgroup label="📍 Local Branches">
+                          <option v-for="b in gitInfo.branches" :key="'local-' + b" :value="b">
+                            {{ b }} {{ b === gitInfo.branch ? '(current)' : '' }}
+                          </option>
+                        </optgroup>
+                        <optgroup label="☁️ Remote Branches (from GitHub/GCP)" v-if="gitInfo.remoteBranches && gitInfo.remoteBranches.length">
+                          <option v-for="rb in gitInfo.remoteBranches" :key="'remote-' + rb" :value="rb">
+                            {{ rb }} {{ gitInfo.branches.includes(rb) ? '(local tracking exists)' : '(remote only)' }}
+                          </option>
+                        </optgroup>
                       </select>
-                      <button class="btn bg-gradient-info mb-0 border-radius-0 px-4" @click="runGitSwitchBranch" :disabled="gitActionLoading">
-                        Switch
+                      <button class="btn bg-gradient-info mb-0 border-radius-0 px-4" @click="runGitSwitchBranch" :disabled="gitActionLoading || !gitSelectedBranch || gitSelectedBranch === gitInfo.branch">
+                        <span v-if="gitActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        <span v-else>Switch</span>
+                      </button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <button class="btn btn-sm btn-outline-info mb-0 border-radius-lg" @click="runGitFetch" :disabled="gitActionLoading">
+                        <i class="material-symbols-rounded text-sm me-1">cloud_sync</i>
+                        Fetch All Branches
+                      </button>
+                      <button class="btn btn-sm btn-outline-success mb-0 border-radius-lg" @click="runGitPull" :disabled="gitActionLoading">
+                        <i class="material-symbols-rounded text-sm me-1">south</i>
+                        Pull ({{ gitInfo.branch }})
+                      </button>
+                      <button class="btn btn-sm btn-outline-primary mb-0 border-radius-lg" @click="runGitPush" :disabled="gitActionLoading">
+                        <i class="material-symbols-rounded text-sm me-1">north</i>
+                        Push ({{ gitInfo.branch }})
                       </button>
                     </div>
                   </div>
                 </div>
+
+                <!-- Commit Changes Column -->
+                <div class="col-lg-6">
+                  <div class="p-3 bg-white border-radius-lg border shadow-sm h-100">
+                    <label class="form-label text-xs font-weight-bold text-uppercase opacity-7 mb-2">Stage & Commit Changes</label>
+                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm mb-3">
+                      <input v-model="gitCommitMessage" type="text" class="form-control border-0 ps-3" placeholder="Commit message (e.g. Update styles and assets)..." @keyup.enter="runGitCommit" />
+                      <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="runGitCommit" :disabled="!gitCommitMessage.trim() || gitActionLoading">
+                        <span v-if="gitActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        Commit All
+                      </button>
+                    </div>
+                    <small class="text-muted d-block">
+                      <i class="material-symbols-rounded text-xs align-middle me-1">info</i>
+                      Stages all modified files (<code>git add -A</code>) and creates a commit on the current branch <strong>{{ gitInfo.branch }}</strong>.
+                    </small>
+                  </div>
+                </div>
               </div>
 
-              <div class="git-console-container mt-4">
-                <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-2">Live Git Status</p>
-                <pre class="git-console shadow-inner">{{ gitInfo.statusLines.join('\n') || 'Working tree clean' }}</pre>
+              <!-- Console Output -->
+              <div class="git-console-container">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-0">Status & Terminal Output</p>
+                  <span class="text-xxs text-secondary">Repo: /var/www/{{ domain }}{{ gitInfo.repoRoot ? '/' + gitInfo.repoRoot : '' }}</span>
+                </div>
+                <pre class="git-console shadow-inner mb-2">{{ gitInfo.statusLines.join('\n') || 'Working tree clean' }}</pre>
                 <transition name="fade">
-                  <div v-if="gitLastOutput" class="mt-3">
-                    <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-2 text-info">Last Action Output</p>
-                    <pre class="git-console border-info text-info shadow-inner" style="background: rgba(17, 205, 239, 0.05);">{{ gitLastOutput }}</pre>
+                  <div v-if="gitLastOutput" class="mt-2">
+                    <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-1 text-info">Last Action Result</p>
+                    <pre class="git-console border-info text-info shadow-inner" style="background: rgba(17, 205, 239, 0.05); max-height: 180px; overflow-y: auto;">{{ gitLastOutput }}</pre>
                   </div>
                 </transition>
               </div>
             </div>
+
+            <!-- No Git Repo State -->
             <div v-else class="text-center py-5 bg-gray-50 border-radius-lg border border-dashed">
               <i class="material-symbols-rounded text-secondary opacity-3 fs-1 mb-3">account_tree</i>
               <h5 class="text-dark font-weight-bold">No Git Repository Detected</h5>
-              <p class="text-sm text-secondary px-5">This directory or its parent folders are not initialized with Git. Use the terminal to <code>git init</code> if needed.</p>
+              <p class="text-sm text-secondary px-5">This directory or its parent folders are not initialized with Git. Use the terminal button to <code>git init</code> if needed.</p>
             </div>
           </div>
         </div>
@@ -491,6 +561,39 @@
             <div class="modal-footer border-0">
               <button class="btn btn-link text-secondary mb-0" @click="showPermissionsModal = false">Cancel</button>
               <button class="btn bg-gradient-primary mb-0 border-radius-lg" @click="changePermissions">Update</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create New Branch Modal -->
+      <div class="modal-backdrop fade show" v-if="showNewBranchModal" @click="showNewBranchModal = false"></div>
+      <div class="modal fade show d-block" v-if="showNewBranchModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="glass-card modal-content border-0">
+            <div class="modal-header border-0 pb-0">
+              <h5 class="modal-title font-weight-bolder d-flex align-items-center">
+                <i class="material-symbols-rounded text-primary me-2">add_circle</i>
+                Create New Git Branch
+              </h5>
+              <button type="button" class="btn-close" @click="showNewBranchModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm text-secondary mb-3">
+                Branch off from current branch: <span class="text-dark font-weight-bold">{{ gitInfo.branch }}</span>
+              </p>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs font-weight-bold">New Branch Name</label>
+                <input v-model="newBranchInput" type="text" class="form-control form-control-lg border ps-3" placeholder="feature/user-auth or fix/login" @keyup.enter="runGitCreateBranch" />
+                <small class="text-muted mt-2 d-block">Use letters, numbers, hyphens, and slashes.</small>
+              </div>
+            </div>
+            <div class="modal-footer border-0">
+              <button class="btn btn-link text-secondary mb-0" @click="showNewBranchModal = false">Cancel</button>
+              <button class="btn bg-gradient-primary mb-0" @click="runGitCreateBranch" :disabled="!newBranchInput.trim() || gitActionLoading">
+                <span v-if="gitActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                Create & Switch
+              </button>
             </div>
           </div>
         </div>
@@ -891,10 +994,16 @@ const gitInfo = ref({
   repoRoot: '',
   branch: '',
   branches: [],
+  remoteBranches: [],
+  allBranches: [],
+  lastCommit: null,
+  hasToken: false,
   statusLines: [],
   stashes: [],
   dirty: false
 })
+const showNewBranchModal = ref(false)
+const newBranchInput = ref('')
 
 // Git token state
 const showGitTokenForm = ref(false)
@@ -1327,9 +1436,17 @@ const loadGitStatus = async () => {
       repoRoot: response.data.repoRoot || '',
       branch: response.data.branch || '',
       branches: response.data.branches || [],
+      remoteBranches: response.data.remoteBranches || [],
+      allBranches: response.data.allBranches || [],
+      lastCommit: response.data.lastCommit || null,
+      hasToken: response.data.hasToken ?? false,
       statusLines: response.data.statusLines || [],
       stashes: response.data.stashes || [],
       dirty: response.data.dirty || false
+    }
+
+    if (response.data.hasToken !== undefined) {
+      gitTokenExists.value = response.data.hasToken
     }
 
     if (gitInfo.value.branch && !gitSelectedBranch.value) {
@@ -1355,6 +1472,7 @@ const performGitAction = async (action, payload = {}) => {
     showAlert('success', response.data.message || 'Action completed')
 
     if (action === 'commit') gitCommitMessage.value = ''
+    if (action === 'switch_branch' && payload.branch) gitSelectedBranch.value = payload.branch
     
     await loadFiles()
   } catch (error) {
@@ -1367,6 +1485,15 @@ const performGitAction = async (action, payload = {}) => {
 
 const runGitCommit = () => performGitAction('commit', { message: gitCommitMessage.value.trim() })
 const runGitSwitchBranch = () => performGitAction('switch_branch', { branch: gitSelectedBranch.value })
+const runGitFetch = () => performGitAction('fetch')
+const runGitPull = () => performGitAction('pull')
+const runGitPush = () => performGitAction('push')
+const runGitCreateBranch = async () => {
+  if (!newBranchInput.value.trim()) return
+  await performGitAction('create_branch', { branch: newBranchInput.value.trim() })
+  newBranchInput.value = ''
+  showNewBranchModal.value = false
+}
 
 const navigateTo = (path) => {
   currentPath.value = path

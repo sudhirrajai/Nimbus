@@ -811,13 +811,70 @@ class FileManagerController extends Controller
                 ]);
             }
 
+            // Ensure remote tracking is configured to track all branches (fixes --single-branch restriction)
+            try {
+                $remotes = $this->executeGitCommand($repoPath, ['remote']);
+                if (in_array('origin', array_map('trim', $remotes))) {
+                    $this->executeGitCommand($repoPath, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
+                }
+            } catch (\Exception $e) {
+                // Ignore config error
+            }
+
             $branch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
             $statusLines = $this->executeGitCommand($repoPath, ['status', '--short', '--branch']);
-            $branchLines = $this->executeGitCommand($repoPath, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+            $localBranchLines = $this->executeGitCommand($repoPath, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+            $remoteBranchLines = [];
+            try {
+                $remoteBranchLines = $this->executeGitCommand($repoPath, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin']);
+            } catch (\Exception $e) {
+                $remoteBranchLines = [];
+            }
             $stashLines = $this->executeGitCommand($repoPath, ['stash', 'list']);
 
             $cleanStatusLines = array_values(array_filter(array_map('trim', $statusLines)));
-            $branches = array_values(array_filter(array_map('trim', $branchLines)));
+            $localBranches = array_values(array_filter(array_map('trim', $localBranchLines)));
+            
+            // Clean remote branches: strip 'origin/' prefix and remove 'origin/HEAD'
+            $remoteBranches = [];
+            foreach ($remoteBranchLines as $rb) {
+                $rb = trim($rb);
+                if (empty($rb) || str_contains($rb, 'HEAD')) continue;
+                $cleaned = preg_replace('/^origin\//', '', $rb);
+                if (!empty($cleaned) && !in_array($cleaned, $remoteBranches)) {
+                    $remoteBranches[] = $cleaned;
+                }
+            }
+
+            // Build unified branch structure
+            $allBranchNames = array_unique(array_merge($localBranches, $remoteBranches));
+            $allBranches = [];
+            foreach ($allBranchNames as $bName) {
+                $allBranches[] = [
+                    'name' => $bName,
+                    'isCurrent' => $bName === $branch,
+                    'isLocal' => in_array($bName, $localBranches),
+                    'isRemote' => in_array($bName, $remoteBranches),
+                ];
+            }
+
+            // Get last commit info
+            $lastCommit = null;
+            try {
+                $logOutput = $this->executeGitCommand($repoPath, ['log', '-1', '--pretty=format:%h|%an|%cr|%s']);
+                if (!empty($logOutput) && !empty($logOutput[0])) {
+                    $parts = explode('|', $logOutput[0], 4);
+                    $lastCommit = [
+                        'hash' => $parts[0] ?? '',
+                        'author' => $parts[1] ?? '',
+                        'date' => $parts[2] ?? '',
+                        'subject' => $parts[3] ?? '',
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Ignore log error
+            }
+
             $stashes = array_map(function ($line) {
                 if (preg_match('/^(stash@\{\d+\}):(.*)$/', $line, $matches)) {
                     return [
@@ -832,11 +889,22 @@ class FileManagerController extends Controller
                 ];
             }, array_values(array_filter(array_map('trim', $stashLines))));
 
+            // Check if token exists
+            $tokenPath = $this->basePath . $domain . '/.git-token';
+            $tokenExists = false;
+            $tokenOutput = [];
+            exec("sudo test -f " . escapeshellarg($tokenPath) . " && echo 'exists'", $tokenOutput);
+            $tokenExists = !empty($tokenOutput) && trim($tokenOutput[0]) === 'exists';
+
             return response()->json([
                 'available' => true,
                 'repoRoot' => $this->toDomainRelativePath($domain, $repoPath),
                 'branch' => $branch,
-                'branches' => $branches,
+                'branches' => $localBranches,
+                'remoteBranches' => $remoteBranches,
+                'allBranches' => $allBranches,
+                'lastCommit' => $lastCommit,
+                'hasToken' => $tokenExists,
                 'statusLines' => $cleanStatusLines,
                 'dirty' => count(array_filter($cleanStatusLines, fn ($line) => !str_starts_with($line, '##'))) > 0,
                 'stashes' => $stashes,
@@ -855,7 +923,7 @@ class FileManagerController extends Controller
         try {
             $request->validate([
                 'path' => 'nullable|string',
-                'action' => 'required|string|in:pull,push,commit,switch_branch,stash,stash_pop',
+                'action' => 'required|string|in:pull,push,commit,switch_branch,create_branch,fetch,stash,stash_pop',
                 'message' => 'nullable|string|max:500',
                 'branch' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9._\/-]+$/'],
                 'stash' => ['nullable', 'string', 'max:100', 'regex:/^stash@\{\d+\}$/'],
@@ -881,14 +949,33 @@ class FileManagerController extends Controller
             $output = [];
 
             switch ($action) {
+                case 'fetch':
+                    // Configure all branches fetch refspec
+                    try {
+                        $this->executeGitCommand($repoPath, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
+                    } catch (\Exception $e) {
+                        // ignore
+                    }
+                    $output = $this->executeGitCommand($repoPath, ['fetch', '--all', '--prune']);
+                    if (empty($output)) {
+                        $output = ['All remote branches fetched and up to date.'];
+                    }
+                    break;
+
                 case 'pull':
                     $currentBranch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
-                    $output = $this->executeGitCommand($repoPath, ['pull', '--ff-only', 'origin', $currentBranch]);
+                    if (empty($currentBranch)) {
+                        return response()->json(['error' => 'Cannot pull: repository is in a detached HEAD state.'], 422);
+                    }
+                    $output = $this->executeGitCommand($repoPath, ['pull', 'origin', $currentBranch]);
                     break;
 
                 case 'push':
                     $currentBranch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
-                    $output = $this->executeGitCommand($repoPath, ['push', 'origin', $currentBranch]);
+                    if (empty($currentBranch)) {
+                        return response()->json(['error' => 'Cannot push: repository is in a detached HEAD state.'], 422);
+                    }
+                    $output = $this->executeGitCommand($repoPath, ['push', '-u', 'origin', $currentBranch]);
                     break;
 
                 case 'commit':
@@ -910,7 +997,23 @@ class FileManagerController extends Controller
                         return response()->json(['error' => 'Branch name is required.'], 422);
                     }
 
-                    $output = $this->executeGitCommand($repoPath, ['switch', $branch]);
+                    // Check if local branch exists
+                    $localBranches = array_map('trim', $this->executeGitCommand($repoPath, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']));
+                    
+                    if (in_array($branch, $localBranches)) {
+                        $output = $this->executeGitCommand($repoPath, ['checkout', $branch]);
+                    } else {
+                        // Switch to and track remote branch
+                        $output = $this->executeGitCommand($repoPath, ['checkout', '-B', $branch, "origin/{$branch}"]);
+                    }
+                    break;
+
+                case 'create_branch':
+                    if ($branch === '') {
+                        return response()->json(['error' => 'New branch name is required.'], 422);
+                    }
+
+                    $output = $this->executeGitCommand($repoPath, ['checkout', '-b', $branch]);
                     break;
 
                 case 'stash':
