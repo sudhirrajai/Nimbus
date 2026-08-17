@@ -1315,10 +1315,10 @@ class FileManagerController extends Controller
             exec("sudo cat " . escapeshellarg($tokenPath), $tokenOutput);
             $token = trim(implode('', $tokenOutput));
             if ($token) {
-                // Use a credential helper that returns the token for HTTPS auth
-                $envParts[] = 'GIT_ASKPASS=/bin/echo';
-                // Set up a one-time credential helper
-                $credentialHelper = "credential.helper=!f() { echo username=x-access-token; echo password={$token}; }; f";
+                // Set up credential helper that provides token for any username
+                $credentialHelper = "credential.helper=!f() { echo password={$token}; echo username=x-access-token; }; f";
+                $authHeader = base64_encode("x-access-token:{$token}");
+                $extraHeader = "http.extraheader=AUTHORIZATION: basic {$authHeader}";
             }
         }
 
@@ -1333,7 +1333,9 @@ class FileManagerController extends Controller
 
         $envString = implode(' ', $envParts);
 
-        if ($tokenExists && isset($credentialHelper)) {
+        if ($tokenExists && isset($credentialHelper) && isset($extraHeader)) {
+            $command = "sudo env {$envString} git -c " . escapeshellarg($extraHeader) . " -c " . escapeshellarg($credentialHelper) . " -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
+        } elseif ($tokenExists && isset($credentialHelper)) {
             $command = "sudo env {$envString} git -c " . escapeshellarg($credentialHelper) . " -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";
         } else {
             $command = "sudo env {$envString} git -c {$escapedSafeDirectory} -C {$escapedRepoPath} {$escapedArguments}";

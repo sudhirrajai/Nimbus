@@ -190,8 +190,8 @@ class GitDeploymentService
 
         if ($deployment->repo_type === 'private' && $deployment->url_type === 'https' && $deployment->access_token) {
             $token = $deployment->access_token;
-            // Insert token into HTTPS URL: https://TOKEN@github.com/user/repo.git
-            $url = preg_replace('/^https:\/\//', "https://{$token}@", $url);
+            // Insert username:token into HTTPS URL: https://x-access-token:TOKEN@github.com/user/repo.git
+            $url = preg_replace('/^https:\/\//', "https://x-access-token:{$token}@", $url);
         }
 
         return escapeshellarg($url);
