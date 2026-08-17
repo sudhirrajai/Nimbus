@@ -811,15 +811,8 @@ class FileManagerController extends Controller
                 ]);
             }
 
-            // Ensure remote tracking is configured to track all branches (fixes --single-branch restriction)
-            try {
-                $remotes = $this->executeGitCommand($repoPath, ['remote']);
-                if (in_array('origin', array_map('trim', $remotes))) {
-                    $this->executeGitCommand($repoPath, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
-                }
-            } catch (\Exception $e) {
-                // Ignore config error
-            }
+            // Ensure remote tracking and credentials format are auto-configured
+            $this->ensureRemoteConfigured($repoPath, $domain);
 
             $branch = trim($this->executeGitCommand($repoPath, ['branch', '--show-current'])[0] ?? '');
             $statusLines = $this->executeGitCommand($repoPath, ['status', '--short', '--branch']);
@@ -948,14 +941,11 @@ class FileManagerController extends Controller
 
             $output = [];
 
+            // Auto-heal remote tracking and credential URL format
+            $this->ensureRemoteConfigured($repoPath, $domain);
+
             switch ($action) {
                 case 'fetch':
-                    // Configure all branches fetch refspec
-                    try {
-                        $this->executeGitCommand($repoPath, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
-                    } catch (\Exception $e) {
-                        // ignore
-                    }
                     $output = $this->executeGitCommand($repoPath, ['fetch', '--all', '--prune']);
                     if (empty($output)) {
                         $output = ['All remote branches fetched and up to date.'];
@@ -1282,6 +1272,34 @@ class FileManagerController extends Controller
 
         $relative = ltrim(substr($realPath, strlen($domainRoot)), DIRECTORY_SEPARATOR);
         return str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+    }
+
+    private function ensureRemoteConfigured($repoPath, $domain)
+    {
+        try {
+            $remotes = $this->executeGitCommand($repoPath, ['remote']);
+            if (in_array('origin', array_map('trim', $remotes))) {
+                // 1. Ensure all branches are fetched (fixes --single-branch restriction)
+                $this->executeGitCommand($repoPath, ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
+
+                // 2. Fix URL if token was saved as bare username without x-access-token:
+                $remoteUrlOutput = $this->executeGitCommand($repoPath, ['remote', 'get-url', 'origin']);
+                $remoteUrl = trim($remoteUrlOutput[0] ?? '');
+
+                if ($remoteUrl && preg_match('/^https:\/\/([^@:]+)@(github\.com|gitlab\.com|bitbucket\.org)(.*)$/i', $remoteUrl, $matches)) {
+                    $userPart = $matches[1];
+                    $host = $matches[2];
+                    $rest = $matches[3];
+                    // If it is a personal token (ghp_..., github_pat_..., glpat-...) or token without colon password
+                    if (str_starts_with($userPart, 'ghp_') || str_starts_with($userPart, 'github_pat_') || str_starts_with($userPart, 'glpat-') || strlen($userPart) > 20) {
+                        $fixedUrl = "https://x-access-token:{$userPart}@{$host}{$rest}";
+                        $this->executeGitCommand($repoPath, ['remote', 'set-url', 'origin', $fixedUrl]);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // Ignore config errors
+        }
     }
 
     private function executeGitCommand($repoPath, array $arguments)
