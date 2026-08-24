@@ -200,31 +200,38 @@ class BackupService
             exec("sudo chmod 775 " . escapeshellarg($parentDir));
 
             // Execute mysqldump via sudo bash -c with pipefail so pipe errors are not masked
-            $dumpScript = "set -o pipefail; mysqldump --single-transaction --quick --default-character-set=utf8mb4 {$escapedDb} | gzip -9 > {$escapedPath}";
+            $dumpScript = "set -o pipefail; mysqldump --single-transaction --quick {$escapedDb} | gzip -9 > {$escapedPath}";
             $escapedDumpScript = escapeshellarg($dumpScript);
 
             $output = [];
             $code = 0;
             exec("sudo bash -c {$escapedDumpScript} 2>&1", $output, $code);
 
-            if ($code !== 0 || !file_exists($targetGzPath) || filesize($targetGzPath) === 0) {
-                // Try alternate mysqldump invocation
+            if ($code !== 0) {
+                // Fallback attempt without flags
                 $altScript = "set -o pipefail; mysqldump {$escapedDb} | gzip -9 > {$escapedPath}";
-                $escapedAltScript = escapeshellarg($altScript);
                 $altOutput = [];
                 $altCode = 0;
-                exec("sudo bash -c {$escapedAltScript} 2>&1", $altOutput, $altCode);
+                exec("sudo bash -c " . escapeshellarg($altScript) . " 2>&1", $altOutput, $altCode);
 
-                if ($altCode !== 0 || !file_exists($targetGzPath) || filesize($targetGzPath) === 0) {
+                if ($altCode !== 0) {
                     $allErrors = array_merge($output, $altOutput);
-                    $errMsg = !empty($allErrors) ? implode("\n", array_unique($allErrors)) : "Exit code {$code}";
+                    $errMsg = !empty($allErrors) ? implode("\n", array_unique($allErrors)) : "Exit code {$altCode}";
                     throw new \Exception("Database dump failed for '{$dbName}': {$errMsg}");
                 }
             }
 
-            // Ensure ownership by www-data
+            // Ensure ownership and readable permissions for www-data
             exec("sudo chown www-data:www-data {$escapedPath}");
             exec("sudo chmod 664 {$escapedPath}");
+            clearstatcache(true, $targetGzPath);
+
+            // Verify the dump archive is present and non-empty
+            $testCode = 0;
+            exec("sudo test -s {$escapedPath}", $testOut, $testCode);
+            if ($testCode !== 0) {
+                throw new \Exception("Database dump file for '{$dbName}' is empty or was not created.");
+            }
         } else {
             // Development fallback on Windows
             $dummySql = "-- Nimbus Development Backup for DB: {$dbName}\n-- Created: " . date('Y-m-d H:i:s') . "\nCREATE DATABASE IF NOT EXISTS `{$dbName}`;\n";
