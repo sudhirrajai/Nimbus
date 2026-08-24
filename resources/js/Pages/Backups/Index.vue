@@ -32,23 +32,23 @@
       <!-- Flash / Alert Messages -->
       <div class="row" v-if="$page.props.flash?.success || $page.props.flash?.error || localAlert.show">
         <div class="col-12">
-          <div v-if="$page.props.flash?.success" class="alert alert-success alert-dismissible fade show text-white" role="alert">
+          <div v-if="$page.props.flash?.success" class="alert bg-gradient-success alert-dismissible fade show text-white shadow-success" role="alert">
             <span class="alert-icon"><i class="material-symbols-rounded">check_circle</i></span>
-            <span class="alert-text">{{ $page.props.flash.success }}</span>
+            <span class="alert-text ms-2 font-weight-bold">{{ $page.props.flash.success }}</span>
             <button type="button" class="btn-close text-white" data-bs-dismiss="alert" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
-          <div v-if="$page.props.flash?.error" class="alert alert-danger alert-dismissible fade show text-white" role="alert">
+          <div v-if="$page.props.flash?.error" class="alert bg-gradient-danger alert-dismissible fade show text-white shadow-danger" role="alert">
             <span class="alert-icon"><i class="material-symbols-rounded">error</i></span>
-            <span class="alert-text">{{ $page.props.flash.error }}</span>
+            <span class="alert-text ms-2 font-weight-bold">{{ $page.props.flash.error }}</span>
             <button type="button" class="btn-close text-white" data-bs-dismiss="alert" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
-          <div v-if="localAlert.show" :class="`alert alert-${localAlert.type} alert-dismissible fade show text-white`" role="alert">
+          <div v-if="localAlert.show" :class="localAlert.type === 'success' ? 'alert bg-gradient-success text-white shadow-success' : 'alert bg-gradient-danger text-white shadow-danger'" class="alert-dismissible fade show" role="alert">
             <span class="alert-icon"><i class="material-symbols-rounded">{{ localAlert.type === 'success' ? 'check_circle' : 'error' }}</i></span>
-            <span class="alert-text">{{ localAlert.message }}</span>
+            <span class="alert-text ms-2 font-weight-bold">{{ localAlert.message }}</span>
             <button type="button" class="btn-close text-white" @click="localAlert.show = false">
               <span aria-hidden="true">&times;</span>
             </button>
@@ -827,21 +827,24 @@
             </button>
           </div>
           <div class="modal-body">
-            <div class="alert alert-danger text-white text-xs mb-3">
-              <strong>Warning:</strong> This action cannot be undone. The backup archive file will be permanently removed from disk storage.
+            <div class="p-3 mb-3 border-radius-md bg-light border border-danger text-dark text-xs d-flex align-items-center">
+              <i class="material-symbols-rounded text-danger me-2" style="font-size: 22px;">warning</i>
+              <div>
+                <strong class="text-danger">Warning:</strong> This action cannot be undone. The backup archive file will be permanently removed from disk storage.
+              </div>
             </div>
             <div class="bg-gray-100 p-3 rounded mb-2 text-sm">
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-secondary">Target:</span>
-                <span class="font-weight-bold">{{ selectedBackupToDelete.domain || selectedBackupToDelete.database_name }}</span>
+                <span class="font-weight-bold text-dark">{{ selectedBackupToDelete.domain || selectedBackupToDelete.database_name }}</span>
               </div>
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-secondary">Archive Size:</span>
-                <span class="font-weight-bold">{{ selectedBackupToDelete.formatted_size }}</span>
+                <span class="font-weight-bold text-dark">{{ selectedBackupToDelete.formatted_size }}</span>
               </div>
               <div class="d-flex justify-content-between">
                 <span class="text-secondary">Created:</span>
-                <span class="font-weight-bold">{{ selectedBackupToDelete.created_at }}</span>
+                <span class="font-weight-bold text-dark">{{ selectedBackupToDelete.created_at }}</span>
               </div>
             </div>
             <p class="text-xs text-muted font-monospace mb-0 text-break">
@@ -873,32 +876,35 @@
             </button>
           </div>
           <div class="modal-body" v-if="selectedRestoreBackup">
-            <div class="alert alert-warning text-white text-xs mb-3">
-              <strong>Caution:</strong> Restoring this backup will replace current live files or database tables with the snapshot version for <strong>{{ selectedRestoreBackup.domain || selectedRestoreBackup.database_name }}</strong>.
+            <div class="p-3 mb-3 border-radius-md bg-light border border-warning text-dark text-xs d-flex align-items-center">
+              <i class="material-symbols-rounded text-warning me-2" style="font-size: 22px;">warning</i>
+              <div>
+                <strong class="text-dark">Caution:</strong> Restoring this backup will replace current live files or database tables with the snapshot version for <strong class="text-dark">{{ selectedRestoreBackup.domain || selectedRestoreBackup.database_name }}</strong>.
+              </div>
             </div>
 
             <div class="bg-gray-100 p-3 rounded mb-3 text-sm">
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-secondary">Target:</span>
-                <span class="font-weight-bold">{{ selectedRestoreBackup.domain || selectedRestoreBackup.database_name }}</span>
+                <span class="font-weight-bold text-dark">{{ selectedRestoreBackup.domain || selectedRestoreBackup.database_name }}</span>
               </div>
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-secondary">Type:</span>
-                <span class="font-weight-bold">{{ formatTypeLabel(selectedRestoreBackup.type) }}</span>
+                <span class="font-weight-bold text-dark">{{ formatTypeLabel(selectedRestoreBackup.type) }}</span>
               </div>
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-secondary">Archive Size:</span>
-                <span class="font-weight-bold">{{ selectedRestoreBackup.formatted_size }}</span>
+                <span class="font-weight-bold text-dark">{{ selectedRestoreBackup.formatted_size }}</span>
               </div>
               <div class="d-flex justify-content-between">
                 <span class="text-secondary">Snapshot Date:</span>
-                <span class="font-weight-bold">{{ selectedRestoreBackup.created_at }}</span>
+                <span class="font-weight-bold text-dark">{{ selectedRestoreBackup.created_at }}</span>
               </div>
             </div>
 
             <div class="form-check ps-0">
               <input class="form-check-input ms-0 me-2" type="checkbox" id="snapBeforeRestore" v-model="createSnapshotBeforeRestore">
-              <label class="form-check-label text-sm" for="snapBeforeRestore">
+              <label class="form-check-label text-sm text-dark" for="snapBeforeRestore">
                 Create a safety snapshot of current live state before restoring
               </label>
             </div>
