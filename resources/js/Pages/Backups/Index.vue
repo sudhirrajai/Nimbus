@@ -262,26 +262,29 @@
                         <p class="text-xxs text-muted mb-0">by {{ backup.created_by }}</p>
                       </td>
                       <td class="align-middle text-center">
-                        <div class="d-flex justify-content-center gap-1">
-                          <!-- Restore Button -->
-                          <button class="btn btn-link text-info px-2 mb-0"
-                                  :disabled="backup.status !== 'completed' || isRestoring"
-                                  title="Restore Backup"
+                        <div class="d-flex justify-content-center gap-1 align-items-center">
+                          <!-- 1. Restore Button -->
+                          <button v-if="backup.status === 'completed'"
+                                  class="btn btn-sm btn-outline-info px-2 py-1 mb-0 d-inline-flex align-items-center"
+                                  :disabled="isRestoring"
+                                  title="Restore snapshot to live site/database"
                                   @click="openRestoreModal(backup)">
-                            <i class="material-symbols-rounded text-sm">restore</i>
+                            <i class="material-symbols-rounded text-sm me-1">restore</i>
+                            <span class="text-xs">Restore</span>
                           </button>
 
-                          <!-- Download Button -->
-                          <a :href="`/backups/${backup.id}/download`"
-                             class="btn btn-link text-primary px-2 mb-0"
-                             :class="{ 'disabled opacity-5': backup.status !== 'completed' }"
-                             title="Download Archive">
-                            <i class="material-symbols-rounded text-sm">download</i>
+                          <!-- 2. Download Button -->
+                          <a v-if="backup.status === 'completed'"
+                             :href="`/backups/${backup.id}/download`"
+                             class="btn btn-sm btn-outline-primary px-2 py-1 mb-0 d-inline-flex align-items-center"
+                             title="Download archive file">
+                            <i class="material-symbols-rounded text-sm me-1">download</i>
+                            <span class="text-xs">Download</span>
                           </a>
 
-                          <!-- Delete Button -->
-                          <button class="btn btn-link text-danger px-2 mb-0"
-                                  title="Delete Backup"
+                          <!-- 3. Delete Button -->
+                          <button class="btn btn-sm btn-outline-danger px-2 py-1 mb-0 d-inline-flex align-items-center"
+                                  title="Delete backup archive"
                                   @click="confirmDeleteBackup(backup)">
                             <i class="material-symbols-rounded text-sm">delete</i>
                           </button>
@@ -480,7 +483,7 @@
               </ul>
               <div class="alert alert-light border text-xs text-muted mt-3 mb-0">
                 <i class="material-symbols-rounded text-sm align-middle me-1">info</i>
-                Local backups are stored with restricted <code>0700</code> file permissions under <code>/var/backups/nimbus/</code>.
+                Local backups are stored with restricted <code>0775</code> / <code>0664</code> file permissions under <code>/var/backups/nimbus/</code>.
               </div>
             </div>
           </div>
@@ -524,7 +527,7 @@
               <!-- Domain Select -->
               <div class="mb-3" v-if="backupForm.scope === 'domain'">
                 <label class="form-label font-weight-bold text-sm">Select Website / Domain</label>
-                <select v-model="backupForm.domain" class="form-select" required @change="onDomainSelected">
+                <select v-model="backupForm.domain" class="form-select" required>
                   <option value="" disabled>-- Select a domain --</option>
                   <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">
                     {{ dom.domain }} {{ dom.associated_db ? `(DB: ${dom.associated_db})` : '' }}
@@ -704,18 +707,18 @@
     <!-- MODAL: RESTORE CONFIRMATION -->
     <div class="modal fade" id="modalRestore" tabindex="-1" role="dialog" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content" v-if="selectedRestoreBackup">
+        <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title font-weight-bolder text-danger">
-              <i class="material-symbols-rounded align-middle me-1">warning</i> Restore Backup
+              <i class="material-symbols-rounded align-middle me-1">restore</i> Restore Backup Snapshot
             </h5>
             <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body" v-if="selectedRestoreBackup">
             <div class="alert alert-warning text-white text-xs mb-3">
-              <strong>Caution:</strong> Restoring this backup will overwrite the current live files or database tables for <strong>{{ selectedRestoreBackup.domain || selectedRestoreBackup.database_name }}</strong>.
+              <strong>Caution:</strong> Restoring this backup will replace current live files or database tables with the snapshot version for <strong>{{ selectedRestoreBackup.domain || selectedRestoreBackup.database_name }}</strong>.
             </div>
 
             <div class="bg-gray-100 p-3 rounded mb-3 text-sm">
@@ -760,7 +763,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 
@@ -834,10 +837,6 @@ const filteredBackups = computed(() => {
   })
 })
 
-const onDomainSelected = () => {
-  // Domain selection handled
-}
-
 const onScheduleTargetTypeChange = () => {
   if (scheduleForm.value.targetType === 'database') {
     scheduleForm.value.type = 'database'
@@ -850,22 +849,20 @@ const refreshData = () => {
   router.reload({ preserveScroll: true })
 }
 
-// Modal Triggers
-let modalBackupInst = null
-let modalScheduleInst = null
-let modalRestoreInst = null
-
+// Modal Helper
 const getModalInstance = (id) => {
   const el = document.getElementById(id)
-  if (el && window.bootstrap) {
-    return new window.bootstrap.Modal(el)
+  if (el) {
+    if (window.bootstrap?.Modal) {
+      return window.bootstrap.Modal.getOrCreateInstance(el)
+    }
   }
   return null
 }
 
 const openCreateBackupModal = () => {
-  modalBackupInst = getModalInstance('modalCreateBackup')
-  modalBackupInst?.show()
+  const modal = getModalInstance('modalCreateBackup')
+  modal?.show()
 }
 
 const openCreateScheduleModal = () => {
@@ -883,8 +880,8 @@ const openCreateScheduleModal = () => {
     retention_count: 7,
     email_notifications: true,
   }
-  modalScheduleInst = getModalInstance('modalSchedule')
-  modalScheduleInst?.show()
+  const modal = getModalInstance('modalSchedule')
+  modal?.show()
 }
 
 const openEditScheduleModal = (schedule) => {
@@ -902,15 +899,16 @@ const openEditScheduleModal = (schedule) => {
     retention_count: schedule.retention_count || 7,
     email_notifications: schedule.email_notifications,
   }
-  modalScheduleInst = getModalInstance('modalSchedule')
-  modalScheduleInst?.show()
+  const modal = getModalInstance('modalSchedule')
+  modal?.show()
 }
 
-const openRestoreModal = (backup) => {
+const openRestoreModal = async (backup) => {
   selectedRestoreBackup.value = backup
   createSnapshotBeforeRestore.value = true
-  modalRestoreInst = getModalInstance('modalRestore')
-  modalRestoreInst?.show()
+  await nextTick()
+  const modal = getModalInstance('modalRestore')
+  modal?.show()
 }
 
 // Submit Create Backup
@@ -926,10 +924,10 @@ const submitCreateBackup = () => {
 
   router.post('/backups', payload, {
     onSuccess: () => {
-      modalBackupInst?.hide()
+      getModalInstance('modalCreateBackup')?.hide()
       isCreatingBackup.value = false
     },
-    onError: (errors) => {
+    onError: () => {
       isCreatingBackup.value = false
     },
     onFinish: () => {
@@ -957,7 +955,7 @@ const submitScheduleForm = () => {
   if (scheduleForm.value.id) {
     router.put(`/backups/schedules/${scheduleForm.value.id}`, payload, {
       onSuccess: () => {
-        modalScheduleInst?.hide()
+        getModalInstance('modalSchedule')?.hide()
         isSavingSchedule.value = false
       },
       onFinish: () => { isSavingSchedule.value = false }
@@ -965,7 +963,7 @@ const submitScheduleForm = () => {
   } else {
     router.post('/backups/schedules', payload, {
       onSuccess: () => {
-        modalScheduleInst?.hide()
+        getModalInstance('modalSchedule')?.hide()
         isSavingSchedule.value = false
       },
       onFinish: () => { isSavingSchedule.value = false }
@@ -1008,7 +1006,7 @@ const performRestore = () => {
     create_snapshot_before_restore: createSnapshotBeforeRestore.value
   }, {
     onSuccess: () => {
-      modalRestoreInst?.hide()
+      getModalInstance('modalRestore')?.hide()
       isRestoring.value = false
     },
     onError: () => {
