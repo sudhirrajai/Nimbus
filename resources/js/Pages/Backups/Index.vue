@@ -301,17 +301,23 @@
                           <i class="material-symbols-rounded align-middle me-1" style="font-size: 12px;">error</i> Failed
                         </span>
                         <span v-else class="badge badge-sm bg-gradient-secondary">{{ backup.status }}</span>
+
+                        <!-- Live Restored State Badge -->
+                        <div v-if="backup.metadata?.last_restored_at" class="mt-1">
+                          <span class="badge badge-xs bg-gradient-info text-white d-inline-flex align-items-center px-2 py-1"
+                                :title="'Restored to live server on ' + backup.metadata.last_restored_at + ' by ' + (backup.metadata.restored_by || 'Admin')">
+                            <i class="material-symbols-rounded text-xxs me-1" style="font-size: 11px;">published_with_changes</i>
+                            Restored on Live
+                          </span>
+                        </div>
                       </td>
                       <td class="align-middle text-center">
                         <span class="text-secondary text-xs font-weight-bold">{{ backup.created_at }}</span>
                         <p class="text-xxs text-muted mb-0">by {{ backup.created_by }}</p>
-                        <!-- Restored Status Badge -->
-                        <div v-if="backup.metadata?.last_restored_at" class="mt-1">
-                          <span class="badge badge-xs bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center"
-                                :title="'Restored at ' + backup.metadata.last_restored_at + ' by ' + (backup.metadata.restored_by || 'Admin')">
-                            <i class="material-symbols-rounded text-xxs me-1" style="font-size: 11px;">history</i>
-                            Restored ({{ backup.metadata.last_restored_at }})
-                          </span>
+                        <!-- Restored Timestamp Details -->
+                        <div v-if="backup.metadata?.last_restored_at" class="text-xxs text-info font-weight-bold mt-1">
+                          <i class="material-symbols-rounded align-middle" style="font-size: 11px;">history</i>
+                          {{ backup.metadata.last_restored_at }}
                         </div>
                       </td>
                       <td class="align-middle text-center">
