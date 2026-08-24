@@ -12,8 +12,8 @@
               <p class="mb-0 text-sm">Automated scheduling, on-demand snapshots, and one-click restore for databases & files</p>
             </div>
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-secondary mb-0" @click="refreshData">
-                <i class="material-symbols-rounded text-sm me-1">refresh</i>
+              <button class="btn btn-outline-secondary mb-0" @click="refreshData" :disabled="isPolling">
+                <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-icon': isPolling }">refresh</i>
                 Refresh
               </button>
               <button class="btn bg-gradient-info mb-0" @click="openCreateScheduleModal">
@@ -52,6 +52,37 @@
             <button type="button" class="btn-close text-white" @click="localAlert.show = false">
               <span aria-hidden="true">&times;</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live In-Progress Active Backup Banner -->
+      <div class="row mb-4" v-if="activeRunningBackup">
+        <div class="col-12">
+          <div class="card bg-gradient-dark text-white shadow-dark border-radius-lg overflow-hidden position-relative p-3"
+               style="background: linear-gradient(135deg, #1e1e2f 0%, #111122 100%); border: 1px solid rgba(0, 210, 255, 0.3);">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div class="d-flex align-items-center gap-3">
+                <div class="spinner-border text-info" style="width: 2.2rem; height: 2.2rem;" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <div>
+                  <h6 class="text-white mb-0 font-weight-bold d-flex align-items-center">
+                    <i class="material-symbols-rounded text-info me-2">cloud_sync</i>
+                    Backup in progress: {{ activeRunningBackup.domain || activeRunningBackup.database_name || 'System Target' }}
+                  </h6>
+                  <p class="text-xs text-white opacity-8 mb-0 mt-1">
+                    Generating {{ formatTypeLabel(activeRunningBackup.type) }} snapshot and calculating SHA256 checksum... Auto-updating status.
+                  </p>
+                </div>
+              </div>
+              <span class="badge bg-gradient-info text-white font-weight-bold px-3 py-2">
+                <span class="spinner-grow spinner-grow-sm me-1" style="width: 8px; height: 8px;"></span> Live Processing
+              </span>
+            </div>
+            <div class="progress mt-3 bg-dark" style="height: 6px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated bg-gradient-info w-100"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -249,7 +280,7 @@
                         <span v-if="backup.status === 'completed'" class="badge badge-sm bg-gradient-success">
                           <i class="material-symbols-rounded align-middle me-1" style="font-size: 12px;">check</i> Completed
                         </span>
-                        <span v-else-if="backup.status === 'in_progress'" class="badge badge-sm bg-gradient-warning">
+                        <span v-else-if="backup.status === 'in_progress'" class="badge badge-sm bg-gradient-warning text-white">
                           <span class="spinner-border spinner-border-sm me-1" style="width: 10px; height: 10px;"></span> Running
                         </span>
                         <span v-else-if="backup.status === 'failed'" class="badge badge-sm bg-gradient-danger cursor-pointer" :title="backup.error_message">
@@ -285,8 +316,9 @@
                           <!-- 3. Delete Button -->
                           <button class="btn btn-sm btn-outline-danger px-2 py-1 mb-0 d-inline-flex align-items-center"
                                   title="Delete backup archive"
-                                  @click="confirmDeleteBackup(backup)">
-                            <i class="material-symbols-rounded text-sm">delete</i>
+                                  @click="openDeleteBackupModal(backup)">
+                            <i class="material-symbols-rounded text-sm me-1">delete</i>
+                            <span class="text-xs">Delete</span>
                           </button>
                         </div>
                       </td>
@@ -384,21 +416,24 @@
                         </div>
                       </td>
                       <td class="align-middle text-center">
-                        <div class="d-flex justify-content-center gap-1">
-                          <button class="btn btn-link text-success px-2 mb-0"
+                        <div class="d-flex justify-content-center gap-1 align-items-center">
+                          <button class="btn btn-sm btn-outline-success px-2 py-1 mb-0 d-inline-flex align-items-center"
                                   title="Run Schedule Now"
-                                  @click="runScheduleNow(schedule)">
-                            <i class="material-symbols-rounded text-sm">play_arrow</i>
+                                  @click="openRunScheduleModal(schedule)">
+                            <i class="material-symbols-rounded text-sm me-1">play_arrow</i>
+                            <span class="text-xs">Run Now</span>
                           </button>
-                          <button class="btn btn-link text-secondary px-2 mb-0"
+                          <button class="btn btn-sm btn-outline-secondary px-2 py-1 mb-0 d-inline-flex align-items-center"
                                   title="Edit Schedule"
                                   @click="openEditScheduleModal(schedule)">
-                            <i class="material-symbols-rounded text-sm">edit</i>
+                            <i class="material-symbols-rounded text-sm me-1">edit</i>
+                            <span class="text-xs">Edit</span>
                           </button>
-                          <button class="btn btn-link text-danger px-2 mb-0"
+                          <button class="btn btn-sm btn-outline-danger px-2 py-1 mb-0 d-inline-flex align-items-center"
                                   title="Delete Schedule"
-                                  @click="confirmDeleteSchedule(schedule)">
-                            <i class="material-symbols-rounded text-sm">delete</i>
+                                  @click="openDeleteScheduleModal(schedule)">
+                            <i class="material-symbols-rounded text-sm me-1">delete</i>
+                            <span class="text-xs">Delete</span>
                           </button>
                         </div>
                       </td>
@@ -704,6 +739,127 @@
       </div>
     </div>
 
+    <!-- MODAL: RUN SCHEDULE NOW CONFIRMATION -->
+    <div class="modal fade" id="modalRunSchedule" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" v-if="selectedScheduleToRun">
+          <div class="modal-header">
+            <h5 class="modal-title font-weight-bolder text-success">
+              <i class="material-symbols-rounded align-middle me-1">play_circle</i> Trigger Automated Schedule
+            </h5>
+            <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="text-sm mb-3">
+              Do you want to run the backup schedule <strong>{{ selectedScheduleToRun.name }}</strong> right now?
+            </p>
+            <div class="bg-gray-100 p-3 rounded mb-3 text-sm">
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-secondary">Target:</span>
+                <span class="font-weight-bold">{{ selectedScheduleToRun.domain || selectedScheduleToRun.database_name || 'All Server Sites' }}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-secondary">Content Type:</span>
+                <span class="font-weight-bold">{{ formatTypeLabel(selectedScheduleToRun.type) }}</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-secondary">Retention:</span>
+                <span class="font-weight-bold">Keep last {{ selectedScheduleToRun.retention_count }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn bg-gradient-success" :disabled="isRunningSchedule" @click="performRunScheduleNow">
+              <span v-if="isRunningSchedule" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="material-symbols-rounded text-sm me-1">play_arrow</i>
+              {{ isRunningSchedule ? 'Executing...' : 'Run Backup Now' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: DELETE SCHEDULE CONFIRMATION -->
+    <div class="modal fade" id="modalDeleteSchedule" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" v-if="selectedScheduleToDelete">
+          <div class="modal-header">
+            <h5 class="modal-title font-weight-bolder text-danger">
+              <i class="material-symbols-rounded align-middle me-1">alarm_off</i> Delete Automated Schedule
+            </h5>
+            <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="text-sm">
+              Are you sure you want to delete the schedule <strong>{{ selectedScheduleToDelete.name }}</strong>?
+            </p>
+            <p class="text-xs text-muted mb-0">
+              Recurring automated backups for this target will be stopped. Existing completed archives will not be deleted.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn bg-gradient-danger" :disabled="isDeletingSchedule" @click="performDeleteSchedule">
+              <span v-if="isDeletingSchedule" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="material-symbols-rounded text-sm me-1">delete</i>
+              {{ isDeletingSchedule ? 'Deleting...' : 'Yes, Delete Schedule' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: DELETE BACKUP ARCHIVE CONFIRMATION -->
+    <div class="modal fade" id="modalDeleteBackup" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" v-if="selectedBackupToDelete">
+          <div class="modal-header">
+            <h5 class="modal-title font-weight-bolder text-danger">
+              <i class="material-symbols-rounded align-middle me-1">delete_forever</i> Delete Backup Archive
+            </h5>
+            <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-danger text-white text-xs mb-3">
+              <strong>Warning:</strong> This action cannot be undone. The backup archive file will be permanently removed from disk storage.
+            </div>
+            <div class="bg-gray-100 p-3 rounded mb-2 text-sm">
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-secondary">Target:</span>
+                <span class="font-weight-bold">{{ selectedBackupToDelete.domain || selectedBackupToDelete.database_name }}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-secondary">Archive Size:</span>
+                <span class="font-weight-bold">{{ selectedBackupToDelete.formatted_size }}</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-secondary">Created:</span>
+                <span class="font-weight-bold">{{ selectedBackupToDelete.created_at }}</span>
+              </div>
+            </div>
+            <p class="text-xs text-muted font-monospace mb-0 text-break">
+              File: {{ selectedBackupToDelete.file_name }}
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn bg-gradient-danger" :disabled="isDeletingBackup" @click="performDeleteBackup">
+              <span v-if="isDeletingBackup" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="material-symbols-rounded text-sm me-1">delete</i>
+              {{ isDeletingBackup ? 'Deleting...' : 'Permanently Delete' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- MODAL: RESTORE CONFIRMATION -->
     <div class="modal fade" id="modalRestore" tabindex="-1" role="dialog" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered" role="document">
@@ -763,7 +919,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 
@@ -784,9 +940,18 @@ const localAlert = ref({ show: false, message: '', type: 'success' })
 const isCreatingBackup = ref(false)
 const isSavingSchedule = ref(false)
 const isRestoring = ref(false)
+const isRunningSchedule = ref(false)
+const isDeletingSchedule = ref(false)
+const isDeletingBackup = ref(false)
+const isPolling = ref(false)
 
 const selectedRestoreBackup = ref(null)
+const selectedScheduleToRun = ref(null)
+const selectedScheduleToDelete = ref(null)
+const selectedBackupToDelete = ref(null)
 const createSnapshotBeforeRestore = ref(true)
+
+let pollingTimer = null
 
 // Forms
 const backupForm = ref({
@@ -813,7 +978,12 @@ const scheduleForm = ref({
   email_notifications: true,
 })
 
-// Initialize defaults
+// Check if any backup is currently in progress
+const activeRunningBackup = computed(() => {
+  return props.backups.find(b => b.status === 'in_progress')
+})
+
+// Lifecycle
 onMounted(() => {
   if (props.domains && props.domains.length > 0) {
     backupForm.value.domain = props.domains[0].domain
@@ -823,7 +993,39 @@ onMounted(() => {
     backupForm.value.database_name = props.databases[0]
     scheduleForm.value.database_name = props.databases[0]
   }
+
+  // If there's an in-progress backup on load, start polling
+  if (activeRunningBackup.value) {
+    startPolling()
+  }
 })
+
+onUnmounted(() => {
+  stopPolling()
+})
+
+const startPolling = () => {
+  if (pollingTimer) return
+  isPolling.value = true
+  pollingTimer = setInterval(() => {
+    router.reload({
+      preserveScroll: true,
+      onSuccess: () => {
+        if (!activeRunningBackup.value) {
+          stopPolling()
+        }
+      }
+    })
+  }, 3000)
+}
+
+const stopPolling = () => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+  isPolling.value = false
+}
 
 // Filtered backups list
 const filteredBackups = computed(() => {
@@ -846,7 +1048,11 @@ const onScheduleTargetTypeChange = () => {
 }
 
 const refreshData = () => {
-  router.reload({ preserveScroll: true })
+  isPolling.value = true
+  router.reload({
+    preserveScroll: true,
+    onFinish: () => { isPolling.value = false }
+  })
 }
 
 // Modal Helper
@@ -911,6 +1117,27 @@ const openRestoreModal = async (backup) => {
   modal?.show()
 }
 
+const openRunScheduleModal = async (schedule) => {
+  selectedScheduleToRun.value = schedule
+  await nextTick()
+  const modal = getModalInstance('modalRunSchedule')
+  modal?.show()
+}
+
+const openDeleteScheduleModal = async (schedule) => {
+  selectedScheduleToDelete.value = schedule
+  await nextTick()
+  const modal = getModalInstance('modalDeleteSchedule')
+  modal?.show()
+}
+
+const openDeleteBackupModal = async (backup) => {
+  selectedBackupToDelete.value = backup
+  await nextTick()
+  const modal = getModalInstance('modalDeleteBackup')
+  modal?.show()
+}
+
 // Submit Create Backup
 const submitCreateBackup = () => {
   isCreatingBackup.value = true
@@ -926,6 +1153,7 @@ const submitCreateBackup = () => {
     onSuccess: () => {
       getModalInstance('modalCreateBackup')?.hide()
       isCreatingBackup.value = false
+      startPolling()
     },
     onError: () => {
       isCreatingBackup.value = false
@@ -976,25 +1204,59 @@ const toggleScheduleActive = (schedule) => {
   router.post(`/backups/schedules/${schedule.id}/toggle`, {}, { preserveScroll: true })
 }
 
-// Run Schedule Now
-const runScheduleNow = (schedule) => {
-  if (confirm(`Trigger execution for '${schedule.name}' immediately?`)) {
-    router.post(`/backups/schedules/${schedule.id}/run`, {}, { preserveScroll: true })
-  }
+// Perform Run Schedule Now
+const performRunScheduleNow = () => {
+  if (!selectedScheduleToRun.value) return
+  isRunningSchedule.value = true
+
+  router.post(`/backups/schedules/${selectedScheduleToRun.value.id}/run`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      getModalInstance('modalRunSchedule')?.hide()
+      isRunningSchedule.value = false
+      startPolling()
+    },
+    onError: () => {
+      isRunningSchedule.value = false
+    },
+    onFinish: () => {
+      isRunningSchedule.value = false
+    }
+  })
 }
 
-// Delete Schedule
-const confirmDeleteSchedule = (schedule) => {
-  if (confirm(`Are you sure you want to delete schedule '${schedule.name}'?`)) {
-    router.delete(`/backups/schedules/${schedule.id}`, { preserveScroll: true })
-  }
+// Perform Delete Schedule
+const performDeleteSchedule = () => {
+  if (!selectedScheduleToDelete.value) return
+  isDeletingSchedule.value = true
+
+  router.delete(`/backups/schedules/${selectedScheduleToDelete.value.id}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      getModalInstance('modalDeleteSchedule')?.hide()
+      isDeletingSchedule.value = false
+    },
+    onFinish: () => {
+      isDeletingSchedule.value = false
+    }
+  })
 }
 
-// Delete Backup
-const confirmDeleteBackup = (backup) => {
-  if (confirm(`Are you sure you want to permanently delete backup '${backup.file_name}'?`)) {
-    router.delete(`/backups/${backup.id}`, { preserveScroll: true })
-  }
+// Perform Delete Backup
+const performDeleteBackup = () => {
+  if (!selectedBackupToDelete.value) return
+  isDeletingBackup.value = true
+
+  router.delete(`/backups/${selectedBackupToDelete.value.id}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      getModalInstance('modalDeleteBackup')?.hide()
+      isDeletingBackup.value = false
+    },
+    onFinish: () => {
+      isDeletingBackup.value = false
+    }
+  })
 }
 
 // Perform Restore
@@ -1056,5 +1318,12 @@ const getDayName = (day) => {
 }
 .cursor-pointer {
   cursor: pointer;
+}
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>
