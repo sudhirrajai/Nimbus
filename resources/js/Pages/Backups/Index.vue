@@ -59,8 +59,8 @@
       <!-- Live In-Progress Active Backup Banner -->
       <div class="row mb-4" v-if="activeRunningBackup">
         <div class="col-12">
-          <div class="card bg-gradient-dark text-white shadow-dark border-radius-lg overflow-hidden position-relative p-3"
-               style="background: linear-gradient(135deg, #1e1e2f 0%, #111122 100%); border: 1px solid rgba(0, 210, 255, 0.3);">
+          <div class="card text-white shadow-dark border-radius-lg overflow-hidden position-relative p-3"
+               style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid rgba(56, 189, 248, 0.4);">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
               <div class="d-flex align-items-center gap-3">
                 <div class="spinner-border text-info" style="width: 2.2rem; height: 2.2rem;" role="status">
@@ -69,10 +69,10 @@
                 <div>
                   <h6 class="text-white mb-0 font-weight-bold d-flex align-items-center">
                     <i class="material-symbols-rounded text-info me-2">cloud_sync</i>
-                    Backup in progress: {{ activeRunningBackup.domain || activeRunningBackup.database_name || 'System Target' }}
+                    Database & Files Backup in progress: {{ activeRunningBackup.domain || activeRunningBackup.database_name || 'System Target' }}
                   </h6>
                   <p class="text-xs text-white opacity-8 mb-0 mt-1">
-                    Generating {{ formatTypeLabel(activeRunningBackup.type) }} snapshot and calculating SHA256 checksum... Auto-updating status.
+                    Exporting {{ formatTypeLabel(activeRunningBackup.type) }} dump and streaming gzip archive... Auto-refreshing status.
                   </p>
                 </div>
               </div>
@@ -80,7 +80,7 @@
                 <span class="spinner-grow spinner-grow-sm me-1" style="width: 8px; height: 8px;"></span> Live Processing
               </span>
             </div>
-            <div class="progress mt-3 bg-dark" style="height: 6px;">
+            <div class="progress mt-3" style="height: 6px; background-color: rgba(255,255,255,0.1);">
               <div class="progress-bar progress-bar-striped progress-bar-animated bg-gradient-info w-100"></div>
             </div>
           </div>
@@ -266,7 +266,12 @@
                         </div>
                       </td>
                       <td>
-                        <span class="badge badge-sm" :class="getTypeBadgeClass(backup.type)">
+                        <!-- Refined Soft Badge -->
+                        <span class="badge badge-xs text-xxs px-2 py-1 border rounded-pill d-inline-flex align-items-center"
+                              :class="backup.type === 'database' ? 'badge-db' : (backup.type === 'files' ? 'badge-files' : 'badge-full')">
+                          <i class="material-symbols-rounded text-xxs me-1" style="font-size: 12px;">
+                            {{ backup.type === 'database' ? 'database' : (backup.type === 'files' ? 'folder_zip' : 'inventory_2') }}
+                          </i>
                           {{ formatTypeLabel(backup.type) }}
                         </span>
                         <div v-if="backup.metadata?.included_database && backup.type === 'full'" class="text-xxs text-muted mt-1">
@@ -371,11 +376,13 @@
                         </button>
                       </td>
                     </tr>
-                    <tr v-for="schedule in schedules" :key="schedule.id">
+                    <tr v-for="schedule in schedules" :key="schedule.id" :class="{ 'table-active': isScheduleRunning(schedule) }">
                       <td>
                         <div class="d-flex px-3 py-1">
                           <div class="avatar avatar-sm me-3 border-radius-md bg-gradient-dark d-flex align-items-center justify-content-center">
-                            <i class="material-symbols-rounded text-white text-sm">schedule</i>
+                            <i class="material-symbols-rounded text-white text-sm" :class="{ 'spin-icon': isScheduleRunning(schedule) }">
+                              {{ isScheduleRunning(schedule) ? 'autorenew' : 'schedule' }}
+                            </i>
                           </div>
                           <div class="d-flex flex-column justify-content-center">
                             <h6 class="mb-0 text-sm font-weight-bold">{{ schedule.name }}</h6>
@@ -386,9 +393,14 @@
                         </div>
                       </td>
                       <td>
-                        <div class="d-flex flex-column">
+                        <div class="d-flex flex-column align-items-start gap-1">
                           <span class="text-sm font-weight-bold text-dark">{{ schedule.domain || schedule.database_name || 'All Server Sites' }}</span>
-                          <span class="badge badge-sm d-inline-block text-start px-0" :class="getTypeBadgeClass(schedule.type)" style="width: fit-content;">
+                          <!-- Refined Soft Badge for Database / Files / Full -->
+                          <span class="badge badge-xs text-xxs px-2 py-1 border rounded-pill d-inline-flex align-items-center"
+                                :class="schedule.type === 'database' ? 'badge-db' : (schedule.type === 'files' ? 'badge-files' : 'badge-full')">
+                            <i class="material-symbols-rounded text-xxs me-1" style="font-size: 11px;">
+                              {{ schedule.type === 'database' ? 'database' : (schedule.type === 'files' ? 'folder_zip' : 'inventory_2') }}
+                            </i>
                             {{ formatTypeLabel(schedule.type) }}
                           </span>
                         </div>
@@ -405,7 +417,11 @@
                         <span class="text-xs font-weight-bold text-secondary">Keep last {{ schedule.retention_count }}</span>
                       </td>
                       <td class="align-middle text-center text-sm">
-                        <span v-if="schedule.is_active" class="text-xs font-weight-bold text-info">
+                        <span v-if="isScheduleRunning(schedule)" class="badge badge-sm bg-gradient-warning text-white d-inline-flex align-items-center">
+                          <span class="spinner-border spinner-border-sm me-1" style="width: 10px; height: 10px;"></span>
+                          Backup in progress
+                        </span>
+                        <span v-else-if="schedule.is_active" class="text-xs font-weight-bold text-info">
                           {{ schedule.next_run_at || 'Pending calculation' }}
                         </span>
                         <span v-else class="text-xs text-muted">Paused</span>
@@ -417,12 +433,21 @@
                       </td>
                       <td class="align-middle text-center">
                         <div class="d-flex justify-content-center gap-1 align-items-center">
-                          <button class="btn btn-sm btn-outline-success px-2 py-1 mb-0 d-inline-flex align-items-center"
+                          <!-- Run Now / In-Progress Button -->
+                          <button v-if="isScheduleRunning(schedule)"
+                                  class="btn btn-sm bg-gradient-info text-white px-2 py-1 mb-0 d-inline-flex align-items-center shadow-none"
+                                  disabled>
+                            <span class="spinner-border spinner-border-sm me-1" style="width: 12px; height: 12px;"></span>
+                            <span class="text-xs">Running...</span>
+                          </button>
+                          <button v-else
+                                  class="btn btn-sm btn-outline-success px-2 py-1 mb-0 d-inline-flex align-items-center"
                                   title="Run Schedule Now"
                                   @click="openRunScheduleModal(schedule)">
                             <i class="material-symbols-rounded text-sm me-1">play_arrow</i>
                             <span class="text-xs">Run Now</span>
                           </button>
+
                           <button class="btn btn-sm btn-outline-secondary px-2 py-1 mb-0 d-inline-flex align-items-center"
                                   title="Edit Schedule"
                                   @click="openEditScheduleModal(schedule)">
@@ -775,7 +800,7 @@
             <button type="button" class="btn bg-gradient-success" :disabled="isRunningSchedule" @click="performRunScheduleNow">
               <span v-if="isRunningSchedule" class="spinner-border spinner-border-sm me-1"></span>
               <i v-else class="material-symbols-rounded text-sm me-1">play_arrow</i>
-              {{ isRunningSchedule ? 'Executing...' : 'Run Backup Now' }}
+              {{ isRunningSchedule ? 'Starting Dump...' : 'Run Backup Now' }}
             </button>
           </div>
         </div>
@@ -951,6 +976,8 @@ const isDeletingSchedule = ref(false)
 const isDeletingBackup = ref(false)
 const isPolling = ref(false)
 
+const runningScheduleId = ref(null)
+
 const selectedRestoreBackup = ref(null)
 const selectedScheduleToRun = ref(null)
 const selectedScheduleToDelete = ref(null)
@@ -989,6 +1016,14 @@ const activeRunningBackup = computed(() => {
   return props.backups.find(b => b.status === 'in_progress')
 })
 
+const isScheduleRunning = (schedule) => {
+  if (runningScheduleId.value === schedule.id) return true
+  if (!activeRunningBackup.value) return false
+  const target = schedule.domain || schedule.database_name
+  const activeTarget = activeRunningBackup.value.domain || activeRunningBackup.value.database_name
+  return Boolean(target && activeTarget && target.toLowerCase() === activeTarget.toLowerCase())
+}
+
 // Lifecycle
 onMounted(() => {
   if (props.domains && props.domains.length > 0) {
@@ -1018,6 +1053,7 @@ const startPolling = () => {
       preserveScroll: true,
       onSuccess: () => {
         if (!activeRunningBackup.value) {
+          runningScheduleId.value = null
           stopPolling()
         }
       }
@@ -1213,9 +1249,11 @@ const toggleScheduleActive = (schedule) => {
 // Perform Run Schedule Now
 const performRunScheduleNow = () => {
   if (!selectedScheduleToRun.value) return
+  const schedId = selectedScheduleToRun.value.id
   isRunningSchedule.value = true
+  runningScheduleId.value = schedId
 
-  router.post(`/backups/schedules/${selectedScheduleToRun.value.id}/run`, {}, {
+  router.post(`/backups/schedules/${schedId}/run`, {}, {
     preserveScroll: true,
     onSuccess: () => {
       getModalInstance('modalRunSchedule')?.hide()
@@ -1224,6 +1262,7 @@ const performRunScheduleNow = () => {
     },
     onError: () => {
       isRunningSchedule.value = false
+      runningScheduleId.value = null
     },
     onFinish: () => {
       isRunningSchedule.value = false
@@ -1299,12 +1338,6 @@ const getTargetIcon = (type) => {
   return 'inventory_2'
 }
 
-const getTypeBadgeClass = (type) => {
-  if (type === 'database') return 'bg-gradient-info text-white'
-  if (type === 'files') return 'bg-gradient-secondary text-white'
-  return 'bg-gradient-primary text-white'
-}
-
 const formatTypeLabel = (type) => {
   if (type === 'database') return 'Database Only'
   if (type === 'files') return 'Files Only'
@@ -1331,5 +1364,30 @@ const getDayName = (day) => {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.badge-xs {
+  font-size: 0.70rem !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.badge-db {
+  background-color: #e0f2fe !important;
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+
+.badge-files {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.badge-full {
+  background-color: #f3e8ff !important;
+  color: #7e22ce !important;
+  border-color: #e9d5ff !important;
 }
 </style>
