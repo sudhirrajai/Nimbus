@@ -376,10 +376,19 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/security/panel-domain', [\App\Http\Controllers\PanelDomainController::class, 'setup'])->name('security.panel-domain');
         });
 
-        // Backups (Coming Soon)
-        Route::get('/backups', function () {
-            return \Inertia\Inertia::render('Backups/Index');
-        })->name('backups.index');
+        // Backups management routes
+        Route::prefix('backups')->name('backups.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\BackupController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\BackupController::class, 'store'])->name('store');
+            Route::post('/schedules', [\App\Http\Controllers\BackupController::class, 'storeSchedule'])->name('schedules.store');
+            Route::put('/schedules/{schedule}', [\App\Http\Controllers\BackupController::class, 'updateSchedule'])->name('schedules.update');
+            Route::post('/schedules/{schedule}/toggle', [\App\Http\Controllers\BackupController::class, 'toggleSchedule'])->name('schedules.toggle');
+            Route::post('/schedules/{schedule}/run', [\App\Http\Controllers\BackupController::class, 'runScheduleNow'])->name('schedules.run');
+            Route::delete('/schedules/{schedule}', [\App\Http\Controllers\BackupController::class, 'deleteSchedule'])->name('schedules.delete');
+            Route::post('/{backup}/restore', [\App\Http\Controllers\BackupController::class, 'restore'])->name('restore');
+            Route::get('/{backup}/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('download');
+            Route::delete('/{backup}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('destroy');
+        });
 
         // FTP Accounts (Coming Soon)
         Route::get('/ftp', function () {
