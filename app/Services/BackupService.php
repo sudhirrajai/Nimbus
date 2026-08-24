@@ -28,7 +28,8 @@ class BackupService
             try {
                 if (PHP_OS_FAMILY === 'Linux') {
                     exec("sudo mkdir -p " . escapeshellarg($dir));
-                    exec("sudo chmod 700 " . escapeshellarg($dir));
+                    exec("sudo chown -R www-data:www-data " . escapeshellarg($dir));
+                    exec("sudo chmod 775 " . escapeshellarg($dir));
                 } else {
                     File::makeDirectory($dir, 0755, true);
                 }
@@ -63,7 +64,8 @@ class BackupService
         if (!File::exists($domainBackupDir)) {
             if (PHP_OS_FAMILY === 'Linux') {
                 exec("sudo mkdir -p " . escapeshellarg($domainBackupDir));
-                exec("sudo chmod 700 " . escapeshellarg($domainBackupDir));
+                exec("sudo chown -R www-data:www-data " . escapeshellarg($domainBackupDir));
+                exec("sudo chmod 775 " . escapeshellarg($domainBackupDir));
             } else {
                 File::makeDirectory($domainBackupDir, 0755, true);
             }
@@ -98,12 +100,14 @@ class BackupService
             $metadata = $record->metadata ?: [];
 
             if ($type === 'database') {
-                $this->dumpDatabase($databaseName ?: $this->resolveDatabaseForDomain($domain), $filePath);
+                $targetDb = $databaseName ?: $this->resolveDatabaseForDomain($domain);
+                $this->dumpDatabase($targetDb, $filePath);
             } elseif ($type === 'files') {
                 $this->archiveFiles($domain, $filePath);
             } else {
                 // Full (Both)
-                $this->archiveFull($domain, $databaseName ?: $this->resolveDatabaseForDomain($domain), $filePath, $metadata);
+                $targetDb = $databaseName ?: $this->resolveDatabaseForDomain($domain);
+                $this->archiveFull($domain, $targetDb, $filePath, $metadata);
             }
 
             // Verify file creation and calculate size & checksum
@@ -180,20 +184,47 @@ class BackupService
         if (PHP_OS_FAMILY === 'Linux') {
             $escapedDb = escapeshellarg($dbName);
             $escapedPath = escapeshellarg($targetGzPath);
-            $cmd = "sudo mysqldump --single-transaction --quick --routines --triggers --hex-blob {$escapedDb} 2>/dev/null | gzip -9 > {$escapedPath}";
-            
+
+            // First check if database actually exists via sudo mysql
+            $checkOutput = [];
+            $checkCode = 0;
+            exec("sudo mysql -N -e " . escapeshellarg("SHOW DATABASES LIKE '{$dbName}';") . " 2>&1", $checkOutput, $checkCode);
+            if ($checkCode !== 0 || empty($checkOutput) || trim($checkOutput[0]) !== $dbName) {
+                throw new \Exception("Database '{$dbName}' was not found on this MySQL server.");
+            }
+
+            // Ensure parent directory exists and is writable
+            $parentDir = dirname($targetGzPath);
+            exec("sudo mkdir -p " . escapeshellarg($parentDir));
+            exec("sudo chown -R www-data:www-data " . escapeshellarg($parentDir));
+            exec("sudo chmod 775 " . escapeshellarg($parentDir));
+
+            // Execute mysqldump via sudo bash -c with pipefail so pipe errors are not masked
+            $dumpScript = "set -o pipefail; mysqldump --single-transaction --quick --default-character-set=utf8mb4 {$escapedDb} | gzip -9 > {$escapedPath}";
+            $escapedDumpScript = escapeshellarg($dumpScript);
+
             $output = [];
             $code = 0;
-            exec($cmd, $output, $code);
+            exec("sudo bash -c {$escapedDumpScript} 2>&1", $output, $code);
 
             if ($code !== 0 || !file_exists($targetGzPath) || filesize($targetGzPath) === 0) {
-                // Fallback attempt without sudo if root credentials are in my.cnf
-                $cmdAlt = "mysqldump --single-transaction --quick {$escapedDb} | gzip -9 > {$escapedPath}";
-                exec($cmdAlt, $output, $code);
-                if ($code !== 0) {
-                    throw new \Exception("Database dump failed for '{$dbName}'. Code: {$code}");
+                // Try alternate mysqldump invocation
+                $altScript = "set -o pipefail; mysqldump {$escapedDb} | gzip -9 > {$escapedPath}";
+                $escapedAltScript = escapeshellarg($altScript);
+                $altOutput = [];
+                $altCode = 0;
+                exec("sudo bash -c {$escapedAltScript} 2>&1", $altOutput, $altCode);
+
+                if ($altCode !== 0 || !file_exists($targetGzPath) || filesize($targetGzPath) === 0) {
+                    $allErrors = array_merge($output, $altOutput);
+                    $errMsg = !empty($allErrors) ? implode("\n", array_unique($allErrors)) : "Exit code {$code}";
+                    throw new \Exception("Database dump failed for '{$dbName}': {$errMsg}");
                 }
             }
+
+            // Ensure ownership by www-data
+            exec("sudo chown www-data:www-data {$escapedPath}");
+            exec("sudo chmod 664 {$escapedPath}");
         } else {
             // Development fallback on Windows
             $dummySql = "-- Nimbus Development Backup for DB: {$dbName}\n-- Created: " . date('Y-m-d H:i:s') . "\nCREATE DATABASE IF NOT EXISTS `{$dbName}`;\n";
@@ -220,6 +251,11 @@ class BackupService
             $escapedSource = escapeshellarg($sourcePath);
             $escapedTarget = escapeshellarg($targetGzPath);
 
+            $parentDir = dirname($targetGzPath);
+            exec("sudo mkdir -p " . escapeshellarg($parentDir));
+            exec("sudo chown -R www-data:www-data " . escapeshellarg($parentDir));
+            exec("sudo chmod 775 " . escapeshellarg($parentDir));
+
             $excludes = [
                 "--exclude='.git'",
                 "--exclude='node_modules'",
@@ -228,19 +264,24 @@ class BackupService
                 "--exclude='storage/framework/sessions/*'",
                 "--exclude='var/cache/*'",
                 "--exclude='wp-content/cache/*'",
-                "--exclude='vendor/phpunit'",
             ];
             $excludeStr = implode(' ', $excludes);
 
-            $cmd = "sudo tar -czf {$escapedTarget} {$excludeStr} -C {$escapedSource} . 2>&1";
+            $tarCmd = "tar -czf {$escapedTarget} {$excludeStr} -C {$escapedSource} .";
+            $escapedTarCmd = escapeshellarg($tarCmd);
+
             $output = [];
             $code = 0;
-            exec($cmd, $output, $code);
+            exec("sudo bash -c {$escapedTarCmd} 2>&1", $output, $code);
 
-            // tar exit code 1 means "files changed as we read them", which is acceptable for active sites
+            // tar exit code 1 means "files changed as we read them", which is acceptable for live sites
             if ($code > 1) {
-                throw new \Exception("File archiving failed for '{$domain}': " . implode("\n", $output));
+                $errMsg = !empty($output) ? implode("\n", $output) : "Exit code {$code}";
+                throw new \Exception("File archiving failed for '{$domain}': {$errMsg}");
             }
+
+            exec("sudo chown www-data:www-data {$escapedTarget}");
+            exec("sudo chmod 664 {$escapedTarget}");
         } else {
             // Windows / Dev fallback
             $zipContent = gzencode("Nimbus Project Files Backup for {$domain}\nTimestamp: " . date('Y-m-d H:i:s'), 9);
@@ -258,7 +299,13 @@ class BackupService
             $tempDir = storage_path('app/temp/nimbus_bkp_' . uniqid());
         }
 
-        File::makeDirectory($tempDir, 0755, true);
+        if (PHP_OS_FAMILY === 'Linux') {
+            exec("sudo mkdir -p " . escapeshellarg($tempDir));
+            exec("sudo chown -R www-data:www-data " . escapeshellarg($tempDir));
+            exec("sudo chmod 775 " . escapeshellarg($tempDir));
+        } else {
+            File::makeDirectory($tempDir, 0755, true);
+        }
 
         try {
             $hasDb = false;
@@ -298,16 +345,26 @@ class BackupService
 
             // 4. Bundle temp directory into final archive
             if (PHP_OS_FAMILY === 'Linux') {
+                $parentDir = dirname($targetGzPath);
+                exec("sudo mkdir -p " . escapeshellarg($parentDir));
+                exec("sudo chown -R www-data:www-data " . escapeshellarg($parentDir));
+
                 $escapedTemp = escapeshellarg($tempDir);
                 $escapedTarget = escapeshellarg($targetGzPath);
-                $cmd = "sudo tar -czf {$escapedTarget} -C {$escapedTemp} . 2>&1";
+                $bundleCmd = "tar -czf {$escapedTarget} -C {$escapedTemp} .";
+                $escapedBundleCmd = escapeshellarg($bundleCmd);
+
                 $output = [];
                 $code = 0;
-                exec($cmd, $output, $code);
+                exec("sudo bash -c {$escapedBundleCmd} 2>&1", $output, $code);
 
                 if ($code > 1) {
-                    throw new \Exception("Full archive bundling failed: " . implode("\n", $output));
+                    $errMsg = !empty($output) ? implode("\n", $output) : "Exit code {$code}";
+                    throw new \Exception("Full archive bundling failed: {$errMsg}");
                 }
+
+                exec("sudo chown www-data:www-data {$escapedTarget}");
+                exec("sudo chmod 664 {$escapedTarget}");
             } else {
                 $bundleContent = gzencode(json_encode($manifest), 9);
                 File::put($targetGzPath, $bundleContent);
@@ -378,14 +435,17 @@ class BackupService
             // Ensure database exists
             exec("sudo mysql -e " . escapeshellarg("CREATE DATABASE IF NOT EXISTS `{$dbName}`"));
 
-            // Import gzipped SQL directly
-            $cmd = "gunzip -c {$escapedPath} | sudo mysql {$escapedDb} 2>&1";
+            // Import gzipped SQL directly via sudo bash
+            $importCmd = "set -o pipefail; gunzip -c {$escapedPath} | mysql {$escapedDb}";
+            $escapedImportCmd = escapeshellarg($importCmd);
+
             $output = [];
             $code = 0;
-            exec($cmd, $output, $code);
+            exec("sudo bash -c {$escapedImportCmd} 2>&1", $output, $code);
 
             if ($code !== 0) {
-                throw new \Exception("Database restore failed: " . implode("\n", $output));
+                $errMsg = !empty($output) ? implode("\n", $output) : "Exit code {$code}";
+                throw new \Exception("Database restore failed: {$errMsg}");
             }
         }
     }
@@ -413,13 +473,16 @@ class BackupService
             $escapedPath = escapeshellarg($gzPath);
 
             // Extract archive
-            $cmd = "sudo tar -xzf {$escapedPath} -C {$escapedTarget} 2>&1";
+            $extractCmd = "tar -xzf {$escapedPath} -C {$escapedTarget}";
+            $escapedExtractCmd = escapeshellarg($extractCmd);
+
             $output = [];
             $code = 0;
-            exec($cmd, $output, $code);
+            exec("sudo bash -c {$escapedExtractCmd} 2>&1", $output, $code);
 
             if ($code !== 0) {
-                throw new \Exception("Files extraction failed: " . implode("\n", $output));
+                $errMsg = !empty($output) ? implode("\n", $output) : "Exit code {$code}";
+                throw new \Exception("Files extraction failed: {$errMsg}");
             }
 
             // Restore www-data permissions
@@ -437,13 +500,20 @@ class BackupService
             $tempDir = storage_path('app/temp/nimbus_rst_' . uniqid());
         }
 
-        File::makeDirectory($tempDir, 0755, true);
+        if (PHP_OS_FAMILY === 'Linux') {
+            exec("sudo mkdir -p " . escapeshellarg($tempDir));
+            exec("sudo chown -R www-data:www-data " . escapeshellarg($tempDir));
+            exec("sudo chmod 775 " . escapeshellarg($tempDir));
+        } else {
+            File::makeDirectory($tempDir, 0755, true);
+        }
 
         try {
             if (PHP_OS_FAMILY === 'Linux') {
                 $escapedTemp = escapeshellarg($tempDir);
                 $escapedPath = escapeshellarg($gzPath);
-                exec("sudo tar -xzf {$escapedPath} -C {$escapedTemp} 2>&1");
+                $extractCmd = "tar -xzf {$escapedPath} -C {$escapedTemp}";
+                exec("sudo bash -c " . escapeshellarg($extractCmd) . " 2>&1");
             }
 
             // 1. Restore database if db dump exists in bundle
