@@ -258,7 +258,16 @@
                             <i class="material-symbols-rounded text-white text-sm">{{ getTargetIcon(backup.type) }}</i>
                           </div>
                           <div class="d-flex flex-column justify-content-center">
-                            <h6 class="mb-0 text-sm font-weight-bold">{{ backup.domain || backup.database_name || 'System' }}</h6>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                              <h6 class="mb-0 text-sm font-weight-bold">{{ backup.domain || backup.database_name || 'System' }}</h6>
+                              <!-- Safety Snapshot / Scheduled Origin Pill -->
+                              <span v-if="backup.created_by?.toLowerCase().includes('safety')" class="badge badge-xs bg-warning-subtle text-warning border border-warning-subtle">
+                                Safety Snapshot
+                              </span>
+                              <span v-else-if="backup.schedule_id" class="badge badge-xs bg-info-subtle text-info border border-info-subtle">
+                                Scheduled
+                              </span>
+                            </div>
                             <p class="text-xs text-secondary mb-0 font-monospace" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="backup.file_name">
                               {{ backup.file_name }}
                             </p>
@@ -296,6 +305,14 @@
                       <td class="align-middle text-center">
                         <span class="text-secondary text-xs font-weight-bold">{{ backup.created_at }}</span>
                         <p class="text-xxs text-muted mb-0">by {{ backup.created_by }}</p>
+                        <!-- Restored Status Badge -->
+                        <div v-if="backup.metadata?.last_restored_at" class="mt-1">
+                          <span class="badge badge-xs bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center"
+                                :title="'Restored at ' + backup.metadata.last_restored_at + ' by ' + (backup.metadata.restored_by || 'Admin')">
+                            <i class="material-symbols-rounded text-xxs me-1" style="font-size: 11px;">history</i>
+                            Restored ({{ backup.metadata.last_restored_at }})
+                          </span>
+                        </div>
                       </td>
                       <td class="align-middle text-center">
                         <div class="d-flex justify-content-center gap-1 align-items-center">
@@ -1389,5 +1406,21 @@ const getDayName = (day) => {
   background-color: #f3e8ff !important;
   color: #7e22ce !important;
   border-color: #e9d5ff !important;
+}
+
+.bg-warning-subtle {
+  background-color: #fef3c7 !important;
+  color: #b45309 !important;
+}
+.border-warning-subtle {
+  border-color: #fde68a !important;
+}
+
+.bg-success-subtle {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
+}
+.border-success-subtle {
+  border-color: #bbf7d0 !important;
 }
 </style>

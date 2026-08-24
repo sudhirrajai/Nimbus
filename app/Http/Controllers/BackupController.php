@@ -332,9 +332,9 @@ class BackupController extends Controller
                         'domain' => $backup->domain,
                         'database_name' => $backup->database_name,
                         'type' => $backup->type,
-                        'name' => 'Pre-Restore Safety Snapshot (' . date('Y-m-d H:i') . ')',
+                        'name' => 'Safety Snapshot (Pre-Restore)',
                         'retention_count' => 0, // don't prune snapshots
-                        'created_by' => 'System Safety Snapshot',
+                        'created_by' => 'Safety Snapshot (Pre-Restore)',
                     ]);
                 } catch (\Exception $snapEx) {
                     Log::warning("Pre-restore snapshot creation failed: " . $snapEx->getMessage());

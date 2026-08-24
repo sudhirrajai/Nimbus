@@ -409,6 +409,13 @@ class BackupService
                 $this->restoreFullArchive($filePath, $domain, $dbName);
             }
 
+            // Update record metadata with restoration history
+            $recordMetadata = $record->metadata ?: [];
+            $recordMetadata['last_restored_at'] = now()->toDateTimeString();
+            $recordMetadata['restored_by'] = auth()->check() ? auth()->user()->email : 'Admin';
+            $recordMetadata['restore_count'] = ($recordMetadata['restore_count'] ?? 0) + 1;
+            $record->update(['metadata' => $recordMetadata]);
+
             // Log activity & send email notification
             \App\Models\ActivityLog::log(
                 'RESTORE_BACKUP',
