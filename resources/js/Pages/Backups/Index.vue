@@ -610,25 +610,23 @@
               <!-- Domain Select -->
               <div class="mb-3" v-if="backupForm.scope === 'domain'">
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select Domain / Website</label>
-                <div class="input-group">
-                  <select v-model="backupForm.domain" class="form-select custom-form-select" required>
-                    <option value="" disabled>-- Select a domain --</option>
-                    <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">
-                      {{ dom.domain }} {{ dom.associated_db ? `(DB: ${dom.associated_db})` : '' }}
-                    </option>
-                  </select>
-                </div>
+                <SearchableSelect v-model="backupForm.domain"
+                                  :items="domains"
+                                  placeholder="Select domain or project..."
+                                  search-placeholder="Search domains & websites..."
+                                  icon="language"
+                                  :required="true" />
               </div>
 
               <!-- Database Select -->
               <div class="mb-3" v-if="backupForm.scope === 'database'">
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select MySQL Database</label>
-                <div class="input-group">
-                  <select v-model="backupForm.database_name" class="form-select custom-form-select" required>
-                    <option value="" disabled>-- Select a database --</option>
-                    <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-                  </select>
-                </div>
+                <SearchableSelect v-model="backupForm.database_name"
+                                  :items="databases"
+                                  placeholder="Select MySQL database..."
+                                  search-placeholder="Search databases..."
+                                  icon="database"
+                                  :required="true" />
               </div>
 
               <!-- Backup Mode / Type Selection (Cards) -->
@@ -725,25 +723,23 @@
               <!-- Domain Select -->
               <div class="mb-3" v-if="scheduleForm.targetType === 'domain'">
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select Domain / Website</label>
-                <div class="input-group">
-                  <select v-model="scheduleForm.domain" class="form-select custom-form-select" required>
-                    <option value="" disabled>-- Select a domain --</option>
-                    <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">
-                      {{ dom.domain }} {{ dom.associated_db ? `(DB: ${dom.associated_db})` : '' }}
-                    </option>
-                  </select>
-                </div>
+                <SearchableSelect v-model="scheduleForm.domain"
+                                  :items="domains"
+                                  placeholder="Select domain or project..."
+                                  search-placeholder="Search domains & websites..."
+                                  icon="language"
+                                  :required="true" />
               </div>
 
               <!-- Database Select -->
               <div class="mb-3" v-if="scheduleForm.targetType === 'database'">
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select MySQL Database</label>
-                <div class="input-group">
-                  <select v-model="scheduleForm.database_name" class="form-select custom-form-select" required>
-                    <option value="" disabled>-- Select a database --</option>
-                    <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-                  </select>
-                </div>
+                <SearchableSelect v-model="scheduleForm.database_name"
+                                  :items="databases"
+                                  placeholder="Select MySQL database..."
+                                  search-placeholder="Search databases..."
+                                  icon="database"
+                                  :required="true" />
               </div>
 
               <!-- Backup Content (Cards) -->
@@ -1041,6 +1037,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
+import SearchableSelect from '@/Components/SearchableSelect.vue'
 
 const props = defineProps({
   backups: { type: Array, default: () => [] },
