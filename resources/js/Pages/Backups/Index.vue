@@ -578,83 +578,87 @@
     <!-- MODAL: CREATE BACKUP NOW -->
     <div class="modal fade" id="modalCreateBackup" tabindex="-1" role="dialog" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title font-weight-bolder">
-              <i class="material-symbols-rounded align-middle me-1 text-primary">cloud_upload</i> Create On-Demand Backup
+        <div class="modal-content shadow-lg border-0">
+          <div class="modal-header bg-gray-100 py-3">
+            <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center mb-0">
+              <i class="material-symbols-rounded text-primary me-2">cloud_upload</i> Create On-Demand Backup
             </h5>
             <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
           <form @submit.prevent="submitCreateBackup">
-            <div class="modal-body">
+            <div class="modal-body p-4">
               
-              <!-- Scope Type Selection -->
+              <!-- Scope Type Selection (Segmented Pill) -->
               <div class="mb-3">
-                <label class="form-label font-weight-bold text-sm">Target Scope</label>
-                <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-sm flex-grow-1"
-                          :class="backupForm.scope === 'domain' ? 'bg-gradient-primary text-white' : 'btn-outline-secondary'"
-                          @click="backupForm.scope = 'domain'">
-                    <i class="material-symbols-rounded text-xs me-1">language</i> Project / Website
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-2">Target Type</label>
+                <div class="btn-group w-100 p-1 bg-gray-100 border-radius-lg" role="group">
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="backupForm.scope === 'domain' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="setBackupScope('domain')">
+                    <i class="material-symbols-rounded text-xs me-1 align-middle">language</i> Website Project
                   </button>
-                  <button type="button" class="btn btn-sm flex-grow-1"
-                          :class="backupForm.scope === 'database' ? 'bg-gradient-primary text-white' : 'btn-outline-secondary'"
-                          @click="backupForm.scope = 'database'">
-                    <i class="material-symbols-rounded text-xs me-1">database</i> Standalone Database
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="backupForm.scope === 'database' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="setBackupScope('database')">
+                    <i class="material-symbols-rounded text-xs me-1 align-middle">database</i> MySQL Database
                   </button>
                 </div>
               </div>
 
               <!-- Domain Select -->
               <div class="mb-3" v-if="backupForm.scope === 'domain'">
-                <label class="form-label font-weight-bold text-sm">Select Website / Domain</label>
-                <select v-model="backupForm.domain" class="form-select" required>
-                  <option value="" disabled>-- Select a domain --</option>
-                  <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">
-                    {{ dom.domain }} {{ dom.associated_db ? `(DB: ${dom.associated_db})` : '' }}
-                  </option>
-                </select>
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select Domain / Website</label>
+                <div class="input-group">
+                  <select v-model="backupForm.domain" class="form-select custom-form-select" required>
+                    <option value="" disabled>-- Select a domain --</option>
+                    <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">
+                      {{ dom.domain }} {{ dom.associated_db ? `(DB: ${dom.associated_db})` : '' }}
+                    </option>
+                  </select>
+                </div>
               </div>
 
               <!-- Database Select -->
               <div class="mb-3" v-if="backupForm.scope === 'database'">
-                <label class="form-label font-weight-bold text-sm">Select MySQL Database</label>
-                <select v-model="backupForm.database_name" class="form-select" required>
-                  <option value="" disabled>-- Select a database --</option>
-                  <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-                </select>
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select MySQL Database</label>
+                <div class="input-group">
+                  <select v-model="backupForm.database_name" class="form-select custom-form-select" required>
+                    <option value="" disabled>-- Select a database --</option>
+                    <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+                  </select>
+                </div>
               </div>
 
-              <!-- Backup Mode / Type Selection -->
+              <!-- Backup Mode / Type Selection (Cards) -->
               <div class="mb-3">
-                <label class="form-label font-weight-bold text-sm">Backup Type</label>
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-2">Backup Content</label>
                 <div class="row g-2">
                   <div class="col-4" v-if="backupForm.scope === 'domain'">
-                    <div class="card card-body p-2 text-center border cursor-pointer h-100"
-                         :class="{ 'border-primary shadow-sm bg-gray-100': backupForm.type === 'full' }"
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': backupForm.type === 'full' }"
                          @click="backupForm.type = 'full'">
                       <i class="material-symbols-rounded text-primary mb-1">inventory_2</i>
-                      <span class="text-xs font-weight-bold">Full (Both)</span>
+                      <span class="text-xs font-weight-bold text-dark">Full (Both)</span>
                       <span class="text-xxs text-muted">DB + Files</span>
                     </div>
                   </div>
                   <div :class="backupForm.scope === 'domain' ? 'col-4' : 'col-6'">
-                    <div class="card card-body p-2 text-center border cursor-pointer h-100"
-                         :class="{ 'border-primary shadow-sm bg-gray-100': backupForm.type === 'database' }"
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': backupForm.type === 'database' }"
                          @click="backupForm.type = 'database'">
                       <i class="material-symbols-rounded text-info mb-1">database</i>
-                      <span class="text-xs font-weight-bold">Database Only</span>
+                      <span class="text-xs font-weight-bold text-dark">Database Only</span>
                       <span class="text-xxs text-muted">SQL dump</span>
                     </div>
                   </div>
                   <div class="col-4" v-if="backupForm.scope === 'domain'">
-                    <div class="card card-body p-2 text-center border cursor-pointer h-100"
-                         :class="{ 'border-primary shadow-sm bg-gray-100': backupForm.type === 'files' }"
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': backupForm.type === 'files' }"
                          @click="backupForm.type = 'files'">
                       <i class="material-symbols-rounded text-secondary mb-1">folder_zip</i>
-                      <span class="text-xs font-weight-bold">Files Only</span>
+                      <span class="text-xs font-weight-bold text-dark">Files Only</span>
                       <span class="text-xxs text-muted">Web root</span>
                     </div>
                   </div>
@@ -662,18 +666,18 @@
               </div>
 
               <!-- Optional Backup Label -->
-              <div class="mb-3">
-                <label class="form-label text-sm">Custom Note / Label (Optional)</label>
-                <input type="text" v-model="backupForm.name" class="form-control px-2 border" placeholder="e.g. Before plugin update">
+              <div class="mb-2">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Custom Note / Label (Optional)</label>
+                <input type="text" v-model="backupForm.name" class="form-control custom-form-input px-3" placeholder="e.g. Before plugin upgrade">
               </div>
 
             </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn bg-gradient-primary" :disabled="isCreatingBackup">
+            <div class="modal-footer bg-gray-100 py-3">
+              <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn bg-gradient-primary mb-0 shadow-primary" :disabled="isCreatingBackup">
                 <span v-if="isCreatingBackup" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">cloud_upload</i>
-                {{ isCreatingBackup ? 'Generating Backup...' : 'Start Backup' }}
+                {{ isCreatingBackup ? 'Generating Archive...' : 'Start Backup Now' }}
               </button>
             </div>
           </form>
@@ -684,10 +688,10 @@
     <!-- MODAL: CREATE / EDIT SCHEDULE -->
     <div class="modal fade" id="modalSchedule" tabindex="-1" role="dialog" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title font-weight-bolder">
-              <i class="material-symbols-rounded align-middle me-1 text-info">alarm</i>
+        <div class="modal-content shadow-lg border-0">
+          <div class="modal-header bg-gray-100 py-3">
+            <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center mb-0">
+              <i class="material-symbols-rounded text-info me-2">alarm</i>
               {{ scheduleForm.id ? 'Edit Automated Schedule' : 'Create Automated Schedule' }}
             </h5>
             <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
@@ -695,89 +699,150 @@
             </button>
           </div>
           <form @submit.prevent="submitScheduleForm">
-            <div class="modal-body">
+            <div class="modal-body p-4">
               <div class="mb-3">
-                <label class="form-label font-weight-bold text-sm">Schedule Name</label>
-                <input type="text" v-model="scheduleForm.name" class="form-control px-2 border" required placeholder="e.g. Daily Website Backup">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Schedule Name</label>
+                <input type="text" v-model="scheduleForm.name" class="form-control custom-form-input px-3" required placeholder="e.g. Daily Production Backup">
               </div>
 
-              <!-- Scope Selection -->
+              <!-- Scope Selection (Segmented Pill) -->
               <div class="mb-3">
-                <label class="form-label font-weight-bold text-sm">Target</label>
-                <select v-model="scheduleForm.targetType" class="form-select mb-2" @change="onScheduleTargetTypeChange">
-                  <option value="domain">Project / Website Domain</option>
-                  <option value="database">MySQL Database</option>
-                </select>
-
-                <select v-if="scheduleForm.targetType === 'domain'" v-model="scheduleForm.domain" class="form-select" required>
-                  <option value="" disabled>-- Select a domain --</option>
-                  <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">{{ dom.domain }}</option>
-                </select>
-
-                <select v-if="scheduleForm.targetType === 'database'" v-model="scheduleForm.database_name" class="form-select" required>
-                  <option value="" disabled>-- Select a database --</option>
-                  <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
-                </select>
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-2">Target Type</label>
+                <div class="btn-group w-100 p-1 bg-gray-100 border-radius-lg" role="group">
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="scheduleForm.targetType === 'domain' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="setScheduleTargetType('domain')">
+                    <i class="material-symbols-rounded text-xs me-1 align-middle">language</i> Website Project
+                  </button>
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="scheduleForm.targetType === 'database' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="setScheduleTargetType('database')">
+                    <i class="material-symbols-rounded text-xs me-1 align-middle">database</i> MySQL Database
+                  </button>
+                </div>
               </div>
 
-              <!-- Type -->
-              <div class="mb-3">
-                <label class="form-label font-weight-bold text-sm">Backup Content</label>
-                <select v-model="scheduleForm.type" class="form-select" required>
-                  <option value="full" v-if="scheduleForm.targetType === 'domain'">Full Backup (Database + Project Files)</option>
-                  <option value="database">Database Dump Only</option>
-                  <option value="files" v-if="scheduleForm.targetType === 'domain'">Project Files Only</option>
-                </select>
-              </div>
-
-              <!-- Frequency & Time -->
-              <div class="row mb-3">
-                <div class="col-6">
-                  <label class="form-label font-weight-bold text-sm">Frequency</label>
-                  <select v-model="scheduleForm.frequency" class="form-select" required>
-                    <option value="hourly">Hourly</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
+              <!-- Domain Select -->
+              <div class="mb-3" v-if="scheduleForm.targetType === 'domain'">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select Domain / Website</label>
+                <div class="input-group">
+                  <select v-model="scheduleForm.domain" class="form-select custom-form-select" required>
+                    <option value="" disabled>-- Select a domain --</option>
+                    <option v-for="dom in domains" :key="dom.domain" :value="dom.domain">
+                      {{ dom.domain }} {{ dom.associated_db ? `(DB: ${dom.associated_db})` : '' }}
+                    </option>
                   </select>
                 </div>
-                <div class="col-6">
-                  <label class="form-label font-weight-bold text-sm">Run Time (24h)</label>
-                  <input type="time" v-model="scheduleForm.time" class="form-control px-2 border" required>
+              </div>
+
+              <!-- Database Select -->
+              <div class="mb-3" v-if="scheduleForm.targetType === 'database'">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Select MySQL Database</label>
+                <div class="input-group">
+                  <select v-model="scheduleForm.database_name" class="form-select custom-form-select" required>
+                    <option value="" disabled>-- Select a database --</option>
+                    <option v-for="db in databases" :key="db" :value="db">{{ db }}</option>
+                  </select>
                 </div>
               </div>
 
-              <!-- Day of week (Weekly) -->
-              <div class="mb-3" v-if="scheduleForm.frequency === 'weekly'">
-                <label class="form-label font-weight-bold text-sm">Day of Week</label>
-                <select v-model="scheduleForm.day_of_week" class="form-select">
-                  <option :value="0">Sunday</option>
-                  <option :value="1">Monday</option>
-                  <option :value="2">Tuesday</option>
-                  <option :value="3">Wednesday</option>
-                  <option :value="4">Thursday</option>
-                  <option :value="5">Friday</option>
-                  <option :value="6">Saturday</option>
-                </select>
-              </div>
-
-              <!-- Retention count -->
+              <!-- Backup Content (Cards) -->
               <div class="mb-3">
-                <label class="form-label font-weight-bold text-sm">Retention Window (Keep last N copies)</label>
-                <input type="number" v-model="scheduleForm.retention_count" class="form-control px-2 border" min="1" max="100" required>
-                <span class="text-xxs text-muted">Older backups exceeding this count will be automatically pruned.</span>
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-2">Backup Content</label>
+                <div class="row g-2">
+                  <div class="col-4" v-if="scheduleForm.targetType === 'domain'">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': scheduleForm.type === 'full' }"
+                         @click="scheduleForm.type = 'full'">
+                      <i class="material-symbols-rounded text-primary mb-1">inventory_2</i>
+                      <span class="text-xs font-weight-bold text-dark">Full (Both)</span>
+                      <span class="text-xxs text-muted">DB + Files</span>
+                    </div>
+                  </div>
+                  <div :class="scheduleForm.targetType === 'domain' ? 'col-4' : 'col-6'">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': scheduleForm.type === 'database' }"
+                         @click="scheduleForm.type = 'database'">
+                      <i class="material-symbols-rounded text-info mb-1">database</i>
+                      <span class="text-xs font-weight-bold text-dark">Database Only</span>
+                      <span class="text-xxs text-muted">SQL dump</span>
+                    </div>
+                  </div>
+                  <div class="col-4" v-if="scheduleForm.targetType === 'domain'">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': scheduleForm.type === 'files' }"
+                         @click="scheduleForm.type = 'files'">
+                      <i class="material-symbols-rounded text-secondary mb-1">folder_zip</i>
+                      <span class="text-xs font-weight-bold text-dark">Files Only</span>
+                      <span class="text-xxs text-muted">Web root</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <!-- Email notification toggle -->
-              <div class="form-check form-switch ps-0 mb-2">
-                <input class="form-check-input ms-0 me-2" type="checkbox" id="emailNotif" v-model="scheduleForm.email_notifications">
-                <label class="form-check-label text-sm" for="emailNotif">Send email alerts on completion / failures</label>
+              <!-- Frequency Selector (Pills) -->
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-2">Frequency</label>
+                <div class="btn-group w-100 p-1 bg-gray-100 border-radius-lg" role="group">
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="scheduleForm.frequency === 'hourly' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="scheduleForm.frequency = 'hourly'">Hourly</button>
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="scheduleForm.frequency === 'daily' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="scheduleForm.frequency = 'daily'">Daily</button>
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="scheduleForm.frequency === 'weekly' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="scheduleForm.frequency = 'weekly'">Weekly</button>
+                  <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                          :class="scheduleForm.frequency === 'monthly' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                          @click="scheduleForm.frequency = 'monthly'">Monthly</button>
+                </div>
+              </div>
+
+              <!-- Run Time & Day -->
+              <div class="row mb-3">
+                <div :class="scheduleForm.frequency === 'weekly' ? 'col-6' : 'col-12'">
+                  <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Execution Time (24h)</label>
+                  <input type="time" v-model="scheduleForm.time" class="form-control custom-form-input px-3" required>
+                </div>
+                <div class="col-6" v-if="scheduleForm.frequency === 'weekly'">
+                  <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Day of Week</label>
+                  <select v-model="scheduleForm.day_of_week" class="form-select custom-form-select">
+                    <option :value="0">Sunday</option>
+                    <option :value="1">Monday</option>
+                    <option :value="2">Tuesday</option>
+                    <option :value="3">Wednesday</option>
+                    <option :value="4">Thursday</option>
+                    <option :value="5">Friday</option>
+                    <option :value="6">Saturday</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Retention Window -->
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Retention Window (Keep last N copies)</label>
+                <input type="number" v-model="scheduleForm.retention_count" class="form-control custom-form-input px-3" min="1" max="100" required>
+                <p class="text-xxs text-muted mb-0 mt-1">Older archives exceeding this threshold are automatically purged to save server disk space.</p>
+              </div>
+
+              <!-- Email notification toggle Card -->
+              <div class="p-3 bg-gray-100 border-radius-lg d-flex align-items-center justify-content-between">
+                <div>
+                  <h6 class="mb-0 text-xs font-weight-bold text-dark d-flex align-items-center">
+                    <i class="material-symbols-rounded text-info text-sm me-1">mail</i> Super Admin Email Alerts
+                  </h6>
+                  <p class="text-xxs text-muted mb-0">Dispatches success and error reports to administrator alert inbox.</p>
+                </div>
+                <div class="form-check form-switch ps-0 mb-0">
+                  <input class="form-check-input ms-0 cursor-pointer" type="checkbox" id="emailNotif" v-model="scheduleForm.email_notifications">
+                </div>
               </div>
 
             </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn bg-gradient-info" :disabled="isSavingSchedule">
+            <div class="modal-footer bg-gray-100 py-3">
+              <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn bg-gradient-info mb-0 shadow-info" :disabled="isSavingSchedule">
                 <span v-if="isSavingSchedule" class="spinner-border spinner-border-sm me-1"></span>
                 {{ scheduleForm.id ? 'Save Changes' : 'Create Schedule' }}
               </button>
@@ -1104,14 +1169,6 @@ const filteredBackups = computed(() => {
   })
 })
 
-const onScheduleTargetTypeChange = () => {
-  if (scheduleForm.value.targetType === 'database') {
-    scheduleForm.value.type = 'database'
-  } else {
-    scheduleForm.value.type = 'full'
-  }
-}
-
 const refreshData = () => {
   isPolling.value = true
   router.reload({
@@ -1371,6 +1428,40 @@ const getDayName = (day) => {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   return days[day] || 'Sunday'
 }
+
+const setScheduleTargetType = (type) => {
+  scheduleForm.value.targetType = type
+  if (type === 'database') {
+    scheduleForm.value.type = 'database'
+    if (!scheduleForm.value.database_name && props.databases.length > 0) {
+      scheduleForm.value.database_name = props.databases[0]
+    }
+  } else {
+    scheduleForm.value.type = 'full'
+    if (!scheduleForm.value.domain && props.domains.length > 0) {
+      scheduleForm.value.domain = props.domains[0].domain
+    }
+  }
+}
+
+const setBackupScope = (scope) => {
+  backupForm.value.scope = scope
+  if (scope === 'database') {
+    backupForm.value.type = 'database'
+    if (!backupForm.value.database_name && props.databases.length > 0) {
+      backupForm.value.database_name = props.databases[0]
+    }
+  } else {
+    backupForm.value.type = 'full'
+    if (!backupForm.value.domain && props.domains.length > 0) {
+      backupForm.value.domain = props.domains[0].domain
+    }
+  }
+}
+
+const onScheduleTargetTypeChange = () => {
+  setScheduleTargetType(scheduleForm.value.targetType)
+}
 </script>
 
 <style scoped>
@@ -1428,5 +1519,35 @@ const getDayName = (day) => {
 }
 .border-success-subtle {
   border-color: #bbf7d0 !important;
+}
+
+.custom-form-input, .custom-form-select {
+  border: 1px solid #d2d6da !important;
+  border-radius: 0.5rem !important;
+  padding: 0.55rem 0.85rem !important;
+  font-size: 0.875rem !important;
+  color: #344767 !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease-in-out;
+}
+.custom-form-input:focus, .custom-form-select:focus {
+  border-color: #1a73e8 !important;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2) !important;
+}
+.selection-card {
+  border: 1px solid #e9ecef !important;
+  border-radius: 0.6rem !important;
+  transition: all 0.2s ease;
+  background: #fff;
+}
+.selection-card:hover {
+  border-color: #adb5bd !important;
+  transform: translateY(-1px);
+}
+.selection-card.active-card {
+  border-color: #1a73e8 !important;
+  background: #f0f7ff !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
 }
 </style>
