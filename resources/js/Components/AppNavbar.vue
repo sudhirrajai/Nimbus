@@ -20,14 +20,63 @@
         </div>
 
         <ul class="navbar-nav d-flex align-items-center justify-content-end">
-          <!-- Live Server Clock Widget -->
-          <li class="nav-item pe-3 d-none d-sm-flex align-items-center">
-            <div class="server-clock-pill d-flex align-items-center px-2 py-1 rounded-3 bg-gray-100 border text-xxs cursor-pointer"
-                 :title="`Server: ${serverFormatted} (${serverTimezone})\nYour Local: ${localFormatted} (${localTimezone})\nDifference: ${timeDiffText}`">
-              <span class="pulse-dot me-1.5"></span>
-              <i class="material-symbols-rounded text-info text-xs me-1">schedule</i>
-              <span class="font-monospace font-weight-bold text-dark me-1">{{ serverTimeDisplay }}</span>
-              <span class="badge badge-xs bg-info-subtle text-info border border-info-subtle px-1">{{ serverTimezoneShort }}</span>
+          <!-- Live Server Clock Capsule -->
+          <li class="nav-item pe-3 d-none d-sm-flex align-items-center position-relative" ref="clockDropdownRef">
+            <div class="server-time-capsule d-flex align-items-center cursor-pointer"
+                 :class="{ 'capsule-active': isClockOpen }"
+                 @click="isClockOpen = !isClockOpen"
+                 title="Click to view Server vs Local Time details">
+              <span class="live-dot"></span>
+              <div class="d-flex align-items-center gap-1">
+                <i class="material-symbols-rounded clock-icon">schedule</i>
+                <span class="time-text">{{ serverTimeDisplay }}</span>
+              </div>
+              <span class="tz-badge">{{ serverTimezoneShort }}</span>
+            </div>
+
+            <!-- Floating Clock Details Popover -->
+            <div v-if="isClockOpen" class="clock-popover shadow-lg border rounded-3 p-3 bg-white position-absolute z-index-modal">
+              <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+                <div class="d-flex align-items-center gap-1.5">
+                  <span class="live-dot"></span>
+                  <span class="text-xs font-weight-bold text-dark">Time Synchronization</span>
+                </div>
+                <span class="badge badge-xs bg-success-subtle text-success">Live Sync</span>
+              </div>
+              
+              <!-- Server Time Card -->
+              <div class="p-2 rounded-2 mb-2 bg-gray-100 border">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-xxs text-secondary text-uppercase font-weight-bold d-flex align-items-center">
+                    <i class="material-symbols-rounded text-xxs me-1 text-primary">dns</i>Linux Server
+                  </span>
+                  <span class="badge badge-xs bg-dark font-monospace text-xxs">{{ serverTimezone }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-baseline">
+                  <span class="font-monospace text-sm font-weight-bolder text-dark">{{ serverTimeDisplay }}</span>
+                  <span class="text-xxs text-muted">{{ serverDateDisplay }}</span>
+                </div>
+              </div>
+
+              <!-- Local Time Card -->
+              <div class="p-2 rounded-2 mb-2 bg-white border">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-xxs text-secondary text-uppercase font-weight-bold d-flex align-items-center">
+                    <i class="material-symbols-rounded text-xxs me-1 text-info">laptop_mac</i>Your Browser
+                  </span>
+                  <span class="badge badge-xs bg-secondary font-monospace text-xxs">{{ localTimezoneShort }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-baseline">
+                  <span class="font-monospace text-sm font-weight-bold text-dark">{{ localTimeDisplay }}</span>
+                  <span class="text-xxs text-muted">{{ localDateDisplay }}</span>
+                </div>
+              </div>
+
+              <!-- Difference note -->
+              <div class="text-xxs text-secondary bg-gray-100 p-2 rounded-2 d-flex align-items-center gap-1.5">
+                <i class="material-symbols-rounded text-info text-xs">info</i>
+                <span>{{ timeDiffText }}</span>
+              </div>
             </div>
           </li>
 
@@ -116,6 +165,9 @@ const userName = computed(() => {
   return page.props.auth?.user?.name || 'Admin'
 })
 
+const isClockOpen = ref(false)
+const clockDropdownRef = ref(null)
+
 // Server Clock State & Sync
 const serverInfo = computed(() => page.props.server_info || {})
 const serverTimezone = computed(() => serverInfo.value.timezone || 'UTC')
@@ -150,10 +202,15 @@ const serverTimeDisplay = computed(() => {
   }
 })
 
-const serverFormatted = computed(() => {
+const serverDateDisplay = computed(() => {
   try {
     const d = new Date(currentTimestamp.value)
-    return d.toLocaleString('en-US', { timeZone: serverTimezone.value, dateStyle: 'short', timeStyle: 'medium' })
+    return d.toLocaleDateString('en-US', {
+      timeZone: serverTimezone.value === 'UTC' ? 'UTC' : serverTimezone.value,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
   } catch (e) {
     return ''
   }
@@ -163,8 +220,27 @@ const localTimezone = computed(() => {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local'
 })
 
-const localFormatted = computed(() => {
-  return new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' })
+const localTimezoneShort = computed(() => {
+  const tz = localTimezone.value
+  const parts = tz.split('/')
+  return parts[parts.length - 1] || tz
+})
+
+const localTimeDisplay = computed(() => {
+  return new Date().toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+})
+
+const localDateDisplay = computed(() => {
+  return new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
 })
 
 const timeDiffText = computed(() => {
@@ -174,11 +250,11 @@ const timeDiffText = computed(() => {
     const localDate = new Date(now.toLocaleString('en-US', { timeZone: localTimezone.value }))
     const diffMs = serverDate - localDate
     const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10
-    if (diffHours === 0) return 'Same as your local time'
+    if (diffHours === 0) return 'Server time is in sync with your local time'
     if (diffHours > 0) return `Server is +${diffHours}h ahead of you`
     return `Server is ${Math.abs(diffHours)}h behind you`
   } catch (e) {
-    return 'Timezone active'
+    return 'Timezone synchronized'
   }
 })
 
@@ -194,6 +270,9 @@ const closeDropdown = () => {
 const handleClickOutside = (event) => {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
     closeDropdown()
+  }
+  if (clockDropdownRef.value && !clockDropdownRef.value.contains(event.target)) {
+    isClockOpen.value = false
   }
 }
 
@@ -304,24 +383,83 @@ const logout = () => {
   z-index: 1039;
 }
 
-.server-clock-pill {
-  border-color: #e5e7eb !important;
-  background-color: #f8fafc !important;
-  transition: all 0.2s ease;
+/* Premium Server Time Capsule */
+.server-time-capsule {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 4px 8px 4px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  gap: 7px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
 }
-.server-clock-pill:hover {
-  background-color: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
+
+.server-time-capsule:hover, .server-time-capsule.capsule-active {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
 }
 
-.pulse-dot {
+.live-dot {
   width: 7px;
   height: 7px;
   background-color: #10b981;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  flex-shrink: 0;
+}
+
+.clock-icon {
+  font-size: 14px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.time-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: -0.01em;
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.tz-badge {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #e2e8f0;
+  line-height: 1.2;
+}
+
+.clock-popover {
+  top: calc(100% + 8px);
+  right: 0;
+  width: 270px;
+  z-index: 1060;
+  border-color: #e2e8f0 !important;
+  animation: popover-slide 0.15s ease-out;
+}
+
+@keyframes popover-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulse-ring {
@@ -330,8 +468,8 @@ const logout = () => {
     transform: scale(1);
   }
   50% {
-    opacity: 0.4;
-    transform: scale(1.2);
+    opacity: 0.5;
+    transform: scale(1.25);
   }
 }
 
@@ -339,6 +477,11 @@ const logout = () => {
   font-size: 0.65rem !important;
   font-weight: 600;
   border-radius: 4px;
+  padding: 2px 6px;
+}
+.bg-success-subtle {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
 }
 .bg-info-subtle {
   background-color: #e0f2fe !important;
