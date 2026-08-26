@@ -361,8 +361,36 @@
 
       <!-- TAB 2: AUTOMATED SCHEDULES -->
       <div v-if="activeTab === 'schedules'" class="row">
+        <!-- Server Time & Timezone Sync Info Card -->
+        <div class="col-12 mb-3">
+          <div class="card border shadow-xs bg-white">
+            <div class="card-body p-3 d-flex align-items-center justify-content-between flex-wrap gap-3">
+              <div class="d-flex align-items-center gap-3">
+                <div class="avatar avatar-sm bg-gradient-info border-radius-md d-flex align-items-center justify-content-center text-white flex-shrink-0">
+                  <i class="material-symbols-rounded">schedule</i>
+                </div>
+                <div>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="text-xs text-secondary font-weight-bold text-uppercase">Linux Server Time:</span>
+                    <span class="badge bg-dark font-monospace text-xs px-2 py-1">{{ liveServerTimeFormatted }}</span>
+                    <span class="badge badge-xs bg-info-subtle text-info border border-info-subtle font-monospace">{{ serverTimezone }}</span>
+                  </div>
+                  <p class="text-xxs text-muted mb-0 mt-1">
+                    Your browser local time: <strong>{{ localTimeFormatted }}</strong> ({{ localTimezone }})
+                    <span v-if="timeDifferenceText" class="text-info font-weight-bold ms-1">&bull; {{ timeDifferenceText }}</span>
+                  </p>
+                </div>
+              </div>
+              <div class="text-xxs text-secondary bg-gray-100 px-3 py-2 border rounded-3 d-flex align-items-center gap-2">
+                <i class="material-symbols-rounded text-warning text-sm">info</i>
+                <div>All backup schedules trigger strictly according to the <strong>Linux Server Clock</strong>.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="col-12">
-          <div class="card my-4">
+          <div class="card my-2">
             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
               <div class="bg-gradient-info shadow-info border-radius-lg pt-4 pb-3 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
@@ -800,6 +828,11 @@
                 <div :class="scheduleForm.frequency === 'weekly' ? 'col-6' : 'col-12'">
                   <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Execution Time (24h)</label>
                   <input type="time" v-model="scheduleForm.time" class="form-control custom-form-input px-3" required>
+                  <div class="text-xxs text-muted mt-1" v-if="scheduleForm.time">
+                    <i class="material-symbols-rounded align-middle text-xxs me-1 text-info">schedule</i>
+                    Runs at <strong>{{ scheduleForm.time }} (Server {{ serverTimezone }})</strong>
+                    <span v-if="localEquivalentTime" class="text-dark font-weight-bold">&bull; Approx <strong>{{ localEquivalentTime }}</strong> in your browser time</span>
+                  </div>
                 </div>
                 <div class="col-6" v-if="scheduleForm.frequency === 'weekly'">
                   <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Day of Week</label>
@@ -1035,9 +1068,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import SearchableSelect from '@/Components/SearchableSelect.vue'
+
+const page = usePage()
 
 const props = defineProps({
   backups: { type: Array, default: () => [] },
@@ -1070,6 +1105,70 @@ const selectedBackupToDelete = ref(null)
 const createSnapshotBeforeRestore = ref(true)
 
 let pollingTimer = null
+let serverClockTimer = null
+
+// Server Clock State & Timezone Sync
+const serverInfo = computed(() => page.props.server_info || {})
+const serverTimezone = computed(() => serverInfo.value.timezone || 'UTC')
+const liveServerTimestamp = ref(Date.now())
+const serverTimeOffset = ref(0)
+
+const updateServerClock = () => {
+  liveServerTimestamp.value = Date.now() + serverTimeOffset.value
+}
+
+const liveServerTimeFormatted = computed(() => {
+  try {
+    const d = new Date(liveServerTimestamp.value)
+    return d.toLocaleString('en-US', {
+      timeZone: serverTimezone.value === 'UTC' ? 'UTC' : serverTimezone.value,
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    })
+  } catch (e) {
+    return new Date(liveServerTimestamp.value).toTimeString().split(' ')[0]
+  }
+})
+
+const localTimezone = computed(() => {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local'
+})
+
+const localTimeFormatted = computed(() => {
+  return new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'medium' })
+})
+
+const timeDifferenceText = computed(() => {
+  try {
+    const now = new Date()
+    const serverDate = new Date(now.toLocaleString('en-US', { timeZone: serverTimezone.value }))
+    const localDate = new Date(now.toLocaleString('en-US', { timeZone: localTimezone.value }))
+    const diffMs = serverDate - localDate
+    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10
+    if (diffHours === 0) return 'Server time matches your local time'
+    if (diffHours > 0) return `Server is +${diffHours}h ahead of you`
+    return `Server is ${Math.abs(diffHours)}h behind you`
+  } catch (e) {
+    return ''
+  }
+})
+
+const localEquivalentTime = computed(() => {
+  if (!scheduleForm.value.time) return ''
+  try {
+    const [h, m] = scheduleForm.value.time.split(':').map(Number)
+    const now = new Date()
+    const nowServerStr = now.toLocaleString('en-US', { timeZone: serverTimezone.value })
+    const nowLocalStr = now.toLocaleString('en-US', { timeZone: localTimezone.value })
+    const diffMs = new Date(nowLocalStr) - new Date(nowServerStr)
+    const d = new Date()
+    d.setHours(h, m, 0, 0)
+    const localTarget = new Date(d.getTime() + diffMs)
+    return localTarget.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  } catch (e) {
+    return ''
+  }
+})
 
 // Forms
 const backupForm = ref({
@@ -1120,6 +1219,15 @@ onMounted(() => {
     scheduleForm.value.database_name = props.databases[0]
   }
 
+  // Sync initial server time offset
+  if (serverInfo.value.timestamp) {
+    const serverMs = serverInfo.value.timestamp * 1000
+    serverTimeOffset.value = serverMs - Date.now()
+  }
+
+  updateServerClock()
+  serverClockTimer = setInterval(updateServerClock, 1000)
+
   // If there's an in-progress backup on load, start polling
   if (activeRunningBackup.value) {
     startPolling()
@@ -1128,6 +1236,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopPolling()
+  if (serverClockTimer) clearInterval(serverClockTimer)
 })
 
 const startPolling = () => {

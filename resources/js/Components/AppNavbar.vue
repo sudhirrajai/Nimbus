@@ -20,6 +20,17 @@
         </div>
 
         <ul class="navbar-nav d-flex align-items-center justify-content-end">
+          <!-- Live Server Clock Widget -->
+          <li class="nav-item pe-3 d-none d-sm-flex align-items-center">
+            <div class="server-clock-pill d-flex align-items-center px-2 py-1 rounded-3 bg-gray-100 border text-xxs cursor-pointer"
+                 :title="`Server: ${serverFormatted} (${serverTimezone})\nYour Local: ${localFormatted} (${localTimezone})\nDifference: ${timeDiffText}`">
+              <span class="pulse-dot me-1.5"></span>
+              <i class="material-symbols-rounded text-info text-xs me-1">schedule</i>
+              <span class="font-monospace font-weight-bold text-dark me-1">{{ serverTimeDisplay }}</span>
+              <span class="badge badge-xs bg-info-subtle text-info border border-info-subtle px-1">{{ serverTimezoneShort }}</span>
+            </div>
+          </li>
+
           <!-- Report Bug Button -->
           <li class="nav-item pe-3">
             <button 
@@ -105,6 +116,72 @@ const userName = computed(() => {
   return page.props.auth?.user?.name || 'Admin'
 })
 
+// Server Clock State & Sync
+const serverInfo = computed(() => page.props.server_info || {})
+const serverTimezone = computed(() => serverInfo.value.timezone || 'UTC')
+const serverTimezoneShort = computed(() => {
+  const tz = serverTimezone.value
+  if (tz === 'UTC') return 'UTC'
+  const parts = tz.split('/')
+  return parts[parts.length - 1] || tz
+})
+
+const currentTimestamp = ref(Date.now())
+const serverTimeOffset = ref(0)
+let clockInterval = null
+
+const updateClock = () => {
+  currentTimestamp.value = Date.now() + serverTimeOffset.value
+}
+
+// Calculate formatted strings
+const serverTimeDisplay = computed(() => {
+  try {
+    const d = new Date(currentTimestamp.value)
+    return d.toLocaleTimeString('en-US', {
+      timeZone: serverTimezone.value === 'UTC' ? 'UTC' : serverTimezone.value,
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  } catch (e) {
+    return new Date(currentTimestamp.value).toTimeString().split(' ')[0]
+  }
+})
+
+const serverFormatted = computed(() => {
+  try {
+    const d = new Date(currentTimestamp.value)
+    return d.toLocaleString('en-US', { timeZone: serverTimezone.value, dateStyle: 'short', timeStyle: 'medium' })
+  } catch (e) {
+    return ''
+  }
+})
+
+const localTimezone = computed(() => {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local'
+})
+
+const localFormatted = computed(() => {
+  return new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' })
+})
+
+const timeDiffText = computed(() => {
+  try {
+    const now = new Date()
+    const serverDate = new Date(now.toLocaleString('en-US', { timeZone: serverTimezone.value }))
+    const localDate = new Date(now.toLocaleString('en-US', { timeZone: localTimezone.value }))
+    const diffMs = serverDate - localDate
+    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10
+    if (diffHours === 0) return 'Same as your local time'
+    if (diffHours > 0) return `Server is +${diffHours}h ahead of you`
+    return `Server is ${Math.abs(diffHours)}h behind you`
+  } catch (e) {
+    return 'Timezone active'
+  }
+})
+
 const toggleDropdown = () => {
   dropdownOpen.value = !dropdownOpen.value
 }
@@ -123,10 +200,20 @@ const handleClickOutside = (event) => {
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   window.closeMobileSidebar = closeSidebar
+
+  // Sync initial server time offset
+  if (serverInfo.value.timestamp) {
+    const serverMs = serverInfo.value.timestamp * 1000
+    serverTimeOffset.value = serverMs - Date.now()
+  }
+
+  updateClock()
+  clockInterval = setInterval(updateClock, 1000)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  if (clockInterval) clearInterval(clockInterval)
 })
 
 const toggleSidebar = () => {
@@ -215,6 +302,50 @@ const logout = () => {
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
   z-index: 1039;
+}
+
+.server-clock-pill {
+  border-color: #e5e7eb !important;
+  background-color: #f8fafc !important;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.server-clock-pill:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  background-color: #10b981;
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.2);
+  }
+}
+
+.badge-xs {
+  font-size: 0.65rem !important;
+  font-weight: 600;
+  border-radius: 4px;
+}
+.bg-info-subtle {
+  background-color: #e0f2fe !important;
+  color: #0284c7 !important;
+}
+.border-info-subtle {
+  border-color: #bae6fd !important;
 }
 </style>
 
