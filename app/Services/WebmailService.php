@@ -364,10 +364,8 @@ class WebmailService
         $isStarred = str_contains($flags, 'F');
         $isDraft = str_contains($flags, 'D');
 
-        // Clean snippet
-        $snippet = strip_tags($bodyPreviewRaw);
-        $snippet = preg_replace('/\s+/', ' ', $snippet);
-        $snippet = mb_substr(trim($snippet), 0, 140);
+        // Clean snippet by stripping MIME boundaries and sub-headers
+        $snippet = $this->cleanSnippetText($bodyPreviewRaw);
 
         // Unique URL-safe ID
         $id = $this->encodeId("{$folder}::{$filename}");
@@ -988,6 +986,54 @@ class WebmailService
         }
 
         return date('m/d/Y', $timestamp);
+    }
+
+    /**
+     * Clean and extract readable text snippet from raw email body preview
+     */
+    protected function cleanSnippetText(string $raw): string
+    {
+        $lines = explode("\n", str_replace("\r", "", $raw));
+        $cleanedLines = [];
+        $skippingHeaders = false;
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if (empty($trimmed)) continue;
+
+            // Skip boundary lines (e.g. --1m-tEDKI or --===============...)
+            if (str_starts_with($trimmed, '--')) {
+                $skippingHeaders = true;
+                continue;
+            }
+
+            // Skip sub-part MIME headers
+            if ($skippingHeaders) {
+                if (preg_match('/^(content-type|content-transfer-encoding|content-disposition|content-id):/i', $trimmed)) {
+                    continue;
+                }
+                // Once we encounter a non-header line, stop skipping
+                $skippingHeaders = false;
+            }
+
+            // Skip leftover MIME headers if any
+            if (preg_match('/^(content-type|content-transfer-encoding|content-disposition|content-id):/i', $trimmed)) {
+                continue;
+            }
+
+            // Decode quoted printable if detected
+            if (str_contains($trimmed, '=')) {
+                $trimmed = quoted_printable_decode($trimmed);
+            }
+
+            $cleanedLines[] = $trimmed;
+        }
+
+        $snippet = implode(' ', $cleanedLines);
+        $snippet = strip_tags($snippet);
+        $snippet = html_entity_decode($snippet, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $snippet = preg_replace('/\s+/', ' ', $snippet);
+        return mb_substr(trim($snippet), 0, 140);
     }
 
     /**
