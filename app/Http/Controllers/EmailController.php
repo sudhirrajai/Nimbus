@@ -1412,12 +1412,12 @@ EMAIL;
     public function getWebmailUrl()
     {
         return response()->json([
-            'url' => '/roundcube'
+            'url' => '/webmail'
         ]);
     }
 
     /**
-     * Generate SSO token for Roundcube auto-login
+     * Generate SSO session for Nimbus native webmail auto-login
      */
     public function webmailLogin(Request $request)
     {
@@ -1426,7 +1426,7 @@ EMAIL;
                 'email' => 'required|email'
             ]);
 
-            $email = $request->input('email');
+            $email = strtolower(trim($request->input('email')));
             $parts = explode('@', $email);
             $domain = $parts[1] ?? '';
 
@@ -1443,25 +1443,12 @@ EMAIL;
                 ], 404);
             }
 
-            // Generate one-time token
-            $token = \Illuminate\Support\Str::random(64);
-            
-            // Store token with email (expires in 60 seconds)
-            $tokenFile = storage_path("app/roundcube_tokens/{$token}.json");
-            $tokenDir = dirname($tokenFile);
-            if (!is_dir($tokenDir)) {
-                mkdir($tokenDir, 0755, true);
-            }
-            
-            file_put_contents($tokenFile, json_encode([
-                'email' => $email,
-                'created_at' => time(),
-                'expires_at' => time() + 60
-            ]));
+            // Store active webmail session
+            session(['webmail_email' => $email]);
 
             return response()->json([
                 'success' => true,
-                'url' => "/roundcube/sso.php?token={$token}"
+                'url' => route('webmail.index', ['account' => $email])
             ]);
         } catch (\Exception $e) {
             return response()->json([

@@ -16,6 +16,7 @@ use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\GitDeploymentController;
 use App\Http\Controllers\ActivationController;
+use App\Http\Controllers\WebmailController;
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -36,6 +37,30 @@ Route::get('/', function () {
 Route::middleware([\App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
     Route::get('/activate', [ActivationController::class, 'index'])->name('activate.index');
     Route::post('/activate', [ActivationController::class, 'activate'])->name('activate.submit');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Webmail Routes (Standalone Login, SSO & In-App Webmail)
+// ═══════════════════════════════════════════════════════════════
+Route::prefix('webmail')->name('webmail.')->group(function () {
+    Route::get('/login', [WebmailController::class, 'showLogin'])->name('login');
+    Route::post('/login', [WebmailController::class, 'login'])->name('login.post');
+    Route::post('/logout', [WebmailController::class, 'logout'])->name('logout');
+    Route::get('/', [WebmailController::class, 'index'])->name('index');
+    Route::post('/sso', [WebmailController::class, 'ssoLogin'])->name('sso');
+    Route::post('/switch-account', [WebmailController::class, 'switchAccount'])->name('switch-account');
+
+    // Webmail AJAX / API
+    Route::prefix('api')->name('api.')->group(function () {
+        Route::get('/folders', [WebmailController::class, 'getFolders'])->name('folders');
+        Route::get('/messages', [WebmailController::class, 'getMessages'])->name('messages');
+        Route::get('/message/{id}', [WebmailController::class, 'getMessage'])->name('message');
+        Route::post('/send', [WebmailController::class, 'sendMessage'])->name('send');
+        Route::post('/flags', [WebmailController::class, 'updateFlags'])->name('flags');
+        Route::post('/move', [WebmailController::class, 'moveMessages'])->name('move');
+        Route::post('/delete', [WebmailController::class, 'deleteMessages'])->name('delete');
+        Route::get('/attachment/{id}/{index}', [WebmailController::class, 'downloadAttachment'])->name('attachment');
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════

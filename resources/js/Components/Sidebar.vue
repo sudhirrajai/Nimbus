@@ -133,6 +133,13 @@
               <span class="nav-link-text ms-1">Email Accounts</span>
             </Link>
           </li>
+
+          <li class="nav-item">
+            <a href="/webmail" target="_blank" class="nav-link" :class="isActive('/webmail')">
+              <i class="material-symbols-rounded opacity-5">mark_email_unread</i>
+              <span class="nav-link-text ms-1">Webmail Client</span>
+            </a>
+          </li>
         </template>
 
         <!-- ═══ AUTOMATION ═══ -->

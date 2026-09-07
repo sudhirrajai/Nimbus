@@ -317,35 +317,25 @@
                       </div>
                     </li>
 
-                    <!-- Roundcube Webmail -->
+                    <!-- Nimbus Native Webmail -->
                     <li class="list-group-item border-0 d-flex justify-content-between ps-0 border-radius-lg align-items-center">
                       <div class="d-flex align-items-center">
                         <div class="icon icon-sm icon-shape bg-gradient-dark shadow text-center border-radius-md me-3 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
-                          <i class="material-symbols-rounded opacity-10 text-white text-xs">web</i>
+                          <i class="material-symbols-rounded opacity-10 text-white text-xs">mark_email_unread</i>
                         </div>
                         <div class="d-flex flex-column">
-                          <h6 class="mb-1 text-dark text-sm font-weight-bold">Roundcube Webmail Client</h6>
-                          <p class="text-xs text-muted mb-0">Interactive web interface to read/send emails</p>
+                          <h6 class="mb-1 text-dark text-sm font-weight-bold">Nimbus Webmail Client</h6>
+                          <p class="text-xs text-muted mb-0">Built-in modern webmail interface with dark/light mode & auto-login</p>
                         </div>
                       </div>
                       <div class="d-flex align-items-center">
-                        <span class="badge badge-sm me-3" :class="status.roundcube.installed ? 'bg-gradient-success' : 'bg-gradient-warning'">
-                          {{ status.roundcube.installed ? 'Installed' : 'Not Configured' }}
+                        <span class="badge badge-sm me-3 bg-gradient-success">
+                          Active & Ready
                         </span>
-                        <button 
-                          v-if="!status.roundcube.installed && isRootOrAdmin" 
-                          class="btn btn-sm bg-gradient-dark mb-0 py-1 px-3"
-                          @click="configureRoundcube"
-                          :disabled="configuringRoundcube"
-                        >
-                          <span v-if="configuringRoundcube" class="spinner-border spinner-border-sm me-1"></span>
-                          Configure Webmail
-                        </button>
                         <a 
-                          v-else-if="status.roundcube.installed"
-                          href="/roundcube" 
+                          href="/webmail" 
                           target="_blank"
-                          class="btn btn-sm btn-outline-dark mb-0 py-1 px-3"
+                          class="btn btn-sm bg-gradient-primary mb-0 py-1 px-3"
                         >
                           Open Webmail
                         </a>
@@ -363,10 +353,10 @@
                 <h6 class="mb-0 font-weight-bold">Webmail Quick Link</h6>
               </div>
               <div class="card-body p-3 d-flex flex-column justify-content-center text-center">
-                <i class="material-symbols-rounded text-primary opacity-3" style="font-size: 64px;">alternate_email</i>
-                <h6 class="text-dark font-weight-bold mt-3">Access Webmail Client</h6>
-                <p class="text-xs text-muted px-3">Log in to check your system email accounts directly from your browser.</p>
-                <a href="/roundcube" target="_blank" class="btn bg-gradient-primary w-100 mb-0 mt-3">
+                <i class="material-symbols-rounded text-primary opacity-3" style="font-size: 64px;">mark_email_unread</i>
+                <h6 class="text-dark font-weight-bold mt-3">Nimbus Webmail Client</h6>
+                <p class="text-xs text-muted px-3">Access your private mailboxes with instant 1-click login and dark/light themes.</p>
+                <a href="/webmail" target="_blank" class="btn bg-gradient-primary w-100 mb-0 mt-3">
                   <i class="material-symbols-rounded text-sm me-1">open_in_new</i> Open Webmail
                 </a>
               </div>
