@@ -266,14 +266,19 @@ class WebmailController extends Controller
     /**
      * Get single full message
      */
-    public function getMessage(Request $request, string $id)
+    public function getMessage(Request $request, ?string $id = null)
     {
         $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
             return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
-        $message = $this->webmail->getMessage($email, $id);
+        $messageId = $id ?: $request->query('id');
+        if (!$messageId) {
+            return response()->json(['error' => 'Message ID is required'], 400);
+        }
+
+        $message = $this->webmail->getMessage($email, $messageId);
         if (!$message) {
             return response()->json(['error' => 'Message not found'], 404);
         }
@@ -407,14 +412,21 @@ class WebmailController extends Controller
     /**
      * Download attachment
      */
-    public function downloadAttachment(Request $request, string $id, int $index)
+    public function downloadAttachment(Request $request, ?string $id = null, ?int $index = null)
     {
         $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
             abort(401, 'Session expired due to inactivity');
         }
 
-        $attachment = $this->webmail->getAttachment($email, $id, $index);
+        $messageId = $id ?: $request->query('id');
+        $attIndex = $index !== null ? $index : (int) $request->query('index', 0);
+
+        if (!$messageId) {
+            abort(400, 'Message ID is required');
+        }
+
+        $attachment = $this->webmail->getAttachment($email, $messageId, $attIndex);
         if (!$attachment) {
             abort(404, 'Attachment not found');
         }

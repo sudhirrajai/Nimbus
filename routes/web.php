@@ -64,13 +64,13 @@ Route::prefix('webmail')->name('webmail.')->group(function () {
     Route::prefix('api')->name('api.')->group(function () {
         Route::get('/folders', [WebmailController::class, 'getFolders'])->name('folders');
         Route::get('/messages', [WebmailController::class, 'getMessages'])->name('messages');
-        Route::get('/message/{id}', [WebmailController::class, 'getMessage'])->name('message');
+        Route::get('/message/{id?}', [WebmailController::class, 'getMessage'])->name('message')->where('id', '.*');
         Route::post('/send', [WebmailController::class, 'sendMessage'])->name('send');
         Route::post('/flags', [WebmailController::class, 'updateFlags'])->name('flags');
         Route::post('/move', [WebmailController::class, 'moveMessages'])->name('move');
         Route::post('/delete', [WebmailController::class, 'deleteMessages'])->name('delete');
         Route::post('/keep-alive', [WebmailController::class, 'keepAlive'])->name('keep-alive');
-        Route::get('/attachment/{id}/{index}', [WebmailController::class, 'downloadAttachment'])->name('attachment');
+        Route::get('/attachment/{id?}/{index?}', [WebmailController::class, 'downloadAttachment'])->name('attachment');
     });
 });
 

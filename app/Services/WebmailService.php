@@ -369,8 +369,8 @@ class WebmailService
         $snippet = preg_replace('/\s+/', ' ', $snippet);
         $snippet = mb_substr(trim($snippet), 0, 140);
 
-        // Unique ID is base64 encoded relative path or hash
-        $id = base64_encode("{$folder}::{$filename}");
+        // Unique URL-safe ID
+        $id = $this->encodeId("{$folder}::{$filename}");
 
         return [
             'id' => $id,
@@ -496,10 +496,41 @@ class WebmailService
                 }
             }
 
-            // Delivery via localhost SMTP / sendmail
-            $transport = Transport::fromDsn('smtp://localhost:25');
-            $mailer = new Mailer($transport);
-            $mailer->send($email);
+            $allRecipients = array_merge($to, $cc, $bcc);
+            $sent = false;
+
+            // Strategy 1: Local EsmtpTransport with AutoTLS disabled (prevents peer certificate CN mismatch on localhost)
+            try {
+                $transport = new \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport('127.0.0.1', 25, false);
+                $transport->setAutoTls(false);
+                $mailer = new Mailer($transport);
+                $mailer->send($email);
+                $sent = true;
+            } catch (\Exception $eTransport) {
+                Log::warning("EsmtpTransport failed, falling back to raw SMTP: " . $eTransport->getMessage());
+            }
+
+            // Strategy 2: Direct raw socket SMTP to Postfix on 127.0.0.1:25
+            if (!$sent) {
+                try {
+                    $this->sendRawSmtp('127.0.0.1', 25, $fromEmail, $allRecipients, $email->toString());
+                    $sent = true;
+                } catch (\Exception $eRaw) {
+                    Log::warning("Raw socket SMTP failed, falling back to sendmail binary: " . $eRaw->getMessage());
+                }
+            }
+
+            // Strategy 3: System sendmail fallback
+            if (!$sent) {
+                try {
+                    $transport = Transport::fromDsn('sendmail://default');
+                    $mailer = new Mailer($transport);
+                    $mailer->send($email);
+                    $sent = true;
+                } catch (\Exception $eSendmail) {
+                    throw new \Exception("All delivery methods failed. SMTP error: " . $eSendmail->getMessage());
+                }
+            }
 
             // Save copy into .Sent folder in Maildir
             $this->saveMessageToFolder($fromEmail, 'Sent', $email->toString(), ['seen' => true]);
@@ -510,26 +541,10 @@ class WebmailService
             ];
         } catch (\Exception $e) {
             Log::error("WebmailService sendEmail error for {$fromEmail}: " . $e->getMessage());
-
-            // Try fallback using sendmail binary
-            try {
-                $transport = Transport::fromDsn('sendmail://default');
-                $mailer = new Mailer($transport);
-                $mailer->send($email);
-
-                $this->saveMessageToFolder($fromEmail, 'Sent', $email->toString(), ['seen' => true]);
-
-                return [
-                    'success' => true,
-                    'message' => 'Email sent successfully via sendmail.'
-                ];
-            } catch (\Exception $e2) {
-                Log::error("WebmailService sendmail fallback error: " . $e2->getMessage());
-                return [
-                    'success' => false,
-                    'error' => 'Failed to send email: ' . $e->getMessage()
-                ];
-            }
+            return [
+                'success' => false,
+                'error' => 'Failed to send email: ' . $e->getMessage()
+            ];
         }
     }
 
@@ -663,11 +678,35 @@ class WebmailService
     }
 
     /**
+     * Encode string to URL-safe base64 ID
+     */
+    public function encodeId(string $str): string
+    {
+        return rtrim(strtr(base64_encode($str), '+/', '-_'), '=');
+    }
+
+    /**
+     * Decode URL-safe or standard base64 ID
+     */
+    public function decodeId(string $str): string
+    {
+        $remainder = strlen($str) % 4;
+        if ($remainder) {
+            $str .= str_repeat('=', 4 - $remainder);
+        }
+        $decoded = @base64_decode(strtr($str, '-_', '+/'));
+        if (!$decoded) {
+            $decoded = @base64_decode($str);
+        }
+        return $decoded ?: '';
+    }
+
+    /**
      * Resolve message ID to physical filepath and folder
      */
     protected function resolveMessageFile(string $email, string $messageId): ?array
     {
-        $decoded = @base64_decode($messageId);
+        $decoded = $this->decodeId($messageId);
         if (!$decoded || !str_contains($decoded, '::')) {
             return null;
         }
@@ -695,6 +734,7 @@ class WebmailService
             if (is_dir("{$folderPath}/{$sub}")) {
                 $files = scandir("{$folderPath}/{$sub}");
                 foreach ($files as $f) {
+                    if ($f === '.' || $f === '..') continue;
                     if (str_starts_with($f, $baseName)) {
                         return [
                             'filepath' => "{$folderPath}/{$sub}/{$f}",
@@ -708,6 +748,71 @@ class WebmailService
         }
 
         return null;
+    }
+
+    /**
+     * Direct raw socket SMTP to localhost Postfix (127.0.0.1:25)
+     */
+    protected function sendRawSmtp(string $host, int $port, string $from, array $recipients, string $rawMessage): bool
+    {
+        $socket = @fsockopen($host, $port, $errno, $errstr, 5);
+        if (!$socket) {
+            throw new \Exception("Could not connect to SMTP server {$host}:{$port} - {$errstr}");
+        }
+
+        $read = fgets($socket, 512);
+        if (!str_starts_with($read, '220')) {
+            fclose($socket);
+            throw new \Exception("SMTP greeting failed: {$read}");
+        }
+
+        fputs($socket, "HELO localhost\r\n");
+        $read = fgets($socket, 512);
+
+        fputs($socket, "MAIL FROM:<{$from}>\r\n");
+        $read = fgets($socket, 512);
+        if (!str_starts_with($read, '250')) {
+            fclose($socket);
+            throw new \Exception("MAIL FROM rejected: {$read}");
+        }
+
+        foreach ($recipients as $rcpt) {
+            $cleanRcpt = trim($rcpt);
+            if (empty($cleanRcpt)) continue;
+            fputs($socket, "RCPT TO:<{$cleanRcpt}>\r\n");
+            $read = fgets($socket, 512);
+            if (!str_starts_with($read, '250')) {
+                fclose($socket);
+                throw new \Exception("RCPT TO rejected for {$cleanRcpt}: {$read}");
+            }
+        }
+
+        fputs($socket, "DATA\r\n");
+        $read = fgets($socket, 512);
+        if (!str_starts_with($read, '354')) {
+            fclose($socket);
+            throw new \Exception("DATA rejected: {$read}");
+        }
+
+        // Normalize line endings and escape leading dots
+        $lines = explode("\n", str_replace("\r\n", "\n", $rawMessage));
+        foreach ($lines as $line) {
+            if (str_starts_with($line, '.')) {
+                $line = '.' . $line;
+            }
+            fputs($socket, $line . "\r\n");
+        }
+
+        fputs($socket, ".\r\n");
+        $read = fgets($socket, 512);
+        if (!str_starts_with($read, '250')) {
+            fclose($socket);
+            throw new \Exception("Message body submission rejected: {$read}");
+        }
+
+        fputs($socket, "QUIT\r\n");
+        fclose($socket);
+        return true;
     }
 
     /**
