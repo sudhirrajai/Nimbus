@@ -40,6 +40,11 @@
           </div>
 
           <form @submit.prevent="submit" class="login-form">
+            <div v-if="timedOut" class="alert alert-warning d-flex align-items-center mb-3" style="background-color: #fff3cd; color: #664d03; border: 1px solid #ffecb5; border-radius: 8px; padding: 10px 14px;">
+              <i class="material-symbols-rounded me-2 text-warning">schedule</i>
+              <span class="text-xs font-weight-bold">Your session timed out due to inactivity. Please log in again.</span>
+            </div>
+
             <div v-if="form.errors.email" class="alert alert-danger">
               <i class="material-symbols-rounded">error</i>
               {{ form.errors.email }}
@@ -102,6 +107,10 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
+
+const props = defineProps({
+  timedOut: Boolean
+});
 
 const showPassword = ref(false);
 

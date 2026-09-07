@@ -11,6 +11,7 @@ use Inertia\Inertia;
 class WebmailController extends Controller
 {
     protected WebmailService $webmail;
+    protected int $sessionTimeoutMinutes = 30; // 30 minutes default inactivity timeout
 
     public function __construct(WebmailService $webmail)
     {
@@ -30,24 +31,32 @@ class WebmailController extends Controller
             $parts = explode('@', $targetEmail);
             $domain = $parts[1] ?? '';
             if ($user->isRoot() || in_array($domain, $user->accessibleDomains())) {
-                session(['webmail_email' => $targetEmail]);
+                session([
+                    'webmail_email' => $targetEmail,
+                    'webmail_last_activity' => time()
+                ]);
             }
         }
 
-        $activeEmail = session('webmail_email');
+        $activeEmail = $this->getActiveEmailWithTimeout($request);
 
         // If no active webmail session but user is logged into Nimbus, auto-pick first mailbox
         if (!$activeEmail && $user) {
             $firstAccount = $this->getFirstAccessibleAccount($user);
             if ($firstAccount) {
                 $activeEmail = $firstAccount;
-                session(['webmail_email' => $activeEmail]);
+                session([
+                    'webmail_email' => $activeEmail,
+                    'webmail_last_activity' => time()
+                ]);
             }
         }
 
         // If still no session, redirect to standalone webmail login
         if (!$activeEmail) {
-            return redirect()->route('webmail.login');
+            $isTimedOut = $request->session()->has('webmail_timed_out');
+            $request->session()->forget('webmail_timed_out');
+            return redirect()->route('webmail.login', $isTimedOut ? ['timeout' => 1] : []);
         }
 
         // Get list of accessible accounts for quick-switcher
@@ -76,20 +85,23 @@ class WebmailController extends Controller
             ],
             'accounts' => $accessibleAccounts,
             'isNimbusUser' => $user !== null,
-            'initialFolders' => $folders
+            'initialFolders' => $folders,
+            'sessionTimeoutMinutes' => $this->sessionTimeoutMinutes
         ]);
     }
 
     /**
      * Standalone Webmail login view
      */
-    public function showLogin()
+    public function showLogin(Request $request)
     {
-        if (session('webmail_email')) {
+        if ($this->getActiveEmailWithTimeout($request)) {
             return redirect()->route('webmail.index');
         }
 
-        return Inertia::render('Webmail/Login');
+        return Inertia::render('Webmail/Login', [
+            'timedOut' => $request->query('timeout') == '1'
+        ]);
     }
 
     /**
@@ -117,7 +129,10 @@ class WebmailController extends Controller
                 return back()->withErrors(['password' => 'Incorrect password.']);
             }
 
-            session(['webmail_email' => $email]);
+            session([
+                'webmail_email' => $email,
+                'webmail_last_activity' => time()
+            ]);
 
             return redirect()->route('webmail.index');
         } catch (\Exception $e) {
@@ -147,7 +162,10 @@ class WebmailController extends Controller
         }
 
         // Set session
-        session(['webmail_email' => $email]);
+        session([
+            'webmail_email' => $email,
+            'webmail_last_activity' => time()
+        ]);
 
         return response()->json([
             'success' => true,
@@ -168,7 +186,10 @@ class WebmailController extends Controller
             $parts = explode('@', $email);
             $domain = $parts[1] ?? '';
             if ($user->isRoot() || in_array($domain, $user->accessibleDomains())) {
-                session(['webmail_email' => $email]);
+                session([
+                    'webmail_email' => $email,
+                    'webmail_last_activity' => time()
+                ]);
                 return response()->json(['success' => true]);
             }
         }
@@ -177,11 +198,25 @@ class WebmailController extends Controller
     }
 
     /**
+     * Heartbeat / Keep-Alive endpoint to refresh inactivity timer
+     */
+    public function keepAlive(Request $request)
+    {
+        $email = $this->getActiveEmailWithTimeout($request);
+        if (!$email) {
+            return response()->json(['error' => 'Session expired', 'timeout' => true], 401);
+        }
+
+        session(['webmail_last_activity' => time()]);
+        return response()->json(['success' => true, 'timestamp' => time()]);
+    }
+
+    /**
      * Logout from Webmail session
      */
     public function logout(Request $request)
     {
-        session()->forget('webmail_email');
+        session()->forget(['webmail_email', 'webmail_last_activity']);
 
         if (auth()->check()) {
             return redirect()->route('email.index');
@@ -197,11 +232,11 @@ class WebmailController extends Controller
     /**
      * Get mailbox folders with unread and total counts
      */
-    public function getFolders()
+    public function getFolders(Request $request)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $folders = $this->webmail->getFolders($email);
@@ -213,9 +248,9 @@ class WebmailController extends Controller
      */
     public function getMessages(Request $request)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $folder = $request->query('folder', 'INBOX');
@@ -233,9 +268,9 @@ class WebmailController extends Controller
      */
     public function getMessage(Request $request, string $id)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $message = $this->webmail->getMessage($email, $id);
@@ -251,9 +286,9 @@ class WebmailController extends Controller
      */
     public function sendMessage(Request $request)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $request->validate([
@@ -299,9 +334,9 @@ class WebmailController extends Controller
      */
     public function updateFlags(Request $request)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $request->validate([
@@ -324,9 +359,9 @@ class WebmailController extends Controller
      */
     public function moveMessages(Request $request)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $request->validate([
@@ -349,9 +384,9 @@ class WebmailController extends Controller
      */
     public function deleteMessages(Request $request)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
         }
 
         $request->validate([
@@ -374,9 +409,9 @@ class WebmailController extends Controller
      */
     public function downloadAttachment(Request $request, string $id, int $index)
     {
-        $email = session('webmail_email');
+        $email = $this->getActiveEmailWithTimeout($request);
         if (!$email) {
-            abort(401);
+            abort(401, 'Session expired due to inactivity');
         }
 
         $attachment = $this->webmail->getAttachment($email, $id, $index);
@@ -398,6 +433,28 @@ class WebmailController extends Controller
     // ─────────────────────────────────────────────────────────────
     // Helper Methods
     // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Retrieve active session email checking inactivity timeout
+     */
+    protected function getActiveEmailWithTimeout(Request $request): ?string
+    {
+        $email = session('webmail_email');
+        if (!$email) {
+            return null;
+        }
+
+        $lastActivity = session('webmail_last_activity');
+        if ($lastActivity && (time() - $lastActivity > ($this->sessionTimeoutMinutes * 60))) {
+            session()->forget(['webmail_email', 'webmail_last_activity']);
+            session(['webmail_timed_out' => true]);
+            return null;
+        }
+
+        // Update activity timestamp
+        session(['webmail_last_activity' => time()]);
+        return $email;
+    }
 
     protected function getFirstAccessibleAccount($user): ?string
     {

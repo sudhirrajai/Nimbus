@@ -350,13 +350,22 @@
           <div class="col-lg-4 mb-4">
             <div class="card h-100 shadow-sm">
               <div class="card-header pb-0 p-3">
-                <h6 class="mb-0 font-weight-bold">Webmail Quick Link</h6>
+                <h6 class="mb-0 font-weight-bold">Webmail Access</h6>
               </div>
-              <div class="card-body p-3 d-flex flex-column justify-content-center text-center">
-                <i class="material-symbols-rounded text-primary opacity-3" style="font-size: 64px;">mark_email_unread</i>
-                <h6 class="text-dark font-weight-bold mt-3">Nimbus Webmail Client</h6>
-                <p class="text-xs text-muted px-3">Access your private mailboxes with instant 1-click login and dark/light themes.</p>
-                <a href="/webmail" target="_blank" class="btn bg-gradient-primary w-100 mb-0 mt-3">
+              <div class="card-body p-3 d-flex flex-column justify-content-between text-center">
+                <div>
+                  <i class="material-symbols-rounded text-primary opacity-3" style="font-size: 56px;">mark_email_unread</i>
+                  <h6 class="text-dark font-weight-bold mt-2">Nimbus Webmail Client</h6>
+                  <p class="text-xs text-muted px-2 mb-2">Access your mailboxes directly without logging into the Nimbus dashboard.</p>
+                  
+                  <div class="bg-gray-100 rounded-2 p-2 mb-2 text-start">
+                    <div class="text-xxs font-weight-bold text-uppercase opacity-7 mb-1">Direct Login URL:</div>
+                    <code class="text-xs text-primary font-weight-bold">/webmail</code>
+                    <div class="text-xxs text-muted mt-1">Or via subdomain: <code>webmail.domain.com</code> / <code>nimbus-mail.domain.com</code></div>
+                  </div>
+                </div>
+
+                <a href="/webmail" target="_blank" class="btn bg-gradient-primary w-100 mb-0 mt-2">
                   <i class="material-symbols-rounded text-sm me-1">open_in_new</i> Open Webmail
                 </a>
               </div>

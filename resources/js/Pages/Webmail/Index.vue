@@ -604,6 +604,28 @@
         </div>
       </div>
     </div>
+
+    <!-- Session Inactivity Warning Modal -->
+    <div v-if="showTimeoutWarning" class="timeout-warning-backdrop">
+      <div class="timeout-warning-card shadow-2xl p-4 text-center">
+        <div class="timeout-icon-circle mx-auto mb-3">
+          <i class="material-symbols-rounded text-warning" style="font-size: 36px;">schedule</i>
+        </div>
+        <h5 class="text-dark font-weight-bold mb-1">Session Inactivity Warning</h5>
+        <p class="text-xs text-muted mb-3">
+          You have been inactive for a while. For your security, your session will automatically expire in 
+          <span class="font-weight-bold text-danger">{{ timeoutCountdown }}s</span>.
+        </p>
+        <div class="d-flex justify-content-center gap-2">
+          <button class="btn bg-gradient-primary btn-sm mb-0 px-4" @click="resetActivityTimer">
+            <i class="material-symbols-rounded text-sm me-1">lock_open</i> Stay Logged In
+          </button>
+          <button class="btn btn-outline-secondary btn-sm mb-0" @click="logout">
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -615,7 +637,11 @@ const props = defineProps({
   currentAccount: Object,
   accounts: Array,
   isNimbusUser: Boolean,
-  initialFolders: Array
+  initialFolders: Array,
+  sessionTimeoutMinutes: {
+    type: Number,
+    default: 30
+  }
 });
 
 // State
@@ -1074,6 +1100,52 @@ const switchMailbox = async (email) => {
   }
 };
 
+// Inactivity Session Timeout
+const timeoutMinutes = computed(() => props.sessionTimeoutMinutes || 30);
+const showTimeoutWarning = ref(false);
+const timeoutCountdown = ref(60);
+let activityTimeout = null;
+let countdownInterval = null;
+let lastKeepAlive = Date.now();
+let axiosInterceptor = null;
+
+const resetActivityTimer = () => {
+  showTimeoutWarning.value = false;
+  clearInterval(countdownInterval);
+  clearTimeout(activityTimeout);
+
+  const warnAfterMs = Math.max(10000, (timeoutMinutes.value * 60 - 60) * 1000);
+  
+  activityTimeout = setTimeout(() => {
+    showTimeoutWarning.value = true;
+    timeoutCountdown.value = 60;
+    countdownInterval = setInterval(() => {
+      timeoutCountdown.value--;
+      if (timeoutCountdown.value <= 0) {
+        clearInterval(countdownInterval);
+        logoutDueToTimeout();
+      }
+    }, 1000);
+  }, warnAfterMs);
+
+  // Keep backend session alive on user action (at most once every 3 minutes)
+  if (Date.now() - lastKeepAlive > 180000) {
+    lastKeepAlive = Date.now();
+    axios.post('/webmail/api/keep-alive').catch(() => {});
+  }
+};
+
+const logoutDueToTimeout = () => {
+  window.location.href = '/webmail/login?timeout=1';
+};
+
+const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+const handleUserInteraction = () => {
+  if (!showTimeoutWarning.value) {
+    resetActivityTimer();
+  }
+};
+
 // Logout
 const logout = async () => {
   try {
@@ -1129,11 +1201,32 @@ onMounted(() => {
   checkTheme();
   window.addEventListener('resize', handleResize);
   loadMessages(1);
+
+  // Setup user activity listeners
+  activityEvents.forEach(evt => window.addEventListener(evt, handleUserInteraction, { passive: true }));
+  resetActivityTimer();
+
+  // Setup Axios 401 interceptor
+  axiosInterceptor = axios.interceptors.response.use(
+    response => response,
+    error => {
+      if (error.response && error.response.status === 401 && error.response.data?.timeout) {
+        logoutDueToTimeout();
+      }
+      return Promise.reject(error);
+    }
+  );
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
   clearTimeout(searchTimer);
+  activityEvents.forEach(evt => window.removeEventListener(evt, handleUserInteraction));
+  clearTimeout(activityTimeout);
+  clearInterval(countdownInterval);
+  if (axiosInterceptor !== null) {
+    axios.interceptors.response.eject(axiosInterceptor);
+  }
 });
 </script>
 
@@ -1880,5 +1973,36 @@ onUnmounted(() => {
   cursor: pointer;
   color: var(--wm-text-muted);
   padding: 0;
+}
+
+/* Timeout Warning Modal */
+.timeout-warning-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 16px;
+}
+
+.timeout-warning-card {
+  width: 100%;
+  max-width: 420px;
+  background-color: var(--wm-surface);
+  border-radius: 16px;
+  border: 1px solid var(--wm-border);
+}
+
+.timeout-icon-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: rgba(255, 193, 7, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

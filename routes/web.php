@@ -28,8 +28,18 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout')->middleware('auth');
 
-// Redirect root to dashboard
-Route::get('/', function () {
+// Redirect root to dashboard (or Webmail if accessed via webmail/mail/nimbus-mail subdomain)
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    $host = strtolower($request->getHost());
+    if (
+        str_starts_with($host, 'webmail.') || 
+        str_starts_with($host, 'nimbus-mail.') || 
+        str_starts_with($host, 'mail.') || 
+        str_contains($host, '.webmail.') ||
+        str_contains($host, 'webmail.nimbus.')
+    ) {
+        return app(\App\Http\Controllers\WebmailController::class)->index($request);
+    }
     return redirect()->route('dashboard');
 });
 
@@ -59,6 +69,7 @@ Route::prefix('webmail')->name('webmail.')->group(function () {
         Route::post('/flags', [WebmailController::class, 'updateFlags'])->name('flags');
         Route::post('/move', [WebmailController::class, 'moveMessages'])->name('move');
         Route::post('/delete', [WebmailController::class, 'deleteMessages'])->name('delete');
+        Route::post('/keep-alive', [WebmailController::class, 'keepAlive'])->name('keep-alive');
         Route::get('/attachment/{id}/{index}', [WebmailController::class, 'downloadAttachment'])->name('attachment');
     });
 });
