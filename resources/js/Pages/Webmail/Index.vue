@@ -509,6 +509,15 @@
 
         <!-- Form Body -->
         <div class="compose-body p-3 d-flex flex-column flex-grow-1">
+          <!-- Compose Error Alert -->
+          <div v-if="composeError" class="alert alert-danger text-white text-xs mb-3 py-2 px-3 rounded-3 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-1.5">
+              <i class="material-symbols-rounded text-sm">error</i>
+              <span>{{ composeError }}</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white text-xs" @click="composeError = ''"></button>
+          </div>
+
           <!-- From Pill -->
           <div class="compose-row mb-2">
             <span class="compose-label">From:</span>
@@ -626,6 +635,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1099; pointer-events: none;">
+      <div 
+        v-if="toast.show" 
+        class="toast show align-items-center border-0 shadow-lg" 
+        :class="toast.type === 'success' ? 'bg-gradient-success text-white' : 'bg-gradient-danger text-white'"
+        role="alert"
+        style="pointer-events: auto; min-width: 280px; border-radius: 10px;"
+      >
+        <div class="d-flex align-items-center justify-content-between p-2">
+          <div class="d-flex align-items-center gap-2 py-1 px-2">
+            <i class="material-symbols-rounded text-base">{{ toast.type === 'success' ? 'check_circle' : 'error' }}</i>
+            <span class="text-xs font-weight-bold">{{ toast.message }}</span>
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" @click="toast.show = false"></button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -683,6 +711,7 @@ const quickReplyBody = ref('');
 const isComposeOpen = ref(false);
 const showCcFields = ref(false);
 const sendingMail = ref(false);
+const composeError = ref('');
 const composeAttachments = ref([]);
 const composeData = ref({
   to: '',
@@ -693,6 +722,22 @@ const composeData = ref({
   isReply: false,
   isForward: false
 });
+
+// Toast Notifications
+const toast = ref({
+  show: false,
+  message: '',
+  type: 'success'
+});
+let toastTimer = null;
+
+const notify = (message, type = 'success') => {
+  clearTimeout(toastTimer);
+  toast.value = { show: true, message, type };
+  toastTimer = setTimeout(() => {
+    toast.value.show = false;
+  }, 4000);
+};
 
 // Computed
 const currentFolderName = computed(() => {
@@ -1026,6 +1071,7 @@ const sendComposedEmail = async () => {
   if (!composeData.value.to) return;
   try {
     sendingMail.value = true;
+    composeError.value = '';
     const formData = new FormData();
     formData.append('to', composeData.value.to);
     if (composeData.value.cc) formData.append('cc', composeData.value.cc);
@@ -1044,13 +1090,20 @@ const sendComposedEmail = async () => {
 
     if (res.data.success) {
       isComposeOpen.value = false;
+      notify('Email sent successfully!', 'success');
       loadFolders();
       if (currentFolder.value === 'Sent') {
         loadMessages(1);
       }
+    } else {
+      const errorMsg = res.data.error || 'Failed to send email. Please check your settings.';
+      composeError.value = errorMsg;
+      notify(errorMsg, 'danger');
     }
   } catch (err) {
-    alert(err.response?.data?.error || 'Failed to send email.');
+    const errorMsg = err.response?.data?.error || err.message || 'Something went wrong while sending email.';
+    composeError.value = errorMsg;
+    notify(errorMsg, 'danger');
   } finally {
     sendingMail.value = false;
   }
@@ -1058,6 +1111,7 @@ const sendComposedEmail = async () => {
 
 const discardCompose = () => {
   isComposeOpen.value = false;
+  composeError.value = '';
 };
 
 // Quick Reply send
@@ -1079,10 +1133,13 @@ const sendQuickReply = async () => {
     if (res.data.success) {
       quickReplyBody.value = '';
       showQuickReply.value = false;
+      notify('Reply sent successfully!', 'success');
       loadFolders();
+    } else {
+      notify(res.data.error || 'Failed to send reply.', 'danger');
     }
   } catch (err) {
-    alert(err.response?.data?.error || 'Failed to send reply.');
+    notify(err.response?.data?.error || err.message || 'Something went wrong while sending reply.', 'danger');
   } finally {
     sendingMail.value = false;
   }

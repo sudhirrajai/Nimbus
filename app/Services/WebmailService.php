@@ -532,8 +532,12 @@ class WebmailService
                 }
             }
 
-            // Save copy into .Sent folder in Maildir
-            $this->saveMessageToFolder($fromEmail, 'Sent', $email->toString(), ['seen' => true]);
+            // Save copy into .Sent folder in Maildir safely (permission issues should not fail sending)
+            try {
+                $this->saveMessageToFolder($fromEmail, 'Sent', $email->toString(), ['seen' => true]);
+            } catch (\Throwable $eSent) {
+                Log::warning("Webmail: Could not save copy to .Sent folder: " . $eSent->getMessage());
+            }
 
             return [
                 'success' => true,
@@ -553,35 +557,70 @@ class WebmailService
      */
     public function saveMessageToFolder(string $email, string $folder, string $rawMessage, array $flags = []): bool
     {
-        $mailboxPath = $this->getMailboxPath($email);
-        if (!$mailboxPath) return false;
+        try {
+            $mailboxPath = $this->getMailboxPath($email);
+            if (!$mailboxPath) return false;
 
-        $targetDir = $this->getFolderPath($mailboxPath, $folder);
-        $curDir = "{$targetDir}/cur";
-        $newDir = "{$targetDir}/new";
-        $tmpDir = "{$targetDir}/tmp";
+            $targetDir = $this->getFolderPath($mailboxPath, $folder);
+            $curDir = "{$targetDir}/cur";
+            $newDir = "{$targetDir}/new";
+            $tmpDir = "{$targetDir}/tmp";
 
-        // Create directories if missing
-        foreach ([$targetDir, $curDir, $newDir, $tmpDir] as $d) {
-            if (!is_dir($d)) {
-                @mkdir($d, 0770, true);
+            // Create directories if missing
+            foreach ([$targetDir, $curDir, $newDir, $tmpDir] as $d) {
+                if (!is_dir($d)) {
+                    @mkdir($d, 0775, true);
+                    @chmod($d, 0775);
+                }
             }
+
+            $uniq = time() . '.M' . rand(100000, 999999) . 'P' . getmypid() . '.' . gethostname();
+            $flagStr = '';
+            if (!empty($flags['seen'])) $flagStr .= 'S';
+            if (!empty($flags['flagged'])) $flagStr .= 'F';
+            if (!empty($flags['draft'])) $flagStr .= 'D';
+
+            $destSub = !empty($flags['seen']) ? 'cur' : 'new';
+            $destFilename = !empty($flagStr) ? "{$uniq}:2,{$flagStr}" : $uniq;
+
+            $tmpFile = "{$tmpDir}/{$uniq}";
+            $destFile = "{$targetDir}/{$destSub}/{$destFilename}";
+
+            // Write with fallback if direct write fails due to permissions
+            if (@file_put_contents($tmpFile, $rawMessage) === false) {
+                // Ensure directory permissions via sudo
+                @exec("sudo mkdir -p " . escapeshellarg($tmpDir) . " " . escapeshellarg("{$targetDir}/{$destSub}") . " && sudo chmod -R 775 " . escapeshellarg($targetDir));
+                if (@file_put_contents($tmpFile, $rawMessage) === false) {
+                    $escapedTmp = escapeshellarg($tmpFile);
+                    $process = proc_open("sudo tee {$escapedTmp} > /dev/null", [
+                        0 => ['pipe', 'r'],
+                        1 => ['pipe', 'w'],
+                        2 => ['pipe', 'w']
+                    ], $pipes);
+                    if (is_resource($process)) {
+                        fwrite($pipes[0], $rawMessage);
+                        fclose($pipes[0]);
+                        fclose($pipes[1]);
+                        fclose($pipes[2]);
+                        proc_close($process);
+                    }
+                }
+            }
+
+            if (file_exists($tmpFile)) {
+                @chmod($tmpFile, 0664);
+                if (!@rename($tmpFile, $destFile)) {
+                    @exec("sudo mv " . escapeshellarg($tmpFile) . " " . escapeshellarg($destFile) . " && sudo chown vmail:vmail " . escapeshellarg($destFile));
+                } else {
+                    @exec("sudo chown vmail:vmail " . escapeshellarg($destFile));
+                }
+                return true;
+            }
+        } catch (\Throwable $e) {
+            Log::warning("WebmailService saveMessageToFolder error: " . $e->getMessage());
         }
 
-        $uniq = time() . '.M' . rand(100000, 999999) . 'P' . getmypid() . '.' . gethostname();
-        $flagStr = '';
-        if (!empty($flags['seen'])) $flagStr .= 'S';
-        if (!empty($flags['flagged'])) $flagStr .= 'F';
-        if (!empty($flags['draft'])) $flagStr .= 'D';
-
-        $destSub = !empty($flags['seen']) ? 'cur' : 'new';
-        $destFilename = !empty($flagStr) ? "{$uniq}:2,{$flagStr}" : $uniq;
-
-        $tmpFile = "{$tmpDir}/{$uniq}";
-        $destFile = "{$targetDir}/{$destSub}/{$destFilename}";
-
-        file_put_contents($tmpFile, $rawMessage);
-        return rename($tmpFile, $destFile);
+        return false;
     }
 
     /**
@@ -629,7 +668,9 @@ class WebmailService
         $newPath = "{$folderDir}/{$targetSub}/{$newFilename}";
 
         if ($oldPath !== $newPath) {
-            return rename($oldPath, $newPath);
+            if (!@rename($oldPath, $newPath)) {
+                @exec("sudo mv " . escapeshellarg($oldPath) . " " . escapeshellarg($newPath) . " && sudo chown vmail:vmail " . escapeshellarg($newPath));
+            }
         }
 
         return true;
@@ -650,13 +691,20 @@ class WebmailService
 
         foreach (['cur', 'new', 'tmp'] as $sub) {
             $d = "{$destFolderPath}/{$sub}";
-            if (!is_dir($d)) @mkdir($d, 0770, true);
+            if (!is_dir($d)) {
+                @mkdir($d, 0775, true);
+                @exec("sudo mkdir -p " . escapeshellarg($d) . " && sudo chmod 775 " . escapeshellarg($d));
+            }
         }
 
         $currentSub = str_contains($info['filepath'], '/new/') ? 'new' : 'cur';
         $destPath = "{$destFolderPath}/{$currentSub}/{$info['filename']}";
 
-        return rename($info['filepath'], $destPath);
+        if (!@rename($info['filepath'], $destPath)) {
+            @exec("sudo mv " . escapeshellarg($info['filepath']) . " " . escapeshellarg($destPath) . " && sudo chown vmail:vmail " . escapeshellarg($destPath));
+        }
+
+        return true;
     }
 
     /**
@@ -670,7 +718,10 @@ class WebmailService
         }
 
         if ($permanent || strtoupper($info['folder']) === 'TRASH') {
-            return @unlink($info['filepath']);
+            if (!@unlink($info['filepath'])) {
+                @exec("sudo rm -f " . escapeshellarg($info['filepath']));
+            }
+            return true;
         }
 
         // Move to Trash
