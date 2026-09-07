@@ -551,6 +551,67 @@ class WebmailService
     }
 
     /**
+     * Save message as a draft in .Drafts folder
+     */
+    public function saveDraft(string $fromEmail, array $data, ?string $existingDraftId = null): array
+    {
+        try {
+            $email = new Email();
+            $email->from(new Address($fromEmail));
+
+            $toAddresses = $this->parseInputAddresses($data['to'] ?? '');
+            if (!empty($toAddresses)) {
+                $email->to(...$toAddresses);
+            }
+
+            if (!empty($data['cc'])) {
+                $ccAddresses = $this->parseInputAddresses($data['cc']);
+                if (!empty($ccAddresses)) $email->cc(...$ccAddresses);
+            }
+
+            if (!empty($data['bcc'])) {
+                $bccAddresses = $this->parseInputAddresses($data['bcc']);
+                if (!empty($bccAddresses)) $email->bcc(...$bccAddresses);
+            }
+
+            $email->subject($data['subject'] ?? '(No Subject)');
+
+            if (!empty($data['bodyHtml'])) {
+                $email->html($data['bodyHtml']);
+            }
+            if (!empty($data['bodyText'])) {
+                $email->text($data['bodyText']);
+            }
+
+            // If updating an existing draft, delete the old file
+            if ($existingDraftId) {
+                $this->deleteMessage($fromEmail, $existingDraftId, true);
+            }
+
+            // Save to .Drafts folder with 'seen' and 'draft' flags
+            $saved = $this->saveMessageToFolder($fromEmail, 'Drafts', $email->toString(), ['seen' => true, 'draft' => true]);
+
+            if ($saved) {
+                return [
+                    'success' => true,
+                    'message' => 'Draft saved successfully.'
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => 'Could not save draft.'
+            ];
+        } catch (\Throwable $e) {
+            Log::error("WebmailService saveDraft error for {$fromEmail}: " . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => 'Failed to save draft: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Save raw email message into specific folder (e.g. Sent, Drafts)
      */
     public function saveMessageToFolder(string $email, string $folder, string $rawMessage, array $flags = []): bool

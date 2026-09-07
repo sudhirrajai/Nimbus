@@ -328,10 +328,38 @@ class WebmailController extends Controller
         $res = $this->webmail->sendEmail($email, $data, $attachments);
 
         if ($res['success']) {
+            if ($request->filled('draftId')) {
+                $this->webmail->deleteMessage($email, $request->input('draftId'), true);
+            }
             return response()->json($res);
         }
 
         return response()->json($res, 500);
+    }
+
+    /**
+     * Save draft in .Drafts folder
+     */
+    public function saveDraft(Request $request)
+    {
+        $email = $this->getActiveEmailWithTimeout($request);
+        if (!$email) {
+            return response()->json(['error' => 'Session expired due to inactivity', 'timeout' => true], 401);
+        }
+
+        $data = [
+            'to' => $request->input('to', ''),
+            'cc' => $request->input('cc', ''),
+            'bcc' => $request->input('bcc', ''),
+            'subject' => $request->input('subject', '(No Subject)'),
+            'bodyHtml' => $request->input('bodyHtml', ''),
+            'bodyText' => $request->input('bodyText', '')
+        ];
+
+        $existingDraftId = $request->input('draftId');
+        $res = $this->webmail->saveDraft($email, $data, $existingDraftId);
+
+        return response()->json($res, $res['success'] ? 200 : 500);
     }
 
     /**

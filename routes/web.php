@@ -66,6 +66,7 @@ Route::prefix('webmail')->name('webmail.')->group(function () {
         Route::get('/messages', [WebmailController::class, 'getMessages'])->name('messages');
         Route::get('/message/{id?}', [WebmailController::class, 'getMessage'])->name('message')->where('id', '.*');
         Route::post('/send', [WebmailController::class, 'sendMessage'])->name('send');
+        Route::post('/draft', [WebmailController::class, 'saveDraft'])->name('draft');
         Route::post('/flags', [WebmailController::class, 'updateFlags'])->name('flags');
         Route::post('/move', [WebmailController::class, 'moveMessages'])->name('move');
         Route::post('/delete', [WebmailController::class, 'deleteMessages'])->name('delete');

@@ -599,6 +599,18 @@
               <span>Send Message</span>
             </button>
 
+            <!-- Save as Draft Button -->
+            <button 
+              class="btn btn-outline-secondary btn-sm mb-0 d-flex align-items-center gap-1.5 px-3 py-2" 
+              :disabled="savingDraft || (!composeData.bodyText && !composeData.subject && !composeData.to)" 
+              @click="saveCurrentDraft"
+              title="Save as Draft (Ctrl+S)"
+            >
+              <span v-if="savingDraft" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="material-symbols-rounded text-sm">save</i>
+              <span>Save Draft</span>
+            </button>
+
             <!-- File Upload Input -->
             <label class="btn btn-outline-secondary btn-sm mb-0 d-flex align-items-center gap-1 cursor-pointer">
               <i class="material-symbols-rounded text-sm">attach_file</i>
@@ -711,6 +723,7 @@ const quickReplyBody = ref('');
 const isComposeOpen = ref(false);
 const showCcFields = ref(false);
 const sendingMail = ref(false);
+const savingDraft = ref(false);
 const composeError = ref('');
 const composeAttachments = ref([]);
 const composeData = ref({
@@ -719,6 +732,7 @@ const composeData = ref({
   bcc: '',
   subject: '',
   bodyText: '',
+  draftId: null,
   isReply: false,
   isForward: false
 });
@@ -872,7 +886,23 @@ const openMessage = async (msg) => {
     const res = await axios.get('/webmail/api/message', {
       params: { id: msg.id }
     });
-    selectedMessage.value = res.data.message;
+    const message = res.data.message;
+
+    // If opened from Drafts folder or is a draft, open directly in Compose Editor!
+    if (currentFolder.value === 'Drafts' || msg.isDraft || msg.folder === 'Drafts') {
+      loadingMessageDetails.value = false;
+      openComposeModal({
+        to: message.to?.map(x => x.address).join(', ') || '',
+        cc: message.cc?.map(x => x.address).join(', ') || '',
+        bcc: message.bcc?.map(x => x.address).join(', ') || '',
+        subject: message.subject || '',
+        bodyText: message.bodyText || '',
+        draftId: msg.id
+      });
+      return;
+    }
+
+    selectedMessage.value = message;
     msg.isRead = true;
     
     // Decrement unread in folder counter locally
@@ -1009,12 +1039,55 @@ const openComposeModal = (prefill = {}) => {
     bcc: prefill.bcc || '',
     subject: prefill.subject || '',
     bodyText: prefill.bodyText || '',
+    draftId: prefill.draftId || null,
     isReply: prefill.isReply || false,
     isForward: prefill.isForward || false
   };
   composeAttachments.value = [];
+  composeError.value = '';
   showCcFields.value = !!(prefill.cc || prefill.bcc);
   isComposeOpen.value = true;
+};
+
+const saveCurrentDraft = async () => {
+  if (!composeData.value.bodyText && !composeData.value.subject && !composeData.value.to) {
+    return;
+  }
+
+  try {
+    savingDraft.value = true;
+    composeError.value = '';
+
+    const payload = {
+      to: composeData.value.to,
+      cc: composeData.value.cc,
+      bcc: composeData.value.bcc,
+      subject: composeData.value.subject || '(No Subject)',
+      bodyText: composeData.value.bodyText,
+      bodyHtml: composeData.value.bodyText ? composeData.value.bodyText.replace(/\n/g, '<br>') : '',
+      draftId: composeData.value.draftId || null
+    };
+
+    const res = await axios.post('/webmail/api/draft', payload);
+
+    if (res.data.success) {
+      notify('Draft saved to Drafts folder', 'success');
+      loadFolders();
+      if (currentFolder.value === 'Drafts') {
+        loadMessages(1);
+      }
+    } else {
+      const errorMsg = res.data.error || 'Failed to save draft.';
+      composeError.value = errorMsg;
+      notify(errorMsg, 'danger');
+    }
+  } catch (err) {
+    const errorMsg = err.response?.data?.error || err.message || 'Something went wrong while saving draft.';
+    composeError.value = errorMsg;
+    notify(errorMsg, 'danger');
+  } finally {
+    savingDraft.value = false;
+  }
 };
 
 const replyToMessage = (isReplyAll = false) => {
@@ -1079,6 +1152,9 @@ const sendComposedEmail = async () => {
     formData.append('subject', composeData.value.subject);
     formData.append('bodyText', composeData.value.bodyText);
     formData.append('bodyHtml', composeData.value.bodyText.replace(/\n/g, '<br>'));
+    if (composeData.value.draftId) {
+      formData.append('draftId', composeData.value.draftId);
+    }
 
     composeAttachments.value.forEach(file => {
       formData.append('attachments[]', file);
@@ -1092,7 +1168,7 @@ const sendComposedEmail = async () => {
       isComposeOpen.value = false;
       notify('Email sent successfully!', 'success');
       loadFolders();
-      if (currentFolder.value === 'Sent') {
+      if (currentFolder.value === 'Sent' || currentFolder.value === 'Drafts') {
         loadMessages(1);
       }
     } else {
@@ -1109,7 +1185,20 @@ const sendComposedEmail = async () => {
   }
 };
 
-const discardCompose = () => {
+const discardCompose = async () => {
+  if (composeData.value.draftId) {
+    try {
+      await axios.post('/webmail/api/delete', {
+        messageIds: [composeData.value.draftId],
+        permanent: true
+      });
+      notify('Draft discarded', 'success');
+      loadFolders();
+      if (currentFolder.value === 'Drafts') loadMessages(1);
+    } catch (e) {
+      console.error(e);
+    }
+  }
   isComposeOpen.value = false;
   composeError.value = '';
 };
