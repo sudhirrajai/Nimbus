@@ -25,9 +25,9 @@
             v-model="searchQuery" 
             @input="debounceSearch" 
             placeholder="Search mail by sender, subject, or content..." 
-            class="form-control search-input"
+            class="search-control"
           />
-          <button v-if="searchQuery" class="btn-clear-search" @click="clearSearch">
+          <button v-if="searchQuery" class="btn-clear-search" @click="clearSearch" type="button" title="Clear search">
             <i class="material-symbols-rounded text-sm">close</i>
           </button>
         </div>
@@ -1208,47 +1208,68 @@ onUnmounted(() => {
 }
 
 /* Search Bar */
-.search-input-group {
-  position: relative;
+.search-bar-wrapper {
   max-width: 600px;
 }
 
-.search-input {
+.search-input-group {
+  display: flex;
+  align-items: center;
+  position: relative;
   background-color: var(--wm-surface-subtle);
-  border: 1px solid transparent;
+  border: 1px solid var(--wm-border);
   border-radius: 20px;
-  padding: 7px 36px 7px 38px;
-  font-size: 0.875rem;
-  color: var(--wm-text);
-  transition: all 0.2s;
+  padding: 4px 12px 4px 14px;
+  transition: all 0.2s ease;
 }
 
-.search-input:focus {
+.search-input-group:focus-within {
   background-color: var(--wm-surface);
   border-color: var(--wm-primary);
   box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.15);
 }
 
 .search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   color: var(--wm-text-muted);
-  font-size: 18px;
-  pointer-events: none;
+  font-size: 20px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.search-control {
+  width: 100%;
+  height: 32px;
+  border: none !important;
+  background: transparent !important;
+  color: var(--wm-text) !important;
+  font-size: 0.875rem !important;
+  outline: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.search-control::placeholder {
+  color: var(--wm-text-muted);
+  opacity: 0.8;
 }
 
 .btn-clear-search {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   border: none;
   background: transparent;
   color: var(--wm-text-muted);
   cursor: pointer;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+.btn-clear-search:hover {
+  color: var(--wm-text);
 }
 
 /* Theme Toggle & Controls */
