@@ -824,7 +824,9 @@ const openMessage = async (msg) => {
     showQuickReply.value = false;
     quickReplyBody.value = '';
     
-    const res = await axios.get(`/webmail/api/message/${encodeURIComponent(msg.id)}`);
+    const res = await axios.get('/webmail/api/message', {
+      params: { id: msg.id }
+    });
     selectedMessage.value = res.data.message;
     msg.isRead = true;
     
@@ -951,7 +953,7 @@ const deleteSingleMessage = async (msg) => {
 
 // Attachments
 const downloadAttachment = (messageId, index) => {
-  window.open(`/webmail/api/attachment/${encodeURIComponent(messageId)}/${index}`, '_blank');
+  window.open(`/webmail/api/attachment?id=${encodeURIComponent(messageId)}&index=${index}`, '_blank');
 };
 
 // Compose Actions
