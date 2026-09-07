@@ -6,12 +6,12 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
               <h4 class="font-weight-bolder mb-0">DNS Management</h4>
               <p class="mb-0 text-sm">Manage DNS records via Cloudflare</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
               <button class="btn btn-outline-info mb-0" @click="showGuideModal = true">
                 <i class="material-symbols-rounded text-sm me-1">help</i>
                 Guide
@@ -40,10 +40,10 @@
       <div class="row" v-if="!selectedDomain">
         <div class="col-12">
           <div class="card">
-            <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+            <div class="card-header pb-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
               <h6 class="mb-0">Select a Domain</h6>
-              <div class="ms-md-auto pe-md-3 d-flex align-items-center">
-                <div class="input-group input-group-sm">
+              <div class="d-flex align-items-center">
+                <div class="input-group input-group-sm" style="min-width: 160px; max-width: 250px;">
                   <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                   <input v-model="domainSearchQuery" type="text" class="form-control" placeholder="Search domains...">
                 </div>

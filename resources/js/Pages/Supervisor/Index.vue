@@ -7,8 +7,8 @@
                 <div class="col-12">
                     <div class="card bg-gradient-dark">
                         <div class="card-body p-3">
-                            <div class="row">
-                                <div class="col-8">
+                            <div class="row align-items-center">
+                                <div class="col-12 col-md-8 mb-2 mb-md-0">
                                     <div class="numbers">
                                         <p class="text-white text-sm mb-0 text-uppercase font-weight-bold opacity-7">
                                             Process Manager</p>
@@ -17,8 +17,8 @@
                                         </h5>
                                     </div>
                                 </div>
-                                <div class="col-4 text-end">
-                                    <div class="icon icon-shape bg-white shadow text-center rounded-circle">
+                                <div class="col-12 col-md-4 text-md-end text-start">
+                                    <div class="icon icon-shape bg-white shadow text-center rounded-circle d-inline-flex align-items-center justify-content-center">
                                         <i class="material-symbols-rounded text-dark text-lg opacity-10">memory</i>
                                     </div>
                                 </div>
@@ -152,10 +152,10 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
-                            <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+                            <div class="card-header pb-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
                                 <h6 class="mb-0">Supervisor Configurations</h6>
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="input-group input-group-sm" style="width: 250px;">
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <div class="input-group input-group-sm" style="min-width: 180px; max-width: 250px;">
                                         <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                                         <input v-model="searchQuery" type="text" class="form-control" placeholder="Search processes or groups...">
                                     </div>

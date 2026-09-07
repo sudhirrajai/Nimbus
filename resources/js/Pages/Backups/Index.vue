@@ -11,7 +11,7 @@
               <h4 class="font-weight-bolder mb-0">Backups & Disaster Recovery</h4>
               <p class="mb-0 text-sm">Automated scheduling, on-demand snapshots, and one-click restore for databases & files</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
               <button class="btn btn-outline-secondary mb-0" @click="refreshData" :disabled="isPolling">
                 <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-icon': isPolling }">refresh</i>
                 Refresh

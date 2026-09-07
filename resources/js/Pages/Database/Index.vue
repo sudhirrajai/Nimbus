@@ -6,12 +6,12 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
               <h4 class="font-weight-bolder mb-0">Database Management</h4>
               <p class="mb-0 text-sm">Manage MySQL databases, users, and Nimbus DB</p>
             </div>
-            <div class="d-flex gap-2" v-if="status.viewerInstalled">
+            <div class="d-flex flex-wrap gap-2" v-if="status.viewerInstalled">
               <button class="btn btn-outline-warning mb-0" @click="reinstallDatabaseViewer" :disabled="reinstalling">
                 <span v-if="reinstalling" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">refresh</i>

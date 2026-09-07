@@ -8,11 +8,11 @@
       <div class="card bg-gradient-dark">
         <div class="card-body p-3">
           <div class="row align-items-center">
-            <div class="col-8">
+            <div class="col-12 col-md-8 mb-2 mb-md-0">
               <h4 class="text-white mb-0"><i class="material-symbols-rounded me-2">group</i>User Management</h4>
               <p class="text-white text-sm mb-0 opacity-8">Manage panel users, roles, and website access</p>
             </div>
-            <div class="col-4 text-end">
+            <div class="col-12 col-md-4 text-md-end text-start">
               <button class="btn btn-sm bg-gradient-success mb-0" @click="openCreateModal">
                 <i class="material-symbols-rounded text-sm me-1">person_add</i> Add User
               </button>
@@ -47,10 +47,10 @@
     <div class="col-12">
       <div class="card">
         <div class="card-header pb-0">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h6 class="mb-0"><i class="material-symbols-rounded text-sm me-1">people</i> Panel Users</h6>
-            <div class="d-flex align-items-center gap-3">
-              <div class="input-group input-group-sm" style="width: 250px;">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <div class="input-group input-group-sm" style="min-width: 180px; max-width: 250px;">
                 <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                 <input v-model="searchQuery" type="text" class="form-control" placeholder="Search users by name or email...">
               </div>

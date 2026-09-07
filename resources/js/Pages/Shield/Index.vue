@@ -2,12 +2,12 @@
     <MainLayout>
         <div class="container-fluid py-4 bg-gray-100 min-vh-100">
             <!-- Header Section -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
                 <div>
                     <h3 class="font-weight-bolder mb-0">Nimbus Shield</h3>
                     <p class="text-sm mb-0 text-secondary">Advanced real-time protection & firewall management.</p>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex flex-wrap gap-2">
                     <div v-if="scanning" class="d-flex align-items-center me-3">
                         <div class="spinner-grow text-primary spinner-grow-sm me-2" role="status"></div>
                         <span class="text-xs font-weight-bold text-primary">System Scan in Progress...</span>
