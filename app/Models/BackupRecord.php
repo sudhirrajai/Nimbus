@@ -11,6 +11,7 @@ class BackupRecord extends Model
 
     protected $fillable = [
         'schedule_id',
+        'destination_id',
         'domain',
         'database_name',
         'type',
@@ -18,6 +19,9 @@ class BackupRecord extends Model
         'file_path',
         'size_bytes',
         'storage_driver',
+        'remote_status',
+        'remote_path',
+        'remote_error',
         'status',
         'error_message',
         'checksum',
@@ -35,6 +39,11 @@ class BackupRecord extends Model
     public function schedule(): BelongsTo
     {
         return $this->belongsTo(BackupSchedule::class, 'schedule_id');
+    }
+
+    public function destination(): BelongsTo
+    {
+        return $this->belongsTo(BackupDestination::class, 'destination_id');
     }
 
     public function getFormattedSizeAttribute(): string

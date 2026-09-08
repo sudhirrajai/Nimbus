@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\BackupDestination;
 use App\Models\BackupRecord;
 use App\Models\BackupSchedule;
 use App\Models\NimbusDatabase;
 use App\Models\UserWebsite;
 use App\Services\BackupService;
+use App\Services\Storage\BackupStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -30,8 +32,21 @@ class BackupController extends Controller
         $user = auth()->user();
         $isRoot = $user->isRootOrAdmin();
 
+        // Ensure default local destination exists
+        if (BackupDestination::count() === 0) {
+            BackupDestination::create([
+                'name' => 'Local Server Storage',
+                'driver' => 'local',
+                'is_default' => true,
+                'is_active' => true,
+                'credentials' => [],
+                'last_test_status' => 'success',
+                'last_tested_at' => now(),
+            ]);
+        }
+
         // 1. Fetch Backups
-        $backupsQuery = BackupRecord::with('schedule')->orderBy('created_at', 'desc');
+        $backupsQuery = BackupRecord::with(['schedule', 'destination'])->orderBy('created_at', 'desc');
         if (!$isRoot) {
             $accessibleDomains = $user->accessibleDomains();
             $backupsQuery->where(function ($q) use ($accessibleDomains) {
@@ -44,6 +59,8 @@ class BackupController extends Controller
                 'id' => $b->id,
                 'schedule_id' => $b->schedule_id,
                 'schedule_name' => $b->schedule?->name,
+                'destination_id' => $b->destination_id,
+                'destination_name' => $b->destination?->name,
                 'domain' => $b->domain,
                 'database_name' => $b->database_name,
                 'type' => $b->type,
@@ -52,6 +69,9 @@ class BackupController extends Controller
                 'size_bytes' => $b->size_bytes,
                 'formatted_size' => $b->formatted_size,
                 'storage_driver' => $b->storage_driver,
+                'remote_status' => $b->remote_status ?: 'none',
+                'remote_path' => $b->remote_path,
+                'remote_error' => $b->remote_error,
                 'status' => $b->status,
                 'error_message' => $b->error_message,
                 'checksum' => $b->checksum,
@@ -63,7 +83,7 @@ class BackupController extends Controller
         });
 
         // 2. Fetch Schedules
-        $schedulesQuery = BackupSchedule::withCount('records')->orderBy('created_at', 'desc');
+        $schedulesQuery = BackupSchedule::with(['destination'])->withCount('records')->orderBy('created_at', 'desc');
         if (!$isRoot) {
             $accessibleDomains = $user->accessibleDomains();
             $schedulesQuery->whereIn('domain', $accessibleDomains);
@@ -80,6 +100,8 @@ class BackupController extends Controller
                 'day_of_week' => $s->day_of_week,
                 'day_of_month' => $s->day_of_month,
                 'retention_count' => $s->retention_count,
+                'destination_id' => $s->destination_id,
+                'destination_name' => $s->destination?->name,
                 'storage_driver' => $s->storage_driver,
                 'email_notifications' => $s->email_notifications,
                 'is_active' => $s->is_active,
@@ -91,11 +113,27 @@ class BackupController extends Controller
             ];
         });
 
-        // 3. Fetch Available Domains & Databases
+        // 3. Fetch Destinations
+        $destinations = BackupDestination::orderBy('is_default', 'desc')->orderBy('name')->get()->map(function ($d) {
+            return [
+                'id' => $d->id,
+                'name' => $d->name,
+                'driver' => $d->driver,
+                'is_default' => $d->is_default,
+                'is_active' => $d->is_active,
+                'credentials' => $d->safe_credentials,
+                'raw_credentials_present' => !empty($d->credentials),
+                'last_tested_at' => $d->last_tested_at ? $d->last_tested_at->toDateTimeString() : null,
+                'last_test_status' => $d->last_test_status,
+                'last_test_error' => $d->last_test_error,
+            ];
+        });
+
+        // 4. Fetch Available Domains & Databases
         $availableDomains = $this->getAvailableDomains();
         $availableDatabases = $this->getAvailableDatabases();
 
-        // 4. Calculate Stats
+        // 5. Calculate Stats
         $totalBytes = $backups->where('status', 'completed')->sum('size_bytes');
         $totalBackups = $backups->count();
         $activeSchedules = $schedules->where('is_active', true)->count();
@@ -113,6 +151,7 @@ class BackupController extends Controller
         return Inertia::render('Backups/Index', [
             'backups' => $backups,
             'schedules' => $schedules,
+            'destinations' => $destinations,
             'domains' => $availableDomains,
             'databases' => $availableDatabases,
             'stats' => $stats,
@@ -129,6 +168,7 @@ class BackupController extends Controller
             'database_name' => 'nullable|string|max:64',
             'type' => 'required|in:database,files,full',
             'name' => 'nullable|string|max:100',
+            'destination_id' => 'nullable|exists:backup_destinations,id',
             'retention_count' => 'nullable|integer|min:1|max:100',
         ]);
 
@@ -157,6 +197,7 @@ class BackupController extends Controller
                 'database_name' => $databaseName,
                 'type' => $type,
                 'name' => $request->input('name'),
+                'destination_id' => $request->input('destination_id'),
                 'retention_count' => (int) $request->input('retention_count', 7),
                 'created_by' => $user->email,
             ]);
@@ -190,6 +231,7 @@ class BackupController extends Controller
             'day_of_week' => 'nullable|integer|between:0,6',
             'day_of_month' => 'nullable|integer|between:1,31',
             'retention_count' => 'required|integer|min:1|max:100',
+            'destination_id' => 'nullable|exists:backup_destinations,id',
             'email_notifications' => 'boolean',
         ]);
 
@@ -202,10 +244,11 @@ class BackupController extends Controller
 
         $schedule = new BackupSchedule($request->only([
             'name', 'domain', 'database_name', 'type', 'frequency', 'time',
-            'day_of_week', 'day_of_month', 'retention_count', 'email_notifications'
+            'day_of_week', 'day_of_month', 'retention_count', 'destination_id', 'email_notifications'
         ]));
         $schedule->is_active = true;
-        $schedule->storage_driver = 'local';
+        $dest = $schedule->destination_id ? BackupDestination::find($schedule->destination_id) : null;
+        $schedule->storage_driver = $dest?->driver ?? 'local';
         $schedule->save();
         $schedule->calculateNextRun();
 
@@ -233,13 +276,16 @@ class BackupController extends Controller
             'day_of_week' => 'nullable|integer|between:0,6',
             'day_of_month' => 'nullable|integer|between:1,31',
             'retention_count' => 'required|integer|min:1|max:100',
+            'destination_id' => 'nullable|exists:backup_destinations,id',
             'email_notifications' => 'boolean',
         ]);
 
         $schedule->fill($request->only([
             'name', 'domain', 'database_name', 'type', 'frequency', 'time',
-            'day_of_week', 'day_of_month', 'retention_count', 'email_notifications'
+            'day_of_week', 'day_of_month', 'retention_count', 'destination_id', 'email_notifications'
         ]));
+        $dest = $schedule->destination_id ? BackupDestination::find($schedule->destination_id) : null;
+        $schedule->storage_driver = $dest?->driver ?? 'local';
         $schedule->save();
         $schedule->calculateNextRun();
 
@@ -468,4 +514,182 @@ class BackupController extends Controller
         }
         return round($bytes, $precision) . ' ' . $units[$i];
     }
+
+    /**
+     * Save or update a backup storage destination
+     */
+    public function saveDestination(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            return back()->with('error', 'Permission denied.');
+        }
+
+        $request->validate([
+            'id' => 'nullable|exists:backup_destinations,id',
+            'name' => 'required|string|max:100',
+            'driver' => 'required|in:local,google_drive,backblaze,s3,wasabi,r2,custom_s3',
+            'is_default' => 'boolean',
+            'credentials' => 'nullable|array',
+        ]);
+
+        $destination = null;
+        if ($request->filled('id')) {
+            $destination = BackupDestination::findOrFail($request->input('id'));
+        }
+
+        $isDefault = $request->boolean('is_default');
+        if ($isDefault) {
+            BackupDestination::where('id', '!=', $destination?->id ?? 0)->update(['is_default' => false]);
+        }
+
+        // Merge new credentials with existing credentials so masked fields aren't lost
+        $newCreds = $request->input('credentials', []);
+        $mergedCreds = [];
+        if ($destination && is_array($destination->credentials)) {
+            $mergedCreds = $destination->credentials;
+        }
+        foreach ($newCreds as $k => $v) {
+            if (is_string($v) && (str_contains($v, '••••••••') || $v === '[Configured JSON Key]')) {
+                continue;
+            }
+            if ($v !== null && $v !== '') {
+                $mergedCreds[$k] = $v;
+            }
+        }
+
+        if (!$destination) {
+            $destination = new BackupDestination();
+        }
+
+        $destination->name = $request->input('name');
+        $destination->driver = $request->input('driver');
+        $destination->is_default = $isDefault;
+        $destination->is_active = true;
+        $destination->credentials = $mergedCreds;
+        $destination->save();
+
+        ActivityLog::log(
+            'SAVE_BACKUP_DESTINATION',
+            'Backups',
+            "Configured backup destination '{$destination->name}' ({$destination->driver})"
+        );
+
+        return back()->with('success', "Storage destination '{$destination->name}' saved successfully.");
+    }
+
+    /**
+     * Test connection to a storage destination
+     */
+    public function testDestination(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
+        }
+
+        $destinationId = $request->input('id');
+        $driver = $request->input('driver', 'local');
+        $creds = $request->input('credentials', []);
+
+        if ($destinationId) {
+            $destination = BackupDestination::find($destinationId);
+            if ($destination) {
+                // Merge credentials
+                $existing = $destination->credentials ?: [];
+                foreach ($creds as $k => $v) {
+                    if (is_string($v) && (str_contains($v, '••••••••') || $v === '[Configured JSON Key]')) {
+                        continue;
+                    }
+                    if ($v !== null && $v !== '') {
+                        $existing[$k] = $v;
+                    }
+                }
+                $destination->credentials = $existing;
+            }
+        } else {
+            $destination = new BackupDestination([
+                'name' => $request->input('name', 'Test Destination'),
+                'driver' => $driver,
+                'credentials' => $creds,
+            ]);
+        }
+
+        $storageService = app(BackupStorageService::class);
+        $testResult = $storageService->testConnection($destination);
+
+        if ($destination && $destination->exists) {
+            $destination->update([
+                'last_tested_at' => now(),
+                'last_test_status' => $testResult['success'] ? 'success' : 'failed',
+                'last_test_error' => $testResult['success'] ? null : $testResult['message'],
+            ]);
+        }
+
+        return response()->json($testResult);
+    }
+
+    /**
+     * Delete a backup storage destination
+     */
+    public function deleteDestination(BackupDestination $destination)
+    {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            return back()->with('error', 'Permission denied.');
+        }
+
+        if ($destination->driver === 'local') {
+            return back()->with('error', 'Cannot delete the default Local Server Storage destination.');
+        }
+
+        $name = $destination->name;
+        $destination->delete();
+
+        ActivityLog::log(
+            'DELETE_BACKUP_DESTINATION',
+            'Backups',
+            "Deleted backup destination '{$name}'"
+        );
+
+        return back()->with('success', "Storage destination '{$name}' deleted.");
+    }
+
+    /**
+     * Set destination as default
+     */
+    public function setDefaultDestination(BackupDestination $destination)
+    {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            return back()->with('error', 'Permission denied.');
+        }
+
+        BackupDestination::query()->update(['is_default' => false]);
+        $destination->update(['is_default' => true]);
+
+        return back()->with('success', "'{$destination->name}' is now the default backup destination.");
+    }
+
+    /**
+     * Retry remote upload for a local backup
+     */
+    public function retryRemoteUpload(BackupRecord $backup)
+    {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            if (!empty($backup->domain) && !$user->canAccessDomain($backup->domain)) {
+                return back()->with('error', 'Permission denied.');
+            }
+        }
+
+        $result = $this->backupService->retryRemoteUpload($backup);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        } else {
+            return back()->with('error', $result['message']);
+        }
+    }
 }
+

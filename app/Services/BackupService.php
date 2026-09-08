@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\BackupDestination;
 use App\Models\BackupRecord;
 use App\Models\BackupSchedule;
 use App\Models\NimbusDatabase;
 use App\Models\Setting;
+use App\Services\Storage\BackupStorageService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -58,6 +60,19 @@ class BackupService
         $timestamp = date('Ymd_His');
         $randomSuffix = Str::random(6);
 
+        // Resolve storage destination
+        $destinationId = $params['destination_id'] ?? null;
+        $destination = null;
+        if ($destinationId) {
+            $destination = BackupDestination::find($destinationId);
+        }
+        if (!$destination) {
+            $destination = BackupDestination::where('is_default', true)->first();
+        }
+
+        $driver = $destination?->driver ?? 'local';
+        $initialRemoteStatus = ($destination && $destination->driver !== 'local') ? 'pending' : 'none';
+
         $backupDir = self::getBackupDirectory();
         $domainBackupDir = $backupDir . '/' . $safeTarget;
 
@@ -80,18 +95,21 @@ class BackupService
         // Create pending record
         $record = BackupRecord::create([
             'schedule_id' => $scheduleId,
+            'destination_id' => $destination?->id,
             'domain' => $domain,
             'database_name' => $databaseName,
             'type' => $type,
             'file_name' => $fileName,
             'file_path' => $filePath,
             'size_bytes' => 0,
-            'storage_driver' => 'local',
+            'storage_driver' => $driver,
+            'remote_status' => $initialRemoteStatus,
             'status' => 'in_progress',
             'created_by' => $createdBy,
             'metadata' => [
                 'custom_name' => $customName,
                 'target' => $targetName,
+                'destination_name' => $destination?->name ?? 'Local Server',
                 'started_at' => now()->toDateTimeString(),
             ]
         ]);
@@ -144,6 +162,37 @@ class BackupService
                 'metadata' => $metadata,
                 'completed_at' => now(),
             ]);
+
+            // FAIL-SAFE REMOTE UPLOAD:
+            // Local file is always verified and saved on server disk first.
+            // Then dispatch to remote storage (Google Drive, Backblaze B2, S3/Wasabi/R2).
+            if ($destination && $destination->driver !== 'local') {
+                try {
+                    $storageService = app(BackupStorageService::class);
+                    $uploadResult = $storageService->uploadBackup($record, $destination);
+
+                    if ($uploadResult['success']) {
+                        $record->update([
+                            'remote_status' => 'synced',
+                            'remote_path' => $uploadResult['remote_path'],
+                            'remote_error' => null,
+                        ]);
+                    } else {
+                        // Keep local backup as completed; flag remote failure for retry
+                        $record->update([
+                            'remote_status' => 'failed',
+                            'remote_error' => $uploadResult['error'] ?? 'Remote upload failed',
+                        ]);
+                        Log::warning("Local backup succeeded for '{$record->file_name}', but remote upload failed: " . ($uploadResult['error'] ?? ''));
+                    }
+                } catch (\Throwable $uploadEx) {
+                    $record->update([
+                        'remote_status' => 'failed',
+                        'remote_error' => $uploadEx->getMessage(),
+                    ]);
+                    Log::warning("Local backup succeeded for '{$record->file_name}', but remote upload exception occurred: " . $uploadEx->getMessage());
+                }
+            }
 
             // Auto prune old backups for this target if retention count is set
             $retention = $params['retention_count'] ?? 7;
@@ -555,6 +604,17 @@ class BackupService
      */
     public function deleteBackup(BackupRecord $record): bool
     {
+        // 1. Delete remote copy if synced
+        if ($record->remote_status === 'synced' && !empty($record->remote_path)) {
+            try {
+                $storageService = app(BackupStorageService::class);
+                $storageService->deleteRemoteFile($record);
+            } catch (\Throwable $e) {
+                Log::warning("Could not delete remote backup copy: " . $e->getMessage());
+            }
+        }
+
+        // 2. Delete local copy
         $filePath = $record->file_path;
         if (!empty($filePath)) {
             if (PHP_OS_FAMILY === 'Linux') {
@@ -567,6 +627,62 @@ class BackupService
         }
 
         return (bool) $record->delete();
+    }
+
+    /**
+     * Manually retry uploading a local backup to its configured or default remote destination
+     */
+    public function retryRemoteUpload(BackupRecord $record): array
+    {
+        $destination = $record->destination;
+        if (!$destination) {
+            $destination = BackupDestination::where('is_default', true)->first();
+        }
+
+        if (!$destination || $destination->driver === 'local') {
+            return [
+                'success' => false,
+                'message' => 'No active remote third-party storage destination configured. Please configure Backblaze B2, Google Drive, or S3 first.',
+            ];
+        }
+
+        if (!file_exists($record->file_path)) {
+            return [
+                'success' => false,
+                'message' => "Local backup file does not exist on disk ({$record->file_path}).",
+            ];
+        }
+
+        $record->update([
+            'destination_id' => $destination->id,
+            'storage_driver' => $destination->driver,
+            'remote_status' => 'pending',
+            'remote_error' => null,
+        ]);
+
+        $storageService = app(BackupStorageService::class);
+        $result = $storageService->uploadBackup($record, $destination);
+
+        if ($result['success']) {
+            $record->update([
+                'remote_status' => 'synced',
+                'remote_path' => $result['remote_path'],
+                'remote_error' => null,
+            ]);
+            return [
+                'success' => true,
+                'message' => "Backup '{$record->file_name}' successfully synced to {$destination->name}!",
+            ];
+        } else {
+            $record->update([
+                'remote_status' => 'failed',
+                'remote_error' => $result['error'],
+            ]);
+            return [
+                'success' => false,
+                'message' => "Remote upload failed: " . $result['error'],
+            ];
+        }
     }
 
     /**
@@ -620,6 +736,7 @@ class BackupService
 
                 $this->createBackup([
                     'schedule_id' => $schedule->id,
+                    'destination_id' => $schedule->destination_id,
                     'domain' => $schedule->domain,
                     'database_name' => $schedule->database_name,
                     'type' => $schedule->type,

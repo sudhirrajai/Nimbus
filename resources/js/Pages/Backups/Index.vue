@@ -16,6 +16,10 @@
                 <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-icon': isPolling }">refresh</i>
                 Refresh
               </button>
+              <button class="btn btn-outline-dark mb-0" @click="activeTab = 'destinations'">
+                <i class="material-symbols-rounded text-sm me-1">cloud_sync</i>
+                Storage Providers ({{ destinations.length }})
+              </button>
               <button class="btn bg-gradient-info mb-0" @click="openCreateScheduleModal">
                 <i class="material-symbols-rounded text-sm me-1">alarm</i>
                 Add Schedule
@@ -201,6 +205,14 @@
                   Email Alerts & Policies
                 </a>
               </li>
+              <li class="nav-item">
+                <a class="nav-link mb-0 px-0 py-1 font-weight-bold cursor-pointer"
+                   :class="{ 'active bg-white text-dark shadow-sm': activeTab === 'destinations', 'text-secondary': activeTab !== 'destinations' }"
+                   @click="activeTab = 'destinations'">
+                  <i class="material-symbols-rounded text-sm me-1">cloud_sync</i>
+                  Storage Providers & Destinations ({{ destinations.length }})
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -234,6 +246,7 @@
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Target / Domain</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Type</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Storage / Offsite</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Created</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
@@ -241,7 +254,7 @@
                   </thead>
                   <tbody>
                     <tr v-if="filteredBackups.length === 0">
-                      <td colspan="6" class="text-center py-5">
+                      <td colspan="7" class="text-center py-5">
                         <i class="material-symbols-rounded text-secondary mb-2" style="font-size: 3rem;">inventory_2</i>
                         <h6 class="text-secondary font-weight-normal mb-1">No backups found</h6>
                         <p class="text-xs text-muted mb-3">Create your first on-demand backup or schedule automated snapshots.</p>
@@ -290,6 +303,31 @@
                       <td class="align-middle text-center text-sm">
                         <span class="text-secondary font-weight-bold text-xs">{{ backup.formatted_size }}</span>
                       </td>
+
+                      <!-- Storage / Offsite Destination & Status -->
+                      <td class="align-middle text-center">
+                        <div class="d-flex flex-column align-items-center">
+                          <span class="badge badge-xs px-2 py-1 border rounded-pill d-inline-flex align-items-center gap-1 mb-1"
+                                :class="getDestinationBadgeClass(backup.storage_driver)">
+                            <i class="material-symbols-rounded text-xxs">{{ getDestinationIcon(backup.storage_driver) }}</i>
+                            {{ backup.destination_name || getDriverLabel(backup.storage_driver) }}
+                          </span>
+                          <span v-if="backup.remote_status === 'synced'" class="badge badge-xs bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1">
+                            <i class="material-symbols-rounded text-xxs">cloud_done</i> Synced Offsite
+                          </span>
+                          <span v-else-if="backup.remote_status === 'failed'" class="badge badge-xs bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center gap-1 cursor-pointer" :title="backup.remote_error">
+                            <i class="material-symbols-rounded text-xxs">cloud_off</i> Upload Failed
+                          </span>
+                          <span v-else-if="backup.remote_status === 'pending'" class="badge badge-xs bg-warning-subtle text-warning border border-warning-subtle d-inline-flex align-items-center gap-1">
+                            <span class="spinner-border spinner-border-sm" style="width: 8px; height: 8px;"></span> Uploading...
+                          </span>
+                          <span v-else class="text-xxs text-muted">Local storage</span>
+                          <div class="text-xxs text-muted mt-1">
+                            <i class="material-symbols-rounded text-success align-middle" style="font-size: 11px;">check_circle</i> Server copy safe
+                          </div>
+                        </div>
+                      </td>
+
                       <td class="align-middle text-center text-sm">
                         <span v-if="backup.status === 'completed'" class="badge badge-sm bg-gradient-success">
                           <i class="material-symbols-rounded align-middle me-1" style="font-size: 12px;">check</i> Completed
@@ -321,7 +359,18 @@
                         </div>
                       </td>
                       <td class="align-middle text-center">
-                        <div class="d-flex justify-content-center gap-1 align-items-center">
+                        <div class="d-flex justify-content-center gap-1 align-items-center flex-wrap">
+                          <!-- Retry Remote Sync Button -->
+                          <button v-if="backup.status === 'completed' && backup.storage_driver !== 'local' && backup.remote_status !== 'synced'"
+                                  class="btn btn-sm btn-outline-warning px-2 py-1 mb-0 d-inline-flex align-items-center"
+                                  :disabled="retryingBackupId === backup.id"
+                                  title="Retry uploading to third-party offsite storage"
+                                  @click="retryUpload(backup)">
+                            <span v-if="retryingBackupId === backup.id" class="spinner-border spinner-border-sm me-1" style="width: 10px; height: 10px;"></span>
+                            <i v-else class="material-symbols-rounded text-sm me-1">cloud_sync</i>
+                            <span class="text-xs">Retry Offsite</span>
+                          </button>
+
                           <!-- 1. Restore Button -->
                           <button v-if="backup.status === 'completed'"
                                   class="btn btn-sm btn-outline-info px-2 py-1 mb-0 d-inline-flex align-items-center"
@@ -601,7 +650,119 @@
         </div>
       </div>
 
-    </div>
+      <!-- TAB 4: STORAGE PROVIDERS & DESTINATIONS -->
+      <div v-if="activeTab === 'destinations'" class="row">
+        <div class="col-12">
+          <!-- Info / Explainer Banner -->
+          <div class="card mb-4 border-0 shadow-sm" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white;">
+            <div class="card-body p-4">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="avatar avatar-lg bg-white text-dark rounded-circle shadow-sm d-flex align-items-center justify-content-center flex-shrink-0">
+                    <i class="material-symbols-rounded text-info" style="font-size: 28px;">cloud_sync</i>
+                  </div>
+                  <div>
+                    <h5 class="text-white mb-1">Multi-Provider Offsite Storage Destinations</h5>
+                    <p class="text-xs text-white opacity-8 mb-0">
+                      Configure multiple offsite storage destinations simultaneously (Google Drive, Backblaze B2, Cloudflare R2, Wasabi, Amazon S3).
+                      <br>
+                      <span class="badge bg-success-subtle text-success border border-success-subtle mt-1 font-weight-bold">
+                        <i class="material-symbols-rounded text-xxs align-middle me-1">verified_user</i> Guaranteed Fail-Safe Redundancy
+                      </span>
+                      &mdash; Backups are always created and verified on this server first. If an upload to third-party storage fails, your local copy remains 100% safe and restorable.
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <button class="btn btn-white text-dark mb-0 font-weight-bold" @click="openCreateDestinationModal()">
+                    <i class="material-symbols-rounded text-sm me-1">add</i>
+                    Add Storage Destination
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Destinations Cards Grid -->
+          <div class="row g-3">
+            <div class="col-lg-4 col-md-6" v-for="dest in destinations" :key="dest.id">
+              <div class="card h-100 border shadow-sm position-relative overflow-hidden">
+                <div class="card-header pb-2 pt-3 px-3 d-flex justify-content-between align-items-center">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="avatar avatar-sm border-radius-md d-flex align-items-center justify-content-center"
+                         :class="getDestinationBadgeBg(dest.driver)">
+                      <i class="material-symbols-rounded text-white text-sm">{{ getDestinationIcon(dest.driver) }}</i>
+                    </div>
+                    <div>
+                      <h6 class="mb-0 text-sm font-weight-bold">{{ dest.name }}</h6>
+                      <span class="text-xxs text-secondary">{{ getDriverLabel(dest.driver) }}</span>
+                    </div>
+                  </div>
+                  <span v-if="dest.is_default" class="badge badge-sm bg-gradient-success">Default</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                  <!-- Connection Status -->
+                  <div class="d-flex justify-content-between align-items-center p-2 rounded bg-gray-100 mb-2 text-xxs">
+                    <span class="text-secondary font-weight-bold">Connection Status:</span>
+                    <span v-if="dest.last_test_status === 'success'" class="text-success font-weight-bold d-flex align-items-center gap-1">
+                      <i class="material-symbols-rounded text-xxs">check_circle</i> Verified
+                    </span>
+                    <span v-else-if="dest.last_test_status === 'failed'" class="text-danger font-weight-bold d-flex align-items-center gap-1" :title="dest.last_test_error">
+                      <i class="material-symbols-rounded text-xxs">error</i> Error
+                    </span>
+                    <span v-else class="text-muted">Not Tested Yet</span>
+                  </div>
+
+                  <!-- Config Details -->
+                  <div class="text-xxs text-secondary">
+                    <div v-if="dest.driver === 'local'" class="text-muted">
+                      Built-in local storage under <code>/var/backups/nimbus</code>. Primary fail-safe destination.
+                    </div>
+                    <div v-if="dest.credentials?.bucket" class="mb-1 d-flex justify-content-between">
+                      <span>Bucket:</span> <strong class="text-dark">{{ dest.credentials.bucket }}</strong>
+                    </div>
+                    <div v-if="dest.credentials?.region" class="mb-1 d-flex justify-content-between">
+                      <span>Region:</span> <span class="font-monospace text-dark">{{ dest.credentials.region }}</span>
+                    </div>
+                    <div v-if="dest.credentials?.folder_id" class="mb-1 d-flex justify-content-between">
+                      <span>Folder ID:</span> <span class="font-monospace text-dark">{{ dest.credentials.folder_id }}</span>
+                    </div>
+                    <div v-if="dest.credentials?.auth_type" class="mb-1 d-flex justify-content-between">
+                      <span>Auth:</span> <span class="badge badge-xs bg-light text-dark">{{ dest.credentials.auth_type === 'service_account' ? 'Service Account' : 'OAuth 2.0' }}</span>
+                    </div>
+                    <div v-if="dest.last_tested_at" class="text-muted mt-2">
+                      <i class="material-symbols-rounded text-xxs align-middle">schedule</i> Tested: {{ dest.last_tested_at }}
+                    </div>
+                  </div>
+                </div>
+                <div class="card-footer pt-2 pb-3 px-3 border-top bg-light d-flex justify-content-between align-items-center flex-wrap gap-1">
+                  <div class="d-flex gap-1">
+                    <button class="btn btn-xs btn-outline-secondary mb-0 d-inline-flex align-items-center"
+                            :disabled="testingDestinationId === dest.id"
+                            @click="testDestination(dest)">
+                      <span v-if="testingDestinationId === dest.id" class="spinner-border spinner-border-sm me-1" style="width: 10px; height: 10px;"></span>
+                      <i v-else class="material-symbols-rounded text-xxs me-1">network_check</i>
+                      Test
+                    </button>
+                    <button v-if="!dest.is_default" class="btn btn-xs btn-outline-primary mb-0"
+                            @click="setDefaultDestination(dest)">
+                      Set Default
+                    </button>
+                  </div>
+                  <div class="d-flex gap-1">
+                    <button class="btn btn-xs btn-link text-dark p-1 mb-0" title="Edit Destination" @click="editDestination(dest)">
+                      <i class="material-symbols-rounded text-sm">edit</i>
+                    </button>
+                    <button v-if="dest.driver !== 'local'" class="btn btn-xs btn-link text-danger p-1 mb-0" title="Delete Destination" @click="deleteDestination(dest)">
+                      <i class="material-symbols-rounded text-sm">delete</i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
     <!-- MODAL: CREATE BACKUP NOW -->
     <div class="modal fade" id="modalCreateBackup" tabindex="-1" role="dialog" aria-hidden="true">
@@ -692,9 +853,27 @@
               </div>
 
               <!-- Optional Backup Label -->
-              <div class="mb-2">
+              <div class="mb-3">
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Custom Note / Label (Optional)</label>
                 <input type="text" v-model="backupForm.name" class="form-control custom-form-input px-3" placeholder="e.g. Before plugin upgrade">
+              </div>
+
+              <!-- Storage Destination Selector -->
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1 d-flex justify-content-between align-items-center">
+                  <span>Storage Destination</span>
+                  <a href="javascript:;" class="text-xxs text-info font-weight-bold" @click="openCreateDestinationModal()">+ Add New Destination</a>
+                </label>
+                <select v-model="backupForm.destination_id" class="form-select custom-form-select">
+                  <option :value="null">Default Destination ({{ defaultDestinationName }})</option>
+                  <option v-for="dest in destinations" :key="dest.id" :value="dest.id">
+                    {{ dest.name }} ({{ getDriverLabel(dest.driver) }}) {{ dest.is_default ? '— Default' : '' }}
+                  </option>
+                </select>
+                <div class="p-2 mt-2 border-radius-md bg-light-info text-xxs text-secondary d-flex align-items-center border border-info-subtle">
+                  <i class="material-symbols-rounded text-info me-2" style="font-size: 18px;">verified_user</i>
+                  <span><strong>Dual-Copy Fail-Safe:</strong> A copy of this backup will always be safely stored on the local server first. If the offsite upload fails, your local backup remains intact and ready to restore.</span>
+                </div>
               </div>
 
             </div>
@@ -853,6 +1032,23 @@
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Retention Window (Keep last N copies)</label>
                 <input type="number" v-model="scheduleForm.retention_count" class="form-control custom-form-input px-3" min="1" max="100" required>
                 <p class="text-xxs text-muted mb-0 mt-1">Older archives exceeding this threshold are automatically purged to save server disk space.</p>
+              </div>
+
+              <!-- Storage Destination Selector -->
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1 d-flex justify-content-between align-items-center">
+                  <span>Target Storage Destination</span>
+                  <a href="javascript:;" class="text-xxs text-info font-weight-bold" @click="openCreateDestinationModal()">+ Add New Destination</a>
+                </label>
+                <select v-model="scheduleForm.destination_id" class="form-select custom-form-select">
+                  <option :value="null">Default Destination ({{ defaultDestinationName }})</option>
+                  <option v-for="dest in destinations" :key="dest.id" :value="dest.id">
+                    {{ dest.name }} ({{ getDriverLabel(dest.driver) }}) {{ dest.is_default ? '— Default' : '' }}
+                  </option>
+                </select>
+                <p class="text-xxs text-muted mb-0 mt-1">
+                  Choose where this scheduled website/database backup will be stored (Google Drive, Backblaze B2, S3, or Local Server).
+                </p>
               </div>
 
               <!-- Email notification toggle Card -->
@@ -1063,6 +1259,288 @@
       </div>
     </div>
 
+    <!-- MODAL: ADD / EDIT STORAGE DESTINATION -->
+    <div class="modal fade" id="modalDestination" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content shadow-lg border-0">
+          <div class="modal-header bg-gray-100 py-3">
+            <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center mb-0">
+              <i class="material-symbols-rounded text-info me-2">cloud_upload</i>
+              {{ destinationForm.id ? 'Edit Storage Destination' : 'Configure Storage Destination' }}
+            </h5>
+            <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <form @submit.prevent="submitDestinationForm">
+            <div class="modal-body p-4">
+              <!-- Driver Selection Cards -->
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-2">Storage Provider</label>
+                <div class="row g-2">
+                  <div class="col-md-4 col-6">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': destinationForm.driver === 'backblaze' }"
+                         @click="destinationForm.driver = 'backblaze'">
+                      <i class="material-symbols-rounded text-danger mb-1">local_fire_department</i>
+                      <span class="text-xs font-weight-bold text-dark">Backblaze B2</span>
+                      <span class="text-xxs text-muted">$6/TB &bull; S3 Compatible</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-6">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': destinationForm.driver === 'google_drive' }"
+                         @click="destinationForm.driver = 'google_drive'">
+                      <i class="material-symbols-rounded text-info mb-1">cloud</i>
+                      <span class="text-xs font-weight-bold text-dark">Google Drive</span>
+                      <span class="text-xxs text-muted">Service Account / OAuth</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-6">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': destinationForm.driver === 'r2' }"
+                         @click="destinationForm.driver = 'r2'">
+                      <i class="material-symbols-rounded text-warning mb-1">cloud_done</i>
+                      <span class="text-xs font-weight-bold text-dark">Cloudflare R2</span>
+                      <span class="text-xxs text-muted">$0 Egress &bull; S3 Compatible</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-6">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': destinationForm.driver === 'wasabi' }"
+                         @click="destinationForm.driver = 'wasabi'">
+                      <i class="material-symbols-rounded text-success mb-1">hard_drive</i>
+                      <span class="text-xs font-weight-bold text-dark">Wasabi Storage</span>
+                      <span class="text-xxs text-muted">$6.99/TB &bull; No API fees</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-6">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': destinationForm.driver === 's3' }"
+                         @click="destinationForm.driver = 's3'">
+                      <i class="material-symbols-rounded text-warning mb-1">storage</i>
+                      <span class="text-xs font-weight-bold text-dark">Amazon S3</span>
+                      <span class="text-xxs text-muted">Standard AWS Bucket</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-6">
+                    <div class="card card-body p-2 text-center border cursor-pointer h-100 selection-card"
+                         :class="{ 'active-card': destinationForm.driver === 'custom_s3' }"
+                         @click="destinationForm.driver = 'custom_s3'">
+                      <i class="material-symbols-rounded text-secondary mb-1">dns</i>
+                      <span class="text-xs font-weight-bold text-dark">Custom S3 / MinIO</span>
+                      <span class="text-xxs text-muted">Any S3 Endpoint</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Destination Name -->
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Destination Friendly Name</label>
+                <input type="text" v-model="destinationForm.name" class="form-control custom-form-input px-3" required placeholder="e.g. Backblaze B2 Vault, Google Drive Offsite">
+              </div>
+
+              <!-- BACKBLAZE B2 FIELDS -->
+              <template v-if="destinationForm.driver === 'backblaze'">
+                <div class="alert alert-light border text-xxs p-2 mb-3">
+                  <i class="material-symbols-rounded text-danger text-sm align-middle me-1">info</i>
+                  In your Backblaze account, go to <strong>App Keys</strong> to generate a <strong>keyID</strong> and <strong>applicationKey</strong> with read/write access to your bucket.
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Bucket Name</label>
+                    <input type="text" v-model="destinationForm.credentials.bucket" class="form-control custom-form-input px-3" required placeholder="e.g. my-nimbus-backups">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">S3 Region / Endpoint</label>
+                    <input type="text" v-model="destinationForm.credentials.region" class="form-control custom-form-input px-3" required placeholder="e.g. us-west-004">
+                    <span class="text-xxs text-muted">Found on your B2 Bucket Details (e.g. s3.<strong>us-west-004</strong>.backblazeb2.com)</span>
+                  </div>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Key ID (Access Key)</label>
+                    <input type="text" v-model="destinationForm.credentials.key" class="form-control custom-form-input px-3" required placeholder="B2 Key ID">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Application Key (Secret)</label>
+                    <input type="password" v-model="destinationForm.credentials.secret" class="form-control custom-form-input px-3" :placeholder="destinationForm.id ? 'Leave blank to keep existing' : 'B2 Application Key'">
+                  </div>
+                </div>
+              </template>
+
+              <!-- GOOGLE DRIVE FIELDS -->
+              <template v-if="destinationForm.driver === 'google_drive'">
+                <div class="mb-3">
+                  <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Authentication Method</label>
+                  <div class="btn-group w-100 p-1 bg-gray-100 border-radius-lg" role="group">
+                    <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                            :class="destinationForm.credentials.auth_type === 'service_account' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                            @click="destinationForm.credentials.auth_type = 'service_account'">
+                      <i class="material-symbols-rounded text-xs me-1 align-middle">vpn_key</i> Service Account JSON (Recommended)
+                    </button>
+                    <button type="button" class="btn btn-sm mb-0 border-0 flex-grow-1 font-weight-bold transition-all"
+                            :class="destinationForm.credentials.auth_type === 'oauth' ? 'bg-white text-dark shadow-sm' : 'text-secondary bg-transparent'"
+                            @click="destinationForm.credentials.auth_type = 'oauth'">
+                      <i class="material-symbols-rounded text-xs me-1 align-middle">lock</i> OAuth 2.0 Client
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="destinationForm.credentials.auth_type === 'service_account'" class="mb-3">
+                  <div class="alert alert-light border text-xxs p-2 mb-2">
+                    <i class="material-symbols-rounded text-info text-sm align-middle me-1">lightbulb</i>
+                    <strong>Quick Setup:</strong> Create a Service Account in Google Cloud Console, download the JSON key, and paste it below. Then share your Google Drive backup folder with the Service Account's <code>client_email</code>.
+                  </div>
+                  <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Service Account JSON Key</label>
+                  <textarea v-model="destinationForm.credentials.service_account_json" class="form-control custom-form-input px-3 font-monospace text-xs" rows="4" :placeholder="destinationForm.id ? 'Paste new JSON or leave blank to keep existing' : 'Paste full JSON content here { &quot;type&quot;: &quot;service_account&quot;, ... }'"></textarea>
+                </div>
+
+                <div v-if="destinationForm.credentials.auth_type === 'oauth'" class="mb-3">
+                  <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                      <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">OAuth Client ID</label>
+                      <input type="text" v-model="destinationForm.credentials.client_id" class="form-control custom-form-input px-3" placeholder="Google OAuth Client ID">
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">OAuth Client Secret</label>
+                      <input type="password" v-model="destinationForm.credentials.client_secret" class="form-control custom-form-input px-3" :placeholder="destinationForm.id ? 'Leave blank to keep existing' : 'Client Secret'">
+                    </div>
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Refresh Token</label>
+                    <input type="password" v-model="destinationForm.credentials.refresh_token" class="form-control custom-form-input px-3" :placeholder="destinationForm.id ? 'Leave blank to keep existing' : 'Refresh Token with drive.file scope'">
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Target Google Drive Folder ID (Optional)</label>
+                  <input type="text" v-model="destinationForm.credentials.folder_id" class="form-control custom-form-input px-3" placeholder="e.g. 1a2b3c4d5e... (from Drive URL: /folders/FOLDER_ID)">
+                  <span class="text-xxs text-muted">If blank, backups will be stored in your Drive root directory.</span>
+                </div>
+              </template>
+
+              <!-- CLOUDFLARE R2 FIELDS -->
+              <template v-if="destinationForm.driver === 'r2'">
+                <div class="alert alert-light border text-xxs p-2 mb-3">
+                  <i class="material-symbols-rounded text-warning text-sm align-middle me-1">info</i>
+                  Cloudflare R2 provides zero egress fees. Find your Account ID in your Cloudflare dashboard URL or R2 overview.
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Cloudflare Account ID</label>
+                    <input type="text" v-model="destinationForm.credentials.account_id" class="form-control custom-form-input px-3" required placeholder="32-character Account ID">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Bucket Name</label>
+                    <input type="text" v-model="destinationForm.credentials.bucket" class="form-control custom-form-input px-3" required placeholder="R2 Bucket Name">
+                  </div>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Access Key ID</label>
+                    <input type="text" v-model="destinationForm.credentials.key" class="form-control custom-form-input px-3" required placeholder="R2 Access Key ID">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Secret Access Key</label>
+                    <input type="password" v-model="destinationForm.credentials.secret" class="form-control custom-form-input px-3" :placeholder="destinationForm.id ? 'Leave blank to keep existing' : 'R2 Secret Access Key'">
+                  </div>
+                </div>
+              </template>
+
+              <!-- WASABI FIELDS -->
+              <template v-if="destinationForm.driver === 'wasabi'">
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Bucket Name</label>
+                    <input type="text" v-model="destinationForm.credentials.bucket" class="form-control custom-form-input px-3" required placeholder="Wasabi Bucket Name">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Wasabi Region</label>
+                    <input type="text" v-model="destinationForm.credentials.region" class="form-control custom-form-input px-3" required placeholder="e.g. us-east-1, eu-central-1">
+                  </div>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Access Key</label>
+                    <input type="text" v-model="destinationForm.credentials.key" class="form-control custom-form-input px-3" required placeholder="Wasabi Access Key">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Secret Key</label>
+                    <input type="password" v-model="destinationForm.credentials.secret" class="form-control custom-form-input px-3" :placeholder="destinationForm.id ? 'Leave blank to keep existing' : 'Wasabi Secret Key'">
+                  </div>
+                </div>
+              </template>
+
+              <!-- S3 / CUSTOM S3 FIELDS -->
+              <template v-if="destinationForm.driver === 's3' || destinationForm.driver === 'custom_s3'">
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Bucket Name</label>
+                    <input type="text" v-model="destinationForm.credentials.bucket" class="form-control custom-form-input px-3" required placeholder="Bucket Name">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Region</label>
+                    <input type="text" v-model="destinationForm.credentials.region" class="form-control custom-form-input px-3" required placeholder="e.g. us-east-1">
+                  </div>
+                </div>
+                <div class="row g-2 mb-2" v-if="destinationForm.driver === 'custom_s3'">
+                  <div class="col-12">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Custom S3 Endpoint URL</label>
+                    <input type="text" v-model="destinationForm.credentials.endpoint" class="form-control custom-form-input px-3" required placeholder="e.g. https://play.min.io or https://nyc3.digitaloceanspaces.com">
+                  </div>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Access Key</label>
+                    <input type="text" v-model="destinationForm.credentials.key" class="form-control custom-form-input px-3" required placeholder="Access Key">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Secret Key</label>
+                    <input type="password" v-model="destinationForm.credentials.secret" class="form-control custom-form-input px-3" :placeholder="destinationForm.id ? 'Leave blank to keep existing' : 'Secret Key'">
+                  </div>
+                </div>
+              </template>
+
+              <!-- Default Toggle -->
+              <div class="form-check form-switch ps-0 mt-3">
+                <input class="form-check-input ms-0 cursor-pointer" type="checkbox" id="destDefault" v-model="destinationForm.is_default">
+                <label class="form-check-label text-xs font-weight-bold text-dark ms-2 cursor-pointer" for="destDefault">
+                  Set as default destination for new backups and schedules
+                </label>
+              </div>
+
+              <!-- Test Result Alert Banner -->
+              <div v-if="modalTestResult" class="mt-3 p-3 rounded text-xs d-flex align-items-center gap-2"
+                   :class="modalTestResult.success ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle'">
+                <i class="material-symbols-rounded text-sm">{{ modalTestResult.success ? 'check_circle' : 'error' }}</i>
+                <span>{{ modalTestResult.message }}</span>
+              </div>
+
+            </div>
+            <div class="modal-footer bg-gray-100 py-3 d-flex justify-content-between">
+              <div>
+                <button type="button" class="btn btn-outline-dark mb-0" :disabled="isTestingInModal" @click="testCurrentFormInModal">
+                  <span v-if="isTestingInModal" class="spinner-border spinner-border-sm me-1"></span>
+                  <i v-else class="material-symbols-rounded text-sm me-1">network_check</i>
+                  Test Connection
+                </button>
+              </div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn bg-gradient-info mb-0 shadow-info" :disabled="isSavingDestination">
+                  <span v-if="isSavingDestination" class="spinner-border spinner-border-sm me-1"></span>
+                  {{ destinationForm.id ? 'Update Destination' : 'Save Destination' }}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    </div>
   </MainLayout>
 </template>
 
@@ -1080,6 +1558,7 @@ const props = defineProps({
   domains: { type: Array, default: () => [] },
   databases: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
+  destinations: { type: Array, default: () => [] },
 })
 
 const activeTab = ref('backups')
@@ -1095,6 +1574,12 @@ const isRunningSchedule = ref(false)
 const isDeletingSchedule = ref(false)
 const isDeletingBackup = ref(false)
 const isPolling = ref(false)
+
+const testingDestinationId = ref(null)
+const isTestingInModal = ref(false)
+const modalTestResult = ref(null)
+const isSavingDestination = ref(false)
+const retryingBackupId = ref(null)
 
 const runningScheduleId = ref(null)
 
@@ -1171,6 +1656,28 @@ const localEquivalentTime = computed(() => {
 })
 
 // Forms
+const destinationForm = ref({
+  id: null,
+  name: '',
+  driver: 'b2',
+  is_default: false,
+  credentials: {
+    auth_type: 'service_account',
+    bucket: '',
+    endpoint: '',
+    region: 'us-east-005',
+    key: '',
+    secret: '',
+    path_prefix: 'backups',
+    folder_id: '',
+    service_account_json: '',
+    client_id: '',
+    client_secret: '',
+    refresh_token: '',
+    account_id: '',
+  }
+})
+
 const backupForm = ref({
   scope: 'domain',
   domain: '',
@@ -1178,6 +1685,7 @@ const backupForm = ref({
   type: 'full',
   name: '',
   retention_count: 7,
+  destination_id: null,
 })
 
 const scheduleForm = ref({
@@ -1193,6 +1701,7 @@ const scheduleForm = ref({
   day_of_month: 1,
   retention_count: 7,
   email_notifications: true,
+  destination_id: null,
 })
 
 // Check if any backup is currently in progress
@@ -1217,6 +1726,16 @@ onMounted(() => {
   if (props.databases && props.databases.length > 0) {
     backupForm.value.database_name = props.databases[0]
     scheduleForm.value.database_name = props.databases[0]
+  }
+
+  // Pre-select default destination if available
+  const defaultDest = props.destinations.find(d => d.is_default)
+  if (defaultDest) {
+    backupForm.value.destination_id = defaultDest.id
+    scheduleForm.value.destination_id = defaultDest.id
+  } else if (props.destinations && props.destinations.length > 0) {
+    backupForm.value.destination_id = props.destinations[0].id
+    scheduleForm.value.destination_id = props.destinations[0].id
   }
 
   // Sync initial server time offset
@@ -1295,11 +1814,18 @@ const getModalInstance = (id) => {
 }
 
 const openCreateBackupModal = () => {
+  const defaultDest = props.destinations.find(d => d.is_default)
+  if (!backupForm.value.destination_id && defaultDest) {
+    backupForm.value.destination_id = defaultDest.id
+  } else if (!backupForm.value.destination_id && props.destinations.length > 0) {
+    backupForm.value.destination_id = props.destinations[0].id
+  }
   const modal = getModalInstance('modalCreateBackup')
   modal?.show()
 }
 
 const openCreateScheduleModal = () => {
+  const defaultDest = props.destinations.find(d => d.is_default)
   scheduleForm.value = {
     id: null,
     name: 'Daily Backup',
@@ -1313,6 +1839,7 @@ const openCreateScheduleModal = () => {
     day_of_month: 1,
     retention_count: 7,
     email_notifications: true,
+    destination_id: defaultDest ? defaultDest.id : (props.destinations[0]?.id || null),
   }
   const modal = getModalInstance('modalSchedule')
   modal?.show()
@@ -1332,6 +1859,7 @@ const openEditScheduleModal = (schedule) => {
     day_of_month: schedule.day_of_month || 1,
     retention_count: schedule.retention_count || 7,
     email_notifications: schedule.email_notifications,
+    destination_id: schedule.destination_id || null,
   }
   const modal = getModalInstance('modalSchedule')
   modal?.show()
@@ -1366,6 +1894,190 @@ const openDeleteBackupModal = async (backup) => {
   modal?.show()
 }
 
+// Destination Management Actions
+const openCreateDestinationModal = (driver = 'b2') => {
+  modalTestResult.value = null
+  destinationForm.value = {
+    id: null,
+    name: '',
+    driver: driver,
+    is_default: false,
+    credentials: {
+      auth_type: 'service_account',
+      bucket: '',
+      endpoint: '',
+      region: driver === 'b2' ? 'us-east-005' : (driver === 'wasabi' ? 'us-east-1' : 'us-east-1'),
+      key: '',
+      secret: '',
+      path_prefix: 'backups',
+      folder_id: '',
+      service_account_json: '',
+      client_id: '',
+      client_secret: '',
+      refresh_token: '',
+      account_id: '',
+    }
+  }
+  const modal = getModalInstance('modalDestination')
+  modal?.show()
+}
+
+const editDestination = (dest) => {
+  modalTestResult.value = null
+  destinationForm.value = {
+    id: dest.id,
+    name: dest.name,
+    driver: dest.driver,
+    is_default: Boolean(dest.is_default),
+    credentials: {
+      auth_type: dest.credentials?.auth_type || 'service_account',
+      bucket: dest.credentials?.bucket || '',
+      endpoint: dest.credentials?.endpoint || '',
+      region: dest.credentials?.region || '',
+      key: dest.credentials?.key || '',
+      secret: '',
+      path_prefix: dest.credentials?.path_prefix || 'backups',
+      folder_id: dest.credentials?.folder_id || '',
+      service_account_json: '',
+      client_id: dest.credentials?.client_id || '',
+      client_secret: '',
+      refresh_token: '',
+      account_id: dest.credentials?.account_id || '',
+    }
+  }
+  const modal = getModalInstance('modalDestination')
+  modal?.show()
+}
+
+const submitDestinationForm = () => {
+  isSavingDestination.value = true
+  modalTestResult.value = null
+
+  router.post('/backups/destinations', destinationForm.value, {
+    preserveScroll: true,
+    onSuccess: () => {
+      getModalInstance('modalDestination')?.hide()
+      isSavingDestination.value = false
+      localAlert.value = {
+        show: true,
+        message: destinationForm.value.id ? 'Storage destination updated successfully.' : 'Storage destination created successfully.',
+        type: 'success'
+      }
+    },
+    onError: (errors) => {
+      isSavingDestination.value = false
+      const msg = Object.values(errors).flat().join(', ') || 'Failed to save storage destination.'
+      modalTestResult.value = { success: false, message: msg }
+    },
+    onFinish: () => {
+      isSavingDestination.value = false
+    }
+  })
+}
+
+const testCurrentFormInModal = async () => {
+  isTestingInModal.value = true
+  modalTestResult.value = null
+
+  try {
+    const res = await fetch('/backups/destinations/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': page.props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      },
+      body: JSON.stringify(destinationForm.value)
+    })
+    const data = await res.json()
+    modalTestResult.value = data
+  } catch (err) {
+    modalTestResult.value = {
+      success: false,
+      message: err.message || 'Connection test failed to reach server.'
+    }
+  } finally {
+    isTestingInModal.value = false
+  }
+}
+
+const testDestination = async (dest) => {
+  testingDestinationId.value = dest.id
+  try {
+    const res = await fetch('/backups/destinations/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': page.props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      },
+      body: JSON.stringify({ id: dest.id, driver: dest.driver })
+    })
+    const data = await res.json()
+    localAlert.value = {
+      show: true,
+      message: `${dest.name}: ${data.message}`,
+      type: data.success ? 'success' : 'danger'
+    }
+  } catch (err) {
+    localAlert.value = {
+      show: true,
+      message: `${dest.name}: Connection test failed.`,
+      type: 'danger'
+    }
+  } finally {
+    testingDestinationId.value = null
+  }
+}
+
+const setDefaultDestination = (dest) => {
+  router.post(`/backups/destinations/${dest.id}/default`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      localAlert.value = {
+        show: true,
+        message: `${dest.name} is now the default backup destination.`,
+        type: 'success'
+      }
+    }
+  })
+}
+
+const deleteDestination = (dest) => {
+  if (!confirm(`Are you sure you want to remove ${dest.name}? Backups already created will retain their history.`)) {
+    return
+  }
+  router.delete(`/backups/destinations/${dest.id}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      localAlert.value = {
+        show: true,
+        message: `${dest.name} was removed.`,
+        type: 'success'
+      }
+    }
+  })
+}
+
+const retryUpload = (backup) => {
+  retryingBackupId.value = backup.id
+  router.post(`/backups/${backup.id}/retry-upload`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      retryingBackupId.value = null
+      localAlert.value = {
+        show: true,
+        message: `Offsite upload retry completed for ${backup.file_name || backup.id}.`,
+        type: 'success'
+      }
+    },
+    onError: () => {
+      retryingBackupId.value = null
+    },
+    onFinish: () => {
+      retryingBackupId.value = null
+    }
+  })
+}
+
 // Submit Create Backup
 const submitCreateBackup = () => {
   isCreatingBackup.value = true
@@ -1375,6 +2087,7 @@ const submitCreateBackup = () => {
     type: backupForm.value.type,
     name: backupForm.value.name,
     retention_count: backupForm.value.retention_count,
+    destination_id: backupForm.value.destination_id || null,
   }
 
   router.post('/backups', payload, {
@@ -1406,6 +2119,7 @@ const submitScheduleForm = () => {
     day_of_month: scheduleForm.value.day_of_month,
     retention_count: scheduleForm.value.retention_count,
     email_notifications: scheduleForm.value.email_notifications,
+    destination_id: scheduleForm.value.destination_id || null,
   }
 
   if (scheduleForm.value.id) {
@@ -1512,6 +2226,11 @@ const performRestore = () => {
 }
 
 // UI Formatting Helpers
+const defaultDestinationName = computed(() => {
+  const d = props.destinations.find(dest => dest.is_default)
+  return d ? d.name : 'Local Server Storage'
+})
+
 const getTargetBadgeBg = (type) => {
   if (type === 'database') return 'bg-gradient-info'
   if (type === 'files') return 'bg-gradient-secondary'
@@ -1567,6 +2286,53 @@ const setBackupScope = (scope) => {
 
 const onScheduleTargetTypeChange = () => {
   setScheduleTargetType(scheduleForm.value.targetType)
+}
+
+const getDriverLabel = (driver) => {
+  const map = {
+    local: 'Local Storage',
+    b2: 'Backblaze B2',
+    google_drive: 'Google Drive',
+    r2: 'Cloudflare R2',
+    wasabi: 'Wasabi Hot Cloud',
+    s3: 'AWS S3',
+    custom_s3: 'Custom S3'
+  }
+  return map[driver] || driver?.toUpperCase()
+}
+
+const getDestinationIcon = (dest) => {
+  if (!dest) return 'hard_drive'
+  const d = typeof dest === 'string' ? dest : dest.driver
+  if (d === 'google_drive') return 'add_to_drive'
+  if (d === 'b2') return 'cloud'
+  if (d === 'r2') return 'cloud_done'
+  if (d === 'wasabi') return 'cloud_queue'
+  if (d === 's3') return 'cloud_sync'
+  if (d === 'custom_s3') return 'dns'
+  return 'hard_drive'
+}
+
+const getDestinationBadgeBg = (dest) => {
+  if (!dest) return 'bg-gradient-secondary'
+  const d = typeof dest === 'string' ? dest : dest.driver
+  if (d === 'google_drive') return 'bg-gradient-warning'
+  if (d === 'b2') return 'bg-gradient-danger'
+  if (d === 'r2') return 'bg-gradient-info'
+  if (d === 'wasabi') return 'bg-gradient-success'
+  if (d === 's3') return 'bg-gradient-primary'
+  return 'bg-gradient-dark'
+}
+
+const getDestinationBadgeClass = (dest) => {
+  if (!dest) return 'badge bg-light text-secondary border'
+  const d = typeof dest === 'string' ? dest : dest.driver
+  if (d === 'google_drive') return 'badge bg-warning text-dark'
+  if (d === 'b2') return 'badge bg-danger text-white'
+  if (d === 'r2') return 'badge bg-info text-white'
+  if (d === 'wasabi') return 'badge bg-success text-white'
+  if (d === 's3') return 'badge bg-primary text-white'
+  return 'badge bg-secondary text-white'
 }
 </script>
 
