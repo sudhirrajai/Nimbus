@@ -1549,6 +1549,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import SearchableSelect from '@/Components/SearchableSelect.vue'
+import axios from 'axios'
 
 const page = usePage()
 
@@ -1980,20 +1981,12 @@ const testCurrentFormInModal = async () => {
   modalTestResult.value = null
 
   try {
-    const res = await fetch('/backups/destinations/test', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': page.props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-      },
-      body: JSON.stringify(destinationForm.value)
-    })
-    const data = await res.json()
-    modalTestResult.value = data
+    const res = await axios.post('/backups/destinations/test', destinationForm.value)
+    modalTestResult.value = res.data
   } catch (err) {
     modalTestResult.value = {
       success: false,
-      message: err.message || 'Connection test failed to reach server.'
+      message: err.response?.data?.message || err.message || 'Connection test failed to reach server.'
     }
   } finally {
     isTestingInModal.value = false
@@ -2003,26 +1996,25 @@ const testCurrentFormInModal = async () => {
 const testDestination = async (dest) => {
   testingDestinationId.value = dest.id
   try {
-    const res = await fetch('/backups/destinations/test', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': page.props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-      },
-      body: JSON.stringify({ id: dest.id, driver: dest.driver })
-    })
-    const data = await res.json()
+    const res = await axios.post('/backups/destinations/test', { id: dest.id, driver: dest.driver })
+    const data = res.data
     localAlert.value = {
       show: true,
       message: `${dest.name}: ${data.message}`,
       type: data.success ? 'success' : 'danger'
     }
+    dest.last_test_status = data.success ? 'success' : 'failed'
+    dest.last_test_error = data.success ? null : data.message
+    dest.last_tested_at = 'Just now'
   } catch (err) {
+    const errorMsg = err.response?.data?.message || err.message || 'Connection test failed.'
     localAlert.value = {
       show: true,
-      message: `${dest.name}: Connection test failed.`,
+      message: `${dest.name}: ${errorMsg}`,
       type: 'danger'
     }
+    dest.last_test_status = 'failed'
+    dest.last_test_error = errorMsg
   } finally {
     testingDestinationId.value = null
   }

@@ -22,10 +22,20 @@ class BackupStorageService
 
             if ($driver === 'local') {
                 $dir = \App\Services\BackupService::getBackupDirectory();
+                if (!is_dir($dir)) {
+                    @mkdir($dir, 0755, true);
+                }
+                if (PHP_OS_FAMILY === 'Linux') {
+                    if (!is_dir($dir) || !is_writable($dir)) {
+                        exec("sudo mkdir -p " . escapeshellarg($dir) . " 2>/dev/null");
+                        exec("sudo chown -R www-data:www-data " . escapeshellarg($dir) . " 2>/dev/null");
+                        exec("sudo chmod -R 755 " . escapeshellarg($dir) . " 2>/dev/null");
+                    }
+                }
                 if (!is_dir($dir) || !is_writable($dir)) {
                     throw new \Exception("Local backup directory '{$dir}' is not writable.");
                 }
-                return ['success' => true, 'message' => "Local storage is writable and ready."];
+                return ['success' => true, 'message' => "Local storage is writable and ready ({$dir})."];
             }
 
             if (in_array($driver, ['backblaze', 'r2', 'wasabi', 's3', 'custom_s3'])) {

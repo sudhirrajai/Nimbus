@@ -528,7 +528,7 @@ class BackupController extends Controller
         $request->validate([
             'id' => 'nullable|exists:backup_destinations,id',
             'name' => 'required|string|max:100',
-            'driver' => 'required|in:local,google_drive,backblaze,s3,wasabi,r2,custom_s3',
+            'driver' => 'required|in:local,google_drive,backblaze,b2,s3,wasabi,r2,custom_s3',
             'is_default' => 'boolean',
             'credentials' => 'nullable|array',
         ]);
@@ -562,8 +562,13 @@ class BackupController extends Controller
             $destination = new BackupDestination();
         }
 
+        $driver = $request->input('driver');
+        if ($driver === 'b2') {
+            $driver = 'backblaze';
+        }
+
         $destination->name = $request->input('name');
-        $destination->driver = $request->input('driver');
+        $destination->driver = $driver;
         $destination->is_default = $isDefault;
         $destination->is_active = true;
         $destination->credentials = $mergedCreds;
@@ -590,6 +595,9 @@ class BackupController extends Controller
 
         $destinationId = $request->input('id');
         $driver = $request->input('driver', 'local');
+        if ($driver === 'b2') {
+            $driver = 'backblaze';
+        }
         $creds = $request->input('credentials', []);
 
         if ($destinationId) {

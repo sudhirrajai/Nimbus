@@ -422,16 +422,18 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/schedules/{schedule}/toggle', [\App\Http\Controllers\BackupController::class, 'toggleSchedule'])->name('schedules.toggle');
             Route::post('/schedules/{schedule}/run', [\App\Http\Controllers\BackupController::class, 'runScheduleNow'])->name('schedules.run');
             Route::delete('/schedules/{schedule}', [\App\Http\Controllers\BackupController::class, 'deleteSchedule'])->name('schedules.delete');
+            // Storage Destinations (Google Drive, Backblaze B2, S3/Wasabi/R2, Local)
+            Route::post('/destinations', [\App\Http\Controllers\BackupController::class, 'saveDestination'])->name('destinations.store');
+            Route::post('/destinations/save', [\App\Http\Controllers\BackupController::class, 'saveDestination'])->name('destinations.save');
+            Route::post('/destinations/test', [\App\Http\Controllers\BackupController::class, 'testDestination'])->name('destinations.test');
+            Route::delete('/destinations/{destination}', [\App\Http\Controllers\BackupController::class, 'deleteDestination'])->name('destinations.delete');
+            Route::post('/destinations/{destination}/default', [\App\Http\Controllers\BackupController::class, 'setDefaultDestination'])->name('destinations.default');
+            Route::post('/destinations/{destination}/set-default', [\App\Http\Controllers\BackupController::class, 'setDefaultDestination'])->name('destinations.set-default');
+
             Route::post('/{backup}/restore', [\App\Http\Controllers\BackupController::class, 'restore'])->name('restore');
             Route::get('/{backup}/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('download');
             Route::post('/{backup}/retry-upload', [\App\Http\Controllers\BackupController::class, 'retryRemoteUpload'])->name('retry-upload');
             Route::delete('/{backup}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('destroy');
-
-            // Storage Destinations (Google Drive, Backblaze B2, S3/Wasabi/R2, Local)
-            Route::post('/destinations/save', [\App\Http\Controllers\BackupController::class, 'saveDestination'])->name('destinations.save');
-            Route::post('/destinations/test', [\App\Http\Controllers\BackupController::class, 'testDestination'])->name('destinations.test');
-            Route::delete('/destinations/{destination}', [\App\Http\Controllers\BackupController::class, 'deleteDestination'])->name('destinations.delete');
-            Route::post('/destinations/{destination}/set-default', [\App\Http\Controllers\BackupController::class, 'setDefaultDestination'])->name('destinations.set-default');
         });
 
         // FTP Accounts (Coming Soon)
