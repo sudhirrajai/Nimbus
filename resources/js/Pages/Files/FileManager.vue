@@ -214,7 +214,7 @@
                     <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
                   </button>
 
-                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles(true)" :disabled="loading" title="Refresh files (F5)">
                     <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
                   </button>
                 </div>
@@ -354,17 +354,92 @@
               <p class="text-xs text-secondary mt-3 font-weight-bold">Fetching files...</p>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="filteredItems.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top bg-gray-50 border-radius-bottom-lg">
-              <span class="text-xxs text-secondary font-weight-bold">Page {{ currentPage }} of {{ totalPages }}</span>
-              <ul class="pagination pagination-primary pagination-xs mb-0">
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button class="page-link shadow-none" @click="currentPage--"><i class="material-symbols-rounded">chevron_left</i></button>
-                </li>
-                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                  <button class="page-link shadow-none" @click="currentPage++"><i class="material-symbols-rounded">chevron_right</i></button>
-                </li>
-              </ul>
+            <!-- Pagination Footer -->
+            <div v-if="filteredItems.length > 0" class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-gray-50 border-radius-bottom-lg gap-2">
+              <!-- Left: Showing range and Per Page Selector -->
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="text-xs text-secondary mb-0">
+                  Showing <strong class="text-dark">{{ showingStart }}</strong> to <strong class="text-dark">{{ showingEnd }}</strong> of <strong class="text-dark">{{ filteredItems.length }}</strong> items
+                </span>
+                
+                <div class="d-flex align-items-center gap-1">
+                  <label class="text-xxs text-secondary mb-0 text-uppercase font-weight-bold">Rows:</label>
+                  <select 
+                    v-model.number="itemsPerPage" 
+                    @change="onItemsPerPageChange" 
+                    class="form-select form-select-sm border shadow-none bg-white py-1 px-2 text-xs border-radius-md"
+                    style="width: auto; min-width: 65px; height: 30px;"
+                  >
+                    <option :value="15">15</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                    <option :value="99999">All</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Right: Pagination Buttons -->
+              <div v-if="totalPages > 1" class="d-flex align-items-center gap-2">
+                <ul class="pagination pagination-sm pagination-primary mb-0 gap-1 align-items-center">
+                  <!-- First Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(1)" 
+                            title="First Page" 
+                            :disabled="currentPage === 1">
+                      <i class="material-symbols-rounded text-sm">first_page</i>
+                    </button>
+                  </li>
+                  <!-- Previous Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(currentPage - 1)" 
+                            title="Previous Page" 
+                            :disabled="currentPage === 1">
+                      <i class="material-symbols-rounded text-sm">chevron_left</i>
+                    </button>
+                  </li>
+
+                  <!-- Numbered Pages with Ellipsis -->
+                  <li v-for="(p, index) in displayedPages" :key="index" class="page-item" :class="{ active: p === currentPage, disabled: p === '...' }">
+                    <span v-if="p === '...'" class="page-link border-0 text-muted px-2 py-1 text-xs">...</span>
+                    <button v-else 
+                            class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none text-xs font-weight-bold" 
+                            :class="p === currentPage ? 'bg-gradient-primary text-white border-0 shadow-sm' : 'bg-white text-dark'"
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(p)">
+                      {{ p }}
+                    </button>
+                  </li>
+
+                  <!-- Next Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(currentPage + 1)" 
+                            title="Next Page" 
+                            :disabled="currentPage === totalPages">
+                      <i class="material-symbols-rounded text-sm">chevron_right</i>
+                    </button>
+                  </li>
+                  <!-- Last Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(totalPages)" 
+                            title="Last Page" 
+                            :disabled="currentPage === totalPages">
+                      <i class="material-symbols-rounded text-sm">last_page</i>
+                    </button>
+                  </li>
+                </ul>
+                <span class="text-xxs text-secondary ms-2 font-weight-bold d-none d-sm-inline">
+                  Page {{ currentPage }} of {{ totalPages }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1054,7 +1129,8 @@ const lastSelected = ref(null)
 const items = ref([])
 const searchQuery = ref('')
 const currentPage = ref(1)
-const itemsPerPage = ref(15)
+const savedItemsPerPage = typeof window !== 'undefined' ? Number(localStorage.getItem('nimbus_fm_items_per_page')) : null
+const itemsPerPage = ref(savedItemsPerPage && savedItemsPerPage > 0 ? savedItemsPerPage : 25)
 const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
@@ -1177,9 +1253,57 @@ const filteredItems = computed(() => {
   )
 })
 
-const totalPages = computed(() => Math.ceil(filteredItems.value.length / itemsPerPage.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / itemsPerPage.value)))
 const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
 const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const showingStart = computed(() => {
+  if (filteredItems.value.length === 0) return 0
+  return paginationStart.value + 1
+})
+
+const showingEnd = computed(() => {
+  return Math.min(paginationEnd.value, filteredItems.value.length)
+})
+
+const displayedPages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+
+  const pages = []
+  const left = Math.max(1, current - 2)
+  const right = Math.min(total, current + 2)
+
+  for (let i = left; i <= right; i++) {
+    pages.push(i)
+  }
+
+  if (left > 1) {
+    if (left > 2) pages.unshift('...')
+    pages.unshift(1)
+  }
+
+  if (right < total) {
+    if (right < total - 1) pages.push('...')
+    pages.push(total)
+  }
+
+  return pages
+})
+
+const goToPage = (p) => {
+  if (p === '...' || p < 1 || p > totalPages.value || p === currentPage.value) return
+  currentPage.value = p
+}
+
+const onItemsPerPageChange = () => {
+  currentPage.value = 1
+  localStorage.setItem('nimbus_fm_items_per_page', itemsPerPage.value)
+}
 
 const paginatedItems = computed(() => {
   return filteredItems.value.slice(paginationStart.value, paginationEnd.value)
@@ -1354,7 +1478,7 @@ const handleKeyboardShortcuts = (e) => {
   // F5 — Refresh
   if (e.key === 'F5') {
     e.preventDefault()
-    loadFiles()
+    loadFiles(true)
   }
 
   // Backspace — Go up one level
@@ -1457,24 +1581,26 @@ const changePermissions = async () => {
   }
 }
 
-const loadFiles = async () => {
+const loadFiles = async (forceRefresh = false) => {
   try {
     loading.value = true
     isSearching.value = false
     searchResults.value = []
     const response = await axios.post(`/file-manager/${props.domain}/list`, {
       path: currentPath.value || '',
-      showHidden: showHidden.value
+      showHidden: showHidden.value,
+      refresh: forceRefresh
     })
     items.value = response.data.items
     breadcrumbs.value = response.data.breadcrumbs
     selectedItems.value = []
     allSelected.value = false
-    await loadGitStatus()
   } catch (error) {
     showAlert('danger', 'Failed to load files')
   } finally {
     loading.value = false
+    // Load git status in background without blocking file list rendering!
+    loadGitStatus()
   }
 }
 
@@ -1579,6 +1705,7 @@ const runGitCreateBranch = async () => {
 
 const navigateTo = (path) => {
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = path 
     ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
@@ -1589,6 +1716,7 @@ const navigateTo = (path) => {
 const openDirectory = (name) => {
   const path = currentPath.value ? `${currentPath.value}/${name}` : name
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = `${window.location.pathname}?path=${encodeURIComponent(path)}`
   window.history.pushState({ path }, '', newUrl)
@@ -1600,6 +1728,7 @@ const goUpOneLevel = () => {
   pathParts.pop()
   const path = pathParts.join('/')
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = path 
     ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 

@@ -6,6 +6,7 @@ use App\Http\Controllers\ShieldController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 
 class FileManagerController extends Controller
@@ -76,6 +77,18 @@ class FileManagerController extends Controller
     }
 
     /**
+     * Invalidate the file manager directory listing cache
+     */
+    private function clearFileManagerCache()
+    {
+        try {
+            Cache::increment('fm_cache_ver');
+        } catch (\Exception $e) {
+            // Ignore cache increment errors
+        }
+    }
+
+    /**
      * List files and directories
      */
     public function list(Request $request, $domain)
@@ -83,6 +96,7 @@ class FileManagerController extends Controller
         try {
             $path = $request->input('path', '');
             $showHidden = filter_var($request->input('showHidden', false), FILTER_VALIDATE_BOOLEAN);
+            $forceRefresh = filter_var($request->input('refresh', false), FILTER_VALIDATE_BOOLEAN);
             $fullPath = $this->getFullPath($domain, $path);
 
             if (!$this->isValidPath($domain, $fullPath)) {
@@ -91,6 +105,20 @@ class FileManagerController extends Controller
 
             if (!File::exists($fullPath) || !is_dir($fullPath)) {
                 return response()->json(['error' => 'Path not found'], 404);
+            }
+
+            if ($forceRefresh) {
+                $this->clearFileManagerCache();
+            }
+
+            $cacheVersion = Cache::get('fm_cache_ver', 1);
+            $cacheKey = "fm_list_{$cacheVersion}_" . md5($fullPath) . ($showHidden ? '_h' : '');
+
+            if (!$forceRefresh && Cache::has($cacheKey)) {
+                $cached = Cache::get($cacheKey);
+                if (is_array($cached)) {
+                    return response()->json($cached);
+                }
             }
 
             $items = [];
@@ -127,15 +155,15 @@ class FileManagerController extends Controller
                 }
             }
 
-            // Directories
+            // Directories - fast metadata without recursive tree crawling
             foreach ($dirs as $name) {
                 $dir = $fullPath . DIRECTORY_SEPARATOR . $name;
                 $items[] = [
                     'name' => $name,
                     'type' => 'directory',
-                    'size' => $this->getDirectorySize($dir),
-                    'modified' => date('Y-m-d H:i:s', filemtime($dir)),
-                    'permissions' => substr(sprintf('%o', fileperms($dir)), -4),
+                    'size' => '-',
+                    'modified' => date('Y-m-d H:i:s', @filemtime($dir) ?: time()),
+                    'permissions' => @fileperms($dir) ? substr(sprintf('%o', fileperms($dir)), -4) : '0755',
                     'hidden' => str_starts_with($name, '.')
                 ];
             }
@@ -144,24 +172,33 @@ class FileManagerController extends Controller
             foreach ($files as $name) {
                 $file = $fullPath . DIRECTORY_SEPARATOR . $name;
                 $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                $size = @filesize($file) ?: 0;
                 $items[] = [
                     'name' => $name,
                     'type' => 'file',
                     'extension' => $extension,
-                    'size' => filesize($file),
-                    'sizeFormatted' => $this->formatBytes(filesize($file)),
-                    'modified' => date('Y-m-d H:i:s', filemtime($file)),
-                    'permissions' => substr(sprintf('%o', fileperms($file)), -4),
+                    'size' => $size,
+                    'sizeFormatted' => $this->formatBytes($size),
+                    'modified' => date('Y-m-d H:i:s', @filemtime($file) ?: time()),
+                    'permissions' => @fileperms($file) ? substr(sprintf('%o', fileperms($file)), -4) : '0644',
                     'editable' => $this->isTextFile($file),
                     'hidden' => str_starts_with($name, '.')
                 ];
             }
 
-            return response()->json([
+            $responsePayload = [
                 'items' => $items,
                 'currentPath' => $path,
                 'breadcrumbs' => $this->getBreadcrumbs($path, $domain)
-            ]);
+            ];
+
+            try {
+                Cache::put($cacheKey, $responsePayload, now()->addSeconds(60));
+            } catch (\Exception $e) {
+                // Ignore cache put errors
+            }
+
+            return response()->json($responsePayload);
         } catch (\Exception $e) {
             \Log::error("File list error: " . $e->getMessage());
             return response()->json(['error' => 'Failed to list files'], 500);
@@ -205,6 +242,7 @@ class FileManagerController extends Controller
                 $this->executeSudoCommand("chmod {$permissions} {$escapedPath}");
             }
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Permissions changed successfully']);
         } catch (\Exception $e) {
             \Log::error("Chmod error: " . $e->getMessage());
@@ -239,6 +277,7 @@ class FileManagerController extends Controller
             $escapedPath = escapeshellarg($targetPath);
             $this->executeSudoCommand("rm -rf {$escapedPath}");
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Deleted successfully']);
         } catch (\Exception $e) {
             \Log::error("Delete error: " . $e->getMessage());
@@ -275,6 +314,7 @@ class FileManagerController extends Controller
                 }
             }
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Items deleted successfully']);
         } catch (\Exception $e) {
             \Log::error("Multiple delete error: " . $e->getMessage());
@@ -318,6 +358,7 @@ class FileManagerController extends Controller
             $escapedNewPath = escapeshellarg($newPath);
             $this->executeSudoCommand("mv {$escapedOldPath} {$escapedNewPath}");
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Renamed successfully']);
         } catch (\Exception $e) {
             \Log::error("Rename error: " . $e->getMessage());
@@ -364,6 +405,7 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("cp -r {$escapedSource} {$escapedDest}");
             $this->executeSudoCommand("chown -R www-data:www-data {$escapedDest}");
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Copied successfully']);
         } catch (\Exception $e) {
             \Log::error("Copy error: " . $e->getMessage());
@@ -409,6 +451,7 @@ class FileManagerController extends Controller
             $escapedDest = escapeshellarg($destFull);
             $this->executeSudoCommand("mv {$escapedSource} {$escapedDest}");
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Moved successfully']);
         } catch (\Exception $e) {
             \Log::error("Move error: " . $e->getMessage());
@@ -455,6 +498,7 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("chown www-data:www-data {$escapedZipPath}");
             $this->executeSudoCommand("chmod 644 {$escapedZipPath}");
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'ZIP archive created successfully']);
         } catch (\Exception $e) {
             \Log::error("ZIP error: " . $e->getMessage());
@@ -531,6 +575,7 @@ class FileManagerController extends Controller
             // Set proper ownership
             $this->executeSudoCommand("chown -R www-data:www-data {$escapedDest}");
 
+            $this->clearFileManagerCache();
             return response()->json([
                 'message' => 'Archive extracted successfully',
                 'destination' => $destination ?: $path
@@ -622,6 +667,7 @@ class FileManagerController extends Controller
                 $this->executeSudoCommand("chmod 644 {$escapedFull}");
             }
 
+            $this->clearFileManagerCache();
             return response()->json([
                 'message' => 'File saved successfully',
                 'size' => File::size($fullPath)
@@ -667,6 +713,7 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("chown www-data:www-data {$escapedFilePath}");
             $this->executeSudoCommand("chmod 644 {$escapedFilePath}");
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'File created successfully']);
         } catch (\Exception $e) {
             \Log::error("File create error: " . $e->getMessage());
@@ -706,6 +753,7 @@ class FileManagerController extends Controller
             $this->executeSudoCommand("mkdir -p " . escapeshellarg($newDirPath));
             $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($newDirPath));
 
+            $this->clearFileManagerCache();
             return response()->json(['message' => 'Directory created successfully']);
         } catch (\Exception $e) {
             \Log::error("Directory create error: " . $e->getMessage());
@@ -774,6 +822,7 @@ class FileManagerController extends Controller
                     $cmd = "php artisan shield:scan-file {$escapedTarget}";
                     exec("nohup {$cmd} > /dev/null 2>&1 &");
 
+                    $this->clearFileManagerCache();
                     return response()->json(['message' => 'File uploaded successfully']);
                 }
 
@@ -797,6 +846,7 @@ class FileManagerController extends Controller
                 $cmd = "php artisan shield:scan-file {$escapedTarget}";
                 exec("nohup {$cmd} > /dev/null 2>&1 &");
 
+                $this->clearFileManagerCache();
                 return response()->json(['message' => 'File uploaded successfully']);
             }
         } catch (\Exception $e) {
