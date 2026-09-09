@@ -22,7 +22,7 @@
           <div class="terminal-title">
             <i class="material-symbols-rounded terminal-title-icon">terminal</i>
             <span class="terminal-title-text">
-              www-data@nimbus: /var/www/{{ domain }}{{ terminalCwd ? '/' + terminalCwd : '' }}
+              www-data@nimbus: {{ displayTerminalPath }}
             </span>
           </div>
         </div>
@@ -84,12 +84,23 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({
   domain: { type: String, required: true },
   currentPath: { type: String, default: '' },
+})
+
+const displayTerminalPath = computed(() => {
+  const rel = terminalCwd.value ? `/${terminalCwd.value}` : ''
+  if (props.domain === 'root') {
+    return rel || '/'
+  }
+  if (props.domain === 'projects') {
+    return `/var/www${rel}`
+  }
+  return `/var/www/${props.domain}${rel}`
 })
 
 const emit = defineEmits(['refresh-files'])

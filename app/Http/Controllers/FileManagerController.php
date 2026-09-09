@@ -14,11 +14,30 @@ class FileManagerController extends Controller
     private $gitSystemUser = 'www-data';
 
     /**
-     * Display file manager for a domain
+     * Display file manager for a scope or domain
      */
-    public function index(Request $request, $domain)
+    public function index(Request $request, $domain = null)
     {
-        $domainPath = $this->basePath . $domain;
+        $user = $request->user();
+        if (!$user) {
+            return redirect()->route('auth.login');
+        }
+
+        // If no domain provided, default based on user's permission
+        if (!$domain) {
+            if ($user->hasFileManagerProjectsAccess()) {
+                $domain = 'projects';
+            } else {
+                $accessible = $user->accessibleDomains();
+                $domain = !empty($accessible) ? $accessible[0] : null;
+                if (!$domain) {
+                    return redirect()->route('domains.list')->with('error', 'No website assigned to your account.');
+                }
+            }
+        }
+
+        $scopeInfo = $this->resolveScopeInfo($request, $domain);
+        $domainPath = $scopeInfo['basePath'];
 
         // Security check
         if (!$this->isValidPath($domain, $domainPath)) {
@@ -26,12 +45,33 @@ class FileManagerController extends Controller
         }
 
         if (!File::exists($domainPath)) {
-            return redirect()->route('domains.list');
+            if ($scopeInfo['scope'] === 'domain') {
+                return redirect()->route('domains.list');
+            }
+        }
+
+        // Available domains list for quick switching dropdown
+        $domains = [];
+        if (File::exists('/var/www')) {
+            $dirs = glob('/var/www/*', GLOB_ONLYDIR);
+            foreach ($dirs as $dir) {
+                $name = basename($dir);
+                if (!in_array($name, ['html', 'default', 'nimbus'])) {
+                    if ($user->canAccessDomain($name) || $user->hasFileManagerProjectsAccess()) {
+                        $domains[] = $name;
+                    }
+                }
+            }
         }
 
         return Inertia::render('Files/FileManager', [
-            'domain' => $domain,
-            'initialPath' => $request->query('path', '')
+            'domain' => $scopeInfo['domainParam'],
+            'scope' => $scopeInfo['scope'],
+            'displayScope' => $scopeInfo['displayScope'],
+            'initialPath' => $request->query('path', ''),
+            'userScope' => $user->getFileManagerScope(),
+            'allowedScopes' => $user->getAllowedFileManagerScopes(),
+            'availableDomains' => $domains,
         ]);
     }
 
@@ -120,7 +160,7 @@ class FileManagerController extends Controller
             return response()->json([
                 'items' => $items,
                 'currentPath' => $path,
-                'breadcrumbs' => $this->getBreadcrumbs($path)
+                'breadcrumbs' => $this->getBreadcrumbs($path, $domain)
             ]);
         } catch (\Exception $e) {
             \Log::error("File list error: " . $e->getMessage());
@@ -883,7 +923,11 @@ class FileManagerController extends Controller
             }, array_values(array_filter(array_map('trim', $stashLines))));
 
             // Check if token exists
-            $tokenPath = $this->basePath . $domain . '/.git-token';
+            $tokenPath = $repoPath . '/.git-token';
+            if (!file_exists($tokenPath)) {
+                $scopeInfo = $this->resolveScopeInfo(request(), $domain);
+                $tokenPath = rtrim($scopeInfo['basePath'], '/') . '/.git-token';
+            }
             $tokenExists = false;
             $tokenOutput = [];
             exec("sudo test -f " . escapeshellarg($tokenPath) . " && echo 'exists'", $tokenOutput);
@@ -1042,12 +1086,13 @@ class FileManagerController extends Controller
                 'token' => 'required|string|max:500',
             ]);
 
-            $domainPath = $this->basePath . $domain;
+            $scopeInfo = $this->resolveScopeInfo($request, $domain);
+            $domainPath = $scopeInfo['basePath'];
             if (!$this->isValidPath($domain, $domainPath)) {
                 return response()->json(['error' => 'Access denied'], 403);
             }
 
-            $tokenPath = $domainPath . '/.git-token';
+            $tokenPath = rtrim($domainPath, '/') . '/.git-token';
             $token = trim($request->input('token'));
 
             // Write the token file with sudo for proper permissions
@@ -1069,8 +1114,9 @@ class FileManagerController extends Controller
      */
     public function getGitToken(Request $request, $domain)
     {
-        $domainPath = $this->basePath . $domain;
-        $tokenPath = $domainPath . '/.git-token';
+        $scopeInfo = $this->resolveScopeInfo($request, $domain);
+        $domainPath = $scopeInfo['basePath'];
+        $tokenPath = rtrim($domainPath, '/') . '/.git-token';
 
         // Check if token file exists using sudo since it's owned by root
         $output = [];
@@ -1086,35 +1132,108 @@ class FileManagerController extends Controller
 
     // Helper methods
 
+    /**
+     * Resolve the base root directory and effective scope for the current request
+     */
+    private function resolveScopeInfo(?Request $request = null, $domain = null): array
+    {
+        $user = ($request ?: request())->user();
+        $normalized = strtolower(trim((string)$domain));
+
+        // 1. Server Root Scope (/)
+        if (in_array($normalized, ['root', '__root__', 'server'])) {
+            if ($user && !$user->hasFileManagerRootAccess()) {
+                abort(403, 'Permission denied. Server root access is restricted.');
+            }
+            return [
+                'scope' => 'root',
+                'basePath' => '/',
+                'displayScope' => 'Server Root (/)',
+                'isServerRoot' => true,
+                'isProjectsRoot' => false,
+                'domainParam' => 'root',
+                'domain' => null,
+            ];
+        }
+
+        // 2. Web Projects Root Scope (/var/www)
+        if (empty($normalized) || in_array($normalized, ['projects', '__projects__', 'all', 'var_www'])) {
+            if ($user && !$user->hasFileManagerProjectsAccess()) {
+                // If user doesn't have projects access, fallback to first accessible domain
+                $accessible = $user->accessibleDomains();
+                if (!empty($accessible)) {
+                    $domain = $accessible[0];
+                    return [
+                        'scope' => 'domain',
+                        'basePath' => '/var/www/' . $domain,
+                        'displayScope' => $domain,
+                        'isServerRoot' => false,
+                        'isProjectsRoot' => false,
+                        'domainParam' => $domain,
+                        'domain' => $domain,
+                    ];
+                }
+                abort(403, 'Permission denied. Web projects access is restricted.');
+            }
+
+            return [
+                'scope' => 'projects',
+                'basePath' => '/var/www',
+                'displayScope' => 'Web Projects (/var/www)',
+                'isServerRoot' => false,
+                'isProjectsRoot' => true,
+                'domainParam' => 'projects',
+                'domain' => null,
+            ];
+        }
+
+        // 3. Domain Scoped (/var/www/{domain})
+        return [
+            'scope' => 'domain',
+            'basePath' => '/var/www/' . $domain,
+            'displayScope' => $domain,
+            'isServerRoot' => false,
+            'isProjectsRoot' => false,
+            'domainParam' => $domain,
+            'domain' => $domain,
+        ];
+    }
+
     private function getFullPath($domain, $path = '')
     {
-        $domainPath = $this->basePath . $domain;
-        if (empty($path)) {
-            return $domainPath;
+        $scopeInfo = $this->resolveScopeInfo(request(), $domain);
+        $base = rtrim($scopeInfo['basePath'], '/');
+        $cleanPath = ltrim(str_replace(['../', '..\\', './', '.\\'], '', (string)$path), '/');
+
+        if (empty($cleanPath)) {
+            return empty($base) ? '/' : $base;
         }
-        return $domainPath . '/' . ltrim($path, '/');
+
+        return (empty($base) ? '' : $base) . '/' . $cleanPath;
     }
 
     private function isValidPath($domain, $path)
     {
         // Sanitize path by removing any '..' or './' sequences manually first
-        $path = str_replace(['../', '..\\', './', '.\\'], '', $path);
-        
-        $realPath = realpath($path);
-        $domainRoot = realpath($this->basePath . $domain);
+        $cleanPath = str_replace(['../', '..\\', './', '.\\'], '', (string)$path);
+        $scopeInfo = $this->resolveScopeInfo(request(), $domain);
 
-        if (!$domainRoot) {
-            return false;
+        // If Server Root (/): Any clean path is permitted
+        if ($scopeInfo['isServerRoot']) {
+            return true;
         }
 
-        // If realpath failed (file doesn't exist yet), we check if the parent directory is valid
+        $allowedBase = realpath($scopeInfo['basePath']) ?: $scopeInfo['basePath'];
+        $realPath = realpath($cleanPath);
+
+        // If realpath failed (file doesn't exist yet), check parent directory
         if (!$realPath) {
-            $parentDir = realpath(dirname($path));
+            $parentDir = realpath(dirname($cleanPath));
             if (!$parentDir) return false;
-            return strpos($parentDir, $domainRoot) === 0;
+            return strpos($parentDir, $allowedBase) === 0;
         }
 
-        return strpos($realPath, $domainRoot) === 0;
+        return strpos($realPath, $allowedBase) === 0;
     }
 
     private function isTextFile($file)
@@ -1208,14 +1327,17 @@ class FileManagerController extends Controller
         return $this->formatBytes($size);
     }
 
-    private function getBreadcrumbs($path)
+    private function getBreadcrumbs($path, $domain = null)
     {
+        $scopeInfo = $this->resolveScopeInfo(request(), $domain);
+        $rootName = $scopeInfo['displayScope'] ?: 'Root';
+
         if (empty($path)) {
-            return [['name' => 'Root', 'path' => '']];
+            return [['name' => $rootName, 'path' => '']];
         }
 
         $parts = explode('/', trim($path, '/'));
-        $breadcrumbs = [['name' => 'Root', 'path' => '']];
+        $breadcrumbs = [['name' => $rootName, 'path' => '']];
         $currentPath = '';
 
         foreach ($parts as $part) {
@@ -1231,23 +1353,17 @@ class FileManagerController extends Controller
 
     private function resolveGitRepository($domain, $fullPath)
     {
-        $domainPath = realpath($this->basePath . $domain);
         $searchPath = File::isDirectory($fullPath) ? $fullPath : dirname($fullPath);
         $realSearchPath = realpath($searchPath);
 
-        if (!$domainPath || !$realSearchPath || strpos($realSearchPath, $domainPath) !== 0) {
+        if (!$realSearchPath) {
             return null;
         }
 
         $currentPath = $realSearchPath;
-
-        while ($currentPath && strpos($currentPath, $domainPath) === 0) {
+        while ($currentPath && $currentPath !== '/' && strlen($currentPath) > 1) {
             if (File::exists($currentPath . DIRECTORY_SEPARATOR . '.git')) {
                 return $currentPath;
-            }
-
-            if ($currentPath === $domainPath) {
-                break;
             }
 
             $parentPath = dirname($currentPath);
@@ -1263,15 +1379,24 @@ class FileManagerController extends Controller
 
     private function toDomainRelativePath($domain, $fullPath)
     {
-        $domainRoot = realpath($this->basePath . $domain);
-        $realPath = realpath($fullPath);
+        $scopeInfo = $this->resolveScopeInfo(request(), $domain);
+        $root = realpath($scopeInfo['basePath']) ?: $scopeInfo['basePath'];
+        $realPath = realpath($fullPath) ?: $fullPath;
 
-        if (!$domainRoot || !$realPath) {
+        if (!$realPath) {
             return '';
         }
 
-        $relative = ltrim(substr($realPath, strlen($domainRoot)), DIRECTORY_SEPARATOR);
-        return str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+        if ($root === '/') {
+            return ltrim($realPath, '/');
+        }
+
+        if (strlen($realPath) >= strlen($root)) {
+            $relative = ltrim(substr($realPath, strlen($root)), DIRECTORY_SEPARATOR);
+            return str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+        }
+
+        return ltrim($realPath, '/');
     }
 
     private function ensureRemoteConfigured($repoPath, $domain)

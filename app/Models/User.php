@@ -21,6 +21,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'file_manager_scope',
         'linux_user',
         'status',
         'last_login_at',
@@ -83,6 +84,37 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    // ─── File Manager Scope Helpers ──────────────────────────────
+
+    public function getFileManagerScope(): string
+    {
+        if ($this->isRoot()) {
+            return 'root';
+        }
+        return $this->file_manager_scope ?: 'domain';
+    }
+
+    public function hasFileManagerRootAccess(): bool
+    {
+        return $this->isRoot() || $this->file_manager_scope === 'root';
+    }
+
+    public function hasFileManagerProjectsAccess(): bool
+    {
+        return $this->isRoot() || in_array($this->file_manager_scope, ['root', 'projects']);
+    }
+
+    public function getAllowedFileManagerScopes(): array
+    {
+        if ($this->hasFileManagerRootAccess()) {
+            return ['domain', 'projects', 'root'];
+        }
+        if ($this->hasFileManagerProjectsAccess()) {
+            return ['domain', 'projects'];
+        }
+        return ['domain'];
     }
 
     // ─── Domain Access ───────────────────────────────────────────

@@ -123,20 +123,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
     });
 
-    // File Manager shortcut — redirects to primary assigned domain or list
-    Route::get('/file-manager', function (\Illuminate\Http\Request $request) {
-        $user = $request->user();
-        if (!$user) return redirect()->route('auth.login');
-        $domains = $user->accessibleDomains();
-        if (!empty($domains)) {
-            return redirect()->route('file-manager.index', ['domain' => $domains[0]]);
-        }
-        return redirect()->route('domains.list');
-    })->name('file-manager.shortcut');
-
-    // File Manager — domain-scoped access via middleware
+    // File Manager — supports root, projects (/var/www), and domain scopes
     Route::middleware(['domain.access', 'permission:files'])->prefix('file-manager')->name('file-manager.')->group(function () {
-        Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
+        Route::get('/{domain?}', [FileManagerController::class, 'index'])->name('index');
         Route::post('/{domain}/list', [FileManagerController::class, 'list'])->name('list');
         Route::post('/{domain}/read', [FileManagerController::class, 'read'])->name('read');
         Route::post('/{domain}/save', [FileManagerController::class, 'save'])->name('save');

@@ -74,6 +74,7 @@
                 <tr>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">User</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Role</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">File Manager</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Linux User</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Websites</th>
                   <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
@@ -98,6 +99,17 @@
                   <td>
                     <span class="badge badge-sm" :class="user.role === 'root' ? 'bg-gradient-danger' : user.role === 'admin' ? 'bg-gradient-warning' : 'bg-gradient-info'">
                       {{ user.role }}
+                    </span>
+                  </td>
+                  <td>
+                    <span v-if="user.file_manager_scope === 'root'" class="badge badge-sm bg-gradient-danger d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">admin_panel_settings</i> Root (/)
+                    </span>
+                    <span v-else-if="user.file_manager_scope === 'projects'" class="badge badge-sm bg-gradient-info d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">folder_special</i> Projects (/var/www)
+                    </span>
+                    <span v-else class="badge badge-sm bg-gradient-secondary d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">folder</i> Domain Only
                     </span>
                   </td>
                   <td><code class="text-xs">{{ user.linux_user || '-' }}</code></td>
@@ -188,6 +200,21 @@
                 <option value="user">User — Access assigned websites only</option>
                 <option value="admin">Admin — Manage assigned websites + view stats</option>
               </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label d-flex justify-content-between align-items-center">
+                <span>File Manager Scope *</span>
+                <small class="text-muted">Filesystem Boundary</small>
+              </label>
+              <select class="form-control form-select" v-model="userForm.file_manager_scope" :disabled="editingUser?.is_protected">
+                <option value="domain">Assigned Domains Only (/var/www/domain)</option>
+                <option value="projects">Web Projects Root (/var/www) — All Sites</option>
+                <option value="root">Full Server Root (/) — Super Admin</option>
+              </select>
+              <div class="form-text text-xs text-secondary mt-1">
+                <i class="material-symbols-rounded text-xs align-middle me-1">shield</i>
+                Allows super admin to delegate server root or multi-project file manager access to other admins.
+              </div>
             </div>
           </div>
           <div class="modal-footer border-0">
@@ -336,7 +363,7 @@ const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
 
-const userForm = ref({ name: '', email: '', password: '', role: 'user' })
+const userForm = ref({ name: '', email: '', password: '', role: 'user', file_manager_scope: 'domain' })
 const websiteAssignments = ref([]) // [{ domain, permissions: [] }]
 
 const allPermissions = [
@@ -402,13 +429,19 @@ const loadDomains = async () => {
 
 const openCreateModal = () => {
   editingUser.value = null
-  userForm.value = { name: '', email: '', password: '', role: 'user' }
+  userForm.value = { name: '', email: '', password: '', role: 'user', file_manager_scope: 'domain' }
   showUserModal.value = true
 }
 
 const openEditModal = (user) => {
   editingUser.value = user
-  userForm.value = { name: user.name, email: user.email, password: '', role: user.role }
+  userForm.value = {
+    name: user.name,
+    email: user.email,
+    password: '',
+    role: user.role,
+    file_manager_scope: user.file_manager_scope || 'domain'
+  }
   showUserModal.value = true
 }
 

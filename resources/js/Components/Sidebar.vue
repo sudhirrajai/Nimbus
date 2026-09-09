@@ -276,6 +276,10 @@ const assignedDomains = computed(() => page.props.auth?.user?.assigned_domains |
 const hasPerm = (perm) => isRoot.value || userPermissions.value.includes(perm)
 
 const fileManagerLink = computed(() => {
+  const scope = page.props.auth?.user?.file_manager_scope
+  if (isRoot.value || scope === 'root' || scope === 'projects') {
+    return '/file-manager'
+  }
   if (assignedDomains.value.length > 0) {
     return `/file-manager/${assignedDomains.value[0]}`
   }

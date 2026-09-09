@@ -32,6 +32,7 @@ class UserController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
+                    'file_manager_scope' => $user->getFileManagerScope(),
                     'linux_user' => $user->linux_user,
                     'status' => $user->status,
                     'last_login_at' => $user->last_login_at?->diffForHumans(),
@@ -76,6 +77,7 @@ class UserController extends Controller
             'email' => 'required|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
             'role' => ['required', Rule::in(['admin', 'user'])],
+            'file_manager_scope' => ['nullable', Rule::in(['domain', 'projects', 'root'])],
             'websites' => 'array',
             'websites.*.domain' => 'required|string',
             'websites.*.permissions' => 'array',
@@ -97,6 +99,7 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
+            'file_manager_scope' => $request->input('file_manager_scope', 'domain'),
             'linux_user' => $linuxUser,
             'status' => 'active',
         ]);
@@ -141,6 +144,7 @@ class UserController extends Controller
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'password' => 'sometimes|string|min:8',
             'role' => ['sometimes', Rule::in(['root', 'admin', 'user'])],
+            'file_manager_scope' => ['sometimes', Rule::in(['domain', 'projects', 'root'])],
             'status' => ['sometimes', Rule::in(['active', 'suspended'])],
         ]);
 
@@ -148,6 +152,9 @@ class UserController extends Controller
         if ($request->has('email')) $user->email = $request->email;
         if ($request->has('password')) $user->password = Hash::make($request->password);
         if ($request->has('role') && $user->id !== 1) $user->role = $request->role;
+        if ($request->has('file_manager_scope')) {
+            $user->file_manager_scope = ($user->id === 1) ? 'root' : $request->file_manager_scope;
+        }
 
         if ($request->has('status')) {
             $user->status = $request->status;

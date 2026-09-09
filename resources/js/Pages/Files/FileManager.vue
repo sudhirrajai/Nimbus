@@ -6,25 +6,82 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="glass-card d-flex justify-content-between align-items-center p-3">
-            <div class="d-flex align-items-center">
-              <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
-                <i class="material-symbols-rounded opacity-10">folder_open</i>
+          <div class="glass-card p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+              <!-- Left: Title & Path Info -->
+              <div class="d-flex align-items-center">
+                <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
+                  <i class="material-symbols-rounded opacity-10">folder_open</i>
+                </div>
+                <div>
+                  <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                    <h4 class="font-weight-bolder mb-0">File Manager</h4>
+                    <!-- Scope Badge -->
+                    <span v-if="scope === 'root'" class="badge bg-gradient-danger text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">admin_panel_settings</i> Server Root (/)
+                    </span>
+                    <span v-else-if="scope === 'projects'" class="badge bg-gradient-info text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">folder_special</i> Web Projects (/var/www)
+                    </span>
+                    <span v-else class="badge bg-gradient-primary text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">language</i> {{ domain }}
+                    </span>
+                  </div>
+                  <p class="mb-0 text-xs text-secondary font-monospace">
+                    <span class="text-muted">{{ scope === 'root' ? '' : (scope === 'projects' ? '/var/www' : `/var/www/${domain}`) }}</span>
+                    <span class="text-dark font-weight-bold">{{ currentPath ? (scope === 'root' ? '/' + currentPath : '/' + currentPath) : (scope === 'root' ? '/' : '') }}</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 class="font-weight-bolder mb-0">File Manager</h4>
-                <p class="mb-0 text-sm text-secondary">
-                  <span class="text-primary font-weight-bold">{{ domain }}</span> 
-                  <span class="mx-2 text-lighter">/</span> 
-                  <span class="text-muted">/var/www/{{ domain }}</span>
-                  <span v-if="currentPath" class="text-dark font-weight-bold">/{{ currentPath }}</span>
-                </p>
+
+              <!-- Right: Scope Switchers & Quick Jump -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Scope Switch Buttons (for users with projects or root access) -->
+                <div v-if="allowedScopes.includes('projects') || allowedScopes.includes('root')" class="btn-group btn-group-sm shadow-sm border-radius-lg overflow-hidden">
+                  <button 
+                    type="button" 
+                    class="btn btn-sm mb-0" 
+                    :class="scope === 'projects' ? 'bg-gradient-info text-white' : 'bg-white text-dark'"
+                    @click="switchScope('projects')"
+                    title="Browse all website projects in /var/www"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">folder_special</i>
+                    <span>Web Projects</span>
+                  </button>
+                  <button 
+                    v-if="allowedScopes.includes('root')" 
+                    type="button" 
+                    class="btn btn-sm mb-0" 
+                    :class="scope === 'root' ? 'bg-gradient-danger text-white' : 'bg-white text-dark'"
+                    @click="switchScope('root')"
+                    title="Full Server Root access (/)"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">admin_panel_settings</i>
+                    <span>Server Root</span>
+                  </button>
+                </div>
+
+                <!-- Quick Domain Selector -->
+                <div v-if="availableDomains && availableDomains.length > 0" class="d-flex align-items-center" style="min-width: 170px;">
+                  <select 
+                    class="form-select form-select-sm border-radius-lg shadow-sm" 
+                    :value="scope === 'domain' ? domain : ''"
+                    @change="onDomainSelect($event.target.value)"
+                  >
+                    <option value="" disabled selected>Jump to Website...</option>
+                    <option v-for="d in availableDomains" :key="d" :value="d">
+                      🌐 {{ d }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Back button -->
+                <button class="btn btn-sm btn-link text-secondary mb-0" @click="goBack">
+                  <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
+                  {{ scope === 'domain' ? 'Domains' : 'Dashboard' }}
+                </button>
               </div>
             </div>
-            <button class="btn btn-link text-secondary mb-0" @click="goBack">
-              <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
-              Back to Domains
-            </button>
           </div>
         </div>
       </div>
@@ -51,10 +108,10 @@
             <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-3">Quick Navigation</h6>
             <div class="nav-pills-container">
               <button class="nav-pill-btn" :class="{ active: !currentPath }" @click="navigateTo('')">
-                <i class="material-symbols-rounded">home</i>
-                <span>Root Directory</span>
+                <i class="material-symbols-rounded">{{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}</i>
+                <span>{{ displayScope || (scope === 'root' ? 'Server Root (/)' : (scope === 'projects' ? 'Web Projects (/var/www)' : 'Root Directory')) }}</span>
               </button>
-              <button v-for="(crumb, index) in breadcrumbs.slice(0, -1)" :key="index" class="nav-pill-btn" @click="navigateTo(crumb.path)">
+              <button v-for="(crumb, index) in breadcrumbs.slice(1, -1)" :key="index" class="nav-pill-btn" @click="navigateTo(crumb.path)">
                 <i class="material-symbols-rounded">subdirectory_arrow_right</i>
                 <span>{{ crumb.name }}</span>
               </button>
@@ -186,15 +243,20 @@
           <!-- Breadcrumbs bar -->
           <div class="glass-card mb-3 p-2 px-3 d-flex align-items-center shadow-sm">
             <nav aria-label="breadcrumb" class="flex-grow-1">
-              <ol class="breadcrumb bg-transparent mb-0 p-0">
-                <li class="breadcrumb-item text-xs">
-                  <a href="#" @click.prevent="navigateTo('')" class="text-secondary">
-                    <i class="material-symbols-rounded text-xs">home</i>
-                  </a>
-                </li>
+              <ol class="breadcrumb bg-transparent mb-0 p-0 align-items-center">
                 <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item text-xs" :class="{ active: index === breadcrumbs.length - 1 }">
-                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)" class="text-secondary">{{ crumb.name }}</a>
-                  <span v-else class="text-dark font-weight-bold">{{ crumb.name }}</span>
+                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)" class="text-secondary text-decoration-none d-inline-flex align-items-center">
+                    <i v-if="index === 0" class="material-symbols-rounded text-xs me-1">
+                      {{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}
+                    </i>
+                    <span>{{ crumb.name }}</span>
+                  </a>
+                  <span v-else class="text-dark font-weight-bold d-inline-flex align-items-center">
+                    <i v-if="index === 0" class="material-symbols-rounded text-xs me-1">
+                      {{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}
+                    </i>
+                    <span>{{ crumb.name }}</span>
+                  </span>
                 </li>
               </ol>
             </nav>
@@ -963,7 +1025,27 @@ const userId = computed(() => page.props.auth?.user?.id || 'guest')
 
 const props = defineProps({
   domain: String,
-  initialPath: String
+  initialPath: String,
+  scope: {
+    type: String,
+    default: 'domain'
+  },
+  displayScope: {
+    type: String,
+    default: ''
+  },
+  userScope: {
+    type: String,
+    default: 'domain'
+  },
+  allowedScopes: {
+    type: Array,
+    default: () => ['domain']
+  },
+  availableDomains: {
+    type: Array,
+    default: () => []
+  }
 })
 
 const webTerminalRef = ref(null)
@@ -1525,7 +1607,27 @@ const goUpOneLevel = () => {
   window.history.pushState({ path }, '', newUrl)
 }
 
-const goBack = () => router.visit('/domains')
+const switchScope = (targetScope) => {
+  if (targetScope === 'projects') {
+    router.visit('/file-manager/projects')
+  } else if (targetScope === 'root') {
+    router.visit('/file-manager/root')
+  }
+}
+
+const onDomainSelect = (selectedDomain) => {
+  if (selectedDomain) {
+    router.visit(`/file-manager/${selectedDomain}`)
+  }
+}
+
+const goBack = () => {
+  if (props.scope === 'domain') {
+    router.visit('/domains')
+  } else {
+    router.visit('/dashboard')
+  }
+}
 
 const createFile = async () => {
   try {
