@@ -428,6 +428,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
+import Chart from 'chart.js/auto'
 
 const props = defineProps({
   serverStats: {
@@ -451,12 +452,13 @@ const loadHistory = ref([])
 const timeLabels = ref([])
 
 onMounted(() => {
-  console.log('Component mounted, loading Chart.js...')
-  loadChartJs()
+  initializeHistoryData()
+  initializeCharts()
+  startAutoRefresh()
+  chartsReady.value = true
 })
 
 onUnmounted(() => {
-  console.log('Component unmounting, cleaning up...')
   if (refreshInterval) {
     clearInterval(refreshInterval)
     refreshInterval = null
@@ -477,43 +479,6 @@ const destroyCharts = () => {
     loadChart.destroy()
     loadChart = null
   }
-}
-
-const loadChartJs = () => {
-  if (typeof Chart !== 'undefined') {
-    console.log('Chart.js already loaded')
-    initializeApp()
-    return
-  }
-
-  const script = document.createElement('script')
-  script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
-  script.async = true
-  
-  script.onload = () => {
-    console.log('Chart.js loaded successfully')
-    initializeApp()
-  }
-  
-  script.onerror = () => {
-    console.error('Failed to load Chart.js')
-  }
-  
-  document.head.appendChild(script)
-}
-
-const initializeApp = () => {
-  setTimeout(() => {
-    if (typeof Chart !== 'undefined') {
-      console.log('Initializing charts and auto-refresh...')
-      initializeHistoryData()
-      initializeCharts()
-      startAutoRefresh()
-      chartsReady.value = true
-    } else {
-      console.error('Chart.js is still not available')
-    }
-  }, 300)
 }
 
 const initializeHistoryData = () => {
@@ -712,8 +677,10 @@ const startAutoRefresh = () => {
 }
 
 const refreshStats = async () => {
+  if (typeof document !== 'undefined' && document.hidden) {
+    return // Pause auto-refreshing when tab is in background
+  }
   if (isRefreshing.value) {
-    console.log('Already refreshing, skipping...')
     return
   }
   

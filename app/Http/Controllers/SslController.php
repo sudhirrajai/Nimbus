@@ -982,6 +982,195 @@ class SslController extends Controller
     }
 
     /**
+     * Install custom SSL certificate (Certificate + Private Key + optional CA Bundle)
+     */
+    public function installCustomCertificate(Request $request)
+    {
+        // Certificate provisioning service check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('ssl')], 503);
+        }
+
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253',
+                'certificate' => 'required|string',
+                'private_key' => 'required|string',
+                'ca_bundle' => 'nullable|string',
+            ]);
+
+            $domain = strtolower(trim($request->input('domain')));
+
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $certificate = trim(str_replace("\r\n", "\n", $request->input('certificate')));
+            $privateKey = trim(str_replace("\r\n", "\n", $request->input('private_key')));
+            $caBundle = trim(str_replace("\r\n", "\n", (string)$request->input('ca_bundle', '')));
+
+            // 1. Validate Certificate PEM format
+            $certResource = @openssl_x509_read($certificate);
+            if (!$certResource) {
+                return response()->json([
+                    'error' => 'Invalid SSL certificate format. Please ensure it is a valid PEM formatted certificate (starts with -----BEGIN CERTIFICATE-----).'
+                ], 422);
+            }
+
+            // 2. Validate Private Key PEM format
+            $keyResource = @openssl_pkey_get_private($privateKey);
+            if (!$keyResource) {
+                return response()->json([
+                    'error' => 'Invalid private key format. Please ensure it is a valid PEM formatted private key (starts with -----BEGIN PRIVATE KEY----- or -----BEGIN RSA PRIVATE KEY-----).'
+                ], 422);
+            }
+
+            // 3. Verify that the private key matches the certificate
+            if (!openssl_x509_check_private_key($certResource, $keyResource)) {
+                return response()->json([
+                    'error' => 'The provided private key does not match the SSL certificate.'
+                ], 422);
+            }
+
+            // 4. Verify domain name matches certificate (CN or SAN)
+            $certInfo = @openssl_x509_parse($certResource);
+            if ($certInfo) {
+                $domainMatch = false;
+                $cn = $certInfo['subject']['CN'] ?? '';
+                if ($this->domainMatchesCert($domain, $cn)) {
+                    $domainMatch = true;
+                }
+
+                if (!$domainMatch && isset($certInfo['extensions']['subjectAltName'])) {
+                    $sans = explode(',', $certInfo['extensions']['subjectAltName']);
+                    foreach ($sans as $san) {
+                        $san = trim(str_replace('DNS:', '', $san));
+                        if ($this->domainMatchesCert($domain, $san)) {
+                            $domainMatch = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$domainMatch) {
+                    return response()->json([
+                        'error' => "The uploaded certificate is for '" . ($cn ?: 'another domain') . "' and does not match '{$domain}'."
+                    ], 422);
+                }
+            }
+
+            // 5. Construct full chain
+            $fullChain = $certificate;
+            if (!empty($caBundle)) {
+                $fullChain .= "\n" . $caBundle;
+            }
+
+            // 6. Write certificate and key files
+            $sslDir = "/etc/nginx/ssl/{$domain}";
+            $certFile = "{$sslDir}/fullchain.pem";
+            $keyFile = "{$sslDir}/privkey.pem";
+
+            $tmpCert = storage_path("app/ssl_{$domain}_" . time() . ".crt");
+            $tmpKey = storage_path("app/ssl_{$domain}_" . time() . ".key");
+
+            File::put($tmpCert, $fullChain . "\n");
+            File::put($tmpKey, $privateKey . "\n");
+
+            exec("sudo mkdir -p " . escapeshellarg($sslDir));
+            exec("sudo mv " . escapeshellarg($tmpCert) . " " . escapeshellarg($certFile));
+            exec("sudo mv " . escapeshellarg($tmpKey) . " " . escapeshellarg($keyFile));
+            exec("sudo chmod 644 " . escapeshellarg($certFile));
+            exec("sudo chmod 600 " . escapeshellarg($keyFile));
+            exec("sudo chown root:root " . escapeshellarg($certFile) . " " . escapeshellarg($keyFile));
+
+            // 7. Update Nginx Virtual Host configuration
+            $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+            $output = [];
+            exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
+            $configContent = implode("\n", $output);
+
+            if (!empty($configContent)) {
+                $backupPath = $configPath . '.bak_custom_ssl_' . time();
+                exec("sudo cp " . escapeshellarg($configPath) . " " . escapeshellarg($backupPath));
+
+                // If ssl_certificate directives exist, replace them
+                if (preg_match('/ssl_certificate\s+/i', $configContent)) {
+                    $configContent = preg_replace('/ssl_certificate\s+[^;]+;/i', "ssl_certificate {$certFile};", $configContent);
+                    $configContent = preg_replace('/ssl_certificate_key\s+[^;]+;/i', "ssl_certificate_key {$keyFile};", $configContent);
+                } else {
+                    // Inject SSL directives into the server block
+                    $sslDirectives = "\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate {$certFile};\n    ssl_certificate_key {$keyFile};\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n";
+                    if (preg_match('/(listen\s+\[::\]:80;)/i', $configContent)) {
+                        $configContent = preg_replace('/(listen\s+\[::\]:80;)/i', "$1" . $sslDirectives, $configContent, 1);
+                    } elseif (preg_match('/(listen\s+80;)/i', $configContent)) {
+                        $configContent = preg_replace('/(listen\s+80;)/i', "$1" . $sslDirectives, $configContent, 1);
+                    } else {
+                        $configContent = preg_replace('/server\s*\{/i', "server {" . $sslDirectives, $configContent, 1);
+                    }
+                }
+
+                $tmpConf = storage_path("app/nginx_{$domain}_custom_ssl_" . time() . ".conf");
+                File::put($tmpConf, $configContent);
+                exec("sudo cp " . escapeshellarg($tmpConf) . " " . escapeshellarg($configPath));
+                @unlink($tmpConf);
+
+                // Test nginx config
+                $testOutput = [];
+                $testCode = 0;
+                exec("sudo nginx -t 2>&1", $testOutput, $testCode);
+
+                if ($testCode !== 0) {
+                    // Revert to backup
+                    exec("sudo cp " . escapeshellarg($backupPath) . " " . escapeshellarg($configPath));
+                    exec("sudo rm -f " . escapeshellarg($backupPath));
+                    return response()->json([
+                        'error' => 'Nginx configuration test failed with custom SSL. Configuration changes reverted.',
+                        'details' => implode("\n", $testOutput)
+                    ], 400);
+                }
+
+                exec("sudo rm -f " . escapeshellarg($backupPath));
+            }
+
+            // Ensure symlink in sites-enabled
+            $enabledPath = $this->resolveNginxConfigPath('/etc/nginx/sites-enabled/', $domain);
+            $symlinkCheck = [];
+            exec("sudo test -f " . escapeshellarg($enabledPath) . " && echo 'exists'", $symlinkCheck);
+            if (empty($symlinkCheck) || $symlinkCheck[0] !== 'exists') {
+                $targetEnabled = '/etc/nginx/sites-enabled/' . basename($configPath);
+                exec("sudo ln -s " . escapeshellarg($configPath) . " " . escapeshellarg($targetEnabled));
+            }
+
+            // 8. Reload Nginx
+            exec("sudo systemctl reload nginx 2>&1");
+
+            // 9. Clear cache
+            cache()->forget("ssl_info_{$domain}");
+            cache()->forget("dns_active_{$domain}");
+
+            // 10. Send notification
+            \App\Services\NotificationService::send(
+                "Custom SSL Certificate Installed Successfully",
+                "<p>Hello,</p><p>A custom SSL certificate has been successfully installed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Custom SSL certificate installed successfully for {$domain}"
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to install custom SSL: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to install custom SSL certificate: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Remove SSL certificate for a domain
      */
     public function removeCertificate(Request $request)
@@ -1001,7 +1190,42 @@ class SslController extends Controller
                 return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
-            // Ensure certbot is available
+            // Check if this domain has a custom SSL installed
+            $customSslDir = "/etc/nginx/ssl/{$domain}";
+            $customCheck = [];
+            exec("sudo test -d " . escapeshellarg($customSslDir) . " && echo 'exists'", $customCheck);
+
+            if (isset($customCheck[0]) && $customCheck[0] === 'exists') {
+                exec("sudo rm -rf " . escapeshellarg($customSslDir));
+
+                // Revert custom SSL lines from nginx config
+                $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+                $confOutput = [];
+                exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $confOutput);
+                $content = implode("\n", $confOutput);
+
+                if (!empty($content)) {
+                    $content = preg_replace('/^\s*listen\s+.*443\s+ssl;.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_certificate\s+.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_certificate_key\s+.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_protocols\s+.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_ciphers\s+.*$/m', '', $content);
+
+                    $tmpConf = storage_path("app/nginx_{$domain}_rm_ssl_" . time() . ".conf");
+                    File::put($tmpConf, $content);
+                    exec("sudo cp " . escapeshellarg($tmpConf) . " " . escapeshellarg($configPath));
+                    @unlink($tmpConf);
+                    exec("sudo nginx -t && sudo systemctl reload nginx 2>&1");
+                }
+
+                cache()->forget("ssl_info_{$domain}");
+
+                return response()->json([
+                    'message' => "Custom SSL certificate removed for {$domain}"
+                ]);
+            }
+
+            // Ensure certbot is available for Let's Encrypt certificates
             $certbotPath = $this->ensureCertbot();
 
             // Delete certificate using certbot

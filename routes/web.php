@@ -180,6 +180,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
         Route::post('/install-certbot', [SslController::class, 'installCertbotAction'])->name('install-certbot');
         Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
+        Route::post('/custom', [SslController::class, 'installCustomCertificate'])->name('custom');
         Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
         Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
         Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');

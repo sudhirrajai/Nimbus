@@ -208,10 +208,26 @@ class BackupController extends Controller
                 "Created {$type} backup '{$record->file_name}' for " . ($domain ?: $databaseName)
             );
 
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Backup completed successfully ({$record->formatted_size}).",
+                    'file_name' => $record->file_name,
+                    'formatted_size' => $record->formatted_size,
+                    'record_id' => $record->id,
+                ]);
+            }
+
             return back()->with('success', "Backup completed successfully ({$record->formatted_size}).");
 
         } catch (\Exception $e) {
             Log::error("Manual backup failed: " . $e->getMessage());
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Backup failed: ' . $e->getMessage(),
+                ], 500);
+            }
             return back()->with('error', 'Backup failed: ' . $e->getMessage());
         }
     }

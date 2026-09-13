@@ -16,6 +16,10 @@
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
               </button>
+              <button class="btn bg-gradient-info mb-0" @click="openCustomSslModal(null)" :disabled="loading || domains.length === 0">
+                <i class="material-symbols-rounded text-sm me-1">upload_file</i>
+                Custom SSL
+              </button>
               <button class="btn bg-gradient-success mb-0" @click="renewAllCerts" :disabled="loading || renewingAll || !certbotInstalled">
                 <span v-if="renewingAll" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">autorenew</i>
@@ -230,13 +234,13 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <!-- Install SSL button -->
+                          <!-- Install SSL button (Let's Encrypt) -->
                           <button 
                             v-if="!domain.hasSsl"
                             class="action-btn btn-install-ssl"
                             @click="installSsl(domain)"
                             :disabled="installing === domain.domain || !certbotInstalled || !domain.is_active"
-                            :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate')"
+                            :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install Let\'s Encrypt SSL')"
                           >
                             <span v-if="installing === domain.domain" class="spinner-border spinner-border-sm" style="width:14px;height:14px"></span>
                             <i v-else class="material-symbols-rounded">add_moderator</i>
@@ -263,12 +267,20 @@
                             <button 
                               class="action-btn btn-delete"
                               @click="confirmRemove(domain)"
-                              :disabled="!certbotInstalled"
                               title="Remove certificate"
                             >
                               <i class="material-symbols-rounded">delete</i>
                             </button>
                           </template>
+
+                          <!-- Custom SSL upload action for any domain -->
+                          <button 
+                            class="action-btn btn-custom-ssl"
+                            @click="openCustomSslModal(domain)"
+                            :title="domain.hasSsl ? 'Upload / Replace with Custom SSL' : 'Install Custom SSL Certificate'"
+                          >
+                            <i class="material-symbols-rounded">upload_file</i>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -426,6 +438,103 @@
         </div>
       </div>
 
+      <!-- Custom SSL Modal -->
+      <div class="modal-backdrop fade show" v-if="showCustomSslModal" @click="showCustomSslModal = false"></div>
+      <div class="modal fade show d-block" v-if="showCustomSslModal">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="material-symbols-rounded text-info me-2">upload_file</i>
+                Install Custom SSL Certificate
+              </h5>
+              <button type="button" class="btn-close" @click="showCustomSslModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm text-secondary mb-3">
+                Upload or paste your own custom SSL certificate, private key, and optional intermediate CA bundle.
+              </p>
+
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase">Domain <span class="text-danger">*</span></label>
+                <select v-model="customSslForm.domain" class="form-select form-select-sm" :disabled="isCustomSslDomainLocked">
+                  <option value="" disabled>Select a domain...</option>
+                  <option v-for="d in domains" :key="d.domain" :value="d.domain">
+                    {{ d.domain }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label font-weight-bold text-xs text-uppercase mb-0">Certificate (CRT / PEM) <span class="text-danger">*</span></label>
+                  <label class="btn btn-xs btn-outline-secondary mb-0 cursor-pointer py-1 px-2" style="font-size: 11px;">
+                    <i class="material-symbols-rounded text-xs me-1">folder_open</i> Load from File
+                    <input type="file" accept=".crt,.pem,.cer" class="d-none" @change="e => handleFileUpload(e, 'certificate')">
+                  </label>
+                </div>
+                <textarea 
+                  v-model="customSslForm.certificate" 
+                  class="form-control font-monospace text-xs" 
+                  rows="5" 
+                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                  required
+                ></textarea>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label font-weight-bold text-xs text-uppercase mb-0">Private Key (KEY) <span class="text-danger">*</span></label>
+                  <label class="btn btn-xs btn-outline-secondary mb-0 cursor-pointer py-1 px-2" style="font-size: 11px;">
+                    <i class="material-symbols-rounded text-xs me-1">folder_open</i> Load from File
+                    <input type="file" accept=".key,.pem" class="d-none" @change="e => handleFileUpload(e, 'private_key')">
+                  </label>
+                </div>
+                <textarea 
+                  v-model="customSslForm.private_key" 
+                  class="form-control font-monospace text-xs" 
+                  rows="5" 
+                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                  required
+                ></textarea>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label font-weight-bold text-xs text-uppercase mb-0">Intermediate CA Bundle (Optional)</label>
+                  <label class="btn btn-xs btn-outline-secondary mb-0 cursor-pointer py-1 px-2" style="font-size: 11px;">
+                    <i class="material-symbols-rounded text-xs me-1">folder_open</i> Load from File
+                    <input type="file" accept=".crt,.pem,.ca-bundle" class="d-none" @change="e => handleFileUpload(e, 'ca_bundle')">
+                  </label>
+                </div>
+                <textarea 
+                  v-model="customSslForm.ca_bundle" 
+                  class="form-control font-monospace text-xs" 
+                  rows="4" 
+                  placeholder="-----BEGIN CERTIFICATE-----&#10;... (Optional intermediate certificate chain)"
+                ></textarea>
+              </div>
+
+              <div v-if="customSslError" class="alert alert-danger text-white py-2 px-3 text-xs mb-0" role="alert">
+                <i class="material-symbols-rounded text-sm me-1 align-middle">error</i>
+                {{ customSslError }}
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary" @click="showCustomSslModal = false" :disabled="savingCustomSsl">Cancel</button>
+              <button 
+                class="btn bg-gradient-info" 
+                @click="submitCustomSsl" 
+                :disabled="savingCustomSsl || !customSslForm.domain || !customSslForm.certificate || !customSslForm.private_key"
+              >
+                <span v-if="savingCustomSsl" class="spinner-border spinner-border-sm me-2"></span>
+                Install Certificate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
@@ -453,6 +562,17 @@ const certbotChecked = ref(false)
 const showDetailsModal = ref(false)
 const showRemoveModal = ref(false)
 const showOutputModal = ref(false)
+const showCustomSslModal = ref(false)
+const isCustomSslDomainLocked = ref(false)
+const savingCustomSsl = ref(false)
+const customSslError = ref('')
+
+const customSslForm = ref({
+  domain: '',
+  certificate: '',
+  private_key: '',
+  ca_bundle: ''
+})
 
 const selectedDomain = ref(null)
 const domainToRemove = ref(null)
@@ -725,6 +845,48 @@ const removeSsl = async () => {
     removing.value = false
   }
 }
+
+const openCustomSslModal = (domainObj = null) => {
+  customSslError.value = ''
+  if (domainObj && domainObj.domain) {
+    customSslForm.value.domain = domainObj.domain
+    isCustomSslDomainLocked.value = true
+  } else {
+    customSslForm.value.domain = domains.value.length > 0 ? domains.value[0].domain : ''
+    isCustomSslDomainLocked.value = false
+  }
+  customSslForm.value.certificate = ''
+  customSslForm.value.private_key = ''
+  customSslForm.value.ca_bundle = ''
+  showCustomSslModal.value = true
+}
+
+const handleFileUpload = (event, field) => {
+  const file = event.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    customSslForm.value[field] = e.target.result
+  }
+  reader.readAsText(file)
+}
+
+const submitCustomSsl = async () => {
+  customSslError.value = ''
+  savingCustomSsl.value = true
+  try {
+    const response = await axios.post('/ssl/custom', customSslForm.value)
+    showAlert('success', response.data.message || 'Custom SSL certificate installed successfully!')
+    showCustomSslModal.value = false
+    await loadDomains(true)
+  } catch (error) {
+    const msg = error.response?.data?.error || error.response?.data?.message || 'Failed to install custom SSL certificate'
+    customSslError.value = msg
+    showAlert('danger', msg)
+  } finally {
+    savingCustomSsl.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -841,6 +1003,7 @@ const removeSsl = async () => {
 .btn-update:hover { background: #1171ef; color: #fff; }
 .btn-info:hover { background: #5e72e4; color: #fff; }
 .btn-delete:hover { background: #f5365c; color: #fff; }
+.btn-custom-ssl:hover { background: #11cdef; color: #fff; }
 
 .action-btn:disabled {
   opacity: 0.5;

@@ -294,6 +294,10 @@
                             <span v-if="openingManager[db.name]" class="spinner-border spinner-border-sm"></span>
                             <i v-else class="material-symbols-rounded">table_chart</i>
                           </button>
+                          <button class="action-btn btn-backup" @click="quickBackupDatabase(db.name)" :disabled="backingUpDb[db.name]" title="Quick Backup Database">
+                            <span v-if="backingUpDb[db.name]" class="spinner-border spinner-border-sm text-success"></span>
+                            <i v-else class="material-symbols-rounded">archive</i>
+                          </button>
                           <button class="action-btn btn-link-proj" @click="openLinkProjectModal(db)"
                             title="Link Project / Domain">
                             <i class="material-symbols-rounded">link</i>
@@ -558,6 +562,8 @@ import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const openingManager = ref({})
+const backingUpDb = ref({})
+
 const openNativeManager = async (dbName) => {
   try {
     openingManager.value[dbName] = true
@@ -569,6 +575,23 @@ const openNativeManager = async (dbName) => {
     alert(err.response?.data?.error || 'Failed to generate database session token')
   } finally {
     openingManager.value[dbName] = false
+  }
+}
+
+const quickBackupDatabase = async (dbName) => {
+  try {
+    backingUpDb.value[dbName] = true
+    const response = await axios.post('/backups', {
+      database_name: dbName,
+      type: 'database'
+    })
+    const msg = response.data?.message || `Backup for "${dbName}" created successfully!`
+    showAlert('success', msg)
+  } catch (err) {
+    const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to create database backup'
+    showAlert('danger', errorMsg)
+  } finally {
+    backingUpDb.value[dbName] = false
   }
 }
 
@@ -1081,6 +1104,7 @@ const saveProjectLink = async () => {
 .btn-sso:hover { background: #1171ef; color: #fff; }
 .btn-settings:hover { background: #5e72e4; color: #fff; }
 .btn-delete:hover { background: #f5365c; color: #fff; }
+.btn-backup:hover { background: #2dce89; color: #fff; }
 
 .action-btn:disabled {
   opacity: 0.5;

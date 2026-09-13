@@ -112,35 +112,35 @@
           </li>
 
           <li class="nav-item">
-            <Link href="/ftp" class="nav-link" :class="isActive('/ftp-accounts')">
+            <Link href="/ftp" class="nav-link d-flex align-items-center" :class="isActive('/ftp')">
               <i class="material-symbols-rounded opacity-5">cloud_upload</i>
               <span class="nav-link-text ms-1">FTP Accounts</span>
+              <span class="badge bg-light text-muted ms-auto text-xxs font-weight-bold" style="border: 1px solid #e2e8f0; padding: 2px 6px;">Soon</span>
             </Link>
           </li>
         </template>
 
-        <!-- ═══ EMAIL (Root & Admin) ═══ -->
-        <template v-if="isRootOrAdmin">
-          <li class="nav-item mt-3">
-            <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
-              Email
-            </h6>
-          </li>
+        <!-- ═══ EMAIL ═══ -->
+        <li v-if="isRootOrAdmin || hasPerm('email')" class="nav-item mt-3">
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
+            Email
+          </h6>
+        </li>
 
-          <li class="nav-item">
-            <Link href="/email" class="nav-link" :class="isActive('/email')">
-              <i class="material-symbols-rounded opacity-5">email</i>
-              <span class="nav-link-text ms-1">Email Accounts</span>
-            </Link>
-          </li>
+        <li v-if="isRootOrAdmin || hasPerm('email')" class="nav-item">
+          <Link href="/email" class="nav-link" :class="isActive('/email')">
+            <i class="material-symbols-rounded opacity-5">email</i>
+            <span class="nav-link-text ms-1">Email Accounts</span>
+          </Link>
+        </li>
 
-          <li class="nav-item">
-            <a href="/webmail" target="_blank" class="nav-link" :class="isActive('/webmail')">
-              <i class="material-symbols-rounded opacity-5">mark_email_unread</i>
-              <span class="nav-link-text ms-1">Webmail Client</span>
-            </a>
-          </li>
-        </template>
+        <li class="nav-item">
+          <a href="/webmail" target="_blank" class="nav-link d-flex align-items-center" :class="isActive('/webmail')">
+            <i class="material-symbols-rounded opacity-5">mark_email_unread</i>
+            <span class="nav-link-text ms-1">Webmail Client</span>
+            <i class="material-symbols-rounded text-xxs ms-auto text-secondary opacity-6">open_in_new</i>
+          </a>
+        </li>
 
         <!-- ═══ AUTOMATION ═══ -->
         <li v-if="isRootOrAdmin || hasPerm('supervisor') || hasPerm('cron')" class="nav-item mt-3">
@@ -227,7 +227,7 @@
         </li>
 
         <li v-if="isRoot" class="nav-item">
-          <Link href="/settings" class="nav-link" :class="isActive('/settings')">
+          <Link href="/settings" class="nav-link" :class="isActive('/settings', true)">
             <i class="material-symbols-rounded opacity-5">settings</i>
             <span class="nav-link-text ms-1">Settings</span>
           </Link>
@@ -286,8 +286,12 @@ const fileManagerLink = computed(() => {
   return '/file-manager'
 })
 
-const isActive = (path) => {
-  const currentPath = page.url
+const isActive = (path, exact = false) => {
+  const currentPath = (page.url || '').split('?')[0]
+
+  if (exact || path === '/settings') {
+    return currentPath === path ? 'active bg-gradient-dark text-white' : 'text-dark'
+  }
 
   // Check if current path matches or starts with the given path
   if (currentPath === path || currentPath.startsWith(path + '/')) {
