@@ -35,29 +35,29 @@ class DomainController extends Controller
                 ->map(function ($path) use ($assignments) {
                     $domain = basename($path);
 
-                    // Quick nginx config check — just test file existence
+                    // Quick nginx config check — direct read when readable, sudo fallback
                     $nginxConfig = '/etc/nginx/sites-enabled/' . $domain;
-                    $configExists = false;
+                    $configContent = null;
                     $documentRoot = $path;
-                    try {
-                        $output = [];
-                        exec("sudo test -f " . escapeshellarg($nginxConfig) . " && echo 'exists'", $output);
-                        $configExists = isset($output[0]) && $output[0] === 'exists';
-                    } catch (\Exception $e) {
-                        $configExists = false;
-                    }
 
-                    if ($configExists) {
+                    if (@is_readable($nginxConfig)) {
+                        $configContent = @file_get_contents($nginxConfig);
+                    } else {
                         try {
                             $output = [];
-                            exec("sudo cat " . escapeshellarg($nginxConfig) . " 2>/dev/null", $output);
-                            $configContent = implode("\n", $output);
-                            if (preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
-                                $documentRoot = trim($matches[1]);
+                            exec("sudo test -f " . escapeshellarg($nginxConfig) . " && echo 'exists'", $output);
+                            if (isset($output[0]) && $output[0] === 'exists') {
+                                $catOutput = [];
+                                exec("sudo cat " . escapeshellarg($nginxConfig) . " 2>/dev/null", $catOutput);
+                                $configContent = implode("\n", $catOutput);
                             }
                         } catch (\Exception $e) {
-                            \Log::warning("Failed to read Nginx config for $domain: " . $e->getMessage());
+                            $configContent = null;
                         }
+                    }
+
+                    if ($configContent && preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
+                        $documentRoot = trim($matches[1]);
                     }
 
                     $createdBy = 'System';
@@ -152,15 +152,20 @@ class DomainController extends Controller
             $phpVersion = '8.2'; // default fallback
             try {
                 $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
-                $output = [];
-                exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
-                if (isset($output[0]) && $output[0] === 'exists') {
-                    $catOutput = [];
-                    exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $catOutput);
-                    $configContent = implode("\n", $catOutput);
-                    if (preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-nimbus)?\.sock;/', $configContent, $matches)) {
-                        $phpVersion = $matches[1];
+                $configContent = null;
+                if (@is_readable($configPath)) {
+                    $configContent = @file_get_contents($configPath);
+                } else {
+                    $output = [];
+                    exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+                    if (isset($output[0]) && $output[0] === 'exists') {
+                        $catOutput = [];
+                        exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $catOutput);
+                        $configContent = implode("\n", $catOutput);
                     }
+                }
+                if ($configContent && preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-nimbus)?\.sock;/', $configContent, $matches)) {
+                    $phpVersion = $matches[1];
                 }
             } catch (\Exception $e) {
                 \Log::warning("Failed to detect PHP version for $domain: " . $e->getMessage());
