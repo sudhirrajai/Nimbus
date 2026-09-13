@@ -201,6 +201,17 @@
                     Client Config
                   </a>
                 </li>
+                <li class="nav-item">
+                  <a 
+                    class="nav-link mb-0 px-0 py-1 d-flex align-items-center justify-content-center" 
+                    :class="{ 'active': activeTab === 'dns' }" 
+                    @click="changeTab('dns')" 
+                    href="javascript:;"
+                  >
+                    <i class="material-symbols-rounded text-sm me-2">verified</i>
+                    DNS & Deliverability
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
@@ -421,6 +432,13 @@
                             <span class="text-xs text-muted font-weight-bold">{{ new Date(domain.created_at).toLocaleDateString() }}</span>
                           </td>
                           <td class="align-middle text-center">
+                            <button 
+                              class="btn btn-link text-info p-0 mb-0 me-3" 
+                              @click="openDnsTabForDomain(domain.name)"
+                              title="Check Email DNS & Deliverability"
+                            >
+                              <i class="material-symbols-rounded text-lg">verified</i>
+                            </button>
                             <button 
                               v-if="isRootOrAdmin"
                               class="btn btn-link text-danger p-0 mb-0" 
@@ -760,6 +778,213 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 6: DNS Deliverability & Records -->
+        <div v-if="activeTab === 'dns'">
+          <!-- Domain Selector & Action Bar -->
+          <div class="row mb-4">
+            <div class="col-12">
+              <div class="card shadow-sm border-radius-xl">
+                <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="text-xs font-weight-bold text-uppercase text-secondary">Domain:</span>
+                    <select 
+                      v-model="selectedDnsDomain" 
+                      @change="fetchDnsRecords(selectedDnsDomain)"
+                      class="form-select form-select-sm"
+                      style="min-width: 220px; border: 1px solid #d2d6da; border-radius: 6px; padding: 6px 12px; font-size: 0.875rem;"
+                    >
+                      <option v-for="d in domains" :key="d.id" :value="d.name">{{ d.name }}</option>
+                    </select>
+                    <button 
+                      class="btn btn-outline-dark btn-sm mb-0 d-flex align-items-center"
+                      @click="fetchDnsRecords(selectedDnsDomain)"
+                      :disabled="dnsLoading || !selectedDnsDomain"
+                    >
+                      <i class="material-symbols-rounded text-sm me-1" :class="{ 'rotate-anim': dnsLoading }">refresh</i>
+                      Re-check Live DNS
+                    </button>
+                  </div>
+
+                  <div class="d-flex align-items-center gap-2" v-if="dnsData">
+                    <span 
+                      class="badge" 
+                      :class="dnsData.all_configured ? 'bg-gradient-success' : 'bg-gradient-warning'"
+                      style="font-size: 0.8rem; padding: 6px 12px;"
+                    >
+                      <i class="material-symbols-rounded text-xs me-1 align-middle">{{ dnsData.all_configured ? 'check_circle' : 'warning' }}</i>
+                      {{ dnsData.all_configured ? '100% Deliverability Configured' : 'Setup Incomplete / Action Needed' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="dnsLoading" class="row py-5">
+            <div class="col-12 text-center">
+              <div class="spinner-border text-dark" role="status" style="width: 2.5rem; height: 2.5rem;">
+                <span class="visually-hidden">Querying DNS...</span>
+              </div>
+              <p class="text-secondary mt-2 text-sm">Querying live DNS records for {{ selectedDnsDomain }}...</p>
+            </div>
+          </div>
+
+          <div v-else-if="dnsData">
+            <!-- Cloudflare 1-Click Provisioning Banner -->
+            <div class="row mb-4" v-if="dnsData.is_cloudflare_connected">
+              <div class="col-12">
+                <div class="card bg-gradient-dark text-white shadow-lg border-radius-xl p-3">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="icon icon-shape bg-white shadow text-center border-radius-lg d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="material-symbols-rounded text-warning" style="font-size: 28px;">cloud_sync</i>
+                      </div>
+                      <div>
+                        <h6 class="text-white mb-0 font-weight-bold d-flex align-items-center">
+                          Cloudflare Connected for {{ selectedDnsDomain }}
+                          <span class="badge bg-warning text-dark text-xxs ms-2 font-weight-bold">Automatic Setup Available</span>
+                        </h6>
+                        <p class="text-white opacity-8 text-xs mb-0 mt-1">
+                          We can automatically configure all A, MX, SPF, and DMARC records on your Cloudflare account with mail proxying properly disabled.
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <button 
+                        class="btn bg-gradient-warning mb-0 font-weight-bold d-flex align-items-center text-dark"
+                        @click="applyCloudflareDnsAction"
+                        :disabled="applyingCfDns"
+                      >
+                        <span v-if="applyingCfDns" class="spinner-border spinner-border-sm me-2"></span>
+                        <i v-else class="material-symbols-rounded text-sm me-1">bolt</i>
+                        1-Click Auto-Configure DNS in Cloudflare
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Provider Not Connected Info -->
+            <div class="row mb-4" v-else>
+              <div class="col-12">
+                <div class="alert alert-info text-white text-xs mb-0 shadow-sm border-radius-lg" style="border: none;">
+                  <div class="d-flex align-items-center">
+                    <i class="material-symbols-rounded me-2" style="font-size: 1.4rem;">info</i>
+                    <div class="flex-grow-1">
+                      <strong>Manual DNS Setup:</strong> Add the records below into your DNS management panel (Cloudflare, Namecheap, GoDaddy, Route53, Hostinger, etc.). If you manage DNS via Cloudflare, connect your domain in <a href="/dns" class="text-white text-decoration-underline font-weight-bold">DNS Manager</a> to unlock 1-Click Auto Configuration!
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Server IP Reference Card -->
+            <div class="row mb-3">
+              <div class="col-12">
+                <div class="card shadow-sm border-radius-lg p-3 bg-gray-100">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="material-symbols-rounded text-dark text-sm">dns</i>
+                      <span class="text-xs font-weight-bold text-dark">Server Public IP Address:</span>
+                      <code class="font-weight-bold text-primary bg-white px-2 py-1 rounded">{{ dnsData.server_ip }}</code>
+                    </div>
+                    <button 
+                      class="btn btn-link text-dark p-0 mb-0 text-xs font-weight-bold d-flex align-items-center"
+                      @click="copyText(dnsData.server_ip, 'server_ip')"
+                    >
+                      <i class="material-symbols-rounded text-xs me-1">{{ copiedKey === 'server_ip' ? 'check' : 'content_copy' }}</i>
+                      {{ copiedKey === 'server_ip' ? 'Copied!' : 'Copy Server IP' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DNS Records Table -->
+            <div class="row">
+              <div class="col-12">
+                <div class="card shadow-sm">
+                  <div class="card-header pb-0 p-3">
+                    <h6 class="mb-0 font-weight-bold">Required DNS Records for Email Deliverability</h6>
+                    <p class="text-xs text-muted mb-0">Missing SPF or DMARC records will cause major email providers (Gmail, Yahoo, Outlook) to mark incoming mail as spam.</p>
+                  </div>
+                  <div class="card-body px-0 pb-2">
+                    <div class="table-responsive p-0">
+                      <table class="table align-items-center mb-0">
+                        <thead>
+                          <tr>
+                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Type</th>
+                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Host / Name</th>
+                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Required Value</th>
+                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Priority</th>
+                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Live Status</th>
+                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="rec in dnsData.records" :key="rec.id">
+                            <td class="ps-3">
+                              <span class="badge bg-gradient-dark font-weight-bold" style="font-size: 0.75rem;">{{ rec.type }}</span>
+                            </td>
+                            <td>
+                              <span class="text-xs font-weight-bold text-dark font-monospace">{{ rec.name }}</span>
+                              <div class="text-xxs text-secondary">{{ rec.full_name }}</div>
+                            </td>
+                            <td style="max-width: 350px;">
+                              <div class="text-xs font-monospace text-dark text-break bg-light p-2 rounded border" style="font-size: 0.75rem;">
+                                {{ rec.value }}
+                              </div>
+                              <div class="text-xxs text-muted mt-1">{{ rec.note }}</div>
+                              <div v-if="rec.status === 'mismatch' && rec.current_value" class="text-xxs text-warning font-weight-bold mt-1">
+                                Detected: {{ rec.current_value }}
+                              </div>
+                            </td>
+                            <td>
+                              <span class="text-xs font-weight-bold text-dark">{{ rec.priority !== undefined ? rec.priority : '-' }}</span>
+                            </td>
+                            <td class="align-middle text-center">
+                              <span 
+                                class="badge badge-sm" 
+                                :class="rec.status === 'configured' ? 'bg-gradient-success' : (rec.status === 'mismatch' ? 'bg-gradient-warning' : 'bg-gradient-danger')"
+                              >
+                                <i class="material-symbols-rounded text-xxs me-1 align-middle">
+                                  {{ rec.status === 'configured' ? 'check' : (rec.status === 'mismatch' ? 'warning' : 'close') }}
+                                </i>
+                                {{ rec.status === 'configured' ? 'Configured' : (rec.status === 'mismatch' ? 'Mismatch' : 'Missing') }}
+                              </span>
+                            </td>
+                            <td class="align-middle text-center">
+                              <button 
+                                class="btn btn-sm btn-outline-dark mb-0 py-1 px-2 text-xs"
+                                @click="copyText(rec.value, rec.id)"
+                                :title="'Copy ' + rec.type + ' value'"
+                              >
+                                <i class="material-symbols-rounded text-xs me-1 align-middle">
+                                  {{ copiedKey === rec.id ? 'check' : 'content_copy' }}
+                                </i>
+                                {{ copiedKey === rec.id ? 'Copied' : 'Copy Value' }}
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="row py-5">
+            <div class="col-12 text-center text-secondary">
+              <i class="material-symbols-rounded opacity-3" style="font-size: 48px;">dns</i>
+              <p class="mt-2 text-sm">Select a domain above to inspect DNS records.</p>
             </div>
           </div>
         </div>
@@ -1229,6 +1454,13 @@ const clientSettings = ref({
   }
 })
 
+// DNS Deliverability State
+const selectedDnsDomain = ref('')
+const dnsLoading = ref(false)
+const dnsData = ref(null)
+const applyingCfDns = ref(false)
+const copiedKey = ref(null)
+
 // Global alert system
 const alert = ref({
   show: false,
@@ -1285,6 +1517,15 @@ const loadDataForActiveTab = () => {
       }
       loadClientSettings()
     })
+  } else if (activeTab.value === 'dns') {
+    loadDomains().then(() => {
+      if (domains.value.length > 0 && !selectedDnsDomain.value) {
+        selectedDnsDomain.value = domains.value[0].name
+      }
+      if (selectedDnsDomain.value) {
+        fetchDnsRecords(selectedDnsDomain.value)
+      }
+    })
   }
 }
 
@@ -1306,6 +1547,56 @@ const loadClientSettings = async () => {
     clientSettings.value = res.data
   } catch (err) {
     console.error(err)
+  }
+}
+
+// DNS Deliverability Methods
+const fetchDnsRecords = async (domain) => {
+  if (!domain) return
+  try {
+    dnsLoading.value = true
+    const res = await axios.get('/email/dns-records', {
+      params: { domain }
+    })
+    dnsData.value = res.data
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to fetch DNS records')
+  } finally {
+    dnsLoading.value = false
+  }
+}
+
+const openDnsTabForDomain = (domainName) => {
+  selectedDnsDomain.value = domainName
+  activeTab.value = 'dns'
+  fetchDnsRecords(domainName)
+}
+
+const copyText = (text, key) => {
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    copiedKey.value = key
+    setTimeout(() => {
+      if (copiedKey.value === key) copiedKey.value = null
+    }, 2000)
+  }).catch(() => {
+    showAlert('info', 'Value copied to clipboard')
+  })
+}
+
+const applyCloudflareDnsAction = async () => {
+  if (!selectedDnsDomain.value) return
+  try {
+    applyingCfDns.value = true
+    const res = await axios.post('/email/dns-records/cloudflare', {
+      domain: selectedDnsDomain.value
+    })
+    showAlert('success', res.data.message || 'Cloudflare DNS configured successfully!')
+    await fetchDnsRecords(selectedDnsDomain.value)
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to configure Cloudflare DNS')
+  } finally {
+    applyingCfDns.value = false
   }
 }
 

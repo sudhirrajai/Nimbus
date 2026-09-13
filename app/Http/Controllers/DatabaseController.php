@@ -772,6 +772,75 @@ BASH;
     }
 
     /**
+     * Update user host (remote access switcher)
+     */
+    public function updateUserHost(Request $request)
+    {
+        try {
+            $request->validate([
+                'username' => 'required|string|max:32',
+                'current_host' => 'required|string|max:255',
+                'new_host' => 'required|string|max:255'
+            ]);
+
+            $username = $request->input('username');
+            $currentHost = $request->input('current_host');
+            $newHost = trim($request->input('new_host'));
+
+            if ($currentHost === $newHost) {
+                return response()->json(['message' => 'Host is already set to ' . $newHost]);
+            }
+
+            // Prevent modifying system users
+            $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
+            if (in_array($username, $systemUsers)) {
+                return response()->json(['error' => 'Cannot modify system user'], 403);
+            }
+
+            if (!auth()->user()->isRoot()) {
+                $sql = "SELECT DISTINCT Db FROM mysql.db WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $currentHost) . "'";
+                $res = $this->runMysqlQuery($sql, true);
+                if ($res['code'] === 0) {
+                    foreach ($res['output'] as $line) {
+                        $dbName = trim($line);
+                        $dbName = str_replace('\\_', '_', $dbName);
+                        if (!empty($dbName) && !auth()->user()->canAccessDatabase($dbName)) {
+                            return response()->json(['error' => 'Permission denied: This MySQL user has access to databases you do not own.'], 403);
+                        }
+                    }
+                }
+            }
+
+            // Check if destination user@new_host already exists
+            $checkSql = "SELECT User FROM mysql.user WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $newHost) . "'";
+            $checkRes = $this->runMysqlQuery($checkSql, true);
+            if ($checkRes['code'] === 0 && !empty($checkRes['output']) && trim($checkRes['output'][0]) !== '') {
+                return response()->json(['error' => "User '{$username}'@'{$newHost}' already exists."], 400);
+            }
+
+            // Rename user: RENAME USER 'user'@'old_host' TO 'user'@'new_host'
+            $renameSql = "RENAME USER '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $currentHost) . "' TO '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $newHost) . "'";
+            $res = $this->runMysqlQuery($renameSql);
+
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to update user host: " . implode("\n", $res['output']));
+            }
+
+            $this->runMysqlQuery("FLUSH PRIVILEGES");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Host for user '{$username}' updated to '{$newHost}' successfully.",
+                'username' => $username,
+                'host' => $newHost
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to update user host: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get Database Viewer access URL for a specific database (with auto-login SSO token)
      */
     public function getDatabaseViewerUrl(Request $request)

@@ -210,6 +210,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
         Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
         Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
+        Route::post('/user/update-host', [DatabaseController::class, 'updateUserHost'])->name('user.update-host');
         Route::post('/viewer/access', [DatabaseController::class, 'getDatabaseViewerUrl'])->name('viewer.access');
         Route::get('/viewer/sso', [DatabaseController::class, 'openDatabaseViewerSSO'])->name('viewer.sso');
         Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
@@ -359,6 +360,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::get('/webmail', [EmailController::class, 'getWebmailUrl'])->name('webmail');
             Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
             Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
+            Route::get('/dns-records', [EmailController::class, 'getDnsRecords'])->name('dns-records');
+            Route::post('/dns-records/cloudflare', [EmailController::class, 'applyCloudflareDns'])->name('dns-records.cloudflare');
             Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
             Route::post('/uninstall', [EmailController::class, 'uninstallMailServer'])->name('uninstall');
         });

@@ -173,9 +173,16 @@
                   <label class="form-label text-xs text-uppercase">Username</label>
                   <input type="text" class="form-control" v-model="newUser.username" placeholder="db_user">
                 </div>
-                <div class="mb-3">
+                <div class="mb-2">
                   <label class="form-label text-xs text-uppercase">Password</label>
                   <input type="password" class="form-control" v-model="newUser.password" placeholder="********">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label text-xs text-uppercase">Host Access</label>
+                  <select class="form-select form-control" v-model="newUser.host">
+                    <option value="localhost">Localhost (localhost)</option>
+                    <option value="%">Any Host (%) - Remote Access</option>
+                  </select>
                 </div>
                 <button class="btn bg-gradient-success w-100" @click="createUser"
                   :disabled="!newUser.username || !newUser.password || creatingUser">
@@ -416,8 +423,15 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="user in managingDb?.users" :key="user.username">
-                      <td>{{ user.username }}@{{ user.host }}</td>
+                    <tr v-for="user in managingDb?.users" :key="user.username + '@' + user.host">
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <span class="font-weight-bold text-sm">{{ user.username }}</span>
+                          <span class="badge ms-2" :class="user.host === '%' ? 'bg-gradient-warning' : (user.host === 'localhost' ? 'bg-light text-dark border' : 'bg-gradient-info')">
+                            {{ user.host === '%' ? 'Remote (%)' : user.host }}
+                          </span>
+                        </div>
+                      </td>
                       <td>
                         <span v-for="priv in user.privileges?.slice(0, 3)" :key="priv"
                           class="badge bg-secondary me-1">{{ priv
@@ -434,6 +448,10 @@
                         <button class="btn btn-link text-warning p-0 me-2" @click="changeUserPassword(user)"
                           title="Change password">
                           <i class="material-symbols-rounded text-sm">key</i>
+                        </button>
+                        <button class="btn btn-link text-info p-0 me-2" @click="openHostModal(user)"
+                          title="Change Host / Remote Access">
+                          <i class="material-symbols-rounded text-sm">lan</i>
                         </button>
                         <button class="btn btn-link text-danger p-0" @click="removeUserAccess(user)"
                           title="Remove access">
@@ -477,6 +495,58 @@
                 :disabled="!newPassword || updatingPassword">
                 <span v-if="updatingPassword" class="spinner-border spinner-border-sm me-1"></span>
                 Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Change Host Modal -->
+      <div class="modal-backdrop fade show" v-if="showHostModal" @click="showHostModal = false"></div>
+      <div class="modal fade show d-block" v-if="showHostModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title d-flex align-items-center">
+                <i class="material-symbols-rounded text-info me-2">lan</i>
+                User Host & Remote Access
+              </h5>
+              <button type="button" class="btn-close" @click="showHostModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm">
+                Configuring allowed host for user <strong>{{ hostTargetUser?.username }}</strong>
+                (currently <code>{{ hostTargetUser?.host }}</code>).
+              </p>
+
+              <div class="form-group mb-3">
+                <label class="form-control-label text-xs text-uppercase font-weight-bold">Allowed Connection Host</label>
+                <select class="form-select form-control" v-model="selectedHostType">
+                  <option value="localhost">Localhost only (localhost) — For sites on this server</option>
+                  <option value="%">Any Host (%) — Remote connection from external clients</option>
+                  <option value="custom">Specific IP / Subnet</option>
+                </select>
+              </div>
+
+              <div class="form-group mb-3" v-if="selectedHostType === 'custom'">
+                <label class="form-control-label text-xs text-uppercase font-weight-bold">Custom Client IP or CIDR</label>
+                <input type="text" class="form-control" v-model="customHostInput" placeholder="e.g. 192.168.1.50 or 203.0.113.10">
+              </div>
+
+              <div class="alert alert-warning text-white text-xs mb-0" v-if="selectedHostType === '%'">
+                <div class="d-flex align-items-start">
+                  <i class="material-symbols-rounded me-2" style="font-size: 1.2rem;">warning</i>
+                  <div>
+                    <strong>Security Notice:</strong> Any host (<code>%</code>) allows connections from external tools (Navicat, DBeaver, external servers). Ensure the user has a strong password and firewall allows port 3306 only from trusted sources.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary" @click="showHostModal = false">Cancel</button>
+              <button class="btn bg-gradient-info" @click="submitHostChange" :disabled="updatingHost || (selectedHostType === 'custom' && !customHostInput.trim())">
+                <span v-if="updatingHost" class="spinner-border spinner-border-sm me-1"></span>
+                Save Host Setting
               </button>
             </div>
           </div>
@@ -619,18 +689,23 @@ const dbCurrentPage = ref(1)
 const itemsPerPage = ref(10)
 
 const newDatabase = ref({ name: '' })
-const newUser = ref({ username: '', password: '' })
+const newUser = ref({ username: '', password: '', host: 'localhost' })
 const assignment = ref({ database: '', username: '', privileges: [] })
 
 const showAssignModal = ref(false)
 const showManageModal = ref(false)
 const showPasswordModal = ref(false)
+const showHostModal = ref(false)
 const showDeleteModal = ref(false)
 const showPmaModal = ref(false)
 const showLinkModal = ref(false)
 
 const managingDb = ref(null)
 const editingUser = ref(null)
+const hostTargetUser = ref(null)
+const selectedHostType = ref('localhost')
+const customHostInput = ref('')
+const updatingHost = ref(false)
 const dbToDelete = ref(null)
 const pmaAccess = ref(null)
 const newPassword = ref('')
@@ -892,8 +967,8 @@ const createUser = async () => {
   try {
     creatingUser.value = true
     await axios.post('/database/user/create', newUser.value)
-    showAlert('success', `User '${newUser.value.username}' created successfully`)
-    newUser.value = { username: '', password: '' }
+    showAlert('success', `User '${newUser.value.username}'@'${newUser.value.host}' created successfully`)
+    newUser.value = { username: '', password: '', host: 'localhost' }
     await loadData()
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to create user')
@@ -978,6 +1053,58 @@ const removeUserAccess = async (user) => {
     managingDb.value = databases.value.find(d => d.name === managingDb.value.name)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to remove user access')
+  }
+}
+
+const openHostModal = (user) => {
+  hostTargetUser.value = user
+  if (user.host === 'localhost') {
+    selectedHostType.value = 'localhost'
+    customHostInput.value = ''
+  } else if (user.host === '%') {
+    selectedHostType.value = '%'
+    customHostInput.value = ''
+  } else {
+    selectedHostType.value = 'custom'
+    customHostInput.value = user.host
+  }
+  showHostModal.value = true
+}
+
+const submitHostChange = async () => {
+  if (!hostTargetUser.value) return
+  let targetHost = selectedHostType.value
+  if (targetHost === 'custom') {
+    targetHost = customHostInput.value.trim()
+    if (!targetHost) {
+      showAlert('danger', 'Please provide a valid host or IP address')
+      return
+    }
+  }
+
+  try {
+    updatingHost.value = true
+    const response = await axios.post('/database/user/update-host', {
+      username: hostTargetUser.value.username,
+      current_host: hostTargetUser.value.host,
+      new_host: targetHost
+    })
+
+    showAlert('success', response.data?.message || 'User host updated successfully')
+    showHostModal.value = false
+
+    if (managingDb.value && managingDb.value.users) {
+      const u = managingDb.value.users.find(u => u.username === hostTargetUser.value.username && u.host === hostTargetUser.value.host)
+      if (u) {
+        u.host = targetHost
+      }
+    }
+
+    await loadData()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || err.response?.data?.message || 'Failed to update user host')
+  } finally {
+    updatingHost.value = false
   }
 }
 

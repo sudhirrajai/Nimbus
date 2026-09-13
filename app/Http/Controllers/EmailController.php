@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use App\Models\DomainCloudflareSetting;
 
 class EmailController extends Controller
 {
@@ -1536,6 +1539,399 @@ EMAIL;
                 'success' => false,
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Get server public IP
+     */
+    private function getServerIp(): string
+    {
+        return Cache::remember('server_public_ip', 3600, function () {
+            try {
+                $services = [
+                    'https://api.ipify.org',
+                    'https://icanhazip.com',
+                    'https://ifconfig.me/ip'
+                ];
+
+                foreach ($services as $service) {
+                    $ip = @file_get_contents($service);
+                    if ($ip && filter_var(trim($ip), FILTER_VALIDATE_IP)) {
+                        return trim($ip);
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to fetch server public IP: " . $e->getMessage());
+            }
+
+            return request()->server('SERVER_ADDR') ?: '127.0.0.1';
+        });
+    }
+
+    /**
+     * Get main registerable domain
+     */
+    private static function getMainDomain($domain)
+    {
+        $domain = strtolower($domain);
+        $parts = explode('.', $domain);
+        $count = count($parts);
+        
+        if ($count <= 2) {
+            return $domain;
+        }
+        
+        $lastTwo = $parts[$count - 2] . '.' . $parts[$count - 1];
+        $multipartTlds = [
+            'co.uk', 'me.uk', 'org.uk', 'net.uk', 'ltd.uk',
+            'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
+            'co.in', 'net.in', 'org.in', 'gen.in', 'firm.in', 'ind.in',
+            'com.br', 'net.br', 'org.br', 'co.nz', 'net.nz', 'org.nz',
+            'com.sg', 'net.sg', 'org.sg', 'com.tw', 'net.tw', 'org.tw',
+            'co.za', 'net.za', 'org.za', 'com.mx', 'net.mx', 'org.mx'
+        ];
+        
+        if (in_array($lastTwo, $multipartTlds)) {
+            if ($count == 3) {
+                return $domain;
+            }
+            return $parts[$count - 3] . '.' . $lastTwo;
+        }
+        
+        return $parts[$count - 2] . '.' . $parts[$count - 1];
+    }
+
+    /**
+     * Get DNS Deliverability & Setup Records for a domain with live status check
+     */
+    public function getDnsRecords(Request $request)
+    {
+        $domain = strtolower(trim($request->query('domain', '')));
+        if (empty($domain)) {
+            return response()->json(['error' => 'Domain parameter is required'], 400);
+        }
+
+        try {
+            $user = auth()->user();
+            if ($user && !$user->isRoot() && !in_array($domain, $user->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $serverIp = $this->getServerIp();
+            $mainDomain = self::getMainDomain($domain);
+
+            // Cloudflare connection check
+            $cfSetting = DomainCloudflareSetting::where('domain', $domain)
+                ->orWhere('domain', $mainDomain)
+                ->first();
+            $isCloudflareConnected = $cfSetting !== null;
+
+            // Live DNS Queries
+            // 1. Mail Host A record: mail.{domain} -> serverIp
+            $mailHost = "mail.{$domain}";
+            $aRecords = @dns_get_record($mailHost, DNS_A) ?: [];
+            $aStatus = 'missing';
+            $aCurrent = null;
+            if (!empty($aRecords)) {
+                $foundIps = array_column($aRecords, 'ip');
+                $aCurrent = implode(', ', $foundIps);
+                if (in_array($serverIp, $foundIps)) {
+                    $aStatus = 'configured';
+                } else {
+                    $aStatus = 'mismatch';
+                }
+            }
+
+            // 2. MX Record: {domain} -> mail.{domain}
+            $mxRecords = @dns_get_record($domain, DNS_MX) ?: [];
+            $mxStatus = 'missing';
+            $mxCurrent = null;
+            if (!empty($mxRecords)) {
+                $targets = array_map(function ($r) {
+                    return rtrim($r['target'] ?? '', '.');
+                }, $mxRecords);
+                $mxCurrent = implode(', ', $targets);
+                if (in_array($mailHost, $targets)) {
+                    $mxStatus = 'configured';
+                } else {
+                    $mxStatus = 'mismatch';
+                }
+            }
+
+            // 3. SPF TXT Record: {domain} -> "v=spf1 mx a ip4:{serverIp} ~all"
+            $txtRecords = @dns_get_record($domain, DNS_TXT) ?: [];
+            $spfStatus = 'missing';
+            $spfCurrent = null;
+            $recommendedSpf = "v=spf1 mx a ip4:{$serverIp} ~all";
+            foreach ($txtRecords as $txt) {
+                $txtVal = $txt['txt'] ?? '';
+                if (stripos($txtVal, 'v=spf1') !== false) {
+                    $spfCurrent = $txtVal;
+                    if (stripos($txtVal, 'mx') !== false || stripos($txtVal, $serverIp) !== false || stripos($txtVal, '+a') !== false) {
+                        $spfStatus = 'configured';
+                    } else {
+                        $spfStatus = 'mismatch';
+                    }
+                    break;
+                }
+            }
+
+            // 4. DMARC TXT Record: _dmarc.{domain} -> "v=DMARC1; p=none; sp=none; aspf=r;"
+            $dmarcHost = "_dmarc.{$domain}";
+            $dmarcRecords = @dns_get_record($dmarcHost, DNS_TXT) ?: [];
+            $dmarcStatus = 'missing';
+            $dmarcCurrent = null;
+            $recommendedDmarc = "v=DMARC1; p=none; sp=none; aspf=r;";
+            foreach ($dmarcRecords as $txt) {
+                $txtVal = $txt['txt'] ?? '';
+                if (stripos($txtVal, 'v=DMARC1') !== false) {
+                    $dmarcCurrent = $txtVal;
+                    $dmarcStatus = 'configured';
+                    break;
+                }
+            }
+
+            // Optional DKIM Check
+            $dkimRecord = null;
+            $dkimKeyPaths = [
+                "/etc/opendkim/keys/{$domain}/default.txt",
+                "/etc/opendkim/keys/{$domain}/mail.txt",
+                "/etc/postfix/dkim/{$domain}.txt"
+            ];
+            foreach ($dkimKeyPaths as $path) {
+                if (file_exists($path)) {
+                    $content = @file_get_contents($path);
+                    if ($content && preg_match('/p=([A-Za-z0-9+\/=]+)/', $content, $m)) {
+                        $dkimRecord = [
+                            'id' => 'dkim',
+                            'title' => 'DKIM DomainKeys Identified Mail',
+                            'type' => 'TXT',
+                            'name' => 'default._domainkey',
+                            'full_name' => "default._domainkey.{$domain}",
+                            'value' => "v=DKIM1; k=rsa; p={$m[1]}",
+                            'status' => 'configured',
+                            'current_value' => 'Configured on local server',
+                            'note' => 'Cryptographic signature validating email authenticity.',
+                            'proxied_allowed' => false
+                        ];
+                        break;
+                    }
+                }
+            }
+
+            $records = [
+                [
+                    'id' => 'mail_a',
+                    'title' => 'Mail Server Host (A Record)',
+                    'type' => 'A',
+                    'name' => 'mail',
+                    'full_name' => "mail.{$domain}",
+                    'value' => $serverIp,
+                    'status' => $aStatus,
+                    'current_value' => $aCurrent,
+                    'note' => 'Points mail subdomain directly to your server IP (Must NOT be proxied in Cloudflare).',
+                    'proxied_allowed' => false
+                ],
+                [
+                    'id' => 'mx',
+                    'title' => 'Mail Exchange (MX Record)',
+                    'type' => 'MX',
+                    'name' => '@',
+                    'full_name' => $domain,
+                    'value' => $mailHost,
+                    'priority' => 10,
+                    'status' => $mxStatus,
+                    'current_value' => $mxCurrent,
+                    'note' => 'Routes incoming emails to mail.' . $domain . '.',
+                    'proxied_allowed' => false
+                ],
+                [
+                    'id' => 'spf',
+                    'title' => 'Sender Policy Framework (SPF)',
+                    'type' => 'TXT',
+                    'name' => '@',
+                    'full_name' => $domain,
+                    'value' => $recommendedSpf,
+                    'status' => $spfStatus,
+                    'current_value' => $spfCurrent,
+                    'note' => 'Prevents email spoofing and authorizes this server to send emails.',
+                    'proxied_allowed' => false
+                ],
+                [
+                    'id' => 'dmarc',
+                    'title' => 'DMARC Policy',
+                    'type' => 'TXT',
+                    'name' => '_dmarc',
+                    'full_name' => "_dmarc.{$domain}",
+                    'value' => $recommendedDmarc,
+                    'status' => $dmarcStatus,
+                    'current_value' => $dmarcCurrent,
+                    'note' => 'Protects against phishing and satisfies Gmail, Yahoo, & Outlook deliverability standards.',
+                    'proxied_allowed' => false
+                ]
+            ];
+
+            if ($dkimRecord) {
+                $records[] = $dkimRecord;
+            }
+
+            $allConfigured = ($aStatus === 'configured' && $mxStatus === 'configured' && $spfStatus === 'configured' && $dmarcStatus === 'configured');
+
+            return response()->json([
+                'domain' => $domain,
+                'server_ip' => $serverIp,
+                'is_cloudflare_connected' => $isCloudflareConnected,
+                'cloudflare_zone_id' => $cfSetting ? $cfSetting->zone_id : null,
+                'all_configured' => $allConfigured,
+                'records' => $records
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to get DNS records for {$domain}: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 1-Click Auto-Configure Cloudflare DNS for Email
+     */
+    public function applyCloudflareDns(Request $request)
+    {
+        $domain = strtolower(trim($request->input('domain', '')));
+        if (empty($domain)) {
+            return response()->json(['error' => 'Domain parameter is required'], 400);
+        }
+
+        try {
+            $user = auth()->user();
+            if ($user && !$user->isRoot() && !in_array($domain, $user->accessibleDomains())) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $mainDomain = self::getMainDomain($domain);
+            $setting = DomainCloudflareSetting::where('domain', $domain)
+                ->orWhere('domain', $mainDomain)
+                ->first();
+
+            if (!$setting) {
+                return response()->json(['error' => "Cloudflare is not connected for {$domain}. Connect it under DNS Manager first."], 400);
+            }
+
+            $serverIp = $this->getServerIp();
+            $token = $setting->api_token;
+            $zoneId = $setting->zone_id;
+
+            // Fetch existing records from Cloudflare
+            $cfRes = Http::withToken($token)
+                ->get("https://api.cloudflare.com/client/v4/zones/{$zoneId}/dns_records?per_page=100");
+
+            if (!$cfRes->successful()) {
+                throw new \Exception($cfRes->json('errors.0.message', 'Failed to fetch DNS records from Cloudflare'));
+            }
+
+            $existingRecords = collect($cfRes->json('result', []));
+            $configuredCount = 0;
+
+            // 1. Mail Host A record (mail.{domain} -> serverIp, proxied: false)
+            $existingMailA = $existingRecords->first(function ($r) use ($domain) {
+                return $r['type'] === 'A' && (
+                    strtolower($r['name']) === "mail.{$domain}" || 
+                    strtolower($r['name']) === 'mail'
+                );
+            });
+
+            if ($existingMailA) {
+                if ($existingMailA['content'] !== $serverIp || $existingMailA['proxied'] !== false) {
+                    Http::withToken($token)
+                        ->put("https://api.cloudflare.com/client/v4/zones/{$zoneId}/dns_records/{$existingMailA['id']}", [
+                            'type' => 'A',
+                            'name' => 'mail',
+                            'content' => $serverIp,
+                            'ttl' => 1,
+                            'proxied' => false
+                        ]);
+                    $configuredCount++;
+                }
+            } else {
+                $res = Http::withToken($token)
+                    ->post("https://api.cloudflare.com/client/v4/zones/{$zoneId}/dns_records", [
+                        'type' => 'A',
+                        'name' => 'mail',
+                        'content' => $serverIp,
+                        'ttl' => 1,
+                        'proxied' => false
+                    ]);
+                if ($res->successful()) $configuredCount++;
+            }
+
+            // 2. MX Record (@ -> mail.{domain}, priority: 10)
+            $existingMx = $existingRecords->first(function ($r) use ($domain) {
+                return $r['type'] === 'MX' && (
+                    strtolower($r['name']) === $domain || 
+                    strtolower($r['name']) === '@'
+                ) && strtolower($r['content']) === "mail.{$domain}";
+            });
+
+            if (!$existingMx) {
+                $res = Http::withToken($token)
+                    ->post("https://api.cloudflare.com/client/v4/zones/{$zoneId}/dns_records", [
+                        'type' => 'MX',
+                        'name' => '@',
+                        'content' => "mail.{$domain}",
+                        'priority' => 10,
+                        'ttl' => 1
+                    ]);
+                if ($res->successful()) $configuredCount++;
+            }
+
+            // 3. SPF TXT Record (@ -> "v=spf1 mx a ip4:{serverIp} ~all")
+            $existingSpf = $existingRecords->first(function ($r) use ($domain) {
+                return $r['type'] === 'TXT' && (
+                    strtolower($r['name']) === $domain || 
+                    strtolower($r['name']) === '@'
+                ) && stripos($r['content'], 'v=spf1') !== false;
+            });
+
+            $spfValue = "v=spf1 mx a ip4:{$serverIp} ~all";
+            if (!$existingSpf) {
+                $res = Http::withToken($token)
+                    ->post("https://api.cloudflare.com/client/v4/zones/{$zoneId}/dns_records", [
+                        'type' => 'TXT',
+                        'name' => '@',
+                        'content' => $spfValue,
+                        'ttl' => 1
+                    ]);
+                if ($res->successful()) $configuredCount++;
+            }
+
+            // 4. DMARC TXT Record (_dmarc -> "v=DMARC1; p=none; sp=none; aspf=r;")
+            $existingDmarc = $existingRecords->first(function ($r) use ($domain) {
+                return $r['type'] === 'TXT' && (
+                    strtolower($r['name']) === "_dmarc.{$domain}" || 
+                    strtolower($r['name']) === '_dmarc'
+                );
+            });
+
+            $dmarcValue = "v=DMARC1; p=none; sp=none; aspf=r;";
+            if (!$existingDmarc) {
+                $res = Http::withToken($token)
+                    ->post("https://api.cloudflare.com/client/v4/zones/{$zoneId}/dns_records", [
+                        'type' => 'TXT',
+                        'name' => '_dmarc',
+                        'content' => $dmarcValue,
+                        'ttl' => 1
+                    ]);
+                if ($res->successful()) $configuredCount++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Cloudflare DNS configured successfully for {$domain}! Records are active and proxying is disabled for mail.",
+                'configured_count' => $configuredCount
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to apply Cloudflare DNS for {$domain}: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }

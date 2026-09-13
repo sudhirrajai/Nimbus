@@ -82,7 +82,9 @@ class WordPressController extends Controller
                 $sslEnabled = false;
                 $sslOutput = [];
                 $sslReturn = 0;
-                exec("sudo test -f " . escapeshellarg("/etc/letsencrypt/live/{$domain}/fullchain.pem") . " && echo 'exists'", $sslOutput, $sslReturn);
+                $leCert = escapeshellarg("/etc/letsencrypt/live/{$domain}/fullchain.pem");
+                $customCert = escapeshellarg("/etc/nginx/ssl/{$domain}/fullchain.pem");
+                exec("(sudo test -f {$leCert} || sudo test -f {$customCert}) && echo 'exists'", $sslOutput, $sslReturn);
                 if ($sslReturn === 0 && isset($sslOutput[0]) && $sslOutput[0] === 'exists') {
                     $sslEnabled = true;
                 }
