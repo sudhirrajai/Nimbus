@@ -48,10 +48,12 @@
             <span class="prompt-command">{{ line.command }}</span>
           </template>
           <template v-else-if="line.type === 'output'">
-            <span class="output-text" v-text="line.text"></span>
+            <span class="output-text" v-if="line.html" v-html="line.html"></span>
+            <span class="output-text" v-else v-text="line.text"></span>
           </template>
           <template v-else-if="line.type === 'error'">
-            <span class="output-error">{{ line.text }}</span>
+            <span class="output-error" v-if="line.html" v-html="line.html"></span>
+            <span class="output-error" v-else v-text="line.text"></span>
           </template>
           <template v-else-if="line.type === 'info'">
             <span class="output-info">{{ line.text }}</span>
@@ -355,6 +357,7 @@ const executeCommand = async () => {
     outputLines.value.push({
       type: 'error',
       text: msg,
+      html: ansiToHtml(msg),
     })
   } finally {
     isExecuting.value = false
@@ -389,6 +392,9 @@ const ansiToHtml = (text) => {
     }
     return style ? `<span style="${style}">` : ''
   })
+
+  // Strip any lingering non-color ANSI control sequences (e.g. cursor moves)
+  html = html.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
 
   return html
 }

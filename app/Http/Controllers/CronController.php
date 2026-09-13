@@ -112,9 +112,10 @@ class CronController extends Controller
             $weekday = $request->input('weekday');
             $command = $request->input('command');
 
-            // Check permission
+            // Check permission and enforce user
             $userModel = auth()->user();
             if (!$userModel->isRoot()) {
+                $user = 'www-data';
                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
                         return response()->json(['error' => 'Permission denied for this domain path'], 403);
@@ -181,9 +182,10 @@ class CronController extends Controller
             $weekday = $request->input('weekday');
             $command = $request->input('command');
 
-            // Check permission
+            // Check permission and enforce user
             $userModel = auth()->user();
             if (!$userModel->isRoot()) {
+                $user = 'www-data';
                 // Check old command
                 if (preg_match('#/var/www/([^/\s]+)#', $oldCommand, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
@@ -251,9 +253,10 @@ class CronController extends Controller
             $user = $request->input('user');
             $command = $request->input('command');
 
-            // Check permission
+            // Check permission and enforce user
             $userModel = auth()->user();
             if (!$userModel->isRoot()) {
+                $user = 'www-data';
                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
                         return response()->json(['error' => 'Permission denied for this domain path'], 403);
@@ -307,9 +310,10 @@ class CronController extends Controller
             $user = $request->input('user');
             $command = $request->input('command');
             
-            // Check permission
+            // Check permission and enforce user
             $userModel = auth()->user();
             if (!$userModel->isRoot()) {
+                $user = 'www-data';
                 if (preg_match('#/var/www/([^/\s]+)#', $command, $m)) {
                     if (!$userModel->hasDomainPermission($m[1], 'cron')) {
                         return response()->json(['error' => 'Permission denied for this domain path'], 403);

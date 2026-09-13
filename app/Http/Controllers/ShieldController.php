@@ -665,11 +665,24 @@ class ShieldController extends Controller
      */
     public function toggleFirewall(Request $request)
     {
-        $enable = $request->input('enable');
-        $command = $enable ? "ufw --force enable" : "ufw disable";
+        $enable = (bool) $request->input('enable');
         
         try {
-            $this->executeSudoCommand($command);
+            if ($enable) {
+                // Safeguard: Ensure critical management & web ports are allowed before enabling UFW
+                // to prevent administrator lockout.
+                $this->executeSudoCommand("ufw allow 22/tcp");
+                $this->executeSudoCommand("ufw allow 80/tcp");
+                $this->executeSudoCommand("ufw allow 443/tcp");
+                $panelPort = (int) env('PORT', 8090);
+                if ($panelPort > 0 && !in_array($panelPort, [22, 80, 443])) {
+                    $this->executeSudoCommand("ufw allow {$panelPort}/tcp");
+                }
+                $this->executeSudoCommand("ufw --force enable");
+            } else {
+                $this->executeSudoCommand("ufw disable");
+            }
+
             return response()->json(['success' => true, 'message' => "Firewall " . ($enable ? "enabled" : "disabled")]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);

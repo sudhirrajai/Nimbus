@@ -313,17 +313,31 @@ const data = ref({
 
 let refreshInterval = null
 
+const handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && !document.hidden) {
+        loadUsage()
+    }
+}
+
 onMounted(async () => {
     await loadUsage()
-    // Auto-refresh every 10 seconds
+    // Auto-refresh every 10 seconds (tab-visibility guarded)
     refreshInterval = setInterval(loadUsage, 10000)
+    if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
 })
 
 onUnmounted(() => {
     if (refreshInterval) clearInterval(refreshInterval)
+    if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
 })
 
 const loadUsage = async () => {
+    if (typeof document !== 'undefined' && document.hidden) return
+
     try {
         const response = await axios.get('/resources/usage')
         if (response.data.success) {

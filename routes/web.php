@@ -109,6 +109,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         return Inertia::render('Domains/Index');
     })->name('domains.list');
 
+    // FTP Accounts (Coming Soon — accessible to all users)
+    Route::get('/ftp', function () {
+        return Inertia::render('FTP/Index');
+    })->name('ftp.index');
+
     Route::prefix('domains')->group(function () {
         Route::get('/api', [DomainController::class, 'index'])->name('domain.index');
         Route::get('/api/{domain}/details', [DomainController::class, 'getDomainDetails'])->name('domain.details');
@@ -426,10 +431,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::delete('/{backup}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('destroy');
         });
 
-        // FTP Accounts (Coming Soon)
-        Route::get('/ftp', function () {
-            return \Inertia\Inertia::render('FTP/Index');
-        })->name('ftp.index');
 
         // Updates routes
         Route::prefix('updates')->name('updates.')->group(function () {
