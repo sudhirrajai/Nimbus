@@ -109,6 +109,97 @@ class GitDeploymentService
     }
 
     /**
+     * Ensure the server SSH key and known_hosts file exist and have correct permissions.
+     */
+    public function ensureSshKeyExists(): string
+    {
+        $sshDir = '/var/www/.ssh';
+        $keyPath = "{$sshDir}/id_ed25519";
+        $knownHostsPath = "{$sshDir}/known_hosts";
+
+        if (!file_exists($sshDir)) {
+            @exec("sudo mkdir -p {$sshDir} 2>&1");
+            @exec("sudo chown -R www-data:www-data {$sshDir} 2>&1");
+            @exec("sudo chmod 700 {$sshDir} 2>&1");
+        }
+
+        if (!file_exists($keyPath)) {
+            @exec("sudo -u www-data ssh-keygen -t ed25519 -f {$keyPath} -N '' -C 'nimbus-deploy@server' 2>&1");
+            @exec("sudo chown www-data:www-data {$keyPath} {$keyPath}.pub 2>&1");
+            @exec("sudo chmod 600 {$keyPath} 2>&1");
+            @exec("sudo chmod 644 {$keyPath}.pub 2>&1");
+        } else {
+            @exec("sudo chmod 600 {$keyPath} 2>&1");
+        }
+
+        if (!file_exists($knownHostsPath)) {
+            @exec("sudo -u www-data touch {$knownHostsPath} 2>&1");
+            @exec("sudo chown www-data:www-data {$knownHostsPath} 2>&1");
+            @exec("sudo chmod 644 {$knownHostsPath} 2>&1");
+            @exec("sudo -u www-data ssh-keyscan -H github.com >> {$knownHostsPath} 2>&1");
+            @exec("sudo -u www-data ssh-keyscan -H gitlab.com >> {$knownHostsPath} 2>&1");
+            @exec("sudo -u www-data ssh-keyscan -H bitbucket.org >> {$knownHostsPath} 2>&1");
+        }
+
+        return $keyPath;
+    }
+
+    /**
+     * Get environment prefix for Git commands (SSH config, non-interactive flags).
+     */
+    public function getGitEnv(): string
+    {
+        $sshDir = '/var/www/.ssh';
+        $keyPath = "{$sshDir}/id_ed25519";
+        $knownHosts = "{$sshDir}/known_hosts";
+
+        $sshCmd = "ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile={$knownHosts}";
+        if (file_exists($keyPath)) {
+            $sshCmd .= " -i {$keyPath} -o IdentitiesOnly=yes";
+        }
+
+        return "export GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND=" . escapeshellarg($sshCmd);
+    }
+
+    /**
+     * Build the authenticated URL for private HTTPS repos or clean URL.
+     */
+    public function buildAuthenticatedUrl(string $url, ?string $token): string
+    {
+        $url = trim($url);
+        if (empty($token)) {
+            return $url;
+        }
+
+        $token = trim($token);
+        $parsed = parse_url($url);
+
+        if (!$parsed || !isset($parsed['scheme']) || !in_array(strtolower($parsed['scheme']), ['http', 'https'])) {
+            return $url;
+        }
+
+        $host = $parsed['host'] ?? '';
+        $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+        $path = $parsed['path'] ?? '';
+        $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
+        $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
+
+        // If token already includes username/prefix (e.g. "x-access-token:ghp_..." or "oauth2:glpat-...")
+        if (str_contains($token, ':')) {
+            $auth = $token;
+        } elseif (str_contains(strtolower($host), 'gitlab')) {
+            $auth = 'oauth2:' . rawurlencode($token);
+        } elseif (str_contains(strtolower($host), 'bitbucket')) {
+            $auth = 'x-token-auth:' . rawurlencode($token);
+        } else {
+            // GitHub and generic git providers
+            $auth = 'x-access-token:' . rawurlencode($token);
+        }
+
+        return "https://{$auth}@{$host}{$port}{$path}{$query}{$fragment}";
+    }
+
+    /**
      * Clone the repository to the domain's directory.
      */
     private function cloneRepository(GitDeployment $deployment): bool
@@ -120,6 +211,10 @@ class GitDeploymentService
 
         try {
             $deployment->update(['status' => 'cloning']);
+
+            if ($deployment->url_type === 'ssh' || preg_match('/^(git@|ssh:\/\/)/', $deployment->repo_url)) {
+                $this->ensureSshKeyExists();
+            }
 
             // Build clone URL based on repo type
             $cloneUrl = $this->buildCloneUrl($deployment);
@@ -189,9 +284,7 @@ class GitDeploymentService
         $url = $deployment->repo_url;
 
         if ($deployment->repo_type === 'private' && $deployment->url_type === 'https' && $deployment->access_token) {
-            $token = $deployment->access_token;
-            // Insert username:token into HTTPS URL: https://x-access-token:TOKEN@github.com/user/repo.git
-            $url = preg_replace('/^https:\/\//', "https://x-access-token:{$token}@", $url);
+            $url = $this->buildAuthenticatedUrl($url, $deployment->access_token);
         }
 
         return escapeshellarg($url);
@@ -732,20 +825,29 @@ NGINX;
     public function validateRepository(string $url, string $type, ?string $token, string $urlType): array
     {
         try {
+            $url = trim($url);
+            if ($urlType === 'ssh' || preg_match('/^(git@|ssh:\/\/)/', $url)) {
+                $this->ensureSshKeyExists();
+            }
+
             $checkUrl = $url;
             if ($type === 'private' && $urlType === 'https' && $token) {
-                $checkUrl = preg_replace('/^https:\/\//', "https://{$token}@", $url);
+                $checkUrl = $this->buildAuthenticatedUrl($url, $token);
             }
 
             $escapedUrl = escapeshellarg($checkUrl);
+            $gitEnv = $this->getGitEnv();
             $output = [];
             $returnCode = 0;
-            exec("export HOME=/tmp && git -c safe.directory='*' ls-remote {$escapedUrl} HEAD 2>&1", $output, $returnCode);
+            exec("{$gitEnv} && export HOME=/tmp && git -c safe.directory='*' ls-remote {$escapedUrl} HEAD 2>&1", $output, $returnCode);
 
             if ($returnCode === 0) {
                 return ['valid' => true, 'message' => 'Repository is accessible'];
             } else {
                 $error = implode("\n", $output);
+                if ($token) {
+                    $error = str_replace($token, '***', $error);
+                }
                 return ['valid' => false, 'message' => "Cannot access repository: {$error}"];
             }
         } catch (\Exception $e) {
@@ -759,18 +861,28 @@ NGINX;
     public function fetchBranches(string $url, string $type, ?string $token, string $urlType): array
     {
         try {
+            $url = trim($url);
+            if ($urlType === 'ssh' || preg_match('/^(git@|ssh:\/\/)/', $url)) {
+                $this->ensureSshKeyExists();
+            }
+
             $checkUrl = $url;
             if ($type === 'private' && $urlType === 'https' && $token) {
-                $checkUrl = preg_replace('/^https:\/\//', "https://{$token}@", $url);
+                $checkUrl = $this->buildAuthenticatedUrl($url, $token);
             }
 
             $escapedUrl = escapeshellarg($checkUrl);
+            $gitEnv = $this->getGitEnv();
             $output = [];
             $returnCode = 0;
-            exec("export HOME=/tmp && git -c safe.directory='*' ls-remote --heads {$escapedUrl} 2>&1", $output, $returnCode);
+            exec("{$gitEnv} && export HOME=/tmp && git -c safe.directory='*' ls-remote --heads {$escapedUrl} 2>&1", $output, $returnCode);
 
             if ($returnCode !== 0) {
-                return ['success' => false, 'branches' => [], 'error' => implode("\n", $output)];
+                $error = implode("\n", $output);
+                if ($token) {
+                    $error = str_replace($token, '***', $error);
+                }
+                return ['success' => false, 'branches' => [], 'error' => $error];
             }
 
             $branches = [];
@@ -800,9 +912,11 @@ NGINX;
         // This forces the child command (like php artisan migrate) to read from its own local .env file.
         $unsets = "unset DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD APP_KEY APP_ENV APP_DEBUG APP_URL MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_ENCRYPTION MAIL_FROM_ADDRESS LOG_CHANNEL SESSION_DRIVER CACHE_STORE QUEUE_CONNECTION";
 
-        $fullCommand = "{$unsets} && export HOME=/tmp && " . $command;
+        $gitEnv = $this->getGitEnv();
+
+        $fullCommand = "{$unsets} && {$gitEnv} && export HOME=/tmp && " . $command;
         if ($cwd) {
-            $fullCommand = "{$unsets} && export HOME=/tmp && cd {$cwd} && {$command}";
+            $fullCommand = "{$unsets} && {$gitEnv} && export HOME=/tmp && cd {$cwd} && {$command}";
         }
 
         Log::debug("Deployment command: {$fullCommand}");

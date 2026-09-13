@@ -471,28 +471,11 @@ class GitDeploymentController extends Controller
     public function getServerSshKey()
     {
         try {
-            $sshDir = '/var/www/.ssh';
-            $keyPath = "{$sshDir}/id_ed25519";
-            $pubKeyPath = "{$keyPath}.pub";
+            $this->deploymentService->ensureSshKeyExists();
+            $pubKeyPath = '/var/www/.ssh/id_ed25519.pub';
 
             if (!File::exists($pubKeyPath)) {
-                if (!File::exists($sshDir)) {
-                    exec("sudo mkdir -p {$sshDir} 2>&1");
-                    exec("sudo chown www-data:www-data {$sshDir} 2>&1");
-                    exec("sudo chmod 700 {$sshDir} 2>&1");
-                }
-
-                // Generate ED25519 key for www-data
-                exec("sudo -u www-data ssh-keygen -t ed25519 -f {$keyPath} -N '' -C 'nimbus-deploy@server' 2>&1", $output, $returnCode);
-                
-                if ($returnCode !== 0) {
-                    throw new \Exception("Failed to generate SSH key: " . implode("\n", $output));
-                }
-
-                // Add github.com and others to known_hosts to prevent interactive prompts
-                exec("sudo -u www-data ssh-keyscan -H github.com >> {$sshDir}/known_hosts 2>&1");
-                exec("sudo -u www-data ssh-keyscan -H gitlab.com >> {$sshDir}/known_hosts 2>&1");
-                exec("sudo -u www-data ssh-keyscan -H bitbucket.org >> {$sshDir}/known_hosts 2>&1");
+                throw new \Exception("Public key file was not found at {$pubKeyPath}");
             }
 
             $pubKey = File::get($pubKeyPath);

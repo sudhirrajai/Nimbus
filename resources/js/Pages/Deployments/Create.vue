@@ -209,21 +209,24 @@
                 <div v-if="form.repo_type === 'private' && form.url_type === 'https'" class="form-group mb-4">
                   <label class="form-control-label font-weight-bold">
                     <i class="material-symbols-rounded text-sm me-1">key</i>
-                    GitHub Personal Access Token
+                    Personal Access Token / App Password
                   </label>
                   <div class="input-group input-group-outline">
                     <input
                       :type="showToken ? 'text' : 'password'"
                       v-model="form.access_token"
                       class="form-control"
-                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      placeholder="ghp_xxxx or glpat-xxxx or app password"
                     >
                     <button class="btn btn-outline-dark mb-0" @click="showToken = !showToken" type="button">
                       <i class="material-symbols-rounded text-sm">{{ showToken ? 'visibility_off' : 'visibility' }}</i>
                     </button>
                   </div>
                   <small class="text-muted d-block mt-1">
-                    Required for private repositories. Generate at <a href="https://github.com/settings/tokens" target="_blank" class="text-dark">github.com/settings/tokens</a> (needs <code>repo</code> scope).
+                    Required for private HTTPS repositories. 
+                    GitHub: <a href="https://github.com/settings/tokens" target="_blank" class="text-dark font-weight-bold">Personal Access Token</a> (needs <code>repo</code> scope) &bull; 
+                    GitLab: Token with <code>read_repository</code> &bull; 
+                    Bitbucket: App password with repository read permission.
                   </small>
                 </div>
 
@@ -618,7 +621,7 @@ const fetchBranches = async () => {
       showAlert('danger', 'Failed to fetch branches: ' + (res.data.error || 'Unknown error'))
     }
   } catch (error) {
-    showAlert('danger', 'Failed to fetch branches')
+    showAlert('danger', error.response?.data?.error || error.response?.data?.message || 'Failed to fetch branches')
   } finally {
     fetchingBranches.value = false
   }
@@ -676,6 +679,12 @@ const copySshKey = () => {
 import { watch } from 'vue'
 watch(() => form.value.url_type, (newVal) => {
   if (newVal === 'ssh') {
+    loadSshKey();
+  }
+})
+
+watch(currentStep, (newStep) => {
+  if (newStep === 2 && form.value.url_type === 'ssh') {
     loadSshKey();
   }
 })
