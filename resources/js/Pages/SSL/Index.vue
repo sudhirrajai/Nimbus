@@ -432,6 +432,9 @@
               <pre class="bg-dark text-light p-3 rounded" style="font-size: 12px; max-height: 400px; overflow: auto;">{{ outputContent }}</pre>
             </div>
             <div class="modal-footer">
+              <button v-if="canForceDomain" class="btn bg-gradient-warning me-auto" @click="installSsl(canForceDomain, true); showOutputModal = false">
+                <i class="material-symbols-rounded text-sm me-1">warning</i> Force Issue Anyway
+              </button>
               <button class="btn btn-outline-secondary" @click="showOutputModal = false">Close</button>
             </div>
           </div>
@@ -579,6 +582,7 @@ const domainToRemove = ref(null)
 const outputTitle = ref('')
 const outputContent = ref('')
 const outputSuccess = ref(true)
+const canForceDomain = ref(null)
 
 const alert = ref({
   show: false,
@@ -746,12 +750,16 @@ const formatDate = (dateStr) => {
   })
 }
 
-const installSsl = async (domain) => {
+const installSsl = async (domain, force = false) => {
   try {
     installing.value = domain.domain
+    canForceDomain.value = null
     showAlert('info', `Installing SSL certificate for ${domain.domain}... This may take a minute.`)
     
-    const response = await axios.post('/ssl/install', { domain: domain.domain })
+    const response = await axios.post('/ssl/install', { 
+      domain: domain.domain,
+      force: force 
+    })
     
     showAlert('success', response.data.message)
     outputTitle.value = 'SSL Installation Complete'
@@ -761,10 +769,18 @@ const installSsl = async (domain) => {
     
     await loadDomains()
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to install SSL')
-    if (error.response?.data?.details) {
+    const errorData = error.response?.data
+    showAlert('danger', errorData?.error || 'Failed to install SSL')
+    
+    if (errorData?.dns_warning && errorData?.can_force) {
+      canForceDomain.value = domain
+      outputTitle.value = 'DNS Verification Notice'
+      outputContent.value = errorData.error + '\n\nIf you recently updated DNS records or your domain is proxied through a CDN (such as Cloudflare), you can click "Force Issue Anyway" below to proceed.'
+      outputSuccess.value = false
+      showOutputModal.value = true
+    } else if (errorData?.details || errorData?.error) {
       outputTitle.value = 'SSL Installation Failed'
-      outputContent.value = error.response.data.details
+      outputContent.value = errorData.details || errorData.error
       outputSuccess.value = false
       showOutputModal.value = true
     }

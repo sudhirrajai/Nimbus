@@ -635,6 +635,19 @@ class SslController extends Controller
                 return response()->json(['error' => 'Domain directory not found'], 404);
             }
 
+            // DNS Pre-flight check: ensure domain resolves before hitting Let's Encrypt rate limits
+            $serverIp = $this->getServerIp();
+            $dnsCheck = $this->verifyDomainDnsForSsl($domain, $serverIp, $request->boolean('force'));
+            if (!$dnsCheck['ok']) {
+                return response()->json([
+                    'error' => $dnsCheck['error'],
+                    'can_force' => $dnsCheck['can_force'] ?? false,
+                    'dns_warning' => true,
+                    'server_ip' => $serverIp,
+                    'resolved_ips' => $dnsCheck['resolved_ips'] ?? [],
+                ], 422);
+            }
+
             // Ensure certbot is available (auto-install if needed)
             $certbotPath = $this->ensureCertbot();
 
@@ -1311,5 +1324,60 @@ class SslController extends Controller
     private function isValidDomain($domain)
     {
         return preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i', $domain) && strlen($domain) <= 253;
+    }
+
+    /**
+     * Check if a domain's DNS is configured and resolves properly before requesting Let's Encrypt.
+     */
+    private function verifyDomainDnsForSsl(string $domain, string $serverIp, bool $force = false): array
+    {
+        if ($force) {
+            return ['ok' => true];
+        }
+
+        try {
+            $recordsA = @dns_get_record($domain, DNS_A) ?: [];
+            $recordsAAAA = @dns_get_record($domain, DNS_AAAA) ?: [];
+            $recordsCNAME = @dns_get_record($domain, DNS_CNAME) ?: [];
+
+            $resolvedIps = array_filter(array_merge(
+                array_column($recordsA, 'ip'),
+                array_column($recordsAAAA, 'ipv6')
+            ));
+
+            // Fallback to gethostbyname if dns_get_record returned empty
+            if (empty($resolvedIps)) {
+                $fallback = @gethostbyname($domain);
+                if ($fallback && $fallback !== $domain) {
+                    $resolvedIps[] = $fallback;
+                }
+            }
+
+            // 1. If domain does not resolve at all
+            if (empty($resolvedIps) && empty($recordsCNAME)) {
+                return [
+                    'ok' => false,
+                    'error' => "DNS record not found for '{$domain}'. Please point your domain's DNS A-record to this server ({$serverIp}) before issuing a Let's Encrypt certificate.",
+                    'can_force' => true,
+                ];
+            }
+
+            // 2. If domain resolves, check if serverIp matches (only if server has a public IP)
+            $isPublicServerIp = filter_var($serverIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+            if ($isPublicServerIp && !empty($resolvedIps) && !in_array($serverIp, $resolvedIps)) {
+                return [
+                    'ok' => false,
+                    'error' => "Domain '{$domain}' currently resolves to " . implode(', ', $resolvedIps) . ", but this server's public IP is {$serverIp}. If DNS was recently updated, please wait for propagation or click 'Force Issue' if using a proxy/CDN.",
+                    'can_force' => true,
+                    'resolved_ips' => $resolvedIps,
+                    'server_ip' => $serverIp,
+                ];
+            }
+
+            return ['ok' => true];
+        } catch (\Exception $e) {
+            \Log::warning("DNS preflight check warning for {$domain}: " . $e->getMessage());
+            return ['ok' => true]; // Fail open if local resolver errors
+        }
     }
 }

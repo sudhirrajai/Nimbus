@@ -197,23 +197,45 @@
                                 <small class="text-muted">Select which user's crontab to manage</small>
                             </div>
 
+                            <!-- Task Templates -->
+                            <div class="mb-4" v-if="!isEditing">
+                                <label class="form-label fw-bold d-flex align-items-center">
+                                    <i class="material-symbols-rounded text-sm me-1">auto_fix_high</i>
+                                    Task Templates (Optional)
+                                </label>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-12 col-md-7">
+                                        <select class="form-select form-select-sm" v-model="selectedTemplate" @change="onTemplateChange">
+                                            <option value="">-- Choose a Predefined Task --</option>
+                                            <option v-for="tpl in taskTemplates" :key="tpl.id" :value="tpl.id">
+                                                {{ tpl.name }} ({{ tpl.frequency }})
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-5" v-if="currentTemplateObj?.needsDomain">
+                                        <select class="form-select form-select-sm" v-model="selectedDomain" @change="onDomainChange">
+                                            <option value="">-- Select Target Domain --</option>
+                                            <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-muted mb-0" v-if="currentTemplateObj">
+                                    <i class="material-symbols-rounded text-xs me-1 align-middle">info</i>
+                                    {{ currentTemplateObj.description }}
+                                </p>
+                            </div>
+
                             <!-- Quick Presets -->
                             <div class="mb-4">
-                                <label class="form-label fw-bold">Quick Presets</label>
+                                <label class="form-label fw-bold">Schedule Presets</label>
                                 <div class="d-flex flex-wrap gap-2">
-                                    <button class="btn btn-sm btn-outline-primary" @click="setPreset('* * * * *')">Every
-                                        Minute</button>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        @click="setPreset('*/5 * * * *')">Every 5
-                                        Minutes</button>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        @click="setPreset('0 * * * *')">Hourly</button>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        @click="setPreset('0 0 * * *')">Daily</button>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        @click="setPreset('0 0 * * 0')">Weekly</button>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        @click="setPreset('0 0 1 * *')">Monthly</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('* * * * *')">Every Minute</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('*/5 * * * *')">Every 5 Mins</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('*/15 * * * *')">Every 15 Mins</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('0 * * * *')">Hourly</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('0 0 * * *')">Daily (Midnight)</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('0 0 * * 0')">Weekly (Sunday)</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="setPreset('0 0 1 * *')">Monthly</button>
                                 </div>
                             </div>
 
@@ -247,37 +269,17 @@
                             </div>
 
                             <!-- Schedule Preview -->
-                            <div class="alert alert-info py-2 mb-4">
-                                <i class="material-symbols-rounded text-sm me-1">schedule</i>
-                                <strong>Schedule:</strong> <code>{{ form.minute }} {{ form.hour }} {{ form.day }} {{ form.month }}
-                        {{ form.weekday }}</code>
+                            <div class="alert alert-info py-2 mb-4 text-white">
+                                <i class="material-symbols-rounded text-sm me-1 align-middle">schedule</i>
+                                <strong>Schedule:</strong> <code>{{ form.minute }} {{ form.hour }} {{ form.day }} {{ form.month }} {{ form.weekday }}</code>
                             </div>
 
                             <!-- Command -->
                             <div class="mb-3">
                                 <label class="form-label fw-bold">Command</label>
-                                <input type="text" class="form-control" v-model="form.command"
+                                <input type="text" class="form-control font-monospace" v-model="form.command"
                                     placeholder="php /var/www/yoursite/artisan schedule:run">
-                                <small class="text-muted">Full path to command or script</small>
-                            </div>
-
-                            <!-- Common Commands -->
-                            <div class="mb-3">
-                                <label class="form-label">Common Commands</label>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button class="btn btn-sm btn-outline-secondary"
-                                        @click="form.command = 'php /var/www/yoursite/artisan schedule:run >> /dev/null 2>&1'">
-                                        Laravel Scheduler
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-secondary"
-                                        @click="form.command = 'php /var/www/yoursite/artisan queue:work --stop-when-empty >> /dev/null 2>&1'">
-                                        Queue Worker
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-secondary"
-                                        @click="form.command = 'curl -s https://example.com/cron >> /dev/null 2>&1'">
-                                        HTTP Request
-                                    </button>
-                                </div>
+                                <small class="text-muted">Full executable command path</small>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -364,9 +366,84 @@ import axios from 'axios'
 const loading = ref(true)
 const saving = ref(false)
 const jobs = ref([])
+const domains = ref([])
 const searchQuery = ref('')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
+
+const selectedTemplate = ref('')
+const selectedDomain = ref('')
+
+const taskTemplates = [
+    {
+        id: 'laravel-scheduler',
+        name: 'Laravel Task Scheduler',
+        frequency: '* * * * *',
+        description: 'Runs scheduled artisan commands and jobs every minute',
+        schedule: '* * * * *',
+        needsDomain: true,
+        command: (d) => `php /var/www/${d || 'yourdomain.com'}/artisan schedule:run >> /dev/null 2>&1`
+    },
+    {
+        id: 'laravel-queue',
+        name: 'Laravel Queue Worker',
+        frequency: '* * * * *',
+        description: 'Processes pending background queue jobs',
+        schedule: '* * * * *',
+        needsDomain: true,
+        command: (d) => `php /var/www/${d || 'yourdomain.com'}/artisan queue:work --stop-when-empty >> /dev/null 2>&1`
+    },
+    {
+        id: 'wordpress-cron',
+        name: 'WordPress WP-Cron',
+        frequency: '*/15 * * * *',
+        description: 'Executes WordPress scheduled actions every 15 minutes',
+        schedule: '*/15 * * * *',
+        needsDomain: true,
+        command: (d) => `wget -q -O - https://${d || 'yourdomain.com'}/wp-cron.php?doing_wp_cron >/dev/null 2>&1`
+    },
+    {
+        id: 'log-cleanup',
+        name: 'Storage Log Truncation',
+        frequency: '0 0 * * 0',
+        description: 'Deletes Laravel storage logs older than 14 days weekly',
+        schedule: '0 0 * * 0',
+        needsDomain: true,
+        command: (d) => `find /var/www/${d || 'yourdomain.com'}/storage/logs/ -name "*.log" -mtime +14 -delete`
+    },
+    {
+        id: 'health-ping',
+        name: 'URL / Health Monitor Ping',
+        frequency: '*/5 * * * *',
+        description: 'Pings a URL or webhook heartbeat endpoint every 5 minutes',
+        schedule: '*/5 * * * *',
+        needsDomain: true,
+        command: (d) => `curl -fsS https://${d || 'yourdomain.com'}/health > /dev/null 2>&1`
+    }
+]
+
+const currentTemplateObj = computed(() => taskTemplates.find(t => t.id === selectedTemplate.value))
+
+const onTemplateChange = () => {
+    if (!selectedTemplate.value) return
+    const tpl = currentTemplateObj.value
+    if (!tpl) return
+
+    setPreset(tpl.schedule)
+
+    if (tpl.needsDomain && !selectedDomain.value && domains.value.length > 0) {
+        selectedDomain.value = domains.value[0]
+    }
+
+    form.value.command = tpl.command(selectedDomain.value)
+}
+
+const onDomainChange = () => {
+    const tpl = currentTemplateObj.value
+    if (tpl) {
+        form.value.command = tpl.command(selectedDomain.value)
+    }
+}
 
 // Modals
 const showModal = ref(false)
@@ -417,6 +494,7 @@ const loadJobs = async () => {
     try {
         const response = await axios.get('/cron/jobs')
         jobs.value = response.data.jobs || []
+        domains.value = response.data.domains || []
     } catch (error) {
         console.error('Failed to load jobs:', error)
     }
@@ -425,6 +503,8 @@ const loadJobs = async () => {
 const openCreateModal = () => {
     isEditing.value = false
     editingJob.value = null
+    selectedTemplate.value = ''
+    selectedDomain.value = domains.value[0] || ''
     form.value = { user: 'www-data', minute: '*', hour: '*', day: '*', month: '*', weekday: '*', command: '' }
     showModal.value = true
 }

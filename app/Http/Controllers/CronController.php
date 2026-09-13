@@ -74,9 +74,17 @@ class CronController extends Controller
                 }
             }
 
+            $accessibleDomains = $userModel->isRoot()
+                ? collect(\Illuminate\Support\Facades\File::directories('/var/www'))
+                    ->map(fn($p) => basename($p))
+                    ->filter(fn($d) => !in_array(strtolower($d), ['html', 'default', 'public', 'cgi-bin', 'nimbus']))
+                    ->values()
+                : $userModel->accessibleDomains();
+
             return response()->json([
                 'success' => true,
-                'jobs' => $jobs
+                'jobs' => $jobs,
+                'domains' => $accessibleDomains
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
