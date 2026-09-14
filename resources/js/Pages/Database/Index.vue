@@ -175,45 +175,50 @@
                 </div>
                 <div class="mb-2">
                   <div class="d-flex justify-content-between align-items-center mb-1">
-                    <label class="form-label text-xs text-uppercase mb-0">Password</label>
+                    <label class="form-label text-xs text-uppercase font-weight-bolder text-secondary mb-0">Password</label>
                     <button 
                       type="button" 
-                      class="btn btn-link text-primary text-xxs p-0 mb-0 d-inline-flex align-items-center font-weight-bold" 
+                      class="btn-auto-gen" 
                       @click="generateStrongPassword('create')"
-                      title="Generate strong password and automatically copy to clipboard"
+                      title="Generate strong password and copy to clipboard"
                     >
                       <i class="material-symbols-rounded text-xs me-1">auto_awesome</i>
-                      Auto Generate & Copy
+                      Auto-Generate & Copy
                     </button>
                   </div>
-                  <div class="input-group input-group-sm">
+                  <div class="password-box-unified">
                     <input 
                       :type="showCreatePassword ? 'text' : 'password'" 
-                      class="form-control" 
                       v-model="newUser.password" 
                       placeholder="Enter or generate password"
+                      class="font-monospace"
                     >
-                    <button 
-                      class="btn btn-outline-secondary mb-0 px-2" 
-                      type="button" 
-                      @click="showCreatePassword = !showCreatePassword"
-                      :title="showCreatePassword ? 'Hide password' : 'Show password'"
-                    >
-                      <i class="material-symbols-rounded text-sm">{{ showCreatePassword ? 'visibility_off' : 'visibility' }}</i>
-                    </button>
-                    <button 
-                      class="btn btn-outline-secondary mb-0 px-2" 
-                      type="button" 
-                      @click="copyToClipboard(newUser.password, 'create')"
-                      :disabled="!newUser.password"
-                      title="Copy password to clipboard"
-                    >
-                      <i class="material-symbols-rounded text-sm">{{ copiedField === 'create' ? 'check' : 'content_copy' }}</i>
-                    </button>
+                    <div class="d-flex align-items-center gap-1">
+                      <button 
+                        type="button" 
+                        class="icon-action-btn"
+                        @click="showCreatePassword = !showCreatePassword"
+                        :title="showCreatePassword ? 'Hide password' : 'Show password'"
+                      >
+                        <i class="material-symbols-rounded text-sm">{{ showCreatePassword ? 'visibility_off' : 'visibility' }}</i>
+                      </button>
+                      <button 
+                        type="button" 
+                        class="icon-action-btn"
+                        :class="{ 'text-success': copiedField === 'create' }"
+                        @click="copyToClipboard(newUser.password, 'create')"
+                        :disabled="!newUser.password"
+                        title="Copy password to clipboard"
+                      >
+                        <i class="material-symbols-rounded text-sm">{{ copiedField === 'create' ? 'check' : 'content_copy' }}</i>
+                      </button>
+                    </div>
                   </div>
-                  <span v-if="copiedField === 'create'" class="text-xxs text-success font-weight-bold mt-1 d-block">
-                    <i class="material-symbols-rounded text-xs align-middle">check_circle</i> Copied to clipboard!
-                  </span>
+                  <transition name="fade">
+                    <span v-if="copiedField === 'create'" class="text-xxs text-success font-weight-bold mt-1 d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">check_circle</i> Copied to clipboard!
+                    </span>
+                  </transition>
                 </div>
                 <div class="mb-3">
                   <label class="form-label text-xs text-uppercase">Host Access</label>
@@ -524,45 +529,50 @@
               <p class="text-sm">Change password for <strong>{{ editingUser?.username }}</strong></p>
               <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <label class="form-label mb-0">New Password</label>
+                  <label class="form-label text-xs text-uppercase font-weight-bolder text-secondary mb-0">New Password</label>
                   <button 
                     type="button" 
-                    class="btn btn-link text-primary text-xxs p-0 mb-0 d-inline-flex align-items-center font-weight-bold" 
+                    class="btn-auto-gen" 
                     @click="generateStrongPassword('change')"
-                    title="Generate strong password and automatically copy to clipboard"
+                    title="Generate strong password and copy to clipboard"
                   >
                     <i class="material-symbols-rounded text-xs me-1">auto_awesome</i>
-                    Auto Generate & Copy
+                    Auto-Generate & Copy
                   </button>
                 </div>
-                <div class="input-group input-group-sm">
+                <div class="password-box-unified">
                   <input 
                     :type="showChangePassword ? 'text' : 'password'" 
-                    class="form-control" 
                     v-model="newPassword" 
                     placeholder="Enter or generate new password"
+                    class="font-monospace"
                   >
-                  <button 
-                    class="btn btn-outline-secondary mb-0 px-2" 
-                    type="button" 
-                    @click="showChangePassword = !showChangePassword"
-                    :title="showChangePassword ? 'Hide password' : 'Show password'"
-                  >
-                    <i class="material-symbols-rounded text-sm">{{ showChangePassword ? 'visibility_off' : 'visibility' }}</i>
-                  </button>
-                  <button 
-                    class="btn btn-outline-secondary mb-0 px-2" 
-                    type="button" 
-                    @click="copyToClipboard(newPassword, 'change')"
-                    :disabled="!newPassword"
-                    title="Copy password to clipboard"
-                  >
-                    <i class="material-symbols-rounded text-sm">{{ copiedField === 'change' ? 'check' : 'content_copy' }}</i>
-                  </button>
+                  <div class="d-flex align-items-center gap-1">
+                    <button 
+                      type="button" 
+                      class="icon-action-btn"
+                      @click="showChangePassword = !showChangePassword"
+                      :title="showChangePassword ? 'Hide password' : 'Show password'"
+                    >
+                      <i class="material-symbols-rounded text-sm">{{ showChangePassword ? 'visibility_off' : 'visibility' }}</i>
+                    </button>
+                    <button 
+                      type="button" 
+                      class="icon-action-btn"
+                      :class="{ 'text-success': copiedField === 'change' }"
+                      @click="copyToClipboard(newPassword, 'change')"
+                      :disabled="!newPassword"
+                      title="Copy password to clipboard"
+                    >
+                      <i class="material-symbols-rounded text-sm">{{ copiedField === 'change' ? 'check' : 'content_copy' }}</i>
+                    </button>
+                  </div>
                 </div>
-                <span v-if="copiedField === 'change'" class="text-xxs text-success font-weight-bold mt-1 d-block">
-                  <i class="material-symbols-rounded text-xs align-middle">check_circle</i> Copied to clipboard!
-                </span>
+                <transition name="fade">
+                  <span v-if="copiedField === 'change'" class="text-xxs text-success font-weight-bold mt-1 d-inline-flex align-items-center">
+                    <i class="material-symbols-rounded text-xs me-1">check_circle</i> Copied to clipboard!
+                  </span>
+                </transition>
               </div>
             </div>
             <div class="modal-footer">
@@ -1383,6 +1393,66 @@ const saveProjectLink = async () => {
 }
 .terminal-output::-webkit-scrollbar-thumb:hover {
   background: #444;
+}
+
+.password-box-unified {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d2d6da;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0 0.5rem 0 0.75rem;
+  transition: all 0.2s ease;
+}
+.password-box-unified:focus-within {
+  border-color: #5e72e4;
+  box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.2);
+}
+.password-box-unified input {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0.45rem 0.25rem 0.45rem 0;
+  font-size: 0.875rem;
+  color: #495057;
+  width: 100%;
+}
+.icon-action-btn {
+  background: transparent;
+  border: none;
+  color: #8392ab;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.icon-action-btn:hover {
+  background: #f1f5f9;
+  color: #344767;
+}
+.btn-auto-gen {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  border-radius: 50rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+.btn-auto-gen:hover {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+  transform: translateY(-1px);
 }
 </style>
 
