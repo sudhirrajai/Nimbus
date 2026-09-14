@@ -517,7 +517,13 @@ class GitDeploymentController extends Controller
             $seenTokens = [];
 
             foreach ($deployments as $dep) {
-                $rawToken = $dep->access_token;
+                try {
+                    $rawToken = $dep->access_token;
+                } catch (\Exception $decryptEx) {
+                    \Log::warning("Could not decrypt git token for deployment {$dep->id}: " . $decryptEx->getMessage());
+                    continue;
+                }
+
                 if (!$rawToken) {
                     continue;
                 }
@@ -534,7 +540,7 @@ class GitDeploymentController extends Controller
 
                 // Detect provider based on repo_url
                 $provider = 'Git Provider';
-                $repoLower = strtolower($dep->repo_url);
+                $repoLower = strtolower($dep->repo_url ?? '');
                 if (str_contains($repoLower, 'github.com')) {
                     $provider = 'GitHub';
                 } elseif (str_contains($repoLower, 'gitlab.com')) {
