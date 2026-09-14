@@ -585,7 +585,10 @@
           <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
               <h5 class="font-weight-bolder text-dark mb-0">SQL Query Console</h5>
-              <small class="text-secondary">Execute raw SQL queries against <code>{{ database }}</code></small>
+              <small class="text-secondary">
+                Execute raw SQL queries against <code>{{ database }}</code>
+                <span class="text-xs text-muted ms-2">• Executes query at cursor or selection (Ctrl+Enter)</span>
+              </small>
             </div>
             <div class="d-flex gap-2">
               <button class="btn btn-xs btn-outline-secondary mb-0" @click="showSqlHistoryDrawer = !showSqlHistoryDrawer">
@@ -605,8 +608,8 @@
             <!-- SQL Editor Box -->
             <div :class="showSqlHistoryDrawer ? 'col-md-8' : 'col-12'" class="d-flex flex-column h-100">
               <div class="sql-editor-container mb-3 shadow-inner border border-radius-lg bg-gradient-dark p-3">
-                <textarea v-model="sqlQuery" class="form-control bg-transparent border-0 text-white font-monospace text-sm" 
-                  rows="6" placeholder="SELECT * FROM users WHERE active = 1;" @keydown.ctrl.enter="runQuery" @keydown.meta.enter="runQuery"></textarea>
+                <textarea ref="sqlTextarea" v-model="sqlQuery" class="form-control bg-transparent border-0 text-white font-monospace text-sm" 
+                  rows="6" placeholder="SELECT * FROM users WHERE active = 1;" @keydown.ctrl.enter.prevent="runQuery" @keydown.meta.enter.prevent="runQuery"></textarea>
               </div>
 
               <!-- Query Results Section -->
@@ -618,6 +621,9 @@
                     </span>
                     <span v-if="sqlResult.execution_time_ms !== undefined" class="text-xs font-weight-bold text-secondary">
                       <i class="material-symbols-rounded text-xs align-middle">timer</i> {{ sqlResult.execution_time_ms }} ms
+                    </span>
+                    <span v-if="sqlResult.executed_sql" class="badge bg-white text-dark border font-monospace text-xs text-truncate d-inline-block shadow-none" style="max-width: 400px;" :title="sqlResult.executed_sql">
+                      <i class="material-symbols-rounded text-xs align-middle me-1 text-primary">terminal</i>{{ sqlResult.executed_sql }}
                     </span>
                   </div>
                   <span v-if="sqlResult.type === 'select'" class="text-xs font-weight-bold text-dark">{{ sqlResult.count }} rows returned</span>
@@ -1241,6 +1247,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import axios from 'axios'
+import { extractTargetQuery } from '@/utils/sqlHelper'
 
 const props = defineProps({
   database: String,
@@ -1349,6 +1356,7 @@ const alterTableForm = ref({
 
 // SQL Console & History
 const sqlQuery = ref('')
+const sqlTextarea = ref(null)
 const sqlResult = ref(null)
 const executingSql = ref(false)
 const showSqlHistoryDrawer = ref(false)
@@ -1994,22 +2002,28 @@ const clearSqlHistory = () => {
 
 const runQuery = async () => {
   if (!sqlQuery.value.trim()) return
-  const currentSql = sqlQuery.value.trim()
+  const targetSql = extractTargetQuery(sqlTextarea.value, sqlQuery.value)
+  if (!targetSql || !targetSql.trim()) return
+
   try {
     executingSql.value = true
     const response = await axios.post(`/database/manager/${props.database}/query`, {
-      sql: currentSql
+      sql: targetSql
     })
-    sqlResult.value = response.data
-    pushSqlHistory(currentSql, response.data.success)
+    sqlResult.value = {
+      ...response.data,
+      executed_sql: targetSql
+    }
+    pushSqlHistory(targetSql, response.data.success)
     if (response.data.success) {
       loadTables()
     }
   } catch (err) {
-    pushSqlHistory(currentSql, false)
+    pushSqlHistory(targetSql, false)
     sqlResult.value = {
       success: false,
-      error: err.response?.data?.error || 'SQL query failed'
+      error: err.response?.data?.error || 'SQL query failed',
+      executed_sql: targetSql
     }
   } finally {
     executingSql.value = false

@@ -1077,7 +1077,8 @@ class DatabaseManagerController extends Controller
                     'columns' => $columns,
                     'rows' => $rows,
                     'count' => count($rows),
-                    'execution_time_ms' => $executionTimeMs
+                    'execution_time_ms' => $executionTimeMs,
+                    'executed_query' => $sql,
                 ]);
             } else {
                 $affected = $pdo->exec($sql);
@@ -1088,7 +1089,8 @@ class DatabaseManagerController extends Controller
                     'type' => 'affected',
                     'affected_rows' => $affected !== false ? $affected : 0,
                     'message' => "Query executed successfully. Affected rows: " . ($affected !== false ? $affected : 0),
-                    'execution_time_ms' => $executionTimeMs
+                    'execution_time_ms' => $executionTimeMs,
+                    'executed_query' => $sql,
                 ]);
             }
         } catch (\Exception $e) {
