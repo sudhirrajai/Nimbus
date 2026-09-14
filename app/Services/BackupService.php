@@ -441,8 +441,21 @@ class BackupService
     public function restoreBackup(BackupRecord $record, array $options = []): bool
     {
         $filePath = $record->file_path;
-        if (!File::exists($filePath) && PHP_OS_FAMILY !== 'Linux') {
-            throw new \Exception("Backup file does not exist at: {$filePath}");
+        $tempDownloaded = false;
+
+        if (!file_exists($filePath)) {
+            // Check if available on remote cloud storage
+            if ($record->remote_status === 'synced') {
+                try {
+                    $storageService = app(BackupStorageService::class);
+                    $filePath = $storageService->downloadRemoteFile($record);
+                    $tempDownloaded = true;
+                } catch (\Throwable $dlEx) {
+                    throw new \Exception("Backup file missing locally and remote retrieval failed: " . $dlEx->getMessage());
+                }
+            } else {
+                throw new \Exception("Backup file does not exist at '{$filePath}', and no synced remote copy is available.");
+            }
         }
 
         $type = $record->type;
@@ -479,6 +492,10 @@ class BackupService
             Log::error("Backup restoration failed for '{$record->file_name}': " . $e->getMessage());
             $this->sendEmailNotification('restore_failed', $record, $e->getMessage());
             throw $e;
+        } finally {
+            if ($tempDownloaded && file_exists($filePath)) {
+                @unlink($filePath);
+            }
         }
     }
 

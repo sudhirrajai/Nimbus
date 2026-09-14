@@ -67,6 +67,7 @@
                                                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">User</th>
                                                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Schedule</th>
                                                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Command</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Last Execution</th>
                                                 <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                                             </tr>
                                         </thead>
@@ -89,14 +90,30 @@
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <code class="text-sm" style="max-width: 400px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                    <code class="text-sm" style="max-width: 320px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                                         {{ job.command }}
                                                     </code>
                                                 </td>
+                                                <td>
+                                                    <div v-if="job.last_run" class="d-flex flex-column">
+                                                        <div class="d-flex align-items-center mb-1">
+                                                            <span :class="['badge badge-sm me-2', job.last_run.status === 'success' ? 'bg-gradient-success' : 'bg-gradient-danger']">
+                                                                {{ job.last_run.status === 'success' ? 'Success (exit 0)' : `Failed (exit ${job.last_run.exit_code})` }}
+                                                            </span>
+                                                            <span class="text-xxs text-secondary">{{ job.last_run.duration_ms }}ms</span>
+                                                        </div>
+                                                        <span class="text-xxs text-muted">{{ formatRelativeTime(job.last_run.executed_at) }}</span>
+                                                    </div>
+                                                    <span v-else class="text-xxs text-muted opacity-7">Never executed</span>
+                                                </td>
                                                 <td class="text-center">
                                                     <div class="d-flex justify-content-center gap-1">
-                                                        <button class="action-btn btn-view" title="Run Now" @click="runNow(job)">
-                                                            <i class="material-symbols-rounded">play_arrow</i>
+                                                        <button class="action-btn btn-view" title="Run Now" @click="runNow(job)" :disabled="runningJobs[job.id]">
+                                                            <span v-if="runningJobs[job.id]" class="spinner-border spinner-border-sm"></span>
+                                                            <i v-else class="material-symbols-rounded">play_arrow</i>
+                                                        </button>
+                                                        <button class="action-btn btn-view text-info" title="Execution History & Logs" @click="openHistoryModal(job)">
+                                                            <i class="material-symbols-rounded">history</i>
                                                         </button>
                                                         <button class="action-btn btn-edit" title="Edit" @click="editJob(job)">
                                                             <i class="material-symbols-rounded">edit</i>
@@ -294,30 +311,104 @@
             </div>
             <div v-if="showModal" class="modal-backdrop fade show"></div>
 
-            <!-- Output Modal -->
-            <div class="modal fade" :class="{ show: showOutputModal }" :style="showOutputModal ? 'display: block;' : ''"
-                tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header bg-dark text-white">
-                            <h5 class="modal-title">
-                                <i class="material-symbols-rounded me-2">terminal</i>
-                                Job Output
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white"
-                                @click="showOutputModal = false"></button>
+            <!-- Execution History & Output Modal -->
+            <div class="modal fade" :class="{ show: showHistoryModal }" :style="showHistoryModal ? 'display: block;' : ''" tabindex="-1">
+                <div class="modal-dialog modal-xl modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header bg-gradient-dark text-white p-3">
+                            <div class="d-flex align-items-center">
+                                <i class="material-symbols-rounded text-warning me-2" style="font-size: 1.5rem;">terminal</i>
+                                <div>
+                                    <h6 class="modal-title text-white mb-0 font-weight-bold">Cron Execution History & Output</h6>
+                                    <code class="text-xs text-light font-monospace opacity-8 text-break">{{ activeJobForHistory?.command }}</code>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white" @click="showHistoryModal = false"></button>
                         </div>
-                        <div class="modal-body p-0">
-                            <pre class="terminal-output">{{ jobOutput }}</pre>
+                        <div class="modal-body p-3">
+                            <div v-if="loadingHistory" class="text-center py-5">
+                                <div class="spinner-border text-dark" role="status"></div>
+                                <p class="text-xs text-secondary mt-2">Loading execution history...</p>
+                            </div>
+                            <div v-else-if="jobHistoryList.length === 0" class="text-center py-5 text-muted">
+                                <i class="material-symbols-rounded opacity-3" style="font-size: 48px;">history</i>
+                                <p class="mt-2 text-sm">No execution runs recorded yet for this cron job.</p>
+                                <button class="btn btn-sm bg-gradient-primary mt-2" @click="runNow(activeJobForHistory)">
+                                    <i class="material-symbols-rounded text-xs me-1">play_arrow</i> Run Job Now
+                                </button>
+                            </div>
+                            <div v-else>
+                                <!-- Run selector tabs -->
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pb-3 border-bottom mb-3">
+                                    <div class="d-flex flex-wrap align-items-center gap-1">
+                                        <button 
+                                            v-for="(run, idx) in jobHistoryList" 
+                                            :key="idx"
+                                            @click="selectedHistoryIdx = idx"
+                                            :class="['btn btn-xs mb-0 d-flex align-items-center', selectedHistoryIdx === idx ? 'bg-gradient-dark text-white' : 'btn-outline-secondary']"
+                                        >
+                                            <span :class="['badge badge-dot me-2', run.status === 'success' ? 'bg-success' : 'bg-danger']"></span>
+                                            {{ formatTimeOnly(run.executed_at) }}
+                                            <span class="opacity-7 text-xxs ms-1">({{ run.duration_ms }}ms)</span>
+                                        </button>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button class="btn btn-outline-danger btn-xs mb-0" @click="clearCurrentHistory" title="Clear History">
+                                            <i class="material-symbols-rounded text-xxs me-1">delete_sweep</i> Clear History
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Active Run Metadata -->
+                                <div v-if="currentRun" class="row mb-3">
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="p-2 rounded bg-light border">
+                                            <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Status</span>
+                                            <span :class="['badge badge-sm', currentRun.status === 'success' ? 'bg-gradient-success' : 'bg-gradient-danger']">
+                                                {{ currentRun.status === 'success' ? 'Success (Exit 0)' : `Failed (Exit ${currentRun.exit_code})` }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="p-2 rounded bg-light border">
+                                            <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Executed At</span>
+                                            <span class="text-xs font-weight-bold text-dark">{{ currentRun.executed_at }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="p-2 rounded bg-light border">
+                                            <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Execution Duration</span>
+                                            <span class="text-xs font-weight-bold text-dark">{{ currentRun.duration_ms }} ms</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="p-2 rounded bg-light border">
+                                            <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Triggered By</span>
+                                            <span class="text-xs font-weight-bold text-dark">{{ currentRun.executed_by || currentRun.user }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Terminal Output -->
+                                <div v-if="currentRun">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-xxs text-uppercase font-weight-bold text-secondary">Terminal Output (stdout / stderr):</span>
+                                        <button class="btn btn-link text-xs p-0 mb-0 d-flex align-items-center" @click="copyTerminalOutput">
+                                            <i class="material-symbols-rounded text-xs me-1">{{ copiedOutput ? 'check' : 'content_copy' }}</i>
+                                            {{ copiedOutput ? 'Copied!' : 'Copy Output' }}
+                                        </button>
+                                    </div>
+                                    <pre class="terminal-output" style="max-height: 380px; overflow-y: auto; background: #0f172a; color: #f8fafc; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap;">{{ currentRun.output }}</pre>
+                                </div>
+                            </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary"
-                                @click="showOutputModal = false">Close</button>
+                        <div class="modal-footer p-2">
+                            <button type="button" class="btn btn-outline-secondary mb-0" @click="showHistoryModal = false">Close</button>
                         </div>
                     </div>
                 </div>
             </div>
-            <div v-if="showOutputModal" class="modal-backdrop fade show"></div>
+            <div v-if="showHistoryModal" class="modal-backdrop fade show" style="z-index: 1045;"></div>
 
             <!-- Delete Confirmation Modal -->
             <div class="modal fade" :class="{ show: showDeleteModal }" :style="showDeleteModal ? 'display: block;' : ''" tabindex="-1">
@@ -580,18 +671,96 @@ const executeDelete = async () => {
     }
 }
 
-const runNow = async (job) => {
+const runningJobs = ref({})
+const showHistoryModal = ref(false)
+const activeJobForHistory = ref(null)
+const jobHistoryList = ref([])
+const selectedHistoryIdx = ref(0)
+const loadingHistory = ref(false)
+const copiedOutput = ref(false)
+
+const currentRun = computed(() => jobHistoryList.value[selectedHistoryIdx.value] || null)
+
+const openHistoryModal = async (job) => {
+    if (!job) return
+    activeJobForHistory.value = job
+    selectedHistoryIdx.value = 0
+    showHistoryModal.value = true
+    loadingHistory.value = true
     try {
-        jobOutput.value = 'Running...'
-        showOutputModal.value = true
+        const response = await axios.get('/cron/history', {
+            params: { user: job.user, command: job.command }
+        })
+        jobHistoryList.value = response.data.history || []
+    } catch (err) {
+        console.error('Failed to load history:', err)
+        jobHistoryList.value = []
+    } finally {
+        loadingHistory.value = false
+    }
+}
+
+const clearCurrentHistory = async () => {
+    if (!activeJobForHistory.value) return
+    if (!confirm('Clear all recorded execution logs for this job?')) return
+    try {
+        await axios.post('/cron/clear-history', {
+            user: activeJobForHistory.value.user,
+            command: activeJobForHistory.value.command
+        })
+        jobHistoryList.value = []
+        if (activeJobForHistory.value) {
+            activeJobForHistory.value.last_run = null
+        }
+    } catch (err) {
+        alert('Failed to clear history')
+    }
+}
+
+const copyTerminalOutput = () => {
+    if (!currentRun.value?.output) return
+    navigator.clipboard.writeText(currentRun.value.output).then(() => {
+        copiedOutput.value = true
+        setTimeout(() => { copiedOutput.value = false }, 2000)
+    })
+}
+
+const runNow = async (job) => {
+    if (!job) return
+    try {
+        runningJobs.value[job.id] = true
         const response = await axios.post('/cron/run', { 
             command: job.command,
             user: job.user
         })
-        jobOutput.value = response.data.output || 'Job completed with no output'
+        if (response.data?.last_run) {
+            job.last_run = response.data.last_run
+        }
+        // Open the history modal right away to show execution result
+        await openHistoryModal(job)
     } catch (error) {
-        jobOutput.value = 'Error: ' + (error.response?.data?.error || error.message)
+        alert('Execution failed: ' + (error.response?.data?.error || error.message))
+    } finally {
+        runningJobs.value[job.id] = false
     }
+}
+
+const formatRelativeTime = (dateStr) => {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diffSec = Math.floor((now - d) / 1000)
+
+    if (diffSec < 60) return 'Just now'
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
+    return d.toLocaleDateString()
+}
+
+const formatTimeOnly = (dateStr) => {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 const getScheduleDescription = (job) => {

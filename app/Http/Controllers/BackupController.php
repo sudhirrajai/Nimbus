@@ -426,6 +426,18 @@ class BackupController extends Controller
 
         $filePath = $backup->file_path;
         if (!file_exists($filePath)) {
+            // Check if available on synced remote cloud storage
+            if ($backup->remote_status === 'synced') {
+                try {
+                    $storageService = app(BackupStorageService::class);
+                    $tempPath = $storageService->downloadRemoteFile($backup);
+                    return response()->download($tempPath, $backup->file_name)->deleteFileAfterSend(true);
+                } catch (\Throwable $dlEx) {
+                    Log::error("Remote backup download failed: " . $dlEx->getMessage());
+                    abort(404, "Backup file missing locally and remote retrieval failed: " . $dlEx->getMessage());
+                }
+            }
+
             // For Linux root files, copy temporarily to storage/app/download if needed
             if (PHP_OS_FAMILY === 'Linux') {
                 $tempPath = storage_path('app/temp_dl_' . basename($filePath));
@@ -435,7 +447,7 @@ class BackupController extends Controller
                     return response()->download($tempPath, $backup->file_name)->deleteFileAfterSend(true);
                 }
             }
-            abort(404, 'Backup file not found on disk.');
+            abort(404, 'Backup file not found on disk or remote storage.');
         }
 
         return response()->download($filePath, $backup->file_name);

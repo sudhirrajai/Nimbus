@@ -164,6 +164,89 @@ class BackupStorageService
         }
     }
 
+    /**
+     * Download a remote backup file to a local destination
+     */
+    public function downloadRemoteFile(BackupRecord $record, ?string $targetLocalPath = null): string
+    {
+        if (empty($record->remote_path)) {
+            throw new \Exception("Backup record has no remote file path recorded.");
+        }
+
+        $destination = $record->destination;
+        if (!$destination) {
+            throw new \Exception("Backup destination is not configured for record #{$record->id}.");
+        }
+
+        $driver = $destination->driver;
+        $creds = $destination->credentials ?: [];
+
+        if (empty($targetLocalPath)) {
+            $tmpDir = storage_path('app/temp_restores');
+            if (!is_dir($tmpDir)) {
+                @mkdir($tmpDir, 0755, true);
+            }
+            $targetLocalPath = $tmpDir . '/' . $record->file_name;
+        }
+
+        if ($driver === 'local') {
+            if (file_exists($record->remote_path)) {
+                return $record->remote_path;
+            }
+            throw new \Exception("Local backup file not found at: {$record->remote_path}");
+        }
+
+        if (in_array($driver, ['backblaze', 'r2', 'wasabi', 's3', 'custom_s3'])) {
+            $disk = $this->buildS3Disk($driver, $creds);
+            if (!$disk->exists($record->remote_path)) {
+                throw new \Exception("Remote backup file '{$record->remote_path}' not found in {$destination->name}.");
+            }
+
+            $readStream = $disk->readStream($record->remote_path);
+            if (!$readStream) {
+                throw new \Exception("Could not open remote read stream for '{$record->remote_path}'.");
+            }
+
+            $outStream = fopen($targetLocalPath, 'w');
+            if (!$outStream) {
+                throw new \Exception("Could not open local target file for writing: {$targetLocalPath}");
+            }
+
+            stream_copy_to_stream($readStream, $outStream);
+
+            if (is_resource($readStream)) fclose($readStream);
+            if (is_resource($outStream)) fclose($outStream);
+
+            if (!file_exists($targetLocalPath) || filesize($targetLocalPath) === 0) {
+                throw new \Exception("Downloaded remote file is empty or missing at {$targetLocalPath}.");
+            }
+
+            return $targetLocalPath;
+        }
+
+        if ($driver === 'google_drive') {
+            $accessToken = $this->getGoogleDriveAccessToken($creds);
+            $fileId = $record->remote_path;
+            
+            $response = Http::withToken($accessToken)
+                ->timeout(300)
+                ->sink($targetLocalPath)
+                ->get("https://www.googleapis.com/drive/v3/files/{$fileId}?alt=media");
+
+            if (!$response->successful()) {
+                throw new \Exception("Failed to download file from Google Drive: " . $response->body());
+            }
+
+            if (!file_exists($targetLocalPath) || filesize($targetLocalPath) === 0) {
+                throw new \Exception("Downloaded file from Google Drive is empty.");
+            }
+
+            return $targetLocalPath;
+        }
+
+        throw new \Exception("Unsupported storage driver for download: {$driver}");
+    }
+
     // ─────────────────────────────────────────────────────────────
     // S3 & S3-Compatible Storage Implementation
     // ─────────────────────────────────────────────────────────────

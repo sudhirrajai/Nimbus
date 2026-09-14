@@ -56,6 +56,22 @@ class CronController extends Controller
                             }
 
                             if ($hasPermission) {
+                                $jobHash = md5("{$user}:{$command}");
+                                $historyFile = storage_path("app/cron_runs/{$jobHash}.json");
+                                $lastRun = null;
+                                if (file_exists($historyFile)) {
+                                    $hist = json_decode(file_get_contents($historyFile), true);
+                                    if (!empty($hist[0])) {
+                                        $lastRun = [
+                                            'executed_at' => $hist[0]['executed_at'],
+                                            'duration_ms' => $hist[0]['duration_ms'],
+                                            'exit_code' => $hist[0]['exit_code'],
+                                            'status' => $hist[0]['status'],
+                                            'executed_by' => $hist[0]['executed_by'] ?? null,
+                                        ];
+                                    }
+                                }
+
                                 $jobs[] = [
                                     'id' => $id++,
                                     'user' => $user,
@@ -66,7 +82,9 @@ class CronController extends Controller
                                     'weekday' => $matches[5],
                                     'command' => $command,
                                     'schedule' => "{$matches[1]} {$matches[2]} {$matches[3]} {$matches[4]} {$matches[5]}",
-                                    'raw' => $line
+                                    'raw' => $line,
+                                    'job_hash' => $jobHash,
+                                    'last_run' => $lastRun
                                 ];
                             }
                         }
@@ -331,17 +349,118 @@ class CronController extends Controller
                 }
             }
             
-            // Run in background as the correct user
-            exec("cd /usr/local/nimbus && sudo -u {$user} {$command} > /tmp/cron_output.log 2>&1 &");
-            
-            // Wait a moment and get output
-            sleep(1);
-            $output = file_exists('/tmp/cron_output.log') ? file_get_contents('/tmp/cron_output.log') : 'Job started in background';
+            $startTime = microtime(true);
+            $logDir = storage_path('app/cron_runs');
+            if (!is_dir($logDir)) {
+                @mkdir($logDir, 0755, true);
+            }
+
+            $jobHash = md5("{$user}:{$command}");
+            $historyFile = "{$logDir}/{$jobHash}.json";
+
+            // Execute command synchronously with a 15-second timeout
+            $escapedCmd = escapeshellarg($command);
+            $execCmd = "cd /usr/local/nimbus && timeout 15s sudo -u {$user} bash -c {$escapedCmd} 2>&1";
+            $outputLines = [];
+            $exitCode = 0;
+            exec($execCmd, $outputLines, $exitCode);
+
+            $durationMs = (int) round((microtime(true) - $startTime) * 1000);
+            $outputStr = implode("\n", $outputLines);
+            if (empty(trim($outputStr))) {
+                $outputStr = "Command finished with exit code {$exitCode} (no output).";
+            }
+
+            if ($exitCode === 124) {
+                $outputStr .= "\n[Execution timeout: Command exceeded the 15-second execution limit and was terminated]";
+            }
+
+            $status = ($exitCode === 0) ? 'success' : 'failed';
+            $runRecord = [
+                'executed_at' => now()->toDateTimeString(),
+                'duration_ms' => $durationMs,
+                'exit_code' => $exitCode,
+                'status' => $status,
+                'output' => mb_substr($outputStr, 0, 50000),
+                'user' => $user,
+                'executed_by' => auth()->user() ? auth()->user()->email : 'System'
+            ];
+
+            // Load existing history, prepend new run, keep last 10
+            $history = [];
+            if (file_exists($historyFile)) {
+                $history = json_decode(file_get_contents($historyFile), true) ?: [];
+            }
+            array_unshift($history, $runRecord);
+            $history = array_slice($history, 0, 10);
+            file_put_contents($historyFile, json_encode($history, JSON_PRETTY_PRINT));
+
+            return response()->json([
+                'success' => ($exitCode === 0),
+                'message' => "Job finished with exit code {$exitCode}",
+                'output' => $outputStr,
+                'last_run' => $runRecord
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get execution history for a cron job
+     */
+    public function getJobHistory(Request $request)
+    {
+        try {
+            $request->validate([
+                'user' => 'required|string',
+                'command' => 'required|string'
+            ]);
+
+            $user = $request->input('user');
+            $command = $request->input('command');
+
+            $jobHash = md5("{$user}:{$command}");
+            $historyFile = storage_path("app/cron_runs/{$jobHash}.json");
+
+            $history = [];
+            if (file_exists($historyFile)) {
+                $history = json_decode(file_get_contents($historyFile), true) ?: [];
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => "Job executed as {$user}",
-                'output' => $output
+                'history' => $history
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Clear execution history for a cron job
+     */
+    public function clearJobHistory(Request $request)
+    {
+        try {
+            $request->validate([
+                'user' => 'required|string',
+                'command' => 'required|string'
+            ]);
+
+            $user = $request->input('user');
+            $command = $request->input('command');
+
+            $jobHash = md5("{$user}:{$command}");
+            $historyFile = storage_path("app/cron_runs/{$jobHash}.json");
+
+            if (file_exists($historyFile)) {
+                unlink($historyFile);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Execution history cleared.'
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);

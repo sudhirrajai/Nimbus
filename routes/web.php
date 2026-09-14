@@ -280,6 +280,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
         Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
         Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
+        Route::post('/proxy/status', [NginxController::class, 'getProxyStatus'])->name('proxy.status');
+        Route::post('/proxy/apply', [NginxController::class, 'applyReverseProxy'])->name('proxy.apply');
+        Route::post('/proxy/remove', [NginxController::class, 'removeReverseProxy'])->name('proxy.remove');
     });
 
     // Supervisor Management — accessible to root, admin, or users with 'supervisor' permission
@@ -313,6 +316,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/update', [CronController::class, 'updateJob'])->name('update');
         Route::post('/delete', [CronController::class, 'deleteJob'])->name('delete');
         Route::post('/run', [CronController::class, 'runNow'])->name('run');
+        Route::get('/history', [CronController::class, 'getJobHistory'])->name('history');
+        Route::post('/clear-history', [CronController::class, 'clearJobHistory'])->name('clear-history');
         Route::post('/describe', [CronController::class, 'describeSchedule'])->name('describe');
     });
 
