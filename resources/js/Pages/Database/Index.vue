@@ -174,8 +174,46 @@
                   <input type="text" class="form-control" v-model="newUser.username" placeholder="db_user">
                 </div>
                 <div class="mb-2">
-                  <label class="form-label text-xs text-uppercase">Password</label>
-                  <input type="password" class="form-control" v-model="newUser.password" placeholder="********">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label text-xs text-uppercase mb-0">Password</label>
+                    <button 
+                      type="button" 
+                      class="btn btn-link text-primary text-xxs p-0 mb-0 d-inline-flex align-items-center font-weight-bold" 
+                      @click="generateStrongPassword('create')"
+                      title="Generate strong password and automatically copy to clipboard"
+                    >
+                      <i class="material-symbols-rounded text-xs me-1">auto_awesome</i>
+                      Auto Generate & Copy
+                    </button>
+                  </div>
+                  <div class="input-group input-group-sm">
+                    <input 
+                      :type="showCreatePassword ? 'text' : 'password'" 
+                      class="form-control" 
+                      v-model="newUser.password" 
+                      placeholder="Enter or generate password"
+                    >
+                    <button 
+                      class="btn btn-outline-secondary mb-0 px-2" 
+                      type="button" 
+                      @click="showCreatePassword = !showCreatePassword"
+                      :title="showCreatePassword ? 'Hide password' : 'Show password'"
+                    >
+                      <i class="material-symbols-rounded text-sm">{{ showCreatePassword ? 'visibility_off' : 'visibility' }}</i>
+                    </button>
+                    <button 
+                      class="btn btn-outline-secondary mb-0 px-2" 
+                      type="button" 
+                      @click="copyToClipboard(newUser.password, 'create')"
+                      :disabled="!newUser.password"
+                      title="Copy password to clipboard"
+                    >
+                      <i class="material-symbols-rounded text-sm">{{ copiedField === 'create' ? 'check' : 'content_copy' }}</i>
+                    </button>
+                  </div>
+                  <span v-if="copiedField === 'create'" class="text-xxs text-success font-weight-bold mt-1 d-block">
+                    <i class="material-symbols-rounded text-xs align-middle">check_circle</i> Copied to clipboard!
+                  </span>
                 </div>
                 <div class="mb-3">
                   <label class="form-label text-xs text-uppercase">Host Access</label>
@@ -485,8 +523,46 @@
             <div class="modal-body">
               <p class="text-sm">Change password for <strong>{{ editingUser?.username }}</strong></p>
               <div class="mb-3">
-                <label class="form-label">New Password</label>
-                <input type="password" class="form-control" v-model="newPassword" placeholder="Enter new password">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">New Password</label>
+                  <button 
+                    type="button" 
+                    class="btn btn-link text-primary text-xxs p-0 mb-0 d-inline-flex align-items-center font-weight-bold" 
+                    @click="generateStrongPassword('change')"
+                    title="Generate strong password and automatically copy to clipboard"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">auto_awesome</i>
+                    Auto Generate & Copy
+                  </button>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input 
+                    :type="showChangePassword ? 'text' : 'password'" 
+                    class="form-control" 
+                    v-model="newPassword" 
+                    placeholder="Enter or generate new password"
+                  >
+                  <button 
+                    class="btn btn-outline-secondary mb-0 px-2" 
+                    type="button" 
+                    @click="showChangePassword = !showChangePassword"
+                    :title="showChangePassword ? 'Hide password' : 'Show password'"
+                  >
+                    <i class="material-symbols-rounded text-sm">{{ showChangePassword ? 'visibility_off' : 'visibility' }}</i>
+                  </button>
+                  <button 
+                    class="btn btn-outline-secondary mb-0 px-2" 
+                    type="button" 
+                    @click="copyToClipboard(newPassword, 'change')"
+                    :disabled="!newPassword"
+                    title="Copy password to clipboard"
+                  >
+                    <i class="material-symbols-rounded text-sm">{{ copiedField === 'change' ? 'check' : 'content_copy' }}</i>
+                  </button>
+                </div>
+                <span v-if="copiedField === 'change'" class="text-xxs text-success font-weight-bold mt-1 d-block">
+                  <i class="material-symbols-rounded text-xs align-middle">check_circle</i> Copied to clipboard!
+                </span>
               </div>
             </div>
             <div class="modal-footer">
@@ -691,6 +767,62 @@ const itemsPerPage = ref(10)
 const newDatabase = ref({ name: '' })
 const newUser = ref({ username: '', password: '', host: 'localhost' })
 const assignment = ref({ database: '', username: '', privileges: [] })
+
+const showCreatePassword = ref(false)
+const showChangePassword = ref(false)
+const copiedField = ref(null)
+
+const generateStrongPassword = (target = 'create') => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+-=[]{}|'
+  let password = ''
+  const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const lowers = 'abcdefghijkmnopqrstuvwxyz'
+  const numbers = '23456789'
+  const specials = '!@#$%^&*()_+-='
+
+  password += uppers[Math.floor(Math.random() * uppers.length)]
+  password += lowers[Math.floor(Math.random() * lowers.length)]
+  password += numbers[Math.floor(Math.random() * numbers.length)]
+  password += specials[Math.floor(Math.random() * specials.length)]
+
+  for (let i = 0; i < 12; i++) {
+    password += chars[Math.floor(Math.random() * chars.length)]
+  }
+
+  password = password.split('').sort(() => 0.5 - Math.random()).join('')
+
+  if (target === 'create') {
+    newUser.value.password = password
+    showCreatePassword.value = true
+  } else if (target === 'change') {
+    newPassword.value = password
+    showChangePassword.value = true
+  }
+
+  copyToClipboard(password, target)
+}
+
+const copyToClipboard = async (text, target = 'create') => {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    copiedField.value = target
+    setTimeout(() => {
+      if (copiedField.value === target) copiedField.value = null
+    }, 3000)
+  } catch (err) {
+    const el = document.createElement('textarea')
+    el.value = text
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    copiedField.value = target
+    setTimeout(() => {
+      if (copiedField.value === target) copiedField.value = null
+    }, 3000)
+  }
+}
 
 const showAssignModal = ref(false)
 const showManageModal = ref(false)

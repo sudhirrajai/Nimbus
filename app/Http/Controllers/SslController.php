@@ -80,10 +80,14 @@ class SslController extends Controller
                 })
                 ->values();
 
+            $globalSetting = \App\Models\Setting::where('key', 'ssl_autorenew_global')->value('value');
+            $globalAutoRenew = ($globalSetting === null || $globalSetting === '1');
+
             return response()->json([
                 'domains' => $domains,
                 'certbotInstalled' => $this->isCertbotInstalled(),
-                'server_ip' => $serverIp
+                'server_ip' => $serverIp,
+                'globalAutoRenew' => $globalAutoRenew,
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get SSL domains: " . $e->getMessage());
@@ -430,11 +434,122 @@ class SslController extends Controller
      */
     private function checkAutoRenew($domain)
     {
+        $setting = \App\Models\Setting::where('key', "ssl_autorenew_{$domain}")->value('value');
+        if ($setting === '0') {
+            return false;
+        }
+
         // Check if renewal config exists
         $renewalConf = "/etc/letsencrypt/renewal/{$domain}.conf";
         $output = [];
         exec("sudo test -f " . escapeshellarg($renewalConf) . " && echo 'exists'", $output);
         return isset($output[0]) && $output[0] === 'exists';
+    }
+
+    /**
+     * Toggle Auto SSL (auto-renewal) for a single domain or globally for all domains
+     */
+    public function toggleAutoRenew(Request $request)
+    {
+        try {
+            $user = auth()->user();
+            $isGlobal = $request->boolean('all');
+
+            if ($isGlobal) {
+                if (!$user->isRoot()) {
+                    return response()->json(['error' => 'Permission denied: Only root can toggle global SSL auto-renew.'], 403);
+                }
+
+                $enabled = $request->boolean('enabled');
+                \App\Models\Setting::updateOrCreate(
+                    ['key' => 'ssl_autorenew_global'],
+                    ['value' => $enabled ? '1' : '0']
+                );
+
+                if (PHP_OS_FAMILY === 'Linux') {
+                    if ($enabled) {
+                        exec("sudo systemctl enable --now certbot.timer 2>&1");
+                        // Also restore any previously disabled .conf.disabled files
+                        $renewalDir = '/etc/letsencrypt/renewal/';
+                        if (file_exists($renewalDir)) {
+                            exec("sudo bash -c 'for f in {$renewalDir}*.conf.disabled; do [ -f \"\$f\" ] && mv \"\$f\" \"\${f%.disabled}\"; done' 2>&1");
+                        }
+                    } else {
+                        exec("sudo systemctl stop certbot.timer 2>&1");
+                        exec("sudo systemctl disable certbot.timer 2>&1");
+                    }
+                }
+
+                // Clear cache so changes reflect immediately
+                cache()->flush();
+
+                \App\Models\ActivityLog::log(
+                    'TOGGLE_GLOBAL_AUTO_SSL',
+                    'SSL',
+                    ($enabled ? 'Enabled' : 'Disabled') . ' global SSL auto-renewal for all domains'
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Global Auto SSL ' . ($enabled ? 'enabled' : 'disabled') . ' successfully.',
+                    'globalAutoRenew' => $enabled
+                ]);
+            }
+
+            // Single Domain Toggle
+            $request->validate([
+                'domain' => 'required|string|max:253'
+            ]);
+
+            $domain = strtolower(trim($request->input('domain')));
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!$user->isRoot() && !$user->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $enabled = $request->boolean('enabled');
+            \App\Models\Setting::updateOrCreate(
+                ['key' => "ssl_autorenew_{$domain}"],
+                ['value' => $enabled ? '1' : '0']
+            );
+
+            if (PHP_OS_FAMILY === 'Linux') {
+                $activeConf = "/etc/letsencrypt/renewal/{$domain}.conf";
+                $disabledConf = "/etc/letsencrypt/renewal/{$domain}.conf.disabled";
+
+                if (!$enabled) {
+                    if (file_exists($activeConf)) {
+                        exec("sudo mv " . escapeshellarg($activeConf) . " " . escapeshellarg($disabledConf) . " 2>&1");
+                    }
+                } else {
+                    if (file_exists($disabledConf)) {
+                        exec("sudo mv " . escapeshellarg($disabledConf) . " " . escapeshellarg($activeConf) . " 2>&1");
+                    }
+                }
+            }
+
+            cache()->forget("ssl_info_{$domain}");
+
+            \App\Models\ActivityLog::log(
+                'TOGGLE_DOMAIN_AUTO_SSL',
+                'SSL',
+                ($enabled ? 'Enabled' : 'Disabled') . " Auto SSL renewal for {$domain}"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Auto SSL " . ($enabled ? 'enabled' : 'disabled') . " for {$domain}.",
+                'autoRenew' => $enabled,
+                'domain' => $domain
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to toggle auto SSL: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**

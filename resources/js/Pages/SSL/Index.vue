@@ -12,6 +12,32 @@
               <p class="mb-0 text-sm">Manage SSL certificates for your domains (Let's Encrypt)</p>
             </div>
             <div class="d-flex gap-2">
+              <!-- Global Auto SSL Toggle -->
+              <div class="d-flex align-items-center bg-white border border-radius-lg px-3 py-1 shadow-sm">
+                <div class="d-flex flex-column me-2 text-start">
+                  <span class="text-xs font-weight-bold text-dark d-flex align-items-center">
+                    <i class="material-symbols-rounded text-xs me-1" :class="globalAutoRenew ? 'text-success' : 'text-secondary'">
+                      {{ globalAutoRenew ? 'autorenew' : 'pause_circle' }}
+                    </i>
+                    Auto SSL (All Domains)
+                  </span>
+                  <span class="text-xxs text-secondary">
+                    {{ globalAutoRenew ? 'Automated renewal active' : 'All auto-renewals paused' }}
+                  </span>
+                </div>
+                <div class="form-check form-switch mb-0 ps-0 d-flex align-items-center">
+                  <input 
+                    class="form-check-input ms-0 cursor-pointer" 
+                    type="checkbox" 
+                    :checked="globalAutoRenew" 
+                    @change="toggleGlobalAutoRenew"
+                    :disabled="togglingAutoRenew === 'all' || !certbotInstalled"
+                    style="width: 34px; height: 18px;"
+                    title="Enable or disable automated Let's Encrypt SSL renewal for all domains"
+                  >
+                </div>
+              </div>
+
               <button class="btn btn-outline-secondary mb-0" @click="loadDomains(true)" :disabled="loading">
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
@@ -170,6 +196,7 @@
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Status</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Issuer</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Expiry</th>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Auto SSL</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                     </tr>
                   </thead>
@@ -231,6 +258,28 @@
                           </span>
                         </div>
                         <span v-else class="text-xs text-secondary">-</span>
+                      </td>
+                      <td class="text-center">
+                        <div v-if="domain.hasSsl && domain.sslSource === 'letsencrypt'" class="d-flex flex-column align-items-center justify-content-center">
+                          <div class="form-check form-switch mb-0 ps-0 d-inline-flex align-items-center gap-1 cursor-pointer">
+                            <input 
+                              class="form-check-input ms-0 cursor-pointer" 
+                              type="checkbox" 
+                              :checked="domain.autoRenew !== false && globalAutoRenew"
+                              @change="toggleDomainAutoRenew(domain)"
+                              :disabled="togglingAutoRenew === domain.domain || !globalAutoRenew"
+                              style="width: 28px; height: 15px;"
+                              :title="!globalAutoRenew ? 'Global Auto SSL is paused' : (domain.autoRenew !== false ? 'Click to disable auto-renewal for this domain' : 'Click to enable auto-renewal for this domain')"
+                            >
+                          </div>
+                          <span class="text-xxs font-weight-bold mt-1" :class="domain.autoRenew !== false && globalAutoRenew ? 'text-success' : 'text-secondary'">
+                            {{ !globalAutoRenew ? 'Global Off' : (domain.autoRenew !== false ? 'Enabled' : 'Disabled') }}
+                          </span>
+                        </div>
+                        <div v-else-if="domain.sslSource === 'nginx_custom'" class="text-xxs text-secondary font-italic">
+                          Manual Cert
+                        </div>
+                        <span v-else class="text-xxs text-secondary">-</span>
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
@@ -561,6 +610,8 @@ const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const certbotInstalled = ref(true) // Assume true until checked
 const certbotChecked = ref(false)
+const globalAutoRenew = ref(true)
+const togglingAutoRenew = ref(null)
 
 const showDetailsModal = ref(false)
 const showRemoveModal = ref(false)
@@ -636,10 +687,49 @@ const loadDomains = async (force = false) => {
       certbotInstalled.value = response.data.certbotInstalled
       certbotChecked.value = true
     }
+
+    if (response.data.globalAutoRenew !== undefined) {
+      globalAutoRenew.value = response.data.globalAutoRenew
+    }
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to load domains')
   } finally {
     loading.value = false
+  }
+}
+
+const toggleGlobalAutoRenew = async () => {
+  const nextState = !globalAutoRenew.value
+  try {
+    togglingAutoRenew.value = 'all'
+    const response = await axios.post('/ssl/toggle-auto-renew', {
+      all: true,
+      enabled: nextState
+    })
+    globalAutoRenew.value = response.data.globalAutoRenew
+    showAlert('success', response.data.message)
+    await loadDomains(true)
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to toggle global Auto SSL')
+  } finally {
+    togglingAutoRenew.value = null
+  }
+}
+
+const toggleDomainAutoRenew = async (domain) => {
+  const nextState = !(domain.autoRenew !== false)
+  try {
+    togglingAutoRenew.value = domain.domain
+    const response = await axios.post('/ssl/toggle-auto-renew', {
+      domain: domain.domain,
+      enabled: nextState
+    })
+    domain.autoRenew = response.data.autoRenew
+    showAlert('success', response.data.message)
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to toggle Auto SSL for domain')
+  } finally {
+    togglingAutoRenew.value = null
   }
 }
 
