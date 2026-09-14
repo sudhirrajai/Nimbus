@@ -426,6 +426,26 @@ BASH;
     }
 
     /**
+     * Execute a command with sudo
+     */
+    private function executeSudoCommand($command)
+    {
+        $output = [];
+        $returnCode = 0;
+
+        \Log::debug("Executing sudo command in NginxController: sudo {$command}");
+        exec("sudo {$command} 2>&1", $output, $returnCode);
+
+        if ($returnCode !== 0) {
+            $errorMsg = "Command execution failed (code {$returnCode}): " . implode("\n", $output);
+            \Log::error($errorMsg);
+            throw new \Exception($errorMsg);
+        }
+
+        return $output;
+    }
+
+    /**
      * Get Reverse Proxy status and details for a domain
      */
     public function getProxyStatus(Request $request)

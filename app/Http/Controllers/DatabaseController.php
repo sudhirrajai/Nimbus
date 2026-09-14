@@ -1401,6 +1401,26 @@ PHP;
                                 ];
                             }
                         }
+
+                        // Support DATABASE_URL / DB_URL / JAWSDB_URL (Node.js, Prisma, TypeORM, Rails, Django, etc.)
+                        // Example: mysql://user:pass@127.0.0.1:3306/maharaj
+                        if (preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
+                            $rawDbUrl = trim($urlMatches[1], "\"' \r\n");
+                            $parsedPath = parse_url($rawDbUrl, PHP_URL_PATH);
+                            if ($parsedPath) {
+                                $extractedDb = trim($parsedPath, '/');
+                                // Remove any URL query parameters if present, e.g. /dbname?charset=utf8
+                                if (str_contains($extractedDb, '?')) {
+                                    $extractedDb = explode('?', $extractedDb)[0];
+                                }
+                                if (!empty($extractedDb)) {
+                                    $associations[strtolower($extractedDb)][] = [
+                                        'project' => $relativeProjectName,
+                                        'type' => 'Node.js / DATABASE_URL'
+                                    ];
+                                }
+                            }
+                        }
                     }
 
                     // Check wp-config.php file

@@ -30,7 +30,7 @@ class BackupController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $isRoot = $user->isRootOrAdmin();
+        $isRoot = $user->isRoot();
 
         // Ensure default local destination exists
         if (BackupDestination::count() === 0) {
@@ -48,10 +48,14 @@ class BackupController extends Controller
         // 1. Fetch Backups
         $backupsQuery = BackupRecord::with(['schedule', 'destination'])->orderBy('created_at', 'desc');
         if (!$isRoot) {
-            $accessibleDomains = $user->accessibleDomains();
-            $backupsQuery->where(function ($q) use ($accessibleDomains) {
+            $accessibleDomains = array_map('strtolower', $user->accessibleDomains());
+            $accessibleDbs = array_map('strtolower', $user->accessibleDatabases());
+            $userEmail = $user->email;
+
+            $backupsQuery->where(function ($q) use ($accessibleDomains, $accessibleDbs, $userEmail) {
                 $q->whereIn('domain', $accessibleDomains)
-                  ->orWhere('created_by', auth()->user()->email);
+                  ->orWhereIn('database_name', $accessibleDbs)
+                  ->orWhere('created_by', $userEmail);
             });
         }
         $backups = $backupsQuery->get()->map(function ($b) {
@@ -85,8 +89,12 @@ class BackupController extends Controller
         // 2. Fetch Schedules
         $schedulesQuery = BackupSchedule::with(['destination'])->withCount('records')->orderBy('created_at', 'desc');
         if (!$isRoot) {
-            $accessibleDomains = $user->accessibleDomains();
-            $schedulesQuery->whereIn('domain', $accessibleDomains);
+            $accessibleDomains = array_map('strtolower', $user->accessibleDomains());
+            $accessibleDbs = array_map('strtolower', $user->accessibleDatabases());
+            $schedulesQuery->where(function ($q) use ($accessibleDomains, $accessibleDbs) {
+                $q->whereIn('domain', $accessibleDomains)
+                  ->orWhereIn('database_name', $accessibleDbs);
+            });
         }
         $schedules = $schedulesQuery->get()->map(function ($s) {
             return [
@@ -484,6 +492,9 @@ class BackupController extends Controller
     {
         $basePath = '/var/www';
         $domains = [];
+        $user = auth()->user();
+        $isRoot = $user->isRoot();
+        $accessibleDomains = array_map('strtolower', $user->accessibleDomains());
 
         if (File::exists($basePath)) {
             try {
@@ -491,6 +502,11 @@ class BackupController extends Controller
                 foreach ($directories as $dir) {
                     $domain = basename($dir);
                     if (!in_array(strtolower($domain), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
+                        // Enforce access control for non-root users
+                        if (!$isRoot && !in_array(strtolower($domain), $accessibleDomains)) {
+                            continue;
+                        }
+
                         $associatedDb = $this->backupService->resolveDatabaseForDomain($domain);
                         $domains[] = [
                             'domain' => $domain,
@@ -512,12 +528,19 @@ class BackupController extends Controller
      */
     private function getAvailableDatabases(): array
     {
+        $user = auth()->user();
+        $isRoot = $user->isRoot();
+
+        if (!$isRoot) {
+            return $user->accessibleDatabases();
+        }
+
         $databases = [];
 
         if (PHP_OS_FAMILY === 'Linux') {
             $output = [];
             exec("sudo mysql -N -e 'SHOW DATABASES;' 2>/dev/null", $output);
-            $ignored = ['information_schema', 'performance_schema', 'mysql', 'sys'];
+            $ignored = ['information_schema', 'performance_schema', 'mysql', 'sys', 'phpmyadmin', 'nimbus', 'roundcube'];
             foreach ($output as $db) {
                 $db = trim($db);
                 if (!empty($db) && !in_array($db, $ignored)) {

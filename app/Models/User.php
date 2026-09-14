@@ -250,6 +250,21 @@ class User extends Authenticatable
                             $databases[] = $db;
                         }
                     }
+
+                    // Support DATABASE_URL / DB_URL / MYSQL_URL
+                    if (preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
+                        $rawDbUrl = trim($urlMatches[1], "\"' \r\n");
+                        $parsedPath = parse_url($rawDbUrl, PHP_URL_PATH);
+                        if ($parsedPath) {
+                            $extractedDb = trim($parsedPath, '/');
+                            if (str_contains($extractedDb, '?')) {
+                                $extractedDb = explode('?', $extractedDb)[0];
+                            }
+                            if (!empty($extractedDb)) {
+                                $databases[] = $extractedDb;
+                            }
+                        }
+                    }
                 }
 
                 // Check wp-config.php

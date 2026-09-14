@@ -823,8 +823,23 @@ class BackupService
         $envPath = "/var/www/{$domain}/.env";
         if (file_exists($envPath)) {
             $content = @file_get_contents($envPath);
-            if ($content && preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
-                return trim($matches[1], "\"' \r\n");
+            if ($content) {
+                if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                    return trim($matches[1], "\"' \r\n");
+                }
+                if (preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
+                    $rawDbUrl = trim($urlMatches[1], "\"' \r\n");
+                    $parsedPath = parse_url($rawDbUrl, PHP_URL_PATH);
+                    if ($parsedPath) {
+                        $extractedDb = trim($parsedPath, '/');
+                        if (str_contains($extractedDb, '?')) {
+                            $extractedDb = explode('?', $extractedDb)[0];
+                        }
+                        if (!empty($extractedDb)) {
+                            return $extractedDb;
+                        }
+                    }
+                }
             }
         }
 
