@@ -492,4 +492,88 @@ class GitDeploymentController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get unique saved access tokens from existing deployments so users can reuse them across projects.
+     */
+    public function getSavedTokens()
+    {
+        try {
+            $user = auth()->user();
+            $accessibleDomains = $user->accessibleDomains();
+
+            $query = GitDeployment::whereNotNull('access_token')
+                ->where('access_token', '!=', '')
+                ->where('repo_type', 'private')
+                ->where('url_type', 'https');
+
+            if (!$user->isRoot()) {
+                $query->whereIn('domain', $accessibleDomains);
+            }
+
+            $deployments = $query->orderBy('updated_at', 'desc')->get();
+
+            $tokens = [];
+            $seenTokens = [];
+
+            foreach ($deployments as $dep) {
+                $rawToken = $dep->access_token;
+                if (!$rawToken) {
+                    continue;
+                }
+
+                // Mask token for display, e.g. ghp_...1234
+                $length = strlen($rawToken);
+                if ($length > 8) {
+                    $prefix = substr($rawToken, 0, 4);
+                    $suffix = substr($rawToken, -4);
+                    $masked = $prefix . '••••' . $suffix;
+                } else {
+                    $masked = '••••' . substr($rawToken, -2);
+                }
+
+                // Detect provider based on repo_url
+                $provider = 'Git Provider';
+                $repoLower = strtolower($dep->repo_url);
+                if (str_contains($repoLower, 'github.com')) {
+                    $provider = 'GitHub';
+                } elseif (str_contains($repoLower, 'gitlab.com')) {
+                    $provider = 'GitLab';
+                } elseif (str_contains($repoLower, 'bitbucket.org')) {
+                    $provider = 'Bitbucket';
+                }
+
+                // Avoid duplicates of the same exact token
+                if (isset($seenTokens[$rawToken])) {
+                    // Just append domain to existing entry's source list
+                    $tokens[$seenTokens[$rawToken]]['used_in'][] = $dep->domain;
+                    continue;
+                }
+
+                $tokenKey = count($tokens);
+                $seenTokens[$rawToken] = $tokenKey;
+
+                $tokens[] = [
+                    'id' => $dep->id,
+                    'domain' => $dep->domain,
+                    'provider' => $provider,
+                    'masked_token' => $masked,
+                    'token' => $rawToken,
+                    'used_in' => [$dep->domain],
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'tokens' => $tokens,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to load saved git tokens: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'tokens' => [],
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
