@@ -748,7 +748,12 @@ class DatabaseManagerController extends Controller
             $safeDb = $this->sanitizeIdentifier($db);
             $safeTable = $this->sanitizeIdentifier($table);
 
-            $pdo->exec("DROP TABLE IF EXISTS `{$safeDb}`.`{$safeTable}`");
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS `{$safeDb}`.`{$safeTable}`");
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
 
             return response()->json([
                 'success' => true,
@@ -773,13 +778,141 @@ class DatabaseManagerController extends Controller
             $safeDb = $this->sanitizeIdentifier($db);
             $safeTable = $this->sanitizeIdentifier($table);
 
-            $pdo->exec("TRUNCATE TABLE `{$safeDb}`.`{$safeTable}`");
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                $pdo->exec("TRUNCATE TABLE `{$safeDb}`.`{$safeTable}`");
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => "Table '{$table}' truncated successfully"
             ]);
         } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Drop all tables and views in database with foreign key checks disabled
+     */
+    public function dropAllTables(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied: You do not have access to this database.'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+
+            // Fetch all tables and views from information_schema
+            $stmt = $pdo->prepare("SELECT TABLE_NAME, TABLE_TYPE FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?");
+            $stmt->execute([$db]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if (empty($rows)) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Database has no tables or views to drop',
+                    'dropped_tables' => 0,
+                    'dropped_views' => 0
+                ]);
+            }
+
+            $tables = [];
+            $views = [];
+            foreach ($rows as $row) {
+                $name = $row['TABLE_NAME'] ?? $row['table_name'] ?? '';
+                $type = strtoupper($row['TABLE_TYPE'] ?? $row['table_type'] ?? '');
+                if (!$name) continue;
+                if ($type === 'VIEW') {
+                    $views[] = $name;
+                } else {
+                    $tables[] = $name;
+                }
+            }
+
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                // Drop views first
+                foreach ($views as $view) {
+                    $safeView = $this->sanitizeIdentifier($view);
+                    $pdo->exec("DROP VIEW IF EXISTS `{$safeDb}`.`{$safeView}`");
+                }
+
+                // Drop all tables
+                foreach ($tables as $table) {
+                    $safeTable = $this->sanitizeIdentifier($table);
+                    $pdo->exec("DROP TABLE IF EXISTS `{$safeDb}`.`{$safeTable}`");
+                }
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
+
+            $totalCount = count($tables) + count($views);
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully dropped {$totalCount} objects (" . count($tables) . " tables, " . count($views) . " views).",
+                'dropped_tables' => count($tables),
+                'dropped_views' => count($views)
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to drop all tables for DB {$db}: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Truncate all tables in database with foreign key checks disabled
+     */
+    public function truncateAllTables(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied: You do not have access to this database.'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+
+            // Fetch base tables only
+            $stmt = $pdo->prepare("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'");
+            $stmt->execute([$db]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if (empty($rows)) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Database has no tables to truncate',
+                    'truncated_tables' => 0
+                ]);
+            }
+
+            $tables = [];
+            foreach ($rows as $row) {
+                $name = $row['TABLE_NAME'] ?? $row['table_name'] ?? '';
+                if ($name) $tables[] = $name;
+            }
+
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                foreach ($tables as $table) {
+                    $safeTable = $this->sanitizeIdentifier($table);
+                    $pdo->exec("TRUNCATE TABLE `{$safeDb}`.`{$safeTable}`");
+                }
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully truncated " . count($tables) . " tables.",
+                'truncated_tables' => count($tables)
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to truncate all tables for DB {$db}: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

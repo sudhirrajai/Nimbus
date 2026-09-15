@@ -228,6 +228,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/manager/{db}/tables/{table}/row/update', [DatabaseManagerController::class, 'updateRow'])->name('manager.row.update');
         Route::post('/manager/{db}/tables/{table}/row/delete', [DatabaseManagerController::class, 'deleteRow'])->name('manager.row.delete');
         Route::post('/manager/{db}/tables/create', [DatabaseManagerController::class, 'createTable'])->name('manager.table.create');
+        Route::post('/manager/{db}/tables/drop-all', [DatabaseManagerController::class, 'dropAllTables'])->name('manager.tables.drop-all');
+        Route::post('/manager/{db}/tables/truncate-all', [DatabaseManagerController::class, 'truncateAllTables'])->name('manager.tables.truncate-all');
         Route::post('/manager/{db}/tables/{table}/drop', [DatabaseManagerController::class, 'dropTable'])->name('manager.table.drop');
         Route::post('/manager/{db}/tables/{table}/truncate', [DatabaseManagerController::class, 'truncateTable'])->name('manager.table.truncate');
         Route::post('/manager/{db}/tables/{table}/column/update', [DatabaseManagerController::class, 'updateColumn'])->name('manager.column.update');

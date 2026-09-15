@@ -91,10 +91,30 @@
                   </button>
                 </div>
 
-                <div class="pt-3 border-top mt-auto text-center">
+                <div class="pt-3 border-top mt-auto d-flex flex-column gap-2">
                   <button class="btn btn-xs btn-outline-primary w-100 mb-0" @click="activeTab = 'create_table'">
                     <i class="material-symbols-rounded text-xs me-1">add</i> New Table
                   </button>
+                  <div class="dropdown w-100">
+                    <button class="btn btn-xs btn-outline-danger w-100 mb-0 dropdown-toggle-custom d-flex align-items-center justify-content-center gap-1 shadow-none" type="button" data-bs-toggle="dropdown" :disabled="tables.length === 0">
+                      <i class="material-symbols-rounded text-xs">delete_sweep</i> Danger Zone
+                      <i class="material-symbols-rounded text-xxs ms-auto">expand_more</i>
+                    </button>
+                    <ul class="dropdown-menu shadow-xl border-0 p-2 position-absolute" style="z-index: 99999 !important; min-width: 190px;">
+                      <li>
+                        <a class="dropdown-item text-xs text-warning border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="openSafetyGuard('truncate_all', databaseName)">
+                          <i class="material-symbols-rounded text-sm me-2 text-warning">cleaning_services</i>
+                          Truncate All Tables
+                        </a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item text-xs text-danger border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="openSafetyGuard('drop_all', databaseName)">
+                          <i class="material-symbols-rounded text-sm me-2 text-danger">delete_forever</i>
+                          Drop All Tables
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
 
@@ -990,17 +1010,47 @@
             <button type="button" class="btn-close" @click="safetyGuard.show = false"></button>
           </div>
           <div class="modal-body text-center py-4">
-            <p class="text-xs text-secondary mb-3">
-              You are about to <strong class="text-danger uppercase">{{ safetyGuard.action }}</strong> the table <code>{{ safetyGuard.targetTable }}</code>.
-              This action cannot be undone.
-            </p>
-            <label class="form-label text-xs font-weight-bold text-uppercase">Type <code>{{ safetyGuard.targetTable }}</code> to confirm:</label>
-            <input v-model="safetyGuard.confirmInput" type="text" class="form-control text-center font-weight-bold text-danger border-danger" placeholder="table_name" />
+            <!-- Drop All Tables Mode -->
+            <template v-if="safetyGuard.action === 'drop_all'">
+              <div class="alert alert-danger text-white text-xs mb-3 p-2 border-radius-md text-start">
+                <i class="material-symbols-rounded text-sm align-middle me-1">warning</i>
+                <strong>DANGER:</strong> You are about to drop <strong>ALL {{ tables.length }} tables and views</strong> in database <code>{{ databaseName }}</code>.
+              </div>
+              <p class="text-xs text-secondary mb-2">
+                Foreign key checks will be disabled during deletion. All data, structure, indexes, and constraints will be permanently destroyed.
+              </p>
+              <label class="form-label text-xs font-weight-bold text-uppercase">Type <code>{{ databaseName }}</code> to confirm:</label>
+              <input v-model="safetyGuard.confirmInput" type="text" class="form-control text-center font-weight-bold text-danger border-danger" :placeholder="databaseName" />
+            </template>
+
+            <!-- Truncate All Tables Mode -->
+            <template v-else-if="safetyGuard.action === 'truncate_all'">
+              <div class="alert alert-warning text-white text-xs mb-3 p-2 border-radius-md text-start">
+                <i class="material-symbols-rounded text-sm align-middle me-1">warning</i>
+                <strong>WARNING:</strong> You are about to truncate <strong>ALL {{ tables.length }} tables</strong> in database <code>{{ databaseName }}</code>.
+              </div>
+              <p class="text-xs text-secondary mb-2">
+                Foreign key checks will be disabled during truncation. All records will be wiped clean while preserving table structures.
+              </p>
+              <label class="form-label text-xs font-weight-bold text-uppercase">Type <code>{{ databaseName }}</code> to confirm:</label>
+              <input v-model="safetyGuard.confirmInput" type="text" class="form-control text-center font-weight-bold text-warning border-warning" :placeholder="databaseName" />
+            </template>
+
+            <!-- Single Table Drop/Truncate Mode -->
+            <template v-else>
+              <p class="text-xs text-secondary mb-3">
+                You are about to <strong class="text-danger uppercase">{{ safetyGuard.action }}</strong> the table <code>{{ safetyGuard.targetTable }}</code>.
+                Foreign key checks will be safely handled. This action cannot be undone.
+              </p>
+              <label class="form-label text-xs font-weight-bold text-uppercase">Type <code>{{ safetyGuard.targetTable }}</code> to confirm:</label>
+              <input v-model="safetyGuard.confirmInput" type="text" class="form-control text-center font-weight-bold text-danger border-danger" placeholder="table_name" />
+            </template>
           </div>
           <div class="modal-footer border-0 pt-0">
-            <button class="btn btn-link text-secondary mb-0" @click="safetyGuard.show = false">Cancel</button>
-            <button class="btn bg-gradient-danger mb-0 border-radius-lg px-4" @click="executeSafetyAction" :disabled="safetyGuard.confirmInput !== safetyGuard.targetTable">
-              Confirm {{ safetyGuard.action.toUpperCase() }} Now
+            <button class="btn btn-link text-secondary mb-0" @click="safetyGuard.show = false" :disabled="executingSafetyAction">Cancel</button>
+            <button class="btn bg-gradient-danger mb-0 border-radius-lg px-4" @click="executeSafetyAction" :disabled="safetyGuard.confirmInput !== safetyGuard.targetTable || executingSafetyAction">
+              <span v-if="executingSafetyAction" class="spinner-border spinner-border-sm me-1"></span>
+              Confirm {{ safetyGuard.action === 'drop_all' ? 'DROP ALL TABLES' : (safetyGuard.action === 'truncate_all' ? 'TRUNCATE ALL' : safetyGuard.action.toUpperCase()) }} Now
             </button>
           </div>
         </div>
@@ -1289,6 +1339,7 @@ const fkForm = ref({ constraint_name: '', column: '', ref_table: '', ref_column:
 
 // Destructive Action Safety Guard
 const safetyGuard = ref({ show: false, action: 'drop', targetTable: '', confirmInput: '' })
+const executingSafetyAction = ref(false)
 
 // ER Designer
 const designerTables = ref([])
@@ -1615,7 +1666,7 @@ const saveDropForeignKey = async (constraintName) => {
 const openSafetyGuard = (action, tName) => {
   safetyGuard.value = {
     show: true,
-    action: action, // 'drop' or 'truncate'
+    action: action, // 'drop', 'truncate', 'drop_all', 'truncate_all'
     targetTable: tName,
     confirmInput: ''
   }
@@ -1625,12 +1676,41 @@ const executeSafetyAction = async () => {
   if (safetyGuard.value.confirmInput !== safetyGuard.value.targetTable) return
   const tName = safetyGuard.value.targetTable
   const action = safetyGuard.value.action
-  safetyGuard.value.show = false
 
   if (action === 'truncate') {
+    safetyGuard.value.show = false
     confirmTruncateTable(tName)
   } else if (action === 'drop') {
+    safetyGuard.value.show = false
     confirmDropTable(tName)
+  } else if (action === 'drop_all') {
+    try {
+      executingSafetyAction.value = true
+      const res = await axios.post(`/database/manager/${props.databaseName}/tables/drop-all`)
+      safetyGuard.value.show = false
+      showAlert('success', res.data.message || 'All tables and views dropped successfully')
+      selectedTable.value = ''
+      loadTables()
+    } catch (err) {
+      showAlert('danger', err.response?.data?.error || 'Failed to drop all tables')
+    } finally {
+      executingSafetyAction.value = false
+    }
+  } else if (action === 'truncate_all') {
+    try {
+      executingSafetyAction.value = true
+      const res = await axios.post(`/database/manager/${props.databaseName}/tables/truncate-all`)
+      safetyGuard.value.show = false
+      showAlert('success', res.data.message || 'All tables truncated successfully')
+      if (selectedTable.value) {
+        loadTableData()
+      }
+      loadTables()
+    } catch (err) {
+      showAlert('danger', err.response?.data?.error || 'Failed to truncate all tables')
+    } finally {
+      executingSafetyAction.value = false
+    }
   }
 }
 
