@@ -206,7 +206,12 @@
                                                             </div>
                                                             <div>
                                                                 <h6 class="mb-0 text-sm">{{ group.name }}</h6>
-                                                                <small class="text-xs text-muted">{{ group.name }}.conf</small>
+                                                                <div class="d-flex align-items-center gap-1">
+                                                                    <small class="text-xs text-muted">{{ group.name }}.conf</small>
+                                                                    <span v-if="group.domain" class="badge badge-sm bg-light text-dark text-xxs border px-1 py-0 ms-1" style="font-size: 0.65rem;">
+                                                                        {{ group.domain }}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </td>
@@ -735,8 +740,9 @@ const filteredGroups = computed(() => {
     const q = searchQuery.value.toLowerCase()
     return groups.value.filter(group => {
         const groupMatches = group.name.toLowerCase().includes(q)
+        const domainMatches = group.domain && group.domain.toLowerCase().includes(q)
         const processMatches = group.processes.some(p => p.name.toLowerCase().includes(q))
-        return groupMatches || processMatches
+        return groupMatches || domainMatches || processMatches
     })
 })
 
