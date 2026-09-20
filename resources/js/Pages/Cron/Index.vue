@@ -453,6 +453,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import { formatDate, formatTime } from '@/Utils/date'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -754,13 +755,12 @@ const formatRelativeTime = (dateStr) => {
     if (diffSec < 60) return 'Just now'
     if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
     if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
-    return d.toLocaleDateString()
+    return formatDate(d)
 }
 
 const formatTimeOnly = (dateStr) => {
     if (!dateStr) return ''
-    const d = new Date(dateStr)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return formatTime(dateStr, { second: '2-digit' })
 }
 
 const getScheduleDescription = (job) => {

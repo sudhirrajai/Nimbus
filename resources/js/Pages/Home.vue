@@ -428,6 +428,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
+import { formatTime } from '@/Utils/date'
 import Chart from 'chart.js/auto'
 
 const props = defineProps({
@@ -717,14 +718,7 @@ const refreshStats = async () => {
   }
 }
 
-const formatTime = (date) => {
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  })
-}
+
 
 const getProgressClass = (percentage) => {
   if (percentage < 60) return 'bg-gradient-success'

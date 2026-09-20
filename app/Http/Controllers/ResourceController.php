@@ -66,6 +66,17 @@ class ResourceController extends Controller
                     ->get();
             }
 
+            // Resolve panel timezone for localized graph display
+            $panelTimezone = 'Asia/Kolkata';
+            try {
+                $dbTz = \App\Models\Setting::where('key', 'timezone')->value('value');
+                if (!empty($dbTz)) {
+                    $panelTimezone = $dbTz;
+                }
+            } catch (\Exception $e) {
+                // fallback
+            }
+
             // Downsample / group points based on range to optimize frontend chart rendering
             $points = [];
             $groupMinutes = match ($range) {
@@ -76,9 +87,10 @@ class ResourceController extends Controller
 
             if ($groupMinutes === 5) {
                 foreach ($metrics as $m) {
+                    $locTime = $m->created_at->copy()->setTimezone($panelTimezone);
                     $points[] = [
-                        'time' => $m->created_at->format('H:i'),
-                        'full_time' => $m->created_at->format('M d, H:i'),
+                        'time' => $locTime->format('H:i'),
+                        'full_time' => $locTime->format('M d, H:i'),
                         'timestamp' => $m->created_at->timestamp,
                         'cpu' => $m->cpu_percent,
                         'memory' => $m->memory_percent,
@@ -105,11 +117,11 @@ class ResourceController extends Controller
                     $usedMb = round(array_sum(array_column($bMetrics, 'memory_used_mb')) / $count, 0);
                     $totalMb = $bMetrics[0]->memory_total_mb;
 
-                    $firstTime = $bMetrics[0]->created_at;
+                    $firstTime = $bMetrics[0]->created_at->copy()->setTimezone($panelTimezone);
                     $points[] = [
                         'time' => $firstTime->format('M d, H:i'),
                         'full_time' => $firstTime->format('M d, Y H:i'),
-                        'timestamp' => $firstTime->timestamp,
+                        'timestamp' => $bMetrics[0]->created_at->timestamp,
                         'cpu' => $cpuAvg,
                         'memory' => $memAvg,
                         'memory_used_mb' => $usedMb,
@@ -127,10 +139,11 @@ class ResourceController extends Controller
             $peakCpu = null;
             if ($peakCpuMetric) {
                 $topProc = !empty($peakCpuMetric->top_processes[0]) ? $peakCpuMetric->top_processes[0] : null;
+                $peakCpuLoc = $peakCpuMetric->created_at->copy()->setTimezone($panelTimezone);
                 $peakCpu = [
                     'value' => $peakCpuMetric->cpu_percent,
-                    'time' => $peakCpuMetric->created_at->format('M d, H:i'),
-                    'full_time' => $peakCpuMetric->created_at->format('M d, Y H:i:s'),
+                    'time' => $peakCpuLoc->format('M d, H:i'),
+                    'full_time' => $peakCpuLoc->format('M d, Y H:i:s'),
                     'process' => $topProc ? ($topProc['command'] ?? $topProc['user'] ?? 'system') : 'N/A',
                     'user' => $topProc['user'] ?? 'N/A',
                 ];
@@ -139,11 +152,12 @@ class ResourceController extends Controller
             $peakMem = null;
             if ($peakMemMetric) {
                 $topProc = !empty($peakMemMetric->top_processes[0]) ? $peakMemMetric->top_processes[0] : null;
+                $peakMemLoc = $peakMemMetric->created_at->copy()->setTimezone($panelTimezone);
                 $peakMem = [
                     'value' => $peakMemMetric->memory_percent,
                     'used_mb' => $peakMemMetric->memory_used_mb,
-                    'time' => $peakMemMetric->created_at->format('M d, H:i'),
-                    'full_time' => $peakMemMetric->created_at->format('M d, Y H:i:s'),
+                    'time' => $peakMemLoc->format('M d, H:i'),
+                    'full_time' => $peakMemLoc->format('M d, Y H:i:s'),
                     'process' => $topProc ? ($topProc['command'] ?? $topProc['user'] ?? 'system') : 'N/A',
                     'user' => $topProc['user'] ?? 'N/A',
                 ];
@@ -155,7 +169,7 @@ class ResourceController extends Controller
             foreach ($incidentRows as $row) {
                 $topProc = !empty($row->top_processes[0]) ? $row->top_processes[0] : null;
                 $incidents[] = [
-                    'time' => $row->created_at->format('M d, Y H:i'),
+                    'time' => $row->created_at->copy()->setTimezone($panelTimezone)->format('M d, Y H:i'),
                     'cpu' => $row->cpu_percent,
                     'memory' => $row->memory_percent,
                     'load' => $row->load_1min,

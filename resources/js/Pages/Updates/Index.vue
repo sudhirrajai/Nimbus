@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <MainLayout>
     <Head title="Updates" />
         <div class="container-fluid py-4">
@@ -161,6 +161,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { formatDate } from '@/Utils/date'
 
 const props = defineProps({
     currentVersion: String
@@ -258,14 +259,7 @@ const compareVersions = (v1, v2) => {
     return 0
 }
 
-const formatDate = (date) => {
-    if (!date) return 'N/A'
-    return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    })
-}
+
 
 const notify = (message, type = 'success') => {
     toastMessage.value = message

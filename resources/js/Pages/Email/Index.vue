@@ -429,7 +429,7 @@
                             <span class="text-xs font-weight-bold text-dark">{{ domain.account_count || 0 }}</span>
                           </td>
                           <td>
-                            <span class="text-xs text-muted font-weight-bold">{{ new Date(domain.created_at).toLocaleDateString() }}</span>
+                            <span class="text-xs text-muted font-weight-bold">{{ formatDate(domain.created_at) }}</span>
                           </td>
                           <td class="align-middle text-center">
                             <button 
@@ -536,7 +536,7 @@
                             </span>
                           </td>
                           <td>
-                            <span class="text-xs text-muted font-weight-bold">{{ new Date(account.created_at).toLocaleDateString() }}</span>
+                            <span class="text-xs text-muted font-weight-bold">{{ formatDate(account.created_at) }}</span>
                           </td>
                           <td class="align-middle text-center">
                             <div class="d-flex justify-content-center gap-2">
@@ -1365,6 +1365,7 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head, usePage } from '@inertiajs/vue3'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
+import { formatDate } from '@/Utils/date'
 
 const page = usePage()
 const userRole = computed(() => page.props.auth?.user?.role || 'user')

@@ -1,7 +1,7 @@
 <template>
-  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
-    id="sidenav-main">
-    <div class="sidenav-header">
+  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2 d-flex flex-column"
+    id="sidenav-main" style="overflow: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; z-index: 999;">
+    <div class="sidenav-header flex-shrink-0">
       <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
         id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
 
@@ -14,9 +14,9 @@
       </Link>
     </div>
 
-    <hr class="horizontal dark mt-0 mb-2" />
+    <hr class="horizontal dark mt-0 mb-2 flex-shrink-0" />
 
-    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" style="max-height: calc(100vh - 170px); overflow-y: auto;">
+    <div class="collapse navbar-collapse w-100 flex-grow-1" id="sidenav-collapse-main" style="overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; max-height: none !important;">
       <ul class="navbar-nav">
 
         <li class="nav-item">
@@ -250,11 +250,11 @@
       </ul>
     </div>
 
-    <div class="sidenav-footer position-absolute w-100 bottom-0">
+    <div class="sidenav-footer flex-shrink-0 mt-auto w-100 py-2 bg-white" style="border-top: 1px solid rgba(0, 0, 0, 0.06);">
       <div class="mx-3">
-        <a class="btn btn-outline-dark mt-4 w-100" href="https://nimbus-docs.vmcore.in/" target="_blank">
-          <i class="material-symbols-rounded text-sm me-1">menu_book</i>
-          Documentation
+        <a class="btn btn-outline-dark w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank">
+          <i class="material-symbols-rounded text-sm">menu_book</i>
+          <span>Documentation</span>
         </a>
       </div>
     </div>
@@ -318,6 +318,8 @@ let removeListener = null
 
 onMounted(() => {
   // Ensure sidebar scroll position resets to top on initial mount
+  const sidenav = document.getElementById('sidenav-main')
+  if (sidenav) sidenav.scrollTop = 0
   const container = document.getElementById('sidenav-collapse-main')
   if (container) container.scrollTop = 0
 
@@ -325,7 +327,7 @@ onMounted(() => {
     closeSidebar()
     // Extra safety: ensure body overflow is reset & sidebar container scrolled up
     document.body.style.overflow = ''
-    if (container) container.scrollTop = 0
+    if (sidenav) sidenav.scrollTop = 0
   })
 })
 
@@ -348,5 +350,32 @@ onUnmounted(() => {
 
 .nav-link.active {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+#sidenav-collapse-main {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar {
+  width: 5px;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+:deep(.ps__rail-y),
+:deep(.ps__rail-x) {
+  display: none !important;
 }
 </style>

@@ -596,6 +596,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { formatDate } from '@/Utils/date'
 
 const loading = ref(false)
 const installing = ref(null)
@@ -831,14 +832,7 @@ const getDaysRemainingText = (daysRemaining) => {
   return `${daysRemaining} days remaining`
 }
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+
 
 const installSsl = async (domain, force = false) => {
   try {
