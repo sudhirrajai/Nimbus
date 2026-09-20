@@ -53,6 +53,13 @@ class CollectServerMetrics extends Command
                 'created_at' => now(),
             ]);
 
+            // Collect per-project resource snapshot
+            try {
+                \App\Services\ProjectMetricsService::collectSnapshot();
+            } catch (\Throwable $pe) {
+                Log::warning("Failed to collect per-project metrics: " . $pe->getMessage());
+            }
+
             // Rolling 30-day retention prune
             ServerMetric::where('created_at', '<', now()->subDays(30))->delete();
 

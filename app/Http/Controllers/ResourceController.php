@@ -342,6 +342,40 @@ class ResourceController extends Controller
             ]);
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
+    /**
+     * Get real-time and historical resource usage for all projects
+     */
+    public function getProjectsUsage(Request $request)
+    {
+        try {
+            $range = $request->query('range', '24h');
+            $data = \App\Services\ProjectMetricsService::getAllProjectsSummary($range);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get historical time-series resource usage for a specific project
+     */
+    public function getSingleProjectHistory(Request $request, string $domain)
+    {
+        try {
+            $range = $request->query('range', '24h');
+            $data = \App\Services\ProjectMetricsService::getProjectHistory($domain, $range);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }
+

@@ -573,6 +573,459 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Per-Project Resource Usage & History Section -->
+                <div class="row mt-4" id="project-usage-container">
+                    <div class="col-12">
+                        <div class="card shadow-sm border">
+                            <!-- Header & Filter Bar -->
+                            <div class="card-header pb-3 p-3 bg-white border-bottom">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                    <div>
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span class="badge bg-gradient-info text-white px-2 py-1 text-xxs">PER-PROJECT METRICS</span>
+                                            <span class="badge bg-light text-dark border px-2 py-1 text-xxs font-weight-bold">
+                                                {{ projectsData.total_projects || 0 }} Projects Monitored
+                                            </span>
+                                        </div>
+                                        <h5 class="mb-0 text-dark font-weight-bolder d-flex align-items-center">
+                                            <i class="material-symbols-rounded text-info me-2">domain</i>
+                                            Project-Wise Resource Usage &amp; History
+                                        </h5>
+                                        <p class="text-xs text-secondary mb-0 mt-1">
+                                            Real-time attribution &bull; Linux system users &amp; process memory &bull; Rolling history up to 1 month
+                                        </p>
+                                    </div>
+
+                                    <!-- Range Switchers & Refresh -->
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm mb-0"
+                                                :class="projectRange === '1h' ? 'btn-info text-white' : 'btn-outline-info'"
+                                                @click="changeProjectRange('1h')">
+                                                Hourly (1h)
+                                            </button>
+                                            <button type="button" class="btn btn-sm mb-0"
+                                                :class="projectRange === '24h' ? 'btn-info text-white' : 'btn-outline-info'"
+                                                @click="changeProjectRange('24h')">
+                                                Daily (24h)
+                                            </button>
+                                            <button type="button" class="btn btn-sm mb-0"
+                                                :class="projectRange === '7d' ? 'btn-info text-white' : 'btn-outline-info'"
+                                                @click="changeProjectRange('7d')">
+                                                Weekly (7d)
+                                            </button>
+                                            <button type="button" class="btn btn-sm mb-0"
+                                                :class="projectRange === '30d' ? 'btn-info text-white' : 'btn-outline-info'"
+                                                @click="changeProjectRange('30d')">
+                                                Monthly (30d)
+                                            </button>
+                                        </div>
+
+                                        <button type="button" class="btn btn-sm btn-outline-secondary mb-0 d-flex align-items-center"
+                                            @click="loadProjectsUsage" :disabled="loadingProjects">
+                                            <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-anim': loadingProjects }">refresh</i>
+                                            Refresh Projects
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Search & Sort Bar -->
+                                <div class="row g-2 mt-3 pt-3 border-top align-items-center">
+                                    <div class="col-md-5 col-12">
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light border-end-0">
+                                                <i class="material-symbols-rounded text-sm text-secondary">search</i>
+                                            </span>
+                                            <input type="text" class="form-control bg-light border-start-0 ps-0"
+                                                placeholder="Search project domain or system user..."
+                                                v-model="projectSearch">
+                                            <button v-if="projectSearch" class="btn btn-outline-secondary mb-0" type="button" @click="projectSearch = ''">
+                                                &times;
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-7 col-12 d-flex justify-content-md-end gap-2 flex-wrap align-items-center">
+                                        <span class="text-xxs text-secondary font-weight-bold">Sort By:</span>
+                                        <button type="button" class="btn btn-xs mb-0"
+                                            :class="projectSortBy === 'cpu' ? 'btn-dark' : 'btn-outline-dark'"
+                                            @click="sortBy('cpu')">
+                                            CPU % <i class="material-symbols-rounded text-xxs align-middle ms-0.5">{{ projectSortBy === 'cpu' && projectSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</i>
+                                        </button>
+                                        <button type="button" class="btn btn-xs mb-0"
+                                            :class="projectSortBy === 'memory' ? 'btn-dark' : 'btn-outline-dark'"
+                                            @click="sortBy('memory')">
+                                            RAM MB <i class="material-symbols-rounded text-xxs align-middle ms-0.5">{{ projectSortBy === 'memory' && projectSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</i>
+                                        </button>
+                                        <button type="button" class="btn btn-xs mb-0"
+                                            :class="projectSortBy === 'disk' ? 'btn-dark' : 'btn-outline-dark'"
+                                            @click="sortBy('disk')">
+                                            Storage <i class="material-symbols-rounded text-xxs align-middle ms-0.5">{{ projectSortBy === 'disk' && projectSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</i>
+                                        </button>
+                                        <button type="button" class="btn btn-xs mb-0"
+                                            :class="projectSortBy === 'domain' ? 'btn-dark' : 'btn-outline-dark'"
+                                            @click="sortBy('domain')">
+                                            Name <i class="material-symbols-rounded text-xxs align-middle ms-0.5">{{ projectSortBy === 'domain' && projectSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-body p-3">
+                                <!-- Top Consumers Highlight Cards -->
+                                <div class="row g-3 mb-4">
+                                    <!-- Top CPU Project -->
+                                    <div class="col-xl-3 col-sm-6">
+                                        <div class="p-3 bg-light rounded-3 border h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="text-xs text-uppercase font-weight-bold text-secondary">Highest CPU Project</span>
+                                                <span class="badge bg-danger text-white text-xxs">Top CPU</span>
+                                            </div>
+                                            <h4 class="mb-0 text-dark font-weight-bolder mt-1 text-truncate" :title="projectsData.top_cpu_project?.domain || 'None'">
+                                                {{ projectsData.top_cpu_project?.domain || 'None' }}
+                                            </h4>
+                                            <div class="mt-2 text-xs border-top pt-2 d-flex justify-content-between align-items-center">
+                                                <span class="text-secondary">Current CPU:</span>
+                                                <span class="font-weight-bold text-danger">{{ projectsData.top_cpu_project?.cpu_percent || 0 }}%</span>
+                                            </div>
+                                            <div class="mt-1 text-xxs text-secondary d-flex justify-content-between">
+                                                <span>{{ projectRange.toUpperCase() }} Peak:</span>
+                                                <span class="font-weight-bold text-dark">{{ projectsData.top_cpu_project?.range_peak_cpu || 0 }}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Top RAM Project -->
+                                    <div class="col-xl-3 col-sm-6">
+                                        <div class="p-3 bg-light rounded-3 border h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="text-xs text-uppercase font-weight-bold text-secondary">Highest RAM Project</span>
+                                                <span class="badge bg-warning text-dark text-xxs">Top RAM</span>
+                                            </div>
+                                            <h4 class="mb-0 text-dark font-weight-bolder mt-1 text-truncate" :title="projectsData.top_memory_project?.domain || 'None'">
+                                                {{ projectsData.top_memory_project?.domain || 'None' }}
+                                            </h4>
+                                            <div class="mt-2 text-xs border-top pt-2 d-flex justify-content-between align-items-center">
+                                                <span class="text-secondary">Current RAM:</span>
+                                                <span class="font-weight-bold text-warning">{{ projectsData.top_memory_project?.memory_mb || 0 }} MB</span>
+                                            </div>
+                                            <div class="mt-1 text-xxs text-secondary d-flex justify-content-between">
+                                                <span>{{ projectRange.toUpperCase() }} Peak:</span>
+                                                <span class="font-weight-bold text-dark">{{ projectsData.top_memory_project?.range_peak_mem_mb || 0 }} MB</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Largest Storage Project -->
+                                    <div class="col-xl-3 col-sm-6">
+                                        <div class="p-3 bg-light rounded-3 border h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="text-xs text-uppercase font-weight-bold text-secondary">Largest Storage</span>
+                                                <span class="badge bg-info text-white text-xxs">Disk Space</span>
+                                            </div>
+                                            <h4 class="mb-0 text-dark font-weight-bolder mt-1 text-truncate" :title="projectsData.top_disk_project?.domain || 'None'">
+                                                {{ projectsData.top_disk_project?.domain || 'None' }}
+                                            </h4>
+                                            <div class="mt-2 text-xs border-top pt-2 d-flex justify-content-between align-items-center">
+                                                <span class="text-secondary">Allocated Size:</span>
+                                                <span class="font-weight-bold text-info">{{ projectsData.top_disk_project?.disk_formatted || '0 MB' }}</span>
+                                            </div>
+                                            <div class="mt-1 text-xxs text-secondary d-flex justify-content-between">
+                                                <span>User:</span>
+                                                <span class="font-weight-bold text-dark">{{ projectsData.top_disk_project?.user || 'N/A' }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Total Monitored Projects -->
+                                    <div class="col-xl-3 col-sm-6">
+                                        <div class="p-3 bg-light rounded-3 border h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="text-xs text-uppercase font-weight-bold text-secondary">Total Projects</span>
+                                                <span class="badge bg-success text-white text-xxs">Isolated Envs</span>
+                                            </div>
+                                            <h4 class="mb-0 text-dark font-weight-bolder mt-1">
+                                                {{ projectsData.total_projects || 0 }} Domains
+                                            </h4>
+                                            <div class="mt-2 text-xs border-top pt-2 d-flex justify-content-between align-items-center">
+                                                <span class="text-secondary">Active Workloads:</span>
+                                                <span class="font-weight-bold text-success">
+                                                    {{ (projectsData.projects || []).filter(p => p.status === 'active').length }} Active
+                                                </span>
+                                            </div>
+                                            <div class="mt-1 text-xxs text-secondary d-flex justify-content-between">
+                                                <span>Idle Sites:</span>
+                                                <span class="font-weight-bold text-secondary">
+                                                    {{ (projectsData.projects || []).filter(p => p.status === 'idle').length }} Idle
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Loading state -->
+                                <div v-if="loadingProjects && (!projectsData.projects || projectsData.projects.length === 0)" class="text-center py-5">
+                                    <div class="spinner-border text-info" role="status">
+                                        <span class="visually-hidden">Loading projects...</span>
+                                    </div>
+                                    <p class="text-secondary text-sm mt-2">Aggregating per-project metrics &amp; disk storage...</p>
+                                </div>
+
+                                <!-- Projects Table -->
+                                <div v-else class="table-responsive border rounded-3 bg-white">
+                                    <table class="table align-items-center mb-0 text-sm">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th class="text-xxs text-secondary text-uppercase ps-3">Project / Domain</th>
+                                                <th class="text-xxs text-secondary text-uppercase">Real-Time CPU</th>
+                                                <th class="text-xxs text-secondary text-uppercase">Real-Time RAM</th>
+                                                <th class="text-xxs text-secondary text-uppercase">Storage</th>
+                                                <th class="text-xxs text-secondary text-uppercase">Processes</th>
+                                                <th class="text-xxs text-secondary text-uppercase">{{ projectRange.toUpperCase() }} Trend (Avg / Peak)</th>
+                                                <th class="text-xxs text-secondary text-uppercase text-end pe-3">History &amp; Analytics</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-if="filteredProjects.length === 0">
+                                                <td colspan="7" class="text-center py-4 text-secondary text-xs">
+                                                    No projects found matching "{{ projectSearch }}".
+                                                </td>
+                                            </tr>
+                                            <tr v-for="proj in filteredProjects" :key="proj.domain" class="align-middle">
+                                                <!-- Project Domain -->
+                                                <td class="ps-3 py-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge rounded-circle p-1 me-2"
+                                                            :class="proj.status === 'active' ? 'bg-success' : 'bg-secondary'"
+                                                            style="width: 8px; height: 8px;"
+                                                            :title="proj.status === 'active' ? 'Active Workload' : 'Idle'"></span>
+                                                        <div>
+                                                            <h6 class="mb-0 text-xs font-weight-bold text-dark">{{ proj.domain }}</h6>
+                                                            <div class="d-flex align-items-center gap-1 mt-0.5">
+                                                                <span class="badge bg-light text-secondary border text-xxs py-0 px-1">{{ proj.user }}</span>
+                                                                <span class="text-xxs text-muted text-truncate" style="max-width: 180px;" :title="proj.dir">{{ proj.dir }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                <!-- Real-Time CPU -->
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2" style="min-width: 120px;">
+                                                        <div class="progress flex-grow-1" style="height: 6px;">
+                                                            <div class="progress-bar"
+                                                                :class="proj.cpu_percent > 50 ? 'bg-danger' : (proj.cpu_percent > 15 ? 'bg-warning' : 'bg-success')"
+                                                                :style="{ width: Math.min(100, Math.max(proj.cpu_percent, 2)) + '%' }"></div>
+                                                        </div>
+                                                        <span class="text-xs font-weight-bold"
+                                                            :class="proj.cpu_percent > 50 ? 'text-danger' : (proj.cpu_percent > 15 ? 'text-warning' : 'text-dark')">
+                                                            {{ proj.cpu_percent }}%
+                                                        </span>
+                                                    </div>
+                                                </td>
+
+                                                <!-- Real-Time RAM -->
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2" style="min-width: 140px;">
+                                                        <div class="progress flex-grow-1" style="height: 6px;">
+                                                            <div class="progress-bar bg-info"
+                                                                :style="{ width: Math.min(100, Math.max(proj.memory_percent * 5, 2)) + '%' }"></div>
+                                                        </div>
+                                                        <div>
+                                                            <span class="text-xs font-weight-bold text-dark">{{ proj.memory_mb }} MB</span>
+                                                            <span class="text-xxs text-secondary ms-1">({{ proj.memory_percent }}%)</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                <!-- Storage -->
+                                                <td>
+                                                    <span class="badge bg-light text-dark border text-xs font-weight-bold">
+                                                        <i class="material-symbols-rounded text-xs me-1 text-primary">folder</i>
+                                                        {{ proj.disk_formatted }}
+                                                    </span>
+                                                </td>
+
+                                                <!-- Processes -->
+                                                <td>
+                                                    <span class="badge text-xs" :class="proj.process_count > 0 ? 'bg-light text-primary border' : 'bg-light text-secondary border'">
+                                                        {{ proj.process_count }} proc
+                                                    </span>
+                                                </td>
+
+                                                <!-- Range Trend (Avg / Peak) -->
+                                                <td>
+                                                    <div class="text-xs">
+                                                        <div>
+                                                            <span class="text-secondary text-xxs">CPU:</span>
+                                                            <strong class="text-dark ms-1">{{ proj.range_avg_cpu }}%</strong>
+                                                            <span class="text-muted text-xxs ms-1">(peak {{ proj.range_peak_cpu }}%)</span>
+                                                        </div>
+                                                        <div class="mt-0.5">
+                                                            <span class="text-secondary text-xxs">RAM:</span>
+                                                            <strong class="text-dark ms-1">{{ proj.range_avg_mem_mb }} MB</strong>
+                                                            <span class="text-muted text-xxs ms-1">(peak {{ proj.range_peak_mem_mb }} MB)</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                <!-- Actions -->
+                                                <td class="text-end pe-3">
+                                                    <button type="button" class="btn btn-outline-info btn-xs mb-0 d-inline-flex align-items-center"
+                                                        @click="openProjectHistory(proj)">
+                                                        <i class="material-symbols-rounded text-xs me-1">monitoring</i>
+                                                        History
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Single Project History Modal -->
+                <div v-if="showProjectModal" class="modal-backdrop-custom d-flex align-items-center justify-content-center" @click.self="closeProjectModal">
+                    <div class="modal-dialog modal-xl modal-dialog-centered w-100 p-3" style="max-width: 1100px;">
+                        <div class="modal-content shadow-lg border-0 rounded-4 overflow-hidden bg-white">
+                            <!-- Modal Header -->
+                            <div class="modal-header bg-gradient-dark text-white p-3 d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon icon-shape bg-white text-dark rounded-3 p-2 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                        <i class="material-symbols-rounded text-primary">domain</i>
+                                    </div>
+                                    <div>
+                                        <h5 class="modal-title text-white font-weight-bolder mb-0 d-flex align-items-center gap-2">
+                                            {{ selectedProject?.domain }}
+                                            <span class="badge bg-light text-dark text-xxs">{{ selectedProject?.user }}</span>
+                                        </h5>
+                                        <p class="text-xs text-white opacity-8 mb-0">
+                                            Directory: <code>{{ selectedProject?.dir }}</code> &bull; Storage: <strong>{{ selectedProject?.disk_formatted }}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-link text-white text-lg p-0 mb-0" @click="closeProjectModal" aria-label="Close">
+                                    &times;
+                                </button>
+                            </div>
+
+                            <!-- Modal Body -->
+                            <div class="modal-body p-4">
+                                <!-- Range Controls & Summary Banner -->
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pb-3 mb-3 border-bottom">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="text-xs font-weight-bold text-secondary text-uppercase">History Timeframe:</span>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn mb-0"
+                                                :class="projectModalRange === '1h' ? 'btn-primary' : 'btn-outline-primary'"
+                                                @click="changeProjectModalRange('1h')">
+                                                Hourly (1h)
+                                            </button>
+                                            <button type="button" class="btn mb-0"
+                                                :class="projectModalRange === '24h' ? 'btn-primary' : 'btn-outline-primary'"
+                                                @click="changeProjectModalRange('24h')">
+                                                Daily (24h)
+                                            </button>
+                                            <button type="button" class="btn mb-0"
+                                                :class="projectModalRange === '7d' ? 'btn-primary' : 'btn-outline-primary'"
+                                                @click="changeProjectModalRange('7d')">
+                                                Weekly (7d)
+                                            </button>
+                                            <button type="button" class="btn mb-0"
+                                                :class="projectModalRange === '30d' ? 'btn-primary' : 'btn-outline-primary'"
+                                                @click="changeProjectModalRange('30d')">
+                                                Monthly (30d)
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span class="text-xxs text-secondary">
+                                            Points recorded: <strong>{{ projectHistory?.summary?.samples_count || 0 }}</strong>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Loading Spinner for History -->
+                                <div v-if="loadingProjectHistory" class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading history...</span>
+                                    </div>
+                                    <p class="text-secondary text-sm mt-2">Loading timeline points for {{ selectedProject?.domain }}...</p>
+                                </div>
+
+                                <div v-else>
+                                    <!-- Modal KPI Cards -->
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-md-3 col-6">
+                                            <div class="p-3 bg-light rounded-3 border">
+                                                <span class="text-xxs text-uppercase font-weight-bold text-secondary">Average CPU</span>
+                                                <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_cpu || 0 }}%</h4>
+                                                <span class="text-xxs text-danger">Peak: {{ projectHistory?.summary?.peak_cpu || 0 }}%</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-6">
+                                            <div class="p-3 bg-light rounded-3 border">
+                                                <span class="text-xxs text-uppercase font-weight-bold text-secondary">Average RAM</span>
+                                                <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_memory_mb || 0 }} MB</h4>
+                                                <span class="text-xxs text-warning">Peak: {{ projectHistory?.summary?.peak_memory_mb || 0 }} MB</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-6">
+                                            <div class="p-3 bg-light rounded-3 border">
+                                                <span class="text-xxs text-uppercase font-weight-bold text-secondary">Allocated Storage</span>
+                                                <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.disk_formatted || selectedProject?.disk_formatted || '0 MB' }}</h4>
+                                                <span class="text-xxs text-secondary">Directory du</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-6">
+                                            <div class="p-3 bg-light rounded-3 border">
+                                                <span class="text-xxs text-uppercase font-weight-bold text-secondary">Processes (Avg)</span>
+                                                <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_process_count || 0 }}</h4>
+                                                <span class="text-xxs text-success">Live: {{ selectedProject?.process_count || 0 }} active</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dual History Charts -->
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-3">
+                                            <div class="border rounded-3 p-3 bg-white">
+                                                <h6 class="text-xs font-weight-bold mb-2 text-dark d-flex align-items-center">
+                                                    <span class="badge bg-primary me-2">CPU %</span>
+                                                    CPU Usage Timeline
+                                                </h6>
+                                                <div style="height: 220px; position: relative;">
+                                                    <canvas id="chart-project-cpu"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6 mb-3">
+                                            <div class="border rounded-3 p-3 bg-white">
+                                                <h6 class="text-xs font-weight-bold mb-2 text-dark d-flex align-items-center">
+                                                    <span class="badge bg-success me-2">RAM MB</span>
+                                                    RAM Consumption Timeline
+                                                </h6>
+                                                <div style="height: 220px; position: relative;">
+                                                    <canvas id="chart-project-memory"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modal Footer -->
+                            <div class="modal-footer bg-light p-3 border-top d-flex justify-content-between">
+                                <span class="text-xxs text-secondary">
+                                    Tip: Data points are sampled every 5 minutes in background with accurate Linux user attribution.
+                                </span>
+                                <button type="button" class="btn btn-secondary btn-sm mb-0" @click="closeProjectModal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </MainLayout>
@@ -606,6 +1059,30 @@ const topWorkloads = ref([])
 const availableDays = ref([])
 const pointsCount = ref(0)
 
+// Per-project resource states
+const projectRange = ref('24h')
+const projectSearch = ref('')
+const projectSortBy = ref('cpu')
+const projectSortDir = ref('desc')
+const projectsData = ref({
+    range: '24h',
+    total_projects: 0,
+    top_cpu_project: null,
+    top_memory_project: null,
+    top_disk_project: null,
+    projects: []
+})
+const loadingProjects = ref(false)
+
+// Project modal state
+const showProjectModal = ref(false)
+const selectedProject = ref(null)
+const projectModalRange = ref('24h')
+const projectHistory = ref(null)
+const loadingProjectHistory = ref(false)
+
+let projectCpuChart = null
+let projectMemoryChart = null
 let historyCpuChart = null
 let historyMemoryChart = null
 let refreshInterval = null
@@ -636,12 +1113,12 @@ const handleVisibilityChange = () => {
     if (typeof document !== 'undefined' && !document.hidden) {
         loadUsage()
         loadHistory()
+        loadProjectsUsage()
     }
 }
 
 onMounted(async () => {
-    await loadUsage()
-    await loadHistory()
+    await Promise.all([loadUsage(), loadHistory(), loadProjectsUsage()])
     // Auto-refresh real-time metrics every 5 seconds (matched with dashboard)
     refreshInterval = setInterval(loadUsage, 5000)
     if (typeof document !== 'undefined') {
@@ -655,11 +1132,12 @@ onUnmounted(() => {
         document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
     destroyHistoryCharts()
+    destroyProjectCharts()
 })
 
 const refreshAll = async () => {
     loading.value = true
-    await Promise.all([loadUsage(), loadHistory()])
+    await Promise.all([loadUsage(), loadHistory(), loadProjectsUsage()])
     loading.value = false
 }
 
@@ -896,6 +1374,202 @@ const renderHistoryCharts = (points) => {
         })
     }
 }
+
+const filteredProjects = computed(() => {
+    let list = [...(projectsData.value.projects || [])]
+    if (projectSearch.value && projectSearch.value.trim()) {
+        const q = projectSearch.value.toLowerCase().trim()
+        list = list.filter(p => p.domain.toLowerCase().includes(q) || (p.user && p.user.toLowerCase().includes(q)))
+    }
+
+    list.sort((a, b) => {
+        let valA = 0
+        let valB = 0
+        if (projectSortBy.value === 'cpu') {
+            valA = a.cpu_percent || 0
+            valB = b.cpu_percent || 0
+        } else if (projectSortBy.value === 'memory') {
+            valA = a.memory_mb || 0
+            valB = b.memory_mb || 0
+        } else if (projectSortBy.value === 'disk') {
+            valA = a.disk_mb || 0
+            valB = b.disk_mb || 0
+        } else if (projectSortBy.value === 'domain') {
+            return projectSortDir.value === 'asc' ? a.domain.localeCompare(b.domain) : b.domain.localeCompare(a.domain)
+        } else if (projectSortBy.value === 'processes') {
+            valA = a.process_count || 0
+            valB = b.process_count || 0
+        }
+        return projectSortDir.value === 'asc' ? valA - valB : valB - valA
+    })
+    return list
+})
+
+const sortBy = (column) => {
+    if (projectSortBy.value === column) {
+        projectSortDir.value = projectSortDir.value === 'asc' ? 'desc' : 'asc'
+    } else {
+        projectSortBy.value = column
+        projectSortDir.value = 'desc'
+    }
+}
+
+const loadProjectsUsage = async () => {
+    loadingProjects.value = true
+    try {
+        const res = await axios.get('/resources/projects', {
+            params: { range: projectRange.value }
+        })
+        if (res.data.success) {
+            projectsData.value = res.data.data
+        }
+    } catch (e) {
+        console.error('Failed to load project resource usage:', e)
+    } finally {
+        loadingProjects.value = false
+    }
+}
+
+const changeProjectRange = async (range) => {
+    if (projectRange.value === range) return
+    projectRange.value = range
+    await loadProjectsUsage()
+}
+
+const openProjectHistory = async (project) => {
+    selectedProject.value = project
+    projectModalRange.value = projectRange.value
+    showProjectModal.value = true
+    await loadProjectHistory()
+}
+
+const changeProjectModalRange = async (range) => {
+    if (projectModalRange.value === range) return
+    projectModalRange.value = range
+    await loadProjectHistory()
+}
+
+const loadProjectHistory = async () => {
+    if (!selectedProject.value) return
+    loadingProjectHistory.value = true
+    try {
+        const res = await axios.get(`/resources/projects/${selectedProject.value.domain}/history`, {
+            params: { range: projectModalRange.value }
+        })
+        if (res.data.success) {
+            projectHistory.value = res.data.data
+            await nextTick()
+            renderProjectCharts(res.data.data?.points || [])
+        }
+    } catch (e) {
+        console.error('Failed to load single project history:', e)
+    } finally {
+        loadingProjectHistory.value = false
+    }
+}
+
+const closeProjectModal = () => {
+    showProjectModal.value = false
+    selectedProject.value = null
+    projectHistory.value = null
+    destroyProjectCharts()
+}
+
+const destroyProjectCharts = () => {
+    if (projectCpuChart) {
+        projectCpuChart.destroy()
+        projectCpuChart = null
+    }
+    if (projectMemoryChart) {
+        projectMemoryChart.destroy()
+        projectMemoryChart = null
+    }
+}
+
+const renderProjectCharts = (points) => {
+    destroyProjectCharts()
+    if (!points || points.length === 0) return
+
+    const labels = points.map(p => p.time)
+    const cpuData = points.map(p => p.cpu)
+    const memData = points.map(p => p.memory_mb)
+
+    const ctxCpu = document.getElementById('chart-project-cpu')
+    if (ctxCpu) {
+        projectCpuChart = new Chart(ctxCpu, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'CPU Usage (%)',
+                    data: cpuData,
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: points.length > 60 ? 0 : 3,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => points[items[0].dataIndex]?.full_time || items[0].label,
+                            label: (item) => `CPU: ${item.raw}%`
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 10 } } },
+                    y: { min: 0, title: { display: true, text: 'CPU %' }, ticks: { callback: (v) => v + '%' } }
+                }
+            }
+        })
+    }
+
+    const ctxMem = document.getElementById('chart-project-memory')
+    if (ctxMem) {
+        projectMemoryChart = new Chart(ctxMem, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'RAM Usage (MB)',
+                    data: memData,
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: points.length > 60 ? 0 : 3,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => points[items[0].dataIndex]?.full_time || items[0].label,
+                            label: (item) => `RAM: ${item.raw} MB`
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 10 } } },
+                    y: { min: 0, title: { display: true, text: 'RAM MB' }, ticks: { callback: (v) => v + ' MB' } }
+                }
+            }
+        })
+    }
+}
 </script>
 
 <style scoped>
@@ -908,8 +1582,20 @@ const renderHistoryCharts = (points) => {
     to { transform: rotate(360deg); }
 }
 
+.modal-backdrop-custom {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 1055;
+    overflow-y: auto;
+}
+
 @media print {
-    #sidenav-main, .navbar, .btn, .d-print-none {
+    #sidenav-main, .navbar, .btn, .d-print-none, #project-usage-container {
         display: none !important;
     }
     #aws-report-container {
