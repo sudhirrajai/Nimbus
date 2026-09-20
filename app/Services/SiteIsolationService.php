@@ -128,10 +128,16 @@ CONF;
         self::executeSudo("find {$safePath} -type d -exec chmod 750 {} \\;");
         self::executeSudo("find {$safePath} -type f -exec chmod 640 {} \\;");
 
-        // Lock down .env if present
+        // Grant Nginx (www-data) read and traverse access via ACL
+        self::executeSudo("setfacl -R -m u:www-data:rx {$safePath}");
+        self::executeSudo("setfacl -R -d -m u:www-data:rx {$safePath}");
+
+        // Strictly lock down .env if present (strip ACLs and lock to 600)
         $envPath = rtrim($basePath, '/') . '/.env';
         if (file_exists($envPath)) {
-            self::executeSudo("chmod 600 " . escapeshellarg($envPath));
+            $safeEnv = escapeshellarg($envPath);
+            self::executeSudo("setfacl -b {$safeEnv}");
+            self::executeSudo("chmod 600 {$safeEnv}");
         }
 
         // Keep storage writable if Laravel

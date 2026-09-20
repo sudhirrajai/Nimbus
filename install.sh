@@ -473,6 +473,13 @@ fi
 # Generate key and run migrations
 php artisan key:generate
 php artisan migrate --force
+
+# Seed default Asia/Kolkata timezone in panel settings
+php artisan tinker --execute="App\Models\Setting::updateOrCreate(['key' => 'timezone'], ['value' => 'Asia/Kolkata']);" >/dev/null 2>&1 || true
+
+# Initialize resource history baseline
+php artisan nimbus:collect-metrics >/dev/null 2>&1 || true
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
@@ -645,19 +652,16 @@ chown ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}/storage/logs/laravel.log
 chmod +x ${NIMBUS_DIR}/artisan
 [ -d "${NIMBUS_DIR}/node_modules/.bin" ] && chmod -R +x ${NIMBUS_DIR}/node_modules/.bin
 
-# Setup /var/www/ directory for hosting websites
+# Setup /var/www/ directory for hosting websites with multi-tenant ACL support
 mkdir -p /var/www
-chown -R ${NIMBUS_USER}:${NIMBUS_USER} /var/www
-chmod 2775 /var/www
+chown ${NIMBUS_USER}:${NIMBUS_USER} /var/www
+chmod 755 /var/www
 
-if [ "$SKIP_EXISTING" = false ]; then
-    # Only recursively change permissions on fresh installs to avoid breaking existing projects
-    find /var/www -mindepth 1 -type d -exec chmod 2775 {} \; 2>/dev/null || true
-    find /var/www -mindepth 1 -type f -exec chmod 664 {} \; 2>/dev/null || true
-fi
-
+# Configure default ACLs so Nginx (www-data) always has read & execute traverse access
+setfacl -m u:${NIMBUS_USER}:rwx /var/www
+setfacl -d -m u:${NIMBUS_USER}:rx /var/www
 setfacl -m g:${NIMBUS_USER}:rwx /var/www
-setfacl -d -m g:${NIMBUS_USER}:rwx /var/www
+setfacl -d -m g:${NIMBUS_USER}:rx /var/www
 
 if id -u "${PANEL_SYSTEM_USER}" >/dev/null 2>&1 && [ "${PANEL_SYSTEM_USER}" != "${NIMBUS_USER}" ] && [ "${PANEL_SYSTEM_USER}" != "root" ]; then
     usermod -aG ${NIMBUS_USER} "${PANEL_SYSTEM_USER}"
@@ -756,6 +760,8 @@ cat << EOF > /etc/cron.d/nimbus
 # Nimbus Control Panel - System Cron
 # Runs the Laravel scheduler every minute
 * * * * * root cd ${NIMBUS_DIR} && php artisan schedule:run >> /dev/null 2>&1
+# Resource Usage History Engine - collects CPU/RAM/Disk metrics every 5 minutes (1-month history)
+*/5 * * * * root cd ${NIMBUS_DIR} && php artisan nimbus:collect-metrics >> /dev/null 2>&1
 EOF
 chmod 644 /etc/cron.d/nimbus
 systemctl restart cron || systemctl restart crond || true
