@@ -1,7 +1,7 @@
 <template>
-  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2 d-flex flex-column"
-    id="sidenav-main" style="overflow: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; z-index: 999;">
-    <div class="sidenav-header flex-shrink-0">
+  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
+    id="sidenav-main" style="display: block !important; overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; width: 14rem !important; max-width: 14rem !important; z-index: 999;">
+    <div class="sidenav-header" style="height: 72px; width: 100%;">
       <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
         id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
 
@@ -14,9 +14,9 @@
       </Link>
     </div>
 
-    <hr class="horizontal dark mt-0 mb-2 flex-shrink-0" />
+    <hr class="horizontal dark mt-0 mb-2" />
 
-    <div class="collapse navbar-collapse w-100 flex-grow-1" id="sidenav-collapse-main" style="overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; max-height: none !important;">
+    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" style="display: block !important; height: calc(100% - 155px) !important; max-height: calc(100% - 155px) !important; overflow-y: auto !important; overflow-x: hidden !important; width: 100% !important;">
       <ul class="navbar-nav">
 
         <li class="nav-item">
@@ -250,7 +250,7 @@
       </ul>
     </div>
 
-    <div class="sidenav-footer flex-shrink-0 mt-auto w-100 py-2 bg-white" style="border-top: 1px solid rgba(0, 0, 0, 0.06);">
+    <div class="sidenav-footer position-absolute w-100 bottom-0 bg-white" style="z-index: 10; border-top: 1px solid rgba(0, 0, 0, 0.06); padding-top: 8px; padding-bottom: 8px;">
       <div class="mx-3">
         <a class="btn btn-outline-dark w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank">
           <i class="material-symbols-rounded text-sm">menu_book</i>
