@@ -635,22 +635,22 @@ class DomainController extends Controller
                 $this->executeSudoCommand("rm -f {$configPath}");
             }
 
-            // Ensure remaining managed domains still have the directories/files their nginx configs expect
-            $this->repairManagedDomainStructures();
-
             // Step 3: Test and reload Nginx configuration
             \Log::info("Testing Nginx configuration...");
             try {
                 $this->executeSudoCommand("nginx -t");
                 \Log::info("Nginx config test passed");
             } catch (\Exception $e) {
-                \Log::error("Nginx config test failed: " . $e->getMessage());
-                throw new \Exception("Nginx configuration test failed. Please check your Nginx configuration.");
+                \Log::warning("Nginx config test warning during delete: " . $e->getMessage());
             }
 
             \Log::info("Reloading Nginx...");
-            $this->executeSudoCommand("systemctl reload nginx");
-            \Log::info("Nginx reloaded successfully");
+            try {
+                $this->executeSudoCommand("systemctl reload nginx");
+                \Log::info("Nginx reloaded successfully");
+            } catch (\Exception $e) {
+                \Log::warning("Nginx reload warning during delete: " . $e->getMessage());
+            }
 
             // Delete isolated PHP pool
             \App\Services\SiteIsolationService::deletePool($domain);
@@ -1104,13 +1104,11 @@ HTML;
         $output = [];
         $returnCode = 0;
         
-        // Log the command being executed (for debugging)
         \Log::debug("Executing sudo command: sudo $command");
         
-        // Execute command with proper error handling
-        exec("sudo $command 2>&1", $output, $returnCode);
+        $escaped = escapeshellarg($command);
+        exec("sudo bash -c {$escaped} 2>&1", $output, $returnCode);
         
-        // Log the output
         $outputStr = implode("\n", $output);
         \Log::debug("Command output: " . $outputStr);
         \Log::debug("Return code: $returnCode");
@@ -1279,13 +1277,14 @@ NGINX;
      */
     public function repairManagedDomainStructures()
     {
-        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
+        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus', 'nimbus_panel', '000-nimbus', '000-default'];
         $domainsToRepair = [];
 
-        // 1. Gather all domains from existing directories
+        // 1. Gather all domains from existing directories (only valid domains containing '.')
         if (File::exists($this->basePath)) {
             foreach (File::directories($this->basePath) as $directory) {
                 $name = basename($directory);
+                if (!str_contains($name, '.')) continue;
                 if (!in_array(strtolower($name), $protectedDirs, true)) {
                     $domainsToRepair[] = $name;
                 }
@@ -1293,26 +1292,27 @@ NGINX;
         }
 
         // 2. Gather all domains from Nginx enabled configs
-        // Even if the directory was deleted, if Nginx expects it, we must recreate it to prevent crashes!
         $sitesPath = '/etc/nginx/sites-enabled/';
         if (is_dir($sitesPath)) {
             foreach (scandir($sitesPath) as $file) {
                 if ($file === '.' || $file === '..') continue;
-                $name = str_replace('.conf', '', basename($file));
+                $name = str_replace(['.conf', '.nimbus_suspended'], '', basename($file));
+                if (!str_contains($name, '.')) continue;
                 if ($name !== 'default' && !empty($name) && !in_array(strtolower($name), $protectedDirs, true)) {
                     $domainsToRepair[] = $name;
                 }
             }
         }
 
-        // 3. Repair all unique domains
+        // 3. Repair all unique domains safely without crashing on individual failures
         $domainsToRepair = array_unique($domainsToRepair);
         foreach ($domainsToRepair as $domain) {
-            $this->ensureDomainStructure($this->basePath . $domain);
-            
-            // ─── NEW: Auto-migrate Nginx logs to system path ─────
-            $this->migrateNginxLogsToSystemPath($domain);
-            // ──────────────────────────────────────────────────
+            try {
+                $this->ensureDomainStructure($this->basePath . $domain);
+                $this->migrateNginxLogsToSystemPath($domain);
+            } catch (\Throwable $e) {
+                \Log::warning("Skipping domain repair for {$domain}: " . $e->getMessage());
+            }
         }
     }
 

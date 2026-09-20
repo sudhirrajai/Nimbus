@@ -183,13 +183,14 @@ CONF;
     }
 
     /**
-     * Helper to execute sudo command.
+     * Helper to execute sudo command safely with compound command support.
      */
     private static function executeSudo(string $command): void
     {
-        exec("sudo {$command} 2>&1", $output, $code);
+        $escaped = escapeshellarg($command);
+        exec("sudo bash -c {$escaped} 2>&1", $output, $code);
         if ($code !== 0) {
-            Log::warning("SiteIsolationService command failed ({$code}): sudo {$command} -> " . implode("\n", $output));
+            Log::warning("SiteIsolationService command failed ({$code}): sudo bash -c {$escaped} -> " . implode("\n", $output));
         }
     }
 }
