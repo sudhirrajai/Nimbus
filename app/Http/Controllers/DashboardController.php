@@ -25,11 +25,11 @@ class DashboardController extends Controller
 
     private function getServerStats()
     {
-        $cpuData = $this->getCpuUsage();
-        $memoryData = $this->getMemoryUsage();
-        $diskData = $this->getDiskUsage();
-        $loadData = $this->getLoadAverage();
-        $uptimeData = $this->getUptime();
+        $cpuData = \App\Services\ServerMetricsService::getCpuUsage();
+        $memoryData = \App\Services\ServerMetricsService::getMemoryUsage();
+        $diskData = \App\Services\ServerMetricsService::getDiskUsage();
+        $loadData = \App\Services\ServerMetricsService::getLoadAverage();
+        $uptimeData = \App\Services\ServerMetricsService::getUptime();
         $processCount = $this->getProcessCount();
 
         $postfixInstalled = file_exists('/etc/postfix/main.cf');

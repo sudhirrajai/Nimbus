@@ -28,19 +28,21 @@ class CollectServerMetrics extends Command
     public function handle()
     {
         try {
-            $cpuPercent = $this->getCpuUsage();
-            $memData = $this->getMemoryData();
-            $loadData = $this->getLoadAverage();
-            $diskPercent = $this->getDiskPercentage();
-            $topProcesses = $this->getTopProcesses();
+            $cpuInfo = \App\Services\ServerMetricsService::getCpuUsage();
+            $cpuPercent = (float) $cpuInfo['usage'];
+            $memData = \App\Services\ServerMetricsService::getMemoryUsage();
+            $loadData = \App\Services\ServerMetricsService::getLoadAverage();
+            $disks = \App\Services\ServerMetricsService::getDiskUsage();
+            $diskPercent = (float) ($disks[0]['percentage'] ?? 0);
+            $topProcesses = \App\Services\ServerMetricsService::getTopProcesses(5);
 
-            $isAlert = ($cpuPercent >= 80.0 || $memData['percent'] >= 85.0 || $loadData['1min'] >= 2.5);
+            $isAlert = ($cpuPercent >= 80.0 || $memData['percentage'] >= 85.0 || $loadData['1min'] >= 2.5);
 
             $metric = ServerMetric::create([
                 'cpu_percent' => $cpuPercent,
                 'memory_used_mb' => $memData['used_mb'],
                 'memory_total_mb' => $memData['total_mb'],
-                'memory_percent' => $memData['percent'],
+                'memory_percent' => $memData['percentage'],
                 'swap_used_mb' => $memData['swap_used_mb'],
                 'disk_percent' => $diskPercent,
                 'load_1min' => $loadData['1min'],
