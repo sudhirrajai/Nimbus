@@ -92,6 +92,7 @@ class HandleInertiaRequests extends Middleware
             'license_warning' => \App\Support\LicenseGuard::shouldShowWarning()
                 ? \App\Support\LicenseGuard::warningMessage()
                 : null,
+            'license_modules' => \App\Support\LicenseGuard::allowedModules(),
         ];
     }
 }

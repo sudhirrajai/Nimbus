@@ -17,6 +17,10 @@ use App\Http\Controllers\CronController;
 use App\Http\Controllers\GitDeploymentController;
 use App\Http\Controllers\ActivationController;
 use App\Http\Controllers\WebmailController;
+use App\Http\Controllers\SsoController;
+
+// 1-Click Single Sign-On (SSO) from VmCoreCentral
+Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
