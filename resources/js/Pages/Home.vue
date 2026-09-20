@@ -438,7 +438,24 @@ const props = defineProps({
   }
 })
 
-const liveStats = ref({ ...props.serverStats })
+const normalizeStats = (raw) => {
+  if (!raw) return raw
+  const data = { ...raw }
+  if (Array.isArray(data.disk) && data.disk.length > 0) {
+    const root = data.disk.find(d => d.mount === '/') || data.disk[0]
+    data.disk = {
+      total: root.total || '0 B',
+      used: root.used || '0 B',
+      free: root.free || '0 B',
+      usage_percent: root.percentage ?? root.usage_percent ?? 0
+    }
+  } else if (!data.disk || typeof data.disk !== 'object') {
+    data.disk = { total: '0 B', used: '0 B', free: '0 B', usage_percent: 0 }
+  }
+  return data
+}
+
+const liveStats = ref(normalizeStats(props.serverStats))
 const isRefreshing = ref(false)
 const chartsReady = ref(false)
 
@@ -692,7 +709,7 @@ const refreshStats = async () => {
     const response = await axios.get('/dashboard/stats')
     console.log('Stats received:', response.data)
 
-    liveStats.value = response.data
+    liveStats.value = normalizeStats(response.data)
 
     timeLabels.value.shift()
     timeLabels.value.push(formatTime(new Date()))
@@ -721,18 +738,21 @@ const refreshStats = async () => {
 
 
 const getProgressClass = (percentage) => {
+  if (percentage === undefined || percentage === null || isNaN(percentage)) return 'bg-gradient-secondary'
   if (percentage < 60) return 'bg-gradient-success'
   if (percentage < 80) return 'bg-gradient-warning'
   return 'bg-gradient-danger'
 }
 
 const getStatusBadge = (percentage) => {
+  if (percentage === undefined || percentage === null || isNaN(percentage)) return 'bg-gradient-secondary'
   if (percentage < 60) return 'bg-gradient-success'
   if (percentage < 80) return 'bg-gradient-warning'
   return 'bg-gradient-danger'
 }
 
 const getStatusText = (percentage) => {
+  if (percentage === undefined || percentage === null || isNaN(percentage)) return 'Normal'
   if (percentage < 60) return 'Good'
   if (percentage < 80) return 'Warning'
   return 'Critical'
