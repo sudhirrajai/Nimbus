@@ -108,7 +108,7 @@ class BackupStorageService
             }
 
             if ($driver === 'google_drive') {
-                $fileId = $this->uploadToGoogleDrive($localFilePath, $fileName, $creds);
+                $fileId = $this->uploadToGoogleDrive($localFilePath, $fileName, $creds, $targetFolder);
                 return [
                     'success' => true,
                     'remote_path' => $fileId,
@@ -371,6 +371,9 @@ class BackupStorageService
 
         // If folder ID specified, verify folder exists and is accessible
         $folderId = trim($creds['folder_id'] ?? '');
+        if (preg_match('#/folders/([a-zA-Z0-9_\-]+)#', $folderId, $m)) {
+            $folderId = $m[1];
+        }
         if (!empty($folderId)) {
             $folderResponse = Http::withToken($accessToken)
                 ->timeout(15)
@@ -393,12 +396,70 @@ class BackupStorageService
     }
 
     /**
+     * Get or create a subfolder in Google Drive (e.g. for a specific project/domain)
+     */
+    protected function getOrCreateDriveFolder(string $accessToken, string $folderName, ?string $parentId = null): string
+    {
+        try {
+            $escapedName = str_replace("'", "\\'", $folderName);
+            $query = "mimeType = 'application/vnd.google-apps.folder' and name = '{$escapedName}' and trashed = false";
+            if (!empty($parentId)) {
+                $query .= " and '{$parentId}' in parents";
+            }
+
+            $searchResponse = Http::withToken($accessToken)
+                ->timeout(15)
+                ->get("https://www.googleapis.com/drive/v3/files", [
+                    'q' => $query,
+                    'fields' => 'files(id, name)',
+                    'pageSize' => 1
+                ]);
+
+            if ($searchResponse->successful()) {
+                $files = $searchResponse->json('files', []);
+                if (!empty($files[0]['id'])) {
+                    return $files[0]['id'];
+                }
+            }
+
+            // Folder does not exist yet -> create it
+            $payload = [
+                'name' => $folderName,
+                'mimeType' => 'application/vnd.google-apps.folder'
+            ];
+            if (!empty($parentId)) {
+                $payload['parents'] = [$parentId];
+            }
+
+            $createResponse = Http::withToken($accessToken)
+                ->timeout(15)
+                ->post('https://www.googleapis.com/drive/v3/files', $payload);
+
+            if ($createResponse->successful() && !empty($createResponse->json('id'))) {
+                return $createResponse->json('id');
+            }
+        } catch (\Throwable $e) {
+            Log::warning("Could not create/find Google Drive subfolder '{$folderName}': " . $e->getMessage());
+        }
+
+        return $parentId ?: '';
+    }
+
+    /**
      * Upload a file to Google Drive using multipart/resumable upload
      */
-    protected function uploadToGoogleDrive(string $localFilePath, string $fileName, array $creds): string
+    protected function uploadToGoogleDrive(string $localFilePath, string $fileName, array $creds, ?string $targetFolder = null): string
     {
         $accessToken = $this->getGoogleDriveAccessToken($creds);
         $folderId = trim($creds['folder_id'] ?? '');
+        if (preg_match('#/folders/([a-zA-Z0-9_\-]+)#', $folderId, $m)) {
+            $folderId = $m[1];
+        }
+
+        // Auto-create/resolve project subfolder inside the designated Drive folder
+        if (!empty($targetFolder)) {
+            $folderId = $this->getOrCreateDriveFolder($accessToken, $targetFolder, !empty($folderId) ? $folderId : null);
+        }
 
         $metadata = [
             'name' => $fileName,
