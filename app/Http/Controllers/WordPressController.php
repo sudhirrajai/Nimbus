@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use App\Services\SiteIsolationService;
 
 class WordPressController extends Controller
 {
@@ -43,8 +44,8 @@ class WordPressController extends Controller
                 $versionFile = $checkPath . '/wp-includes/version.php';
                 $wpVersion = 'Unknown';
                 if (file_exists($versionFile)) {
-                    $versionContent = file_get_contents($versionFile);
-                    if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $versionContent, $m)) {
+                    $versionContent = SiteIsolationService::readFile($versionFile);
+                    if ($versionContent && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $versionContent, $m)) {
                         $wpVersion = $m[1];
                     }
                 }
@@ -230,8 +231,8 @@ class WordPressController extends Controller
             $wpVersion = 'Unknown';
             $versionFile = $domainPath . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
-                $content = file_get_contents($versionFile);
-                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                $content = SiteIsolationService::readFile($versionFile);
+                if ($content && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
                     $wpVersion = $m[1];
                 }
             }
@@ -332,8 +333,8 @@ class WordPressController extends Controller
             // Re-check version
             $versionFile = $site->path . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
-                $content = file_get_contents($versionFile);
-                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                $content = SiteIsolationService::readFile($versionFile);
+                if ($content && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
                     $site->update(['wp_version' => $m[1], 'last_checked_at' => now()]);
                 }
             }
@@ -416,7 +417,8 @@ class WordPressController extends Controller
 
         if (!file_exists($path)) return $config;
 
-        $content = file_get_contents($path);
+        $content = SiteIsolationService::readFile($path);
+        if (!$content) return $config;
 
         if (preg_match("/define\s*\(\s*['\"]DB_NAME['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/", $content, $m)) {
             $config['db_name'] = $m[1];
@@ -602,8 +604,8 @@ PHP;
             // Re-check version in case it changed/was upgraded
             $versionFile = $site->path . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
-                $content = file_get_contents($versionFile);
-                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                $content = SiteIsolationService::readFile($versionFile);
+                if ($content && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
                     $site->update(['wp_version' => $m[1], 'last_checked_at' => now()]);
                 }
             }

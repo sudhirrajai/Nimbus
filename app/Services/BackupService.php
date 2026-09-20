@@ -822,7 +822,7 @@ class BackupService
         // 3. Scan .env or wp-config if available
         $envPath = "/var/www/{$domain}/.env";
         if (file_exists($envPath)) {
-            $content = @file_get_contents($envPath);
+            $content = SiteIsolationService::readFile($envPath);
             if ($content) {
                 if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
                     return trim($matches[1], "\"' \r\n");
@@ -845,7 +845,7 @@ class BackupService
 
         $wpConfig = "/var/www/{$domain}/wp-config.php";
         if (file_exists($wpConfig)) {
-            $content = @file_get_contents($wpConfig);
+            $content = SiteIsolationService::readFile($wpConfig);
             if ($content && preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
                 return trim($matches[1]);
             }

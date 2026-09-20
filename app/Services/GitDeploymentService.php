@@ -545,9 +545,9 @@ class GitDeploymentService
         try {
             $envContent = '';
             if (file_exists($envFile)) {
-                $envContent = file_get_contents($envFile);
+                $envContent = SiteIsolationService::readFile($envFile) ?? '';
             } elseif (file_exists($domainPath . '/.env.example')) {
-                $envContent = file_get_contents($domainPath . '/.env.example');
+                $envContent = SiteIsolationService::readFile($domainPath . '/.env.example') ?? '';
             }
 
             foreach ($envVars as $key => $value) {

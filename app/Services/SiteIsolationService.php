@@ -183,6 +183,32 @@ CONF;
     }
 
     /**
+     * Safely read the contents of a file (such as .env or wp-config.php)
+     * even if owned by an isolated site user with 600 permissions.
+     */
+    public static function readFile(string $path): ?string
+    {
+        if (!file_exists($path)) {
+            return null;
+        }
+
+        if (is_readable($path)) {
+            $content = @file_get_contents($path);
+            if ($content !== false) {
+                return $content;
+            }
+        }
+
+        $escaped = escapeshellarg($path);
+        $output = @shell_exec("sudo cat {$escaped} 2>/dev/null");
+        if ($output !== null && $output !== false && strlen($output) > 0) {
+            return $output;
+        }
+
+        return null;
+    }
+
+    /**
      * Helper to execute sudo command safely with compound command support.
      */
     private static function executeSudo(string $command): void

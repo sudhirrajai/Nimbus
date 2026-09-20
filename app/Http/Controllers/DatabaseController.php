@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use App\Services\SiteIsolationService;
 
 class DatabaseController extends Controller
 {
@@ -1391,8 +1392,8 @@ PHP;
                     // Check .env file
                     $envPath = $checkPath . '/.env';
                     if (file_exists($envPath)) {
-                        $content = file_get_contents($envPath);
-                        if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                        $content = SiteIsolationService::readFile($envPath);
+                        if ($content && preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
                             $db = trim($matches[1], "\"' \r\n");
                             if (!empty($db)) {
                                 $associations[strtolower($db)][] = [
@@ -1404,7 +1405,7 @@ PHP;
 
                         // Support DATABASE_URL / DB_URL / JAWSDB_URL (Node.js, Prisma, TypeORM, Rails, Django, etc.)
                         // Example: mysql://user:pass@127.0.0.1:3306/maharaj
-                        if (preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
+                        if ($content && preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
                             $rawDbUrl = trim($urlMatches[1], "\"' \r\n");
                             $parsedPath = parse_url($rawDbUrl, PHP_URL_PATH);
                             if ($parsedPath) {
@@ -1426,8 +1427,8 @@ PHP;
                     // Check wp-config.php file
                     $wpPath = $checkPath . '/wp-config.php';
                     if (file_exists($wpPath)) {
-                        $content = file_get_contents($wpPath);
-                        if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                        $content = SiteIsolationService::readFile($wpPath);
+                        if ($content && preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
                             $db = trim($matches[1]);
                             if (!empty($db)) {
                                 $associations[strtolower($db)][] = [
@@ -1451,7 +1452,8 @@ PHP;
 
                     foreach ($corePhpFiles as $phpFile) {
                         if (file_exists($phpFile)) {
-                            $content = file_get_contents($phpFile);
+                            $content = SiteIsolationService::readFile($phpFile);
+                            if (!$content) continue;
                             $foundDb = null;
                             if (preg_match('/define\(\s*[\'"](?:DB_NAME|DB_DATABASE|DB_DB|DATABASE_NAME)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $content, $matches)) {
                                 $foundDb = trim($matches[1]);
