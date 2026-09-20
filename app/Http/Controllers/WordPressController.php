@@ -219,10 +219,12 @@ class WordPressController extends Controller
             $url = 'http://' . $domain;
             $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core install --url=" . escapeshellarg($url) . " --title=" . escapeshellarg($request->site_title) . " --admin_user=" . escapeshellarg($request->admin_user) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($request->admin_email) . " --allow-root 2>&1", $output);
 
-            // 5. Set permissions
-            $this->execCmd("sudo chown -R www-data:www-data " . escapeshellarg($domainPath), $output);
-            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type d -exec chmod 755 {} \\;", $output);
-            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type f -exec chmod 644 {} \\;", $output);
+            // 5. Set permissions with isolated site user
+            $siteUser = \App\Services\SiteIsolationService::siteUser($domain);
+            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath), $output);
+            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type d -exec chmod 750 {} \\;", $output);
+            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type f -exec chmod 640 {} \\;", $output);
+            $this->execCmd("sudo chmod 600 " . escapeshellarg($domainPath . '/wp-config.php') . " 2>/dev/null || true", $output);
 
             // Check WP version
             $wpVersion = 'Unknown';
@@ -591,9 +593,11 @@ PHP;
             $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core download --force --skip-content --allow-root 2>&1", $output);
 
             // Reset permissions to ensure everything is correct
-            $this->execCmd("sudo chown -R www-data:www-data " . escapeshellarg($site->path), $output);
-            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type d -exec chmod 755 {} \\;", $output);
-            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type f -exec chmod 644 {} \\;", $output);
+            $siteUser = \App\Services\SiteIsolationService::siteUser(basename($site->path));
+            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($site->path), $output);
+            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type d -exec chmod 750 {} \\;", $output);
+            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type f -exec chmod 640 {} \\;", $output);
+            $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
             // Re-check version in case it changed/was upgraded
             $versionFile = $site->path . '/wp-includes/version.php';

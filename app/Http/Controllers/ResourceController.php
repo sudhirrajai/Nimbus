@@ -41,6 +41,155 @@ class ResourceController extends Controller
     }
 
     /**
+     * Get historical resource usage (24h, 7d, 30d) with peak analysis
+     */
+    public function getHistory(Request $request)
+    {
+        try {
+            $range = $request->query('range', '24h');
+
+            $startTime = match ($range) {
+                '7d' => now()->subDays(7),
+                '30d' => now()->subDays(30),
+                default => now()->subHours(24),
+            };
+
+            $metrics = \App\Models\ServerMetric::where('created_at', '>=', $startTime)
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            if ($metrics->isEmpty()) {
+                // If table is newly created, generate one baseline snapshot now
+                \Illuminate\Support\Facades\Artisan::call('nimbus:collect-metrics');
+                $metrics = \App\Models\ServerMetric::where('created_at', '>=', $startTime)
+                    ->orderBy('created_at', 'asc')
+                    ->get();
+            }
+
+            // Downsample / group points based on range to optimize frontend chart rendering
+            $points = [];
+            $groupMinutes = match ($range) {
+                '7d' => 60,   // 1-hour slots for 7 days = ~168 points
+                '30d' => 240, // 4-hour slots for 30 days = ~180 points
+                default => 5, // 5-minute slots for 24h = ~288 points
+            };
+
+            if ($groupMinutes === 5) {
+                foreach ($metrics as $m) {
+                    $points[] = [
+                        'time' => $m->created_at->format('H:i'),
+                        'full_time' => $m->created_at->format('M d, H:i'),
+                        'timestamp' => $m->created_at->timestamp,
+                        'cpu' => $m->cpu_percent,
+                        'memory' => $m->memory_percent,
+                        'memory_used_mb' => $m->memory_used_mb,
+                        'memory_total_mb' => $m->memory_total_mb,
+                        'load' => $m->load_1min,
+                        'disk' => $m->disk_percent,
+                    ];
+                }
+            } else {
+                // Group by bucket
+                $buckets = [];
+                foreach ($metrics as $m) {
+                    $bucketKey = floor($m->created_at->timestamp / ($groupMinutes * 60));
+                    $buckets[$bucketKey][] = $m;
+                }
+
+                foreach ($buckets as $bKey => $bMetrics) {
+                    $count = count($bMetrics);
+                    $cpuAvg = round(array_sum(array_column($bMetrics, 'cpu_percent')) / $count, 1);
+                    $memAvg = round(array_sum(array_column($bMetrics, 'memory_percent')) / $count, 1);
+                    $loadAvg = round(array_sum(array_column($bMetrics, 'load_1min')) / $count, 2);
+                    $diskAvg = round(array_sum(array_column($bMetrics, 'disk_percent')) / $count, 1);
+                    $usedMb = round(array_sum(array_column($bMetrics, 'memory_used_mb')) / $count, 0);
+                    $totalMb = $bMetrics[0]->memory_total_mb;
+
+                    $firstTime = $bMetrics[0]->created_at;
+                    $points[] = [
+                        'time' => $firstTime->format('M d, H:i'),
+                        'full_time' => $firstTime->format('M d, Y H:i'),
+                        'timestamp' => $firstTime->timestamp,
+                        'cpu' => $cpuAvg,
+                        'memory' => $memAvg,
+                        'memory_used_mb' => $usedMb,
+                        'memory_total_mb' => $totalMb,
+                        'load' => $loadAvg,
+                        'disk' => $diskAvg,
+                    ];
+                }
+            }
+
+            // Calculate peak values and identify responsible process
+            $peakCpuMetric = $metrics->sortByDesc('cpu_percent')->first();
+            $peakMemMetric = $metrics->sortByDesc('memory_percent')->first();
+
+            $peakCpu = null;
+            if ($peakCpuMetric) {
+                $topProc = !empty($peakCpuMetric->top_processes[0]) ? $peakCpuMetric->top_processes[0] : null;
+                $peakCpu = [
+                    'value' => $peakCpuMetric->cpu_percent,
+                    'time' => $peakCpuMetric->created_at->format('M d, H:i'),
+                    'full_time' => $peakCpuMetric->created_at->format('M d, Y H:i:s'),
+                    'process' => $topProc ? ($topProc['command'] ?? $topProc['user'] ?? 'system') : 'N/A',
+                    'user' => $topProc['user'] ?? 'N/A',
+                ];
+            }
+
+            $peakMem = null;
+            if ($peakMemMetric) {
+                $topProc = !empty($peakMemMetric->top_processes[0]) ? $peakMemMetric->top_processes[0] : null;
+                $peakMem = [
+                    'value' => $peakMemMetric->memory_percent,
+                    'used_mb' => $peakMemMetric->memory_used_mb,
+                    'time' => $peakMemMetric->created_at->format('M d, H:i'),
+                    'full_time' => $peakMemMetric->created_at->format('M d, Y H:i:s'),
+                    'process' => $topProc ? ($topProc['command'] ?? $topProc['user'] ?? 'system') : 'N/A',
+                    'user' => $topProc['user'] ?? 'N/A',
+                ];
+            }
+
+            // Find high-usage incidents (CPU > 80% or RAM > 85%)
+            $incidents = [];
+            $incidentRows = $metrics->where('is_alert_level', true)->sortByDesc('created_at')->take(10);
+            foreach ($incidentRows as $row) {
+                $topProc = !empty($row->top_processes[0]) ? $row->top_processes[0] : null;
+                $incidents[] = [
+                    'time' => $row->created_at->format('M d, Y H:i'),
+                    'cpu' => $row->cpu_percent,
+                    'memory' => $row->memory_percent,
+                    'load' => $row->load_1min,
+                    'process' => $topProc ? ($topProc['command'] ?? 'Unknown') : 'System',
+                    'user' => $topProc['user'] ?? 'Unknown',
+                ];
+            }
+
+            // Summary stats
+            $avgCpu = $metrics->count() > 0 ? round($metrics->avg('cpu_percent'), 1) : 0;
+            $avgMem = $metrics->count() > 0 ? round($metrics->avg('memory_percent'), 1) : 0;
+            $avgLoad = $metrics->count() > 0 ? round($metrics->avg('load_1min'), 2) : 0;
+
+            return response()->json([
+                'success' => true,
+                'range' => $range,
+                'points_count' => count($points),
+                'summary' => [
+                    'avg_cpu' => $avgCpu,
+                    'avg_memory' => $avgMem,
+                    'avg_load' => $avgLoad,
+                    'peak_cpu' => $peakCpu,
+                    'peak_memory' => $peakMem,
+                    'total_incidents' => $metrics->where('is_alert_level', true)->count(),
+                ],
+                'points' => $points,
+                'incidents' => $incidents,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get CPU usage percentage
      */
     private function getCpuUsage()

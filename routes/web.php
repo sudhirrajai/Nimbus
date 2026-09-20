@@ -398,6 +398,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::prefix('resources')->name('resources.')->group(function () {
             Route::get('/', [\App\Http\Controllers\ResourceController::class, 'index'])->name('index');
             Route::get('/usage', [\App\Http\Controllers\ResourceController::class, 'getUsage'])->name('usage');
+            Route::get('/history', [\App\Http\Controllers\ResourceController::class, 'getHistory'])->name('history');
         });
 
         // Settings routes

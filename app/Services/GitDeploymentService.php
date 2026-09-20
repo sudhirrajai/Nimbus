@@ -571,8 +571,9 @@ class GitDeploymentService
             $tempFile = "/tmp/nimbus_env_" . $deployment->id . "_" . time();
             file_put_contents($tempFile, trim($envContent) . "\n");
             $this->executeCommand("sudo mv {$tempFile} {$envFile}");
-            $this->executeCommand("sudo chown www-data:www-data {$envFile}");
-            $this->executeCommand("sudo chmod 640 {$envFile}");
+            $siteUser = \App\Services\SiteIsolationService::siteUser($deployment->domain);
+            $this->executeCommand("sudo chown {$siteUser}:{$siteUser} {$envFile}");
+            $this->executeCommand("sudo chmod 600 {$envFile}");
 
             $duration = (int)(microtime(true) - $startTime);
             $log->update([
@@ -677,9 +678,10 @@ class GitDeploymentService
         $log = $this->createLog($deployment, 'permissions', 'running');
 
         try {
-            $this->executeCommand("sudo chown -R www-data:www-data {$domainPath}");
-            $this->executeCommand("sudo find {$domainPath} -type d -exec chmod 2775 {} \\;");
-            $this->executeCommand("sudo find {$domainPath} -type f -not -path '*/node_modules/*' -not -path '*/vendor/*' -exec chmod 664 {} \\;");
+            $siteUser = \App\Services\SiteIsolationService::siteUser($deployment->domain);
+            $this->executeCommand("sudo chown -R {$siteUser}:{$siteUser} {$domainPath}");
+            $this->executeCommand("sudo find {$domainPath} -type d -exec chmod 750 {} \\;");
+            $this->executeCommand("sudo find {$domainPath} -type f -not -path '*/node_modules/*' -not -path '*/vendor/*' -exec chmod 640 {} \\;");
 
             // Make common directories writable if they exist
             $writableDirs = ['storage', 'bootstrap/cache', 'var', 'tmp', 'cache', 'writable'];
@@ -765,6 +767,8 @@ class GitDeploymentService
      */
     private function generateNginxConfig(string $domain, string $root, string $domainPath, string $phpVersion): string
     {
+        $sockPath = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
+
         return <<<NGINX
 server {
     listen 80;
@@ -790,7 +794,7 @@ server {
     # PHP handling
     location ~ \.php\$ {
         fastcgi_split_path_info ^(.+\.php)(/.+)\$;
-        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
+        fastcgi_pass unix:{$sockPath};
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;

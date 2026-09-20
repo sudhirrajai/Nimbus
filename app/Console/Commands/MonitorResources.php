@@ -35,12 +35,15 @@ class MonitorResources extends Command
         $cpu = $this->getCpuUsage();
         $memory = $this->getMemoryUsage();
         $disks = $this->getDiskUsage();
+        $load = sys_getloadavg() ?: [0.0, 0.0, 0.0];
+        exec('nproc', $coresOut);
+        $cores = max(1, (int) ($coresOut[0] ?? 1));
 
         $alerts = [];
 
-        // Check CPU (> threshold)
-        if ($cpu > $threshold) {
-            $alerts[] = "<strong>CPU Usage:</strong> {$cpu}% (Threshold: {$threshold}%)";
+        // Check CPU (> threshold) ONLY if system load also confirms true load pressure
+        if ($cpu > $threshold && $load[1] >= ($cores * 0.85)) {
+            $alerts[] = "<strong>CPU Usage:</strong> {$cpu}% (5m Load: {$load[1]} on {$cores} cores, Threshold: {$threshold}%)";
         }
 
         // Check Memory (> threshold)
@@ -157,7 +160,7 @@ class MonitorResources extends Command
         }
 
         $stat1 = @file_get_contents('/proc/stat');
-        usleep(100000); // 100ms
+        sleep(1); // 1 full second true sample
         $stat2 = @file_get_contents('/proc/stat');
 
         if (!$stat1 || !$stat2) {
@@ -170,7 +173,7 @@ class MonitorResources extends Command
         $total = $info2['total'] - $info1['total'];
         $idle = $info2['idle'] - $info1['idle'];
 
-        if ($total == 0) {
+        if ($total <= 0) {
             return 0;
         }
 
@@ -180,11 +183,21 @@ class MonitorResources extends Command
     private function parseCpuStat($stat)
     {
         $lines = explode("\n", $stat);
-        $cpu = explode(" ", preg_replace("/cpu\s+/", "", $lines[0]));
+        $firstLine = trim($lines[0] ?? '');
+        $parts = preg_split('/\s+/', $firstLine);
+
+        $user = (int) ($parts[1] ?? 0);
+        $nice = (int) ($parts[2] ?? 0);
+        $system = (int) ($parts[3] ?? 0);
+        $idle = (int) ($parts[4] ?? 0);
+        $iowait = (int) ($parts[5] ?? 0);
+        $irq = (int) ($parts[6] ?? 0);
+        $softirq = (int) ($parts[7] ?? 0);
+        $steal = (int) ($parts[8] ?? 0);
 
         return [
-            'idle' => $cpu[3],
-            'total' => array_sum($cpu)
+            'idle' => $idle + $iowait,
+            'total' => $user + $nice + $system + $idle + $iowait + $irq + $softirq + $steal
         ];
     }
 

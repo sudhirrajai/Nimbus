@@ -164,7 +164,7 @@ class DomainController extends Controller
                         $configContent = implode("\n", $catOutput);
                     }
                 }
-                if ($configContent && preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-nimbus)?\.sock;/', $configContent, $matches)) {
+                if ($configContent && preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-[a-zA-Z0-9_]+)?\.sock;/', $configContent, $matches)) {
                     $phpVersion = $matches[1];
                 }
             } catch (\Exception $e) {
@@ -305,9 +305,10 @@ class DomainController extends Controller
                 ], 409);
             }
 
-            // Create folder structure using sudo for proper permissions
+            // Create folder structure with isolated system user
             $this->executeSudoCommand("mkdir -p {$path}");
-            $this->executeSudoCommand("chown -R www-data:www-data {$path}");
+            $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $path);
+            $this->executeSudoCommand("chown -R {$siteUser}:{$siteUser} {$path}");
             $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
             $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
             $createdDirs = true;
@@ -335,6 +336,12 @@ class DomainController extends Controller
             if (!preg_match('/^[0-9]+\.[0-9]+$/', $phpVersion) || !File::exists("/etc/php/{$phpVersion}/fpm")) {
                 $phpVersion = '8.2'; // absolute fallback
             }
+
+            // Create isolated PHP-FPM pool
+            \App\Services\SiteIsolationService::createOrUpdatePool($domain, $path, $phpVersion);
+
+            // Secure site permissions and lock down .env
+            \App\Services\SiteIsolationService::securePath($path, $domain);
 
             // Create Nginx configuration
             $this->createNginxConfig($domain, $phpVersion);
@@ -642,6 +649,9 @@ class DomainController extends Controller
             \Log::info("Reloading Nginx...");
             $this->executeSudoCommand("systemctl reload nginx");
             \Log::info("Nginx reloaded successfully");
+
+            // Delete isolated PHP pool
+            \App\Services\SiteIsolationService::deletePool($domain);
 
             // Step 4: Delete the domain directory
             \Log::info("Removing domain directory: $path");
@@ -1112,6 +1122,8 @@ HTML;
         $domainPath = $this->basePath . $domain;
         $tempPath = "/tmp/nginx_{$domain}_" . time() . ".conf";
 
+        $sockPath = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
+
         $config = <<<NGINX
 server {
     listen 80;
@@ -1137,7 +1149,7 @@ server {
     # PHP handling
     location ~ \.php$ {
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
+        fastcgi_pass unix:{$sockPath};
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
@@ -1319,18 +1331,21 @@ NGINX;
             $this->executeSudoCommand('mkdir -p ' . escapeshellarg($domainPath));
         }
 
-        $this->executeSudoCommand('chown -R www-data:www-data ' . escapeshellarg($domainPath));
-        $this->executeSudoCommand('chmod 2775 ' . escapeshellarg($domainPath));
+        $domain = basename($domainPath);
+        $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
+        $this->executeSudoCommand("chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath));
+        $this->executeSudoCommand('chmod 750 ' . escapeshellarg($domainPath));
         
         // Ensure index.html exists if empty
         $indexFile = $domainPath . '/index.html';
         if (!File::exists($indexFile) && count(File::files($domainPath)) === 0) {
-            $domain = basename($domainPath);
             $indexContent = $this->getDefaultIndexContent($domain);
             file_put_contents($indexFile, $indexContent);
-            $this->executeSudoCommand('chown www-data:www-data ' . escapeshellarg($indexFile));
-            $this->executeSudoCommand('chmod 664 ' . escapeshellarg($indexFile));
+            $this->executeSudoCommand("chown {$siteUser}:{$siteUser} " . escapeshellarg($indexFile));
+            $this->executeSudoCommand('chmod 640 ' . escapeshellarg($indexFile));
         }
+
+        \App\Services\SiteIsolationService::securePath($domainPath, $domain);
     }
 
     /**
@@ -1442,16 +1457,14 @@ NGINX;
             exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
             $configContent = implode("\n", $output);
 
-            // Replace fastcgi_pass socket path
-            $pattern = '/(fastcgi_pass\s+unix:)(?:\/var)?(\/run\/php\/php)[0-9.]+(-fpm(?:-nimbus)?\.sock;)/';
-            $replacement = '${1}${2}' . $phpVersion . '${3}';
-            
-            // Double check if pattern matches
-            if (!preg_match($pattern, $configContent)) {
-                $pattern = '/(fastcgi_pass\s+unix:[^;]+\.sock;)/';
-                $replacement = "fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;";
-            }
+            // Update isolated PHP pool for the new version
+            $domainPath = $this->basePath . $domain;
+            \App\Services\SiteIsolationService::createOrUpdatePool($domain, $domainPath, $phpVersion);
+            $sockPath = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
 
+            // Replace fastcgi_pass socket path
+            $pattern = '/fastcgi_pass\s+unix:[^;]+\.sock;/';
+            $replacement = "fastcgi_pass unix:{$sockPath};";
             $newConfigContent = preg_replace($pattern, $replacement, $configContent);
 
             // Write updated config to a temp file, then move to Nginx directory

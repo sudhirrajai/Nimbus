@@ -1073,15 +1073,13 @@ BASH;
                     exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
                     $configContent = implode("\n", $output);
 
-                    // Replace fastcgi_pass socket path
-                    $pattern = '/(fastcgi_pass\s+unix:)(?:\/var)?(\/run\/php\/php)[0-9.]+(-fpm(?:-nimbus)?\.sock;)/';
-                    $replacement = '${1}${2}' . $phpVersion . '${3}';
-                    
-                    if (!preg_match($pattern, $configContent)) {
-                        $pattern = '/(fastcgi_pass\s+unix:[^;]+\.sock;)/';
-                        $replacement = "fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;";
-                    }
+                    // Update isolated pool and replace fastcgi_pass socket path
+                    $domainPath = $this->basePath . $domain;
+                    \App\Services\SiteIsolationService::createOrUpdatePool($domain, $domainPath, $phpVersion);
+                    $newSock = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
 
+                    $pattern = '/fastcgi_pass\s+unix:[^;]+\.sock;/';
+                    $replacement = "fastcgi_pass unix:{$newSock};";
                     $newConfigContent = preg_replace($pattern, $replacement, $configContent);
 
                     // Write to temp file then move to Nginx config directory
