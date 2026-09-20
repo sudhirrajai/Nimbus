@@ -380,5 +380,37 @@ class ResourceController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Toggle project resource suspension on/off from resources page
+     */
+    public function toggleProjectStatus(Request $request, string $domain)
+    {
+        try {
+            $domain = trim($domain);
+            if (empty($domain)) {
+                return response()->json(['error' => 'Domain name is required'], 400);
+            }
+
+            $user = auth()->user();
+            if (!$user->isRoot() && !$user->hasDomainPermission($domain, 'edit')) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $result = \App\Services\ProjectControlService::toggle($domain);
+
+            return response()->json([
+                'success' => $result['success'] ?? true,
+                'status' => $result['status'] ?? 'unknown',
+                'is_suspended' => ($result['status'] ?? '') === 'suspended',
+                'message' => ($result['status'] ?? '') === 'suspended'
+                    ? "Project {$domain} suspended. All resources, workers, and crons stopped."
+                    : "Project {$domain} resumed. Normal operations restored.",
+                'data' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
 

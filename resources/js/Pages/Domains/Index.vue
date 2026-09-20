@@ -195,7 +195,11 @@
 
                           <!-- Status -->
                           <td>
-                            <span v-if="group.main.is_active === null" class="status-pill opacity-5">
+                            <span v-if="group.main.is_suspended" class="status-pill status-suspended" title="Project temporarily suspended (workers, crons & web stopped)">
+                              <span class="pill-dot"></span>
+                              Suspended (OFF)
+                            </span>
+                            <span v-else-if="group.main.is_active === null" class="status-pill opacity-5">
                               <span class="spinner-border spinner-border-sm me-2" style="width: 10px; height: 10px; border-width: 1px;"></span>
                               Checking...
                             </span>
@@ -242,6 +246,17 @@
                           <!-- Actions -->
                           <td class="align-middle text-center">
                             <div class="d-flex justify-content-center gap-2">
+                              <button 
+                                v-if="isRootOrAdmin"
+                                class="action-btn"
+                                :class="group.main.is_suspended ? 'btn-power-off' : 'btn-power-on'"
+                                @click="toggleProjectPower(group.main)"
+                                :title="group.main.is_suspended ? 'Turn ON (Resume all workers, crons and web access)' : 'Turn OFF (Temporarily pause workers, crons and release resources)'"
+                                :disabled="powerTogglingDomain === group.main.name"
+                              >
+                                <span v-if="powerTogglingDomain === group.main.name" class="spinner-border spinner-border-sm" style="width: 14px; height: 14px;"></span>
+                                <i v-else class="material-symbols-rounded">{{ group.main.is_suspended ? 'power_settings_new' : 'toggle_on' }}</i>
+                              </button>
                               <button 
                                 class="action-btn btn-view" 
                                 @click="viewWebsite(group.main.name)"
@@ -317,7 +332,11 @@
 
                             <!-- Subdomain Status -->
                             <td>
-                              <span v-if="sub.is_active === null" class="status-pill opacity-5">
+                              <span v-if="sub.is_suspended" class="status-pill status-suspended" title="Project temporarily suspended">
+                                <span class="pill-dot"></span>
+                                Suspended (OFF)
+                              </span>
+                              <span v-else-if="sub.is_active === null" class="status-pill opacity-5">
                                 <span class="spinner-border spinner-border-sm me-2" style="width: 10px; height: 10px; border-width: 1px;"></span>
                                 Checking...
                               </span>
@@ -364,6 +383,17 @@
                             <!-- Subdomain Actions -->
                             <td class="align-middle text-center">
                               <div class="d-flex justify-content-center gap-2">
+                                <button 
+                                  v-if="isRootOrAdmin"
+                                  class="action-btn"
+                                  :class="sub.is_suspended ? 'btn-power-off' : 'btn-power-on'"
+                                  @click="toggleProjectPower(sub)"
+                                  :title="sub.is_suspended ? 'Turn ON (Resume all workers, crons and web access)' : 'Turn OFF (Temporarily pause workers, crons and release resources)'"
+                                  :disabled="powerTogglingDomain === sub.name"
+                                >
+                                  <span v-if="powerTogglingDomain === sub.name" class="spinner-border spinner-border-sm" style="width: 14px; height: 14px;"></span>
+                                  <i v-else class="material-symbols-rounded">{{ sub.is_suspended ? 'power_settings_new' : 'toggle_on' }}</i>
+                                </button>
                                 <button 
                                   class="action-btn btn-view" 
                                   @click="viewWebsite(sub.name)"
@@ -433,7 +463,11 @@
                           </div>
                         </td>
                         <td>
-                          <span v-if="domain.is_active === null" class="status-pill opacity-5">
+                          <span v-if="domain.is_suspended" class="status-pill status-suspended" title="Project temporarily suspended">
+                            <span class="pill-dot"></span>
+                            Suspended (OFF)
+                          </span>
+                          <span v-else-if="domain.is_active === null" class="status-pill opacity-5">
                             <span class="spinner-border spinner-border-sm me-2" style="width: 10px; height: 10px; border-width: 1px;"></span>
                             Checking...
                           </span>
@@ -470,6 +504,17 @@
                         </td>
                         <td class="align-middle text-center">
                           <div class="d-flex justify-content-center gap-2">
+                            <button 
+                              v-if="isRootOrAdmin"
+                              class="action-btn"
+                              :class="domain.is_suspended ? 'btn-power-off' : 'btn-power-on'"
+                              @click="toggleProjectPower(domain)"
+                              :title="domain.is_suspended ? 'Turn ON (Resume all workers, crons and web access)' : 'Turn OFF (Temporarily pause workers, crons and release resources)'"
+                              :disabled="powerTogglingDomain === domain.name"
+                            >
+                              <span v-if="powerTogglingDomain === domain.name" class="spinner-border spinner-border-sm" style="width: 14px; height: 14px;"></span>
+                              <i v-else class="material-symbols-rounded">{{ domain.is_suspended ? 'power_settings_new' : 'toggle_on' }}</i>
+                            </button>
                             <button 
                               class="action-btn btn-view" 
                               @click="viewWebsite(domain.name)"
@@ -803,7 +848,7 @@
               </p>
               <p class="text-sm text-danger mb-0 mt-2">
                 <i class="material-symbols-rounded text-sm me-1">info</i>
-                This will permanently delete the domain folder and all its contents. This action cannot be undone.
+                This will completely remove the website files (/var/www/...), Nginx configs, Certbot SSL certificates, Supervisor workers, Crontabs, PHP pools, and database records. This action cannot be undone.
               </p>
             </div>
 
@@ -825,6 +870,63 @@
               </button>
             </div>
 
+          </div>
+        </div>
+      </div>
+
+      <!-- Suspend / Pause Confirmation Modal -->
+      <div v-if="showSuspendModal" class="modal-backdrop fade show"></div>
+      <div 
+        v-if="showSuspendModal"
+        class="modal fade show d-block" 
+        tabindex="-1"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title font-weight-bolder text-warning d-flex align-items-center">
+                <i class="material-symbols-rounded text-lg me-2">power_settings_new</i>
+                Turn OFF Project Resources
+              </h5>
+              <button type="button" class="btn-close" @click="showSuspendModal = false" :disabled="submitting"></button>
+            </div>
+
+            <div class="modal-body">
+              <p class="mb-2">
+                Are you sure you want to temporarily turn OFF <strong>{{ domainToSuspend?.name }}</strong>?
+              </p>
+              <div class="alert alert-warning text-white text-xs mb-0 p-3">
+                <i class="material-symbols-rounded text-sm me-1">warning</i>
+                <strong>This will temporarily disable:</strong>
+                <ul class="mb-0 mt-1 ps-3">
+                  <li>Supervisor workers & background queue consumers (stopped)</li>
+                  <li>Scheduled cron jobs (safely paused)</li>
+                  <li>Active PHP-FPM processes and memory footprint</li>
+                  <li>Web traffic (served 503 Maintenance page)</li>
+                </ul>
+                <div class="mt-2 text-white-50">
+                  You can turn it back ON anytime with one click to restore all services and cron jobs.
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer border-top">
+              <button 
+                class="btn btn-outline-secondary mb-0" 
+                @click="showSuspendModal = false"
+                :disabled="submitting"
+              >
+                Cancel
+              </button>
+              <button 
+                class="btn bg-gradient-warning text-white mb-0" 
+                @click="executeSuspendProject"
+                :disabled="submitting"
+              >
+                <span v-if="submitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                Turn OFF Resources
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -871,6 +973,10 @@ const oldDomain = ref("")
 const domainToDelete = ref("")
 const validationError = ref("")
 const rootValidationError = ref("")
+
+const showSuspendModal = ref(false)
+const domainToSuspend = ref(null)
+const powerTogglingDomain = ref(null)
 
 const selectedDomainName = ref("")
 const currentDomainPhpVersion = ref("")
@@ -1229,13 +1335,66 @@ const deleteDomain = async () => {
   try {
     submitting.value = true
     await axios.delete(`/domains/${domainToDelete.value}`)
-    showAlert('success', `Domain "${domainToDelete.value}" has been deleted`)
+    showAlert('success', `Domain "${domainToDelete.value}" and all related resources have been completely removed`)
     showDeleteModal.value = false
     loadDomains()
   } catch (error) {
-    showAlert('danger', 'Failed to delete domain. Please try again.')
+    showAlert('danger', error.response?.data?.error || 'Failed to delete domain. Please try again.')
   } finally {
     submitting.value = false
+  }
+}
+
+// ==========================================
+// POWER ON / OFF (RESOURCE SUSPEND / RESUME)
+// ==========================================
+
+const toggleProjectPower = async (domainObj) => {
+  if (!domainObj.is_suspended) {
+    domainToSuspend.value = domainObj
+    showSuspendModal.value = true
+  } else {
+    await executeResumeProject(domainObj)
+  }
+}
+
+const executeSuspendProject = async () => {
+  if (!domainToSuspend.value) return
+  const target = domainToSuspend.value
+  powerTogglingDomain.value = target.name
+  submitting.value = true
+
+  try {
+    const res = await axios.post(`/domains/${target.name}/toggle-status`, { action: 'suspend' })
+    if (res.data.success) {
+      target.is_suspended = true
+      showAlert('warning', res.data.message || `Resources for ${target.name} turned OFF`)
+      showSuspendModal.value = false
+    } else {
+      showAlert('danger', res.data.error || 'Failed to turn off resources')
+    }
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to turn off resources')
+  } finally {
+    submitting.value = false
+    powerTogglingDomain.value = null
+  }
+}
+
+const executeResumeProject = async (target) => {
+  powerTogglingDomain.value = target.name
+  try {
+    const res = await axios.post(`/domains/${target.name}/toggle-status`, { action: 'resume' })
+    if (res.data.success) {
+      target.is_suspended = false
+      showAlert('success', res.data.message || `Resources for ${target.name} turned ON`)
+    } else {
+      showAlert('danger', res.data.error || 'Failed to turn on resources')
+    }
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to turn on resources')
+  } finally {
+    powerTogglingDomain.value = null
   }
 }
 
@@ -1521,6 +1680,28 @@ const closeModal = () => {
 .btn-delete:hover {
   background-color: #fef2f2;
   color: #ef4444;
+}
+
+.btn-power-on {
+  color: #10b981 !important;
+}
+.btn-power-on:hover {
+  background-color: #ecfdf5 !important;
+  color: #059669 !important;
+}
+
+.btn-power-off {
+  color: #ef4444 !important;
+}
+.btn-power-off:hover {
+  background-color: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+
+.status-suspended {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #dc2626 !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
 }
 
 .btn-edit-root {

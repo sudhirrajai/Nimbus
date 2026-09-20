@@ -125,6 +125,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
         Route::put('/{domain}/php-version', [DomainController::class, 'updatePhpVersion'])->name('domain.update.php-version');
+        Route::post('/{domain}/toggle-status', [DomainController::class, 'toggleStatus'])->name('domain.toggle-status');
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
     });
 
@@ -401,6 +402,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::get('/history', [\App\Http\Controllers\ResourceController::class, 'getHistory'])->name('history');
             Route::get('/projects', [\App\Http\Controllers\ResourceController::class, 'getProjectsUsage'])->name('projects');
             Route::get('/projects/{domain}/history', [\App\Http\Controllers\ResourceController::class, 'getSingleProjectHistory'])->name('project.history');
+            Route::post('/projects/{domain}/toggle-status', [\App\Http\Controllers\ResourceController::class, 'toggleProjectStatus'])->name('project.toggle-status');
         });
 
         // Settings routes

@@ -101,12 +101,19 @@ class ProjectMetricsService
                 }
             }
 
+            $suspendedDomains = ProjectControlService::getSuspendedDomains();
             foreach ($projects as $d => &$p) {
                 $p['cpu_percent'] = round($p['cpu_percent'], 1);
                 $p['memory_mb'] = round($p['memory_mb'], 1);
                 $p['memory_percent'] = round($p['memory_percent'], 1);
-                $p['is_active'] = ($p['process_count'] > 0 || $p['cpu_percent'] > 0 || $p['memory_mb'] > 0);
-                $p['status'] = $p['is_active'] ? 'active' : 'idle';
+                $p['is_suspended'] = in_array(strtolower($d), $suspendedDomains, true);
+                if ($p['is_suspended']) {
+                    $p['status'] = 'suspended';
+                    $p['is_active'] = false;
+                } else {
+                    $p['is_active'] = ($p['process_count'] > 0 || $p['cpu_percent'] > 0 || $p['memory_mb'] > 0);
+                    $p['status'] = $p['is_active'] ? 'active' : 'idle';
+                }
             }
             unset($p);
         }

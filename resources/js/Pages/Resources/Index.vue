@@ -254,7 +254,7 @@
                                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                                     <div>
                                         <div class="d-flex align-items-center gap-2 mb-1">
-                                            <span class="badge bg-gradient-dark text-white px-2 py-1 text-xxs">AWS CLOUDWATCH STYLE</span>
+                                            <span class="badge bg-gradient-dark text-white px-2 py-1 text-xxs">Detailed Metrics</span>
                                             <span class="badge px-2 py-1 text-xxs font-weight-bold"
                                                 :class="reportMetadata.health_status === 'HEALTHY' ? 'bg-success text-white' : (reportMetadata.health_status === 'WARNING' ? 'bg-warning text-dark' : 'bg-danger text-white')">
                                                 STATUS: {{ reportMetadata.health_status || 'HEALTHY' }}
@@ -796,11 +796,14 @@
                                                 <td class="ps-3 py-3">
                                                     <div class="d-flex align-items-center">
                                                         <span class="badge rounded-circle p-1 me-2"
-                                                            :class="proj.status === 'active' ? 'bg-success' : 'bg-secondary'"
+                                                            :class="proj.is_suspended ? 'bg-danger' : (proj.status === 'active' ? 'bg-success' : 'bg-secondary')"
                                                             style="width: 8px; height: 8px;"
-                                                            :title="proj.status === 'active' ? 'Active Workload' : 'Idle'"></span>
+                                                            :title="proj.is_suspended ? 'Suspended (OFF)' : (proj.status === 'active' ? 'Active Workload' : 'Idle')"></span>
                                                         <div>
-                                                            <h6 class="mb-0 text-xs font-weight-bold text-dark">{{ proj.domain }}</h6>
+                                                            <div class="d-flex align-items-center">
+                                                                <h6 class="mb-0 text-xs font-weight-bold text-dark">{{ proj.domain }}</h6>
+                                                                <span v-if="proj.is_suspended" class="badge bg-gradient-danger text-xxs ms-2 py-0 px-1">OFF</span>
+                                                            </div>
                                                             <div class="d-flex align-items-center gap-1 mt-0.5">
                                                                 <span class="badge bg-light text-secondary border text-xxs py-0 px-1">{{ proj.user }}</span>
                                                                 <span class="text-xxs text-muted text-truncate" style="max-width: 180px;" :title="proj.dir">{{ proj.dir }}</span>
@@ -871,11 +874,23 @@
 
                                                 <!-- Actions -->
                                                 <td class="text-end pe-3">
-                                                    <button type="button" class="btn btn-outline-info btn-xs mb-0 d-inline-flex align-items-center"
-                                                        @click="openProjectHistory(proj)">
-                                                        <i class="material-symbols-rounded text-xs me-1">monitoring</i>
-                                                        History
-                                                    </button>
+                                                    <div class="d-inline-flex align-items-center gap-1">
+                                                        <button type="button" 
+                                                            class="btn btn-xs mb-0 d-inline-flex align-items-center"
+                                                            :class="proj.is_suspended ? 'btn-outline-success' : 'btn-outline-danger'"
+                                                            :disabled="togglingDomain === proj.domain"
+                                                            @click="toggleProjectPower(proj)"
+                                                            :title="proj.is_suspended ? 'Turn ON all project resources & services' : 'Turn OFF all project resources & workers'">
+                                                            <span v-if="togglingDomain === proj.domain" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                            <i v-else class="material-symbols-rounded text-xs me-1">{{ proj.is_suspended ? 'power_settings_new' : 'power_off' }}</i>
+                                                            {{ proj.is_suspended ? 'Turn ON' : 'Turn OFF' }}
+                                                        </button>
+                                                        <button type="button" class="btn btn-outline-info btn-xs mb-0 d-inline-flex align-items-center"
+                                                            @click="openProjectHistory(proj)">
+                                                            <i class="material-symbols-rounded text-xs me-1">monitoring</i>
+                                                            History
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -1073,6 +1088,7 @@ const projectsData = ref({
     projects: []
 })
 const loadingProjects = ref(false)
+const togglingDomain = ref(null)
 
 // Project modal state
 const showProjectModal = ref(false)
@@ -1427,6 +1443,29 @@ const loadProjectsUsage = async () => {
         console.error('Failed to load project resource usage:', e)
     } finally {
         loadingProjects.value = false
+    }
+}
+
+const toggleProjectPower = async (proj) => {
+    const action = proj.is_suspended ? 'resume' : 'suspend'
+    if (action === 'suspend') {
+        const confirmed = window.confirm(`Are you sure you want to turn OFF all resources for "${proj.domain}"?\n\nThis will temporarily pause its Supervisor workers, cron jobs, active processes, and web requests.`)
+        if (!confirmed) return
+    }
+    togglingDomain.value = proj.domain
+    try {
+        const res = await axios.post(`/resources/projects/${proj.domain}/toggle-status`, { action })
+        if (res.data.success) {
+            proj.is_suspended = (action === 'suspend')
+            proj.status = proj.is_suspended ? 'suspended' : (proj.process_count > 0 ? 'active' : 'idle')
+            await loadProjectsUsage()
+        } else {
+            alert(res.data.error || 'Failed to toggle project status')
+        }
+    } catch (e) {
+        alert(e.response?.data?.error || 'Failed to toggle project status')
+    } finally {
+        togglingDomain.value = null
     }
 }
 

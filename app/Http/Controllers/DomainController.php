@@ -30,9 +30,10 @@ class DomainController extends Controller
 
             // Load assignments to identify creators and timestamps
             $assignments = UserWebsite::with('user')->get()->groupBy('domain');
+            $suspendedList = \App\Services\ProjectControlService::getSuspendedDomains();
 
             $directories = collect(File::directories($this->basePath))
-                ->map(function ($path) use ($assignments) {
+                ->map(function ($path) use ($assignments, $suspendedList) {
                     $domain = basename($path);
 
                     // Quick nginx config check — direct read when readable, sudo fallback
@@ -86,6 +87,7 @@ class DomainController extends Controller
                         'document_root' => $documentRoot,
                         'storage' => null,       // Loaded lazily
                         'is_active' => null,     // Loaded lazily
+                        'is_suspended' => in_array(strtolower($domain), $suspendedList, true),
                         'server_ip' => null,
                         'created_by' => $createdBy,
                         'created_at' => $createdAt
@@ -668,14 +670,14 @@ class DomainController extends Controller
 
             \Log::info("Domain deleted successfully: $domain by user " . auth()->id());
 
-            // ─── NEW: Cleanup database assignments ────────────────────
-            UserWebsite::where('domain', $domain)->delete();
-            \Log::info("UserWebsite assignments removed for $domain");
-            // ──────────────────────────────────────────────────────────
+            // ─── Comprehensive Cleanup: Files, Crons, Supervisors, Processes, SSL, DB ──
+            $cleanup = \App\Services\ProjectControlService::cleanupDomainCompletely($domain);
+            \Log::info("Comprehensive cleanup finished for $domain: " . json_encode($cleanup));
 
             return response()->json([
-                'message' => 'Domain deleted successfully',
-                'domain' => $domain
+                'message' => 'Domain and all associated resources (crons, supervisor workers, files, SSL) deleted successfully',
+                'domain' => $domain,
+                'cleanup' => $cleanup
             ], 200);
 
         } catch (\Exception $e) {
@@ -684,6 +686,41 @@ class DomainController extends Controller
             
             return response()->json([
                 'error' => 'Failed to delete domain: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Toggle domain resource suspension on/off
+     */
+    public function toggleStatus(Request $request, $domain)
+    {
+        try {
+            $domain = trim($domain);
+            if (empty($domain)) {
+                return response()->json(['error' => 'Domain name is required'], 400);
+            }
+
+            $user = auth()->user();
+            if (!$user->isRoot() && !$user->hasDomainPermission($domain, 'edit')) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $result = \App\Services\ProjectControlService::toggle($domain);
+
+            return response()->json([
+                'success' => $result['success'] ?? true,
+                'status' => $result['status'] ?? 'unknown',
+                'is_suspended' => ($result['status'] ?? '') === 'suspended',
+                'message' => ($result['status'] ?? '') === 'suspended'
+                    ? "Project {$domain} temporarily suspended. All workers, crons, and web resources stopped."
+                    : "Project {$domain} resumed. All workers, crons, and web resources active.",
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to toggle domain status: ' . $e->getMessage()
             ], 500);
         }
     }
