@@ -63,7 +63,8 @@ class CollectServerMetrics extends Command
             // Rolling 30-day retention prune
             ServerMetric::where('created_at', '<', now()->subDays(30))->delete();
 
-            $this->info("Metrics collected: CPU {$cpuPercent}%, RAM {$memData['percent']}%, Load {$loadData['1min']}");
+            $ramPercent = $memData['percentage'] ?? ($memData['percent'] ?? 0);
+            $this->info("Metrics collected: CPU {$cpuPercent}%, RAM {$ramPercent}%, Load {$loadData['1min']}");
             return Command::SUCCESS;
         } catch (\Throwable $e) {
             Log::error("Failed to collect server metrics: " . $e->getMessage());
