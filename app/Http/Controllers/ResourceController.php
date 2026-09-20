@@ -342,6 +342,9 @@ class ResourceController extends Controller
             ]);
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * Get real-time and historical resource usage for all projects
      */
