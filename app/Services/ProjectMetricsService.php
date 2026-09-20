@@ -47,7 +47,9 @@ class ProjectMetricsService
                 $projects[$domain] = [
                     'domain' => $domain,
                     'owner' => $owner,
+                    'user' => $owner,
                     'path' => $dir,
+                    'dir' => $dir,
                     'cpu_percent' => 0.0,
                     'memory_mb' => 0.0,
                     'memory_percent' => 0.0,
@@ -55,6 +57,7 @@ class ProjectMetricsService
                     'disk_formatted' => ServerMetricsService::formatBytes($diskMb * 1024 * 1024),
                     'process_count' => 0,
                     'is_active' => false,
+                    'status' => 'idle',
                 ];
 
                 if (!in_array($owner, ['www-data', 'root', 'unknown'])) {
@@ -103,6 +106,7 @@ class ProjectMetricsService
                 $p['memory_mb'] = round($p['memory_mb'], 1);
                 $p['memory_percent'] = round($p['memory_percent'], 1);
                 $p['is_active'] = ($p['process_count'] > 0 || $p['cpu_percent'] > 0 || $p['memory_mb'] > 0);
+                $p['status'] = $p['is_active'] ? 'active' : 'idle';
             }
             unset($p);
         }
@@ -201,6 +205,7 @@ class ProjectMetricsService
             'top_cpu_project' => $topCpu,
             'top_memory_project' => $topMemory,
             'top_storage_project' => $topStorage,
+            'top_disk_project' => $topStorage,
             'projects' => $projectList,
         ];
     }
