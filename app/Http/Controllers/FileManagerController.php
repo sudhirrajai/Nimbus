@@ -607,21 +607,46 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'File is not editable'], 400);
             }
 
-            // Try reading with standard PHP first, fall back to sudo cat for protected files
-            $content = '';
-            try {
-                $content = File::get($fullPath);
-            } catch (\Exception $e) {
-                // Fallback to sudo cat
+            $fileSize = File::size($fullPath);
+            $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+            $isLog = ($ext === 'log');
+            $maxReadSize = 5 * 1024 * 1024; // 5 MB threshold
+            $isTruncated = false;
+            $truncatedMessage = null;
+
+            if ($fileSize > $maxReadSize || ($isLog && $fileSize > 2 * 1024 * 1024)) {
+                // Large file or large log: tail the last 2,500 lines using tail to prevent memory exhaustion and browser freezing
                 $escapedPath = escapeshellarg($fullPath);
-                $output = $this->executeSudoCommand("cat {$escapedPath}");
+                $output = [];
+                exec("sudo tail -n 2500 {$escapedPath} 2>&1", $output);
                 $content = implode("\n", $output);
+                $isTruncated = true;
+                $humanSize = $this->formatBytes($fileSize);
+                $truncatedMessage = "Large file ({$humanSize}). Showing the latest 2,500 lines in Read-Only preview mode to prevent browser memory issues.";
+            } else {
+                // Try reading with standard PHP first, fall back to sudo cat for protected files
+                try {
+                    $content = File::get($fullPath);
+                } catch (\Exception $e) {
+                    // Fallback to sudo cat
+                    $escapedPath = escapeshellarg($fullPath);
+                    $output = $this->executeSudoCommand("cat {$escapedPath}");
+                    $content = implode("\n", $output);
+                }
+            }
+
+            // Ensure content is strictly valid UTF-8 so json_encode never throws Malformed UTF-8 exception
+            if (!mb_check_encoding($content, 'UTF-8')) {
+                $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
             }
 
             return response()->json([
                 'content' => $content,
                 'name' => basename($fullPath),
-                'size' => File::size($fullPath)
+                'size' => $fileSize,
+                'is_truncated' => $isTruncated,
+                'read_only' => $isTruncated,
+                'truncated_message' => $truncatedMessage
             ]);
         } catch (\Exception $e) {
             \Log::error("File read error: " . $e->getMessage());
@@ -650,6 +675,12 @@ class FileManagerController extends Controller
 
             if (!$this->isTextFile($fullPath)) {
                 return response()->json(['error' => 'File is not editable'], 400);
+            }
+
+            if (File::exists($fullPath) && File::size($fullPath) > 5 * 1024 * 1024) {
+                if ($request->input('force') !== true) {
+                    return response()->json(['error' => 'Saving is disabled because this file is very large and was opened in read-only preview mode to prevent file truncation.'], 400);
+                }
             }
 
             try {
@@ -1635,5 +1666,15 @@ class FileManagerController extends Controller
         }
 
         return $output;
+    }
+
+    private function formatBytes($bytes, $precision = 2)
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        $bytes /= pow(1024, $pow);
+        return round($bytes, $precision) . ' ' . $units[$pow];
     }
 }

@@ -904,13 +904,16 @@
               <i class="material-symbols-rounded text-white me-2">edit_note</i>
               <span class="text-white font-weight-bold">{{ editingFile }}</span>
               <span class="badge badge-sm bg-primary ms-3">{{ detectedMode }}</span>
+              <span v-if="fileIsReadOnly" class="badge badge-sm bg-warning text-dark ms-2 font-weight-bold">
+                <i class="material-symbols-rounded text-xs align-middle me-1">lock</i>Read-Only Preview
+              </span>
             </div>
             <div class="d-flex gap-2">
               <button v-if="detectedMode === 'json'" class="btn btn-sm btn-outline-info mb-0" @click="formatContent">
                 <i class="material-symbols-rounded text-sm me-1">format_align_left</i>
                 Format
               </button>
-              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving">
+              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving || fileIsReadOnly" :title="fileIsReadOnly ? 'Saving disabled for large preview files' : 'Save Changes'">
                 <i class="material-symbols-rounded text-sm me-1">{{ saving ? 'sync' : 'save' }}</i>
                 {{ saving ? 'Saving...' : 'Save Changes' }}
               </button>
@@ -919,6 +922,14 @@
                 Close
               </button>
             </div>
+          </div>
+          <!-- Large File / Truncated Warning Banner -->
+          <div v-if="fileIsTruncated" class="bg-warning-subtle border-bottom border-warning px-4 py-2 d-flex align-items-center justify-content-between text-xs font-weight-bold text-dark">
+            <div class="d-flex align-items-center">
+              <i class="material-symbols-rounded text-sm text-warning me-2">info</i>
+              <span>{{ fileTruncatedMessage }}</span>
+            </div>
+            <span class="badge badge-xs bg-warning text-dark text-uppercase">Preview Mode</span>
           </div>
           <!-- Floating Toast Alert inside Editor -->
           <transition name="fade">
@@ -1197,6 +1208,9 @@ const editingFile = ref('')
 const fileContent = ref('')
 const originalFileContent = ref('')
 const detectedMode = ref('text')
+const fileIsTruncated = ref(false)
+const fileTruncatedMessage = ref('')
+const fileIsReadOnly = ref(false)
 let aceEditor = null
 const fileInput = ref(null)
 const newPermissions = ref('')
@@ -1848,6 +1862,9 @@ const editFile = async (name) => {
     fileContent.value = response.data.content
     originalFileContent.value = response.data.content
     editingFile.value = name
+    fileIsTruncated.value = Boolean(response.data.is_truncated)
+    fileTruncatedMessage.value = response.data.truncated_message || ''
+    fileIsReadOnly.value = Boolean(response.data.read_only)
     showEditorModal.value = true
     
     // Auto-detect language
@@ -1879,11 +1896,12 @@ const initAceEditor = () => {
   // Options
   aceEditor.setOptions({
     fontSize: "14px",
-    enableBasicAutocompletion: true,
-    enableLiveAutocompletion: true,
+    enableBasicAutocompletion: !fileIsReadOnly.value,
+    enableLiveAutocompletion: !fileIsReadOnly.value,
     showPrintMargin: false,
     scrollPastEnd: 0.5,
-    wrap: true
+    wrap: true,
+    readOnly: fileIsReadOnly.value
   })
 
   // Close editor on pressing Esc inside the Ace Editor
@@ -1900,7 +1918,9 @@ const initAceEditor = () => {
     name: 'saveFileOnCtrlS',
     bindKey: {win: 'Ctrl-S', mac: 'Command-S'},
     exec: function(editor) {
-      saveFile()
+      if (!fileIsReadOnly.value) {
+        saveFile()
+      }
     }
   })
 
@@ -1910,6 +1930,10 @@ const initAceEditor = () => {
 }
 
 const saveFile = async () => {
+  if (fileIsReadOnly.value) {
+    showAlert('warning', 'Saving is disabled because this file is in read-only preview mode.')
+    return
+  }
   try {
     saving.value = true
     const filePath = currentPath.value ? `${currentPath.value}/${editingFile.value}` : editingFile.value
@@ -1933,6 +1957,9 @@ const closeEditor = () => {
   showEditorModal.value = false
   editingFile.value = ''
   fileContent.value = ''
+  fileIsTruncated.value = false
+  fileTruncatedMessage.value = ''
+  fileIsReadOnly.value = false
   document.body.style.overflow = '' // Restore scroll
 }
 
