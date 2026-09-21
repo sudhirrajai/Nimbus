@@ -12,9 +12,39 @@
               <p class="mb-0 text-sm">Manage SSL certificates for your domains (Let's Encrypt)</p>
             </div>
             <div class="d-flex gap-2">
+              <!-- Global Auto SSL Toggle -->
+              <div class="d-flex align-items-center bg-white border border-radius-lg px-3 py-1 shadow-sm">
+                <div class="d-flex flex-column me-2 text-start">
+                  <span class="text-xs font-weight-bold text-dark d-flex align-items-center">
+                    <i class="material-symbols-rounded text-xs me-1" :class="globalAutoRenew ? 'text-success' : 'text-secondary'">
+                      {{ globalAutoRenew ? 'autorenew' : 'pause_circle' }}
+                    </i>
+                    Auto SSL (All Domains)
+                  </span>
+                  <span class="text-xxs text-secondary">
+                    {{ globalAutoRenew ? 'Automated renewal active' : 'All auto-renewals paused' }}
+                  </span>
+                </div>
+                <div class="form-check form-switch mb-0 ps-0 d-flex align-items-center">
+                  <input 
+                    class="form-check-input ms-0 cursor-pointer" 
+                    type="checkbox" 
+                    :checked="globalAutoRenew" 
+                    @change="toggleGlobalAutoRenew"
+                    :disabled="togglingAutoRenew === 'all' || !certbotInstalled"
+                    style="width: 34px; height: 18px;"
+                    title="Enable or disable automated Let's Encrypt SSL renewal for all domains"
+                  >
+                </div>
+              </div>
+
               <button class="btn btn-outline-secondary mb-0" @click="loadDomains(true)" :disabled="loading">
                 <i class="material-symbols-rounded text-sm me-1">refresh</i>
                 Refresh
+              </button>
+              <button class="btn bg-gradient-info mb-0" @click="openCustomSslModal(null)" :disabled="loading || domains.length === 0">
+                <i class="material-symbols-rounded text-sm me-1">upload_file</i>
+                Custom SSL
               </button>
               <button class="btn bg-gradient-success mb-0" @click="renewAllCerts" :disabled="loading || renewingAll || !certbotInstalled">
                 <span v-if="renewingAll" class="spinner-border spinner-border-sm me-1"></span>
@@ -166,6 +196,7 @@
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Status</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Issuer</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Expiry</th>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Auto SSL</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                     </tr>
                   </thead>
@@ -229,14 +260,36 @@
                         <span v-else class="text-xs text-secondary">-</span>
                       </td>
                       <td class="text-center">
+                        <div v-if="domain.hasSsl && domain.sslSource === 'letsencrypt'" class="d-flex flex-column align-items-center justify-content-center">
+                          <div class="form-check form-switch mb-0 ps-0 d-inline-flex align-items-center gap-1 cursor-pointer">
+                            <input 
+                              class="form-check-input ms-0 cursor-pointer" 
+                              type="checkbox" 
+                              :checked="domain.autoRenew !== false && globalAutoRenew"
+                              @change="toggleDomainAutoRenew(domain)"
+                              :disabled="togglingAutoRenew === domain.domain || !globalAutoRenew"
+                              style="width: 28px; height: 15px;"
+                              :title="!globalAutoRenew ? 'Global Auto SSL is paused' : (domain.autoRenew !== false ? 'Click to disable auto-renewal for this domain' : 'Click to enable auto-renewal for this domain')"
+                            >
+                          </div>
+                          <span class="text-xxs font-weight-bold mt-1" :class="domain.autoRenew !== false && globalAutoRenew ? 'text-success' : 'text-secondary'">
+                            {{ !globalAutoRenew ? 'Global Off' : (domain.autoRenew !== false ? 'Enabled' : 'Disabled') }}
+                          </span>
+                        </div>
+                        <div v-else-if="domain.sslSource === 'nginx_custom'" class="text-xxs text-secondary font-italic">
+                          Manual Cert
+                        </div>
+                        <span v-else class="text-xxs text-secondary">-</span>
+                      </td>
+                      <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <!-- Install SSL button -->
+                          <!-- Install SSL button (Let's Encrypt) -->
                           <button 
                             v-if="!domain.hasSsl"
                             class="action-btn btn-install-ssl"
                             @click="installSsl(domain)"
                             :disabled="installing === domain.domain || !certbotInstalled || !domain.is_active"
-                            :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install SSL certificate')"
+                            :title="!domain.is_active ? `DNS not pointing to ${domain.server_ip}` : (!certbotInstalled ? 'Install Certbot first' : 'Install Let\'s Encrypt SSL')"
                           >
                             <span v-if="installing === domain.domain" class="spinner-border spinner-border-sm" style="width:14px;height:14px"></span>
                             <i v-else class="material-symbols-rounded">add_moderator</i>
@@ -263,12 +316,20 @@
                             <button 
                               class="action-btn btn-delete"
                               @click="confirmRemove(domain)"
-                              :disabled="!certbotInstalled"
                               title="Remove certificate"
                             >
                               <i class="material-symbols-rounded">delete</i>
                             </button>
                           </template>
+
+                          <!-- Custom SSL upload action for any domain -->
+                          <button 
+                            class="action-btn btn-custom-ssl"
+                            @click="openCustomSslModal(domain)"
+                            :title="domain.hasSsl ? 'Upload / Replace with Custom SSL' : 'Install Custom SSL Certificate'"
+                          >
+                            <i class="material-symbols-rounded">upload_file</i>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -403,24 +464,134 @@
       </div>
 
       <!-- Output Modal -->
-      <div class="modal-backdrop fade show" v-if="showOutputModal" @click="showOutputModal = false"></div>
+      <div class="modal-backdrop fade show" v-if="showOutputModal" @click="isPollingSsl ? null : closeOutputModal()"></div>
       <div class="modal fade show d-block" v-if="showOutputModal">
         <div class="modal-dialog modal-lg modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="material-symbols-rounded me-2" :class="outputSuccess ? 'text-success' : 'text-danger'">
+              <h5 class="modal-title d-flex align-items-center">
+                <span v-if="isPollingSsl" class="spinner-border spinner-border-sm text-info me-2"></span>
+                <i v-else class="material-symbols-rounded me-2" :class="outputSuccess ? 'text-success' : 'text-danger'">
                   {{ outputSuccess ? 'check_circle' : 'error' }}
                 </i>
                 {{ outputTitle }}
               </h5>
-              <button type="button" class="btn-close" @click="showOutputModal = false"></button>
+              <button type="button" class="btn-close" @click="closeOutputModal" :disabled="isPollingSsl"></button>
             </div>
             <div class="modal-body">
-              <pre class="bg-dark text-light p-3 rounded" style="font-size: 12px; max-height: 400px; overflow: auto;">{{ outputContent }}</pre>
+              <div v-if="isPollingSsl" class="mb-3 d-flex align-items-center justify-content-between p-2 rounded bg-gray-100">
+                <span class="text-sm font-weight-bold text-dark d-flex align-items-center">
+                  <i class="material-symbols-rounded text-info text-sm me-1">sync</i>
+                  {{ currentProgressMessage || 'Installing SSL certificate in background...' }}
+                </span>
+                <span class="badge bg-gradient-info text-xxs">In Progress</span>
+              </div>
+              <pre class="bg-dark text-light p-3 rounded font-monospace" style="font-size: 12px; max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all;">{{ outputContent || 'Waiting for certbot output...' }}</pre>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-outline-secondary" @click="showOutputModal = false">Close</button>
+              <button v-if="canForceDomain && !isPollingSsl" class="btn bg-gradient-warning me-auto" @click="installSsl(canForceDomain, true)">
+                <i class="material-symbols-rounded text-sm me-1">warning</i> Force Issue Anyway
+              </button>
+              <button class="btn btn-outline-secondary" @click="closeOutputModal" :disabled="isPollingSsl">
+                {{ isPollingSsl ? 'Installing in background...' : 'Close' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom SSL Modal -->
+      <div class="modal-backdrop fade show" v-if="showCustomSslModal" @click="showCustomSslModal = false"></div>
+      <div class="modal fade show d-block" v-if="showCustomSslModal">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="material-symbols-rounded text-info me-2">upload_file</i>
+                Install Custom SSL Certificate
+              </h5>
+              <button type="button" class="btn-close" @click="showCustomSslModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm text-secondary mb-3">
+                Upload or paste your own custom SSL certificate, private key, and optional intermediate CA bundle.
+              </p>
+
+              <div class="mb-3">
+                <label class="form-label font-weight-bold text-xs text-uppercase">Domain <span class="text-danger">*</span></label>
+                <select v-model="customSslForm.domain" class="form-select form-select-sm" :disabled="isCustomSslDomainLocked">
+                  <option value="" disabled>Select a domain...</option>
+                  <option v-for="d in domains" :key="d.domain" :value="d.domain">
+                    {{ d.domain }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label font-weight-bold text-xs text-uppercase mb-0">Certificate (CRT / PEM) <span class="text-danger">*</span></label>
+                  <label class="btn btn-xs btn-outline-secondary mb-0 cursor-pointer py-1 px-2" style="font-size: 11px;">
+                    <i class="material-symbols-rounded text-xs me-1">folder_open</i> Load from File
+                    <input type="file" accept=".crt,.pem,.cer" class="d-none" @change="e => handleFileUpload(e, 'certificate')">
+                  </label>
+                </div>
+                <textarea 
+                  v-model="customSslForm.certificate" 
+                  class="form-control font-monospace text-xs" 
+                  rows="5" 
+                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                  required
+                ></textarea>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label font-weight-bold text-xs text-uppercase mb-0">Private Key (KEY) <span class="text-danger">*</span></label>
+                  <label class="btn btn-xs btn-outline-secondary mb-0 cursor-pointer py-1 px-2" style="font-size: 11px;">
+                    <i class="material-symbols-rounded text-xs me-1">folder_open</i> Load from File
+                    <input type="file" accept=".key,.pem" class="d-none" @change="e => handleFileUpload(e, 'private_key')">
+                  </label>
+                </div>
+                <textarea 
+                  v-model="customSslForm.private_key" 
+                  class="form-control font-monospace text-xs" 
+                  rows="5" 
+                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                  required
+                ></textarea>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label font-weight-bold text-xs text-uppercase mb-0">Intermediate CA Bundle (Optional)</label>
+                  <label class="btn btn-xs btn-outline-secondary mb-0 cursor-pointer py-1 px-2" style="font-size: 11px;">
+                    <i class="material-symbols-rounded text-xs me-1">folder_open</i> Load from File
+                    <input type="file" accept=".crt,.pem,.ca-bundle" class="d-none" @change="e => handleFileUpload(e, 'ca_bundle')">
+                  </label>
+                </div>
+                <textarea 
+                  v-model="customSslForm.ca_bundle" 
+                  class="form-control font-monospace text-xs" 
+                  rows="4" 
+                  placeholder="-----BEGIN CERTIFICATE-----&#10;... (Optional intermediate certificate chain)"
+                ></textarea>
+              </div>
+
+              <div v-if="customSslError" class="alert alert-danger text-white py-2 px-3 text-xs mb-0" role="alert">
+                <i class="material-symbols-rounded text-sm me-1 align-middle">error</i>
+                {{ customSslError }}
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary" @click="showCustomSslModal = false" :disabled="savingCustomSsl">Cancel</button>
+              <button 
+                class="btn bg-gradient-info" 
+                @click="submitCustomSsl" 
+                :disabled="savingCustomSsl || !customSslForm.domain || !customSslForm.certificate || !customSslForm.private_key"
+              >
+                <span v-if="savingCustomSsl" class="spinner-border spinner-border-sm me-2"></span>
+                Install Certificate
+              </button>
             </div>
           </div>
         </div>
@@ -433,8 +604,9 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { formatDate } from '@/Utils/date'
 
 const loading = ref(false)
 const installing = ref(null)
@@ -449,16 +621,34 @@ const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const certbotInstalled = ref(true) // Assume true until checked
 const certbotChecked = ref(false)
+const globalAutoRenew = ref(true)
+const togglingAutoRenew = ref(null)
 
 const showDetailsModal = ref(false)
 const showRemoveModal = ref(false)
 const showOutputModal = ref(false)
+const showCustomSslModal = ref(false)
+const isCustomSslDomainLocked = ref(false)
+const savingCustomSsl = ref(false)
+const customSslError = ref('')
+
+const customSslForm = ref({
+  domain: '',
+  certificate: '',
+  private_key: '',
+  ca_bundle: ''
+})
 
 const selectedDomain = ref(null)
 const domainToRemove = ref(null)
 const outputTitle = ref('')
 const outputContent = ref('')
 const outputSuccess = ref(true)
+const canForceDomain = ref(null)
+
+const isPollingSsl = ref(false)
+const currentProgressMessage = ref('')
+let pollingTimer = null
 
 const alert = ref({
   show: false,
@@ -512,10 +702,49 @@ const loadDomains = async (force = false) => {
       certbotInstalled.value = response.data.certbotInstalled
       certbotChecked.value = true
     }
+
+    if (response.data.globalAutoRenew !== undefined) {
+      globalAutoRenew.value = response.data.globalAutoRenew
+    }
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to load domains')
   } finally {
     loading.value = false
+  }
+}
+
+const toggleGlobalAutoRenew = async () => {
+  const nextState = !globalAutoRenew.value
+  try {
+    togglingAutoRenew.value = 'all'
+    const response = await axios.post('/ssl/toggle-auto-renew', {
+      all: true,
+      enabled: nextState
+    })
+    globalAutoRenew.value = response.data.globalAutoRenew
+    showAlert('success', response.data.message)
+    await loadDomains(true)
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to toggle global Auto SSL')
+  } finally {
+    togglingAutoRenew.value = null
+  }
+}
+
+const toggleDomainAutoRenew = async (domain) => {
+  const nextState = !(domain.autoRenew !== false)
+  try {
+    togglingAutoRenew.value = domain.domain
+    const response = await axios.post('/ssl/toggle-auto-renew', {
+      domain: domain.domain,
+      enabled: nextState
+    })
+    domain.autoRenew = response.data.autoRenew
+    showAlert('success', response.data.message)
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to toggle Auto SSL for domain')
+  } finally {
+    togglingAutoRenew.value = null
   }
 }
 
@@ -617,52 +846,153 @@ const getDaysRemainingText = (daysRemaining) => {
   return `${daysRemaining} days remaining`
 }
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+
+
+const closeOutputModal = () => {
+  if (isPollingSsl.value) return
+  showOutputModal.value = false
+  canForceDomain.value = null
 }
 
-const installSsl = async (domain) => {
+onUnmounted(() => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+})
+
+const pollSslStatus = (domainName, isRenewal = false) => {
+  if (pollingTimer) clearInterval(pollingTimer)
+  isPollingSsl.value = true
+
+  pollingTimer = setInterval(async () => {
+    try {
+      const res = await axios.get('/ssl/install-status', {
+        params: { domain: domainName }
+      })
+
+      const { status, progress, log, error, details } = res.data
+
+      if (progress) {
+        currentProgressMessage.value = progress
+      }
+      if (log) {
+        outputContent.value = log
+      }
+
+      if (status === 'completed') {
+        clearInterval(pollingTimer)
+        pollingTimer = null
+        isPollingSsl.value = false
+        installing.value = null
+        renewing.value = null
+        outputSuccess.value = true
+        outputTitle.value = isRenewal ? 'SSL Renewal Complete' : 'SSL Installation Complete'
+        outputContent.value = details || log || 'Certificate installed successfully'
+        showAlert('success', `SSL certificate successfully ${isRenewal ? 'renewed' : 'installed'} for ${domainName}`)
+        await loadDomains()
+      } else if (status === 'failed') {
+        clearInterval(pollingTimer)
+        pollingTimer = null
+        isPollingSsl.value = false
+        installing.value = null
+        renewing.value = null
+        outputSuccess.value = false
+        outputTitle.value = isRenewal ? 'SSL Renewal Failed' : 'SSL Installation Failed'
+        outputContent.value = (error ? `${error}\n\n` : '') + (details || log || 'An error occurred during certbot execution.')
+        showAlert('danger', error || `Failed to ${isRenewal ? 'renew' : 'install'} SSL certificate`)
+      }
+    } catch (err) {
+      console.error('Failed to poll SSL status', err)
+    }
+  }, 2000)
+}
+
+const installSsl = async (domain, force = false) => {
+  const domainName = typeof domain === 'string' ? domain : (domain.domain || '')
   try {
-    installing.value = domain.domain
-    showAlert('info', `Installing SSL certificate for ${domain.domain}... This may take a minute.`)
-    
-    const response = await axios.post('/ssl/install', { domain: domain.domain })
-    
-    showAlert('success', response.data.message)
-    outputTitle.value = 'SSL Installation Complete'
-    outputContent.value = response.data.details || 'Certificate installed successfully'
+    installing.value = domainName
+    canForceDomain.value = null
+    outputTitle.value = `Installing SSL: ${domainName}`
+    currentProgressMessage.value = 'Contacting server and launching background installation...'
+    outputContent.value = 'Preparing Let\'s Encrypt verification...'
     outputSuccess.value = true
+    isPollingSsl.value = true
     showOutputModal.value = true
     
-    await loadDomains()
+    const response = await axios.post('/ssl/install', { 
+      domain: domainName,
+      force: force 
+    })
+    
+    if (response.data.polling) {
+      pollSslStatus(domainName, false)
+    } else {
+      isPollingSsl.value = false
+      installing.value = null
+      showAlert('success', response.data.message)
+      outputTitle.value = 'SSL Installation Complete'
+      outputContent.value = response.data.details || 'Certificate installed successfully'
+      outputSuccess.value = true
+      await loadDomains()
+    }
   } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to install SSL')
-    if (error.response?.data?.details) {
+    isPollingSsl.value = false
+    installing.value = null
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
+
+    const errorData = error.response?.data
+    showAlert('danger', errorData?.error || 'Failed to install SSL')
+    
+    if (errorData?.dns_warning && errorData?.can_force) {
+      canForceDomain.value = domainName
+      outputTitle.value = 'DNS Verification Notice'
+      outputContent.value = errorData.error + '\n\nIf you recently updated DNS records or your domain is proxied through a CDN (such as Cloudflare), you can click "Force Issue Anyway" below to proceed.'
+      outputSuccess.value = false
+      showOutputModal.value = true
+    } else if (errorData?.details || errorData?.error) {
       outputTitle.value = 'SSL Installation Failed'
-      outputContent.value = error.response.data.details
+      outputContent.value = errorData.details || errorData.error
       outputSuccess.value = false
       showOutputModal.value = true
     }
-  } finally {
-    installing.value = null
   }
 }
 
 const renewSsl = async (domain) => {
+  const domainName = typeof domain === 'string' ? domain : (domain.domain || '')
   try {
-    renewing.value = domain.domain
-    showAlert('info', `Renewing SSL certificate for ${domain.domain}...`)
+    renewing.value = domainName
+    outputTitle.value = `Renewing SSL: ${domainName}`
+    currentProgressMessage.value = 'Contacting server and launching background renewal...'
+    outputContent.value = 'Connecting to Let\'s Encrypt for renewal...'
+    outputSuccess.value = true
+    isPollingSsl.value = true
+    showOutputModal.value = true
     
-    const response = await axios.post('/ssl/renew', { domain: domain.domain })
+    const response = await axios.post('/ssl/renew', { domain: domainName })
     
-    showAlert('success', response.data.message)
-    await loadDomains()
+    if (response.data.polling) {
+      pollSslStatus(domainName, true)
+    } else {
+      isPollingSsl.value = false
+      renewing.value = null
+      showAlert('success', response.data.message)
+      outputTitle.value = 'SSL Renewal Complete'
+      outputContent.value = response.data.details || 'Certificate renewed successfully'
+      outputSuccess.value = true
+      await loadDomains()
+    }
   } catch (error) {
+    isPollingSsl.value = false
+    renewing.value = null
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
     showAlert('danger', error.response?.data?.error || 'Failed to renew SSL')
     if (error.response?.data?.details) {
       outputTitle.value = 'SSL Renewal Failed'
@@ -670,8 +1000,6 @@ const renewSsl = async (domain) => {
       outputSuccess.value = false
       showOutputModal.value = true
     }
-  } finally {
-    renewing.value = null
   }
 }
 
@@ -723,6 +1051,48 @@ const removeSsl = async () => {
     showAlert('danger', error.response?.data?.error || 'Failed to remove SSL')
   } finally {
     removing.value = false
+  }
+}
+
+const openCustomSslModal = (domainObj = null) => {
+  customSslError.value = ''
+  if (domainObj && domainObj.domain) {
+    customSslForm.value.domain = domainObj.domain
+    isCustomSslDomainLocked.value = true
+  } else {
+    customSslForm.value.domain = domains.value.length > 0 ? domains.value[0].domain : ''
+    isCustomSslDomainLocked.value = false
+  }
+  customSslForm.value.certificate = ''
+  customSslForm.value.private_key = ''
+  customSslForm.value.ca_bundle = ''
+  showCustomSslModal.value = true
+}
+
+const handleFileUpload = (event, field) => {
+  const file = event.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    customSslForm.value[field] = e.target.result
+  }
+  reader.readAsText(file)
+}
+
+const submitCustomSsl = async () => {
+  customSslError.value = ''
+  savingCustomSsl.value = true
+  try {
+    const response = await axios.post('/ssl/custom', customSslForm.value)
+    showAlert('success', response.data.message || 'Custom SSL certificate installed successfully!')
+    showCustomSslModal.value = false
+    await loadDomains(true)
+  } catch (error) {
+    const msg = error.response?.data?.error || error.response?.data?.message || 'Failed to install custom SSL certificate'
+    customSslError.value = msg
+    showAlert('danger', msg)
+  } finally {
+    savingCustomSsl.value = false
   }
 }
 </script>
@@ -841,6 +1211,7 @@ const removeSsl = async () => {
 .btn-update:hover { background: #1171ef; color: #fff; }
 .btn-info:hover { background: #5e72e4; color: #fff; }
 .btn-delete:hover { background: #f5365c; color: #fff; }
+.btn-custom-ssl:hover { background: #11cdef; color: #fff; }
 
 .action-btn:disabled {
   opacity: 0.5;

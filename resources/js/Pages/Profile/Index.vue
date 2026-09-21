@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <MainLayout>
     <Head title="Profile" />
         <div class="container-fluid py-4">
@@ -141,6 +141,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import { formatDate } from '@/Utils/date'
 
 const props = defineProps({
     user: Object
@@ -204,14 +205,7 @@ const changePassword = async () => {
     }
 }
 
-const formatDate = (date) => {
-    if (!date) return 'N/A'
-    return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    })
-}
+
 
 const notify = (message, type = 'success') => {
     toastMessage.value = message

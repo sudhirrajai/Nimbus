@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Services\SiteIsolationService;
 
 class User extends Authenticatable
 {
@@ -21,6 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'file_manager_scope',
         'linux_user',
         'status',
         'last_login_at',
@@ -83,6 +85,37 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    // ─── File Manager Scope Helpers ──────────────────────────────
+
+    public function getFileManagerScope(): string
+    {
+        if ($this->isRoot()) {
+            return 'root';
+        }
+        return $this->file_manager_scope ?: 'domain';
+    }
+
+    public function hasFileManagerRootAccess(): bool
+    {
+        return $this->isRoot() || $this->file_manager_scope === 'root';
+    }
+
+    public function hasFileManagerProjectsAccess(): bool
+    {
+        return $this->isRoot() || in_array($this->file_manager_scope, ['root', 'projects']);
+    }
+
+    public function getAllowedFileManagerScopes(): array
+    {
+        if ($this->hasFileManagerRootAccess()) {
+            return ['domain', 'projects', 'root'];
+        }
+        if ($this->hasFileManagerProjectsAccess()) {
+            return ['domain', 'projects'];
+        }
+        return ['domain'];
     }
 
     // ─── Domain Access ───────────────────────────────────────────
@@ -211,11 +244,26 @@ class User extends Authenticatable
                 // Check .env
                 $envPath = "{$checkPath}/.env";
                 if (file_exists($envPath)) {
-                    $content = file_get_contents($envPath);
-                    if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                    $content = SiteIsolationService::readFile($envPath);
+                    if ($content && preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
                         $db = trim($matches[1], "\"' \r\n");
                         if (!empty($db)) {
                             $databases[] = $db;
+                        }
+                    }
+
+                    // Support DATABASE_URL / DB_URL / MYSQL_URL
+                    if ($content && preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
+                        $rawDbUrl = trim($urlMatches[1], "\"' \r\n");
+                        $parsedPath = parse_url($rawDbUrl, PHP_URL_PATH);
+                        if ($parsedPath) {
+                            $extractedDb = trim($parsedPath, '/');
+                            if (str_contains($extractedDb, '?')) {
+                                $extractedDb = explode('?', $extractedDb)[0];
+                            }
+                            if (!empty($extractedDb)) {
+                                $databases[] = $extractedDb;
+                            }
                         }
                     }
                 }
@@ -223,8 +271,8 @@ class User extends Authenticatable
                 // Check wp-config.php
                 $wpPath = "{$checkPath}/wp-config.php";
                 if (file_exists($wpPath)) {
-                    $content = file_get_contents($wpPath);
-                    if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                    $content = SiteIsolationService::readFile($wpPath);
+                    if ($content && preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
                         $db = trim($matches[1]);
                         if (!empty($db)) {
                             $databases[] = $db;
@@ -245,7 +293,8 @@ class User extends Authenticatable
 
                 foreach ($corePhpFiles as $phpFile) {
                     if (file_exists($phpFile)) {
-                        $content = file_get_contents($phpFile);
+                        $content = SiteIsolationService::readFile($phpFile);
+                        if (!$content) continue;
                         if (preg_match('/define\(\s*[\'"](?:DB_NAME|DB_DATABASE|DB_DB|DATABASE_NAME)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $content, $matches)) {
                             $db = trim($matches[1]);
                             if (!empty($db)) $databases[] = $db;

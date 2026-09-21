@@ -25,16 +25,50 @@ class CheckDomainAccess
             return $next($request);
         }
 
-        // Try to find the domain from the route parameter or request data
+        // Try to find the domain or scope from the route parameter or request data
         $domain = $request->route('domain')
+            ?? $request->route('scope')
             ?? $request->input('domain')
+            ?? $request->input('scope')
             ?? $this->extractDomainFromPath($request);
 
-        if ($domain && !$user->canAccessDomain($domain)) {
-            if ($request->expectsJson()) {
-                return response()->json(['error' => 'You do not have access to this website.'], 403);
+        if ($domain) {
+            $normalized = strtolower(trim($domain));
+
+            // Server Root scope check
+            if (in_array($normalized, ['root', '__root__'])) {
+                if ($user->hasFileManagerRootAccess()) {
+                    return $next($request);
+                }
+                if ($request->expectsJson()) {
+                    return response()->json(['error' => 'You do not have permission to access the server root filesystem.'], 403);
+                }
+                abort(403, 'You do not have permission to access the server root filesystem.');
             }
-            abort(403, 'You do not have access to this website.');
+
+            // Web Projects scope check
+            if (in_array($normalized, ['projects', '__projects__'])) {
+                if ($user->hasFileManagerProjectsAccess()) {
+                    return $next($request);
+                }
+                if ($request->expectsJson()) {
+                    return response()->json(['error' => 'You do not have permission to access the web projects directory.'], 403);
+                }
+                abort(403, 'You do not have permission to access the web projects directory.');
+            }
+
+            // Regular domain access check
+            if (!$user->canAccessDomain($domain)) {
+                // If user has projects or root access, they can access any domain in /var/www/
+                if ($user->hasFileManagerProjectsAccess()) {
+                    return $next($request);
+                }
+
+                if ($request->expectsJson()) {
+                    return response()->json(['error' => 'You do not have access to this website.'], 403);
+                }
+                abort(403, 'You do not have access to this website.');
+            }
         }
 
         return $next($request);

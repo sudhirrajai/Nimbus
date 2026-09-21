@@ -6,12 +6,12 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
               <h4 class="font-weight-bolder mb-0">DNS Management</h4>
               <p class="mb-0 text-sm">Manage DNS records via Cloudflare</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
               <button class="btn btn-outline-info mb-0" @click="showGuideModal = true">
                 <i class="material-symbols-rounded text-sm me-1">help</i>
                 Guide
@@ -40,10 +40,10 @@
       <div class="row" v-if="!selectedDomain">
         <div class="col-12">
           <div class="card">
-            <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+            <div class="card-header pb-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
               <h6 class="mb-0">Select a Domain</h6>
-              <div class="ms-md-auto pe-md-3 d-flex align-items-center">
-                <div class="input-group input-group-sm">
+              <div class="d-flex align-items-center">
+                <div class="input-group input-group-sm" style="min-width: 160px; max-width: 250px;">
                   <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                   <input v-model="domainSearchQuery" type="text" class="form-control" placeholder="Search domains...">
                 </div>
@@ -323,6 +323,40 @@
         </div>
       </div>
 
+      <!-- Delete Record Confirmation Modal -->
+      <div v-if="recordToDelete" class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content shadow-lg border-0 rounded-4">
+            <div class="modal-header border-bottom py-3">
+              <div class="d-flex align-items-center gap-2">
+                <div class="icon icon-shape bg-gradient-danger shadow-danger text-center border-radius-md d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                  <i class="material-symbols-rounded opacity-10 text-white text-sm">delete</i>
+                </div>
+                <h6 class="modal-title font-weight-bold mb-0">Delete DNS Record</h6>
+              </div>
+              <button type="button" class="btn-close text-dark" @click="recordToDelete = null"></button>
+            </div>
+            <div class="modal-body py-4">
+              <p class="text-sm text-secondary mb-1">
+                Are you sure you want to delete this <span class="badge bg-gradient-dark text-xxs font-weight-bold">{{ recordToDelete.type }}</span> record?
+              </p>
+              <div class="p-2.5 bg-gray-100 border-radius-md text-xs font-monospace text-dark mt-2">
+                <div><strong>Name:</strong> {{ recordToDelete.name }}</div>
+                <div><strong>Value:</strong> {{ recordToDelete.content }}</div>
+              </div>
+            </div>
+            <div class="modal-footer border-top py-2">
+              <button class="btn btn-outline-secondary btn-sm mb-0" @click="recordToDelete = null">Cancel</button>
+              <button class="btn bg-gradient-danger btn-sm mb-0 d-flex align-items-center gap-1" @click="confirmDeleteRecord" :disabled="deletingRecord">
+                <span v-if="deletingRecord" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-xs">delete</i>
+                <span>Delete Record</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
@@ -507,14 +541,25 @@ const saveRecord = async () => {
   }
 }
 
-const deleteRecord = async (record) => {
-  if (!confirm(`Are you sure you want to delete this ${record.type} record?`)) return
+const recordToDelete = ref(null)
+const deletingRecord = ref(false)
+
+const deleteRecord = (record) => {
+  recordToDelete.value = record
+}
+
+const confirmDeleteRecord = async () => {
+  if (!recordToDelete.value) return
   try {
-    await axios.delete(`/dns/${selectedDomain.value.domain}/records/${record.id}`)
+    deletingRecord.value = true
+    await axios.delete(`/dns/${selectedDomain.value.domain}/records/${recordToDelete.value.id}`)
     showAlert('success', 'Record deleted successfully')
+    recordToDelete.value = null
     loadRecords()
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to delete record')
+  } finally {
+    deletingRecord.value = false
   }
 }
 </script>

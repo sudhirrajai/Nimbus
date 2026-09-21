@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use App\Services\SiteIsolationService;
 
 class WordPressController extends Controller
 {
@@ -43,8 +44,8 @@ class WordPressController extends Controller
                 $versionFile = $checkPath . '/wp-includes/version.php';
                 $wpVersion = 'Unknown';
                 if (file_exists($versionFile)) {
-                    $versionContent = file_get_contents($versionFile);
-                    if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $versionContent, $m)) {
+                    $versionContent = SiteIsolationService::readFile($versionFile);
+                    if ($versionContent && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $versionContent, $m)) {
                         $wpVersion = $m[1];
                     }
                 }
@@ -82,7 +83,9 @@ class WordPressController extends Controller
                 $sslEnabled = false;
                 $sslOutput = [];
                 $sslReturn = 0;
-                exec("sudo test -f " . escapeshellarg("/etc/letsencrypt/live/{$domain}/fullchain.pem") . " && echo 'exists'", $sslOutput, $sslReturn);
+                $leCert = escapeshellarg("/etc/letsencrypt/live/{$domain}/fullchain.pem");
+                $customCert = escapeshellarg("/etc/nginx/ssl/{$domain}/fullchain.pem");
+                exec("(sudo test -f {$leCert} || sudo test -f {$customCert}) && echo 'exists'", $sslOutput, $sslReturn);
                 if ($sslReturn === 0 && isset($sslOutput[0]) && $sslOutput[0] === 'exists') {
                     $sslEnabled = true;
                 }
@@ -217,17 +220,19 @@ class WordPressController extends Controller
             $url = 'http://' . $domain;
             $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core install --url=" . escapeshellarg($url) . " --title=" . escapeshellarg($request->site_title) . " --admin_user=" . escapeshellarg($request->admin_user) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($request->admin_email) . " --allow-root 2>&1", $output);
 
-            // 5. Set permissions
-            $this->execCmd("sudo chown -R www-data:www-data " . escapeshellarg($domainPath), $output);
-            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type d -exec chmod 755 {} \\;", $output);
-            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type f -exec chmod 644 {} \\;", $output);
+            // 5. Set permissions with isolated site user
+            $siteUser = \App\Services\SiteIsolationService::siteUser($domain);
+            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath), $output);
+            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type d -exec chmod 750 {} \\;", $output);
+            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type f -exec chmod 640 {} \\;", $output);
+            $this->execCmd("sudo chmod 600 " . escapeshellarg($domainPath . '/wp-config.php') . " 2>/dev/null || true", $output);
 
             // Check WP version
             $wpVersion = 'Unknown';
             $versionFile = $domainPath . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
-                $content = file_get_contents($versionFile);
-                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                $content = SiteIsolationService::readFile($versionFile);
+                if ($content && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
                     $wpVersion = $m[1];
                 }
             }
@@ -328,8 +333,8 @@ class WordPressController extends Controller
             // Re-check version
             $versionFile = $site->path . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
-                $content = file_get_contents($versionFile);
-                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                $content = SiteIsolationService::readFile($versionFile);
+                if ($content && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
                     $site->update(['wp_version' => $m[1], 'last_checked_at' => now()]);
                 }
             }
@@ -412,7 +417,8 @@ class WordPressController extends Controller
 
         if (!file_exists($path)) return $config;
 
-        $content = file_get_contents($path);
+        $content = SiteIsolationService::readFile($path);
+        if (!$content) return $config;
 
         if (preg_match("/define\s*\(\s*['\"]DB_NAME['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/", $content, $m)) {
             $config['db_name'] = $m[1];
@@ -589,15 +595,17 @@ PHP;
             $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core download --force --skip-content --allow-root 2>&1", $output);
 
             // Reset permissions to ensure everything is correct
-            $this->execCmd("sudo chown -R www-data:www-data " . escapeshellarg($site->path), $output);
-            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type d -exec chmod 755 {} \\;", $output);
-            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type f -exec chmod 644 {} \\;", $output);
+            $siteUser = \App\Services\SiteIsolationService::siteUser(basename($site->path));
+            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($site->path), $output);
+            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type d -exec chmod 750 {} \\;", $output);
+            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type f -exec chmod 640 {} \\;", $output);
+            $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
             // Re-check version in case it changed/was upgraded
             $versionFile = $site->path . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
-                $content = file_get_contents($versionFile);
-                if (preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
+                $content = SiteIsolationService::readFile($versionFile);
+                if ($content && preg_match("/\\\$wp_version\s*=\s*'([^']+)'/", $content, $m)) {
                     $site->update(['wp_version' => $m[1], 'last_checked_at' => now()]);
                 }
             }

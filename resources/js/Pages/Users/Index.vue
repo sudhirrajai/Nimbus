@@ -8,11 +8,11 @@
       <div class="card bg-gradient-dark">
         <div class="card-body p-3">
           <div class="row align-items-center">
-            <div class="col-8">
+            <div class="col-12 col-md-8 mb-2 mb-md-0">
               <h4 class="text-white mb-0"><i class="material-symbols-rounded me-2">group</i>User Management</h4>
               <p class="text-white text-sm mb-0 opacity-8">Manage panel users, roles, and website access</p>
             </div>
-            <div class="col-4 text-end">
+            <div class="col-12 col-md-4 text-md-end text-start">
               <button class="btn btn-sm bg-gradient-success mb-0" @click="openCreateModal">
                 <i class="material-symbols-rounded text-sm me-1">person_add</i> Add User
               </button>
@@ -47,10 +47,10 @@
     <div class="col-12">
       <div class="card">
         <div class="card-header pb-0">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h6 class="mb-0"><i class="material-symbols-rounded text-sm me-1">people</i> Panel Users</h6>
-            <div class="d-flex align-items-center gap-3">
-              <div class="input-group input-group-sm" style="width: 250px;">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <div class="input-group input-group-sm" style="min-width: 180px; max-width: 250px;">
                 <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                 <input v-model="searchQuery" type="text" class="form-control" placeholder="Search users by name or email...">
               </div>
@@ -74,6 +74,7 @@
                 <tr>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">User</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Role</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">File Manager</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Linux User</th>
                   <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Websites</th>
                   <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
@@ -98,6 +99,17 @@
                   <td>
                     <span class="badge badge-sm" :class="user.role === 'root' ? 'bg-gradient-danger' : user.role === 'admin' ? 'bg-gradient-warning' : 'bg-gradient-info'">
                       {{ user.role }}
+                    </span>
+                  </td>
+                  <td>
+                    <span v-if="user.file_manager_scope === 'root'" class="badge badge-sm bg-gradient-danger d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">admin_panel_settings</i> Root (/)
+                    </span>
+                    <span v-else-if="user.file_manager_scope === 'projects'" class="badge badge-sm bg-gradient-info d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">folder_special</i> Projects (/var/www)
+                    </span>
+                    <span v-else class="badge badge-sm bg-gradient-secondary d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">folder</i> Domain Only
                     </span>
                   </td>
                   <td><code class="text-xs">{{ user.linux_user || '-' }}</code></td>
@@ -188,6 +200,21 @@
                 <option value="user">User — Access assigned websites only</option>
                 <option value="admin">Admin — Manage assigned websites + view stats</option>
               </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label d-flex justify-content-between align-items-center">
+                <span>File Manager Scope *</span>
+                <small class="text-muted">Filesystem Boundary</small>
+              </label>
+              <select class="form-control form-select" v-model="userForm.file_manager_scope" :disabled="editingUser?.is_protected">
+                <option value="domain">Assigned Domains Only (/var/www/domain)</option>
+                <option value="projects">Web Projects Root (/var/www) — All Sites</option>
+                <option value="root">Full Server Root (/) — Super Admin</option>
+              </select>
+              <div class="form-text text-xs text-secondary mt-1">
+                <i class="material-symbols-rounded text-xs align-middle me-1">shield</i>
+                Allows super admin to delegate server root or multi-project file manager access to other admins.
+              </div>
             </div>
           </div>
           <div class="modal-footer border-0">
@@ -336,7 +363,7 @@ const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
 
-const userForm = ref({ name: '', email: '', password: '', role: 'user' })
+const userForm = ref({ name: '', email: '', password: '', role: 'user', file_manager_scope: 'domain' })
 const websiteAssignments = ref([]) // [{ domain, permissions: [] }]
 
 const allPermissions = [
@@ -402,13 +429,19 @@ const loadDomains = async () => {
 
 const openCreateModal = () => {
   editingUser.value = null
-  userForm.value = { name: '', email: '', password: '', role: 'user' }
+  userForm.value = { name: '', email: '', password: '', role: 'user', file_manager_scope: 'domain' }
   showUserModal.value = true
 }
 
 const openEditModal = (user) => {
   editingUser.value = user
-  userForm.value = { name: user.name, email: user.email, password: '', role: user.role }
+  userForm.value = {
+    name: user.name,
+    email: user.email,
+    password: '',
+    role: user.role,
+    file_manager_scope: user.file_manager_scope || 'domain'
+  }
   showUserModal.value = true
 }
 

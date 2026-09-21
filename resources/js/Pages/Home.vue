@@ -428,6 +428,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
+import { formatTime } from '@/Utils/date'
+import Chart from 'chart.js/auto'
 
 const props = defineProps({
   serverStats: {
@@ -436,7 +438,24 @@ const props = defineProps({
   }
 })
 
-const liveStats = ref({ ...props.serverStats })
+const normalizeStats = (raw) => {
+  if (!raw) return raw
+  const data = { ...raw }
+  if (Array.isArray(data.disk) && data.disk.length > 0) {
+    const root = data.disk.find(d => d.mount === '/') || data.disk[0]
+    data.disk = {
+      total: root.total || '0 B',
+      used: root.used || '0 B',
+      free: root.free || '0 B',
+      usage_percent: root.percentage ?? root.usage_percent ?? 0
+    }
+  } else if (!data.disk || typeof data.disk !== 'object') {
+    data.disk = { total: '0 B', used: '0 B', free: '0 B', usage_percent: 0 }
+  }
+  return data
+}
+
+const liveStats = ref(normalizeStats(props.serverStats))
 const isRefreshing = ref(false)
 const chartsReady = ref(false)
 
@@ -451,12 +470,13 @@ const loadHistory = ref([])
 const timeLabels = ref([])
 
 onMounted(() => {
-  console.log('Component mounted, loading Chart.js...')
-  loadChartJs()
+  initializeHistoryData()
+  initializeCharts()
+  startAutoRefresh()
+  chartsReady.value = true
 })
 
 onUnmounted(() => {
-  console.log('Component unmounting, cleaning up...')
   if (refreshInterval) {
     clearInterval(refreshInterval)
     refreshInterval = null
@@ -477,43 +497,6 @@ const destroyCharts = () => {
     loadChart.destroy()
     loadChart = null
   }
-}
-
-const loadChartJs = () => {
-  if (typeof Chart !== 'undefined') {
-    console.log('Chart.js already loaded')
-    initializeApp()
-    return
-  }
-
-  const script = document.createElement('script')
-  script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
-  script.async = true
-  
-  script.onload = () => {
-    console.log('Chart.js loaded successfully')
-    initializeApp()
-  }
-  
-  script.onerror = () => {
-    console.error('Failed to load Chart.js')
-  }
-  
-  document.head.appendChild(script)
-}
-
-const initializeApp = () => {
-  setTimeout(() => {
-    if (typeof Chart !== 'undefined') {
-      console.log('Initializing charts and auto-refresh...')
-      initializeHistoryData()
-      initializeCharts()
-      startAutoRefresh()
-      chartsReady.value = true
-    } else {
-      console.error('Chart.js is still not available')
-    }
-  }, 300)
 }
 
 const initializeHistoryData = () => {
@@ -712,8 +695,10 @@ const startAutoRefresh = () => {
 }
 
 const refreshStats = async () => {
+  if (typeof document !== 'undefined' && document.hidden) {
+    return // Pause auto-refreshing when tab is in background
+  }
   if (isRefreshing.value) {
-    console.log('Already refreshing, skipping...')
     return
   }
   
@@ -724,7 +709,7 @@ const refreshStats = async () => {
     const response = await axios.get('/dashboard/stats')
     console.log('Stats received:', response.data)
 
-    liveStats.value = response.data
+    liveStats.value = normalizeStats(response.data)
 
     timeLabels.value.shift()
     timeLabels.value.push(formatTime(new Date()))
@@ -750,28 +735,24 @@ const refreshStats = async () => {
   }
 }
 
-const formatTime = (date) => {
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  })
-}
+
 
 const getProgressClass = (percentage) => {
+  if (percentage === undefined || percentage === null || isNaN(percentage)) return 'bg-gradient-secondary'
   if (percentage < 60) return 'bg-gradient-success'
   if (percentage < 80) return 'bg-gradient-warning'
   return 'bg-gradient-danger'
 }
 
 const getStatusBadge = (percentage) => {
+  if (percentage === undefined || percentage === null || isNaN(percentage)) return 'bg-gradient-secondary'
   if (percentage < 60) return 'bg-gradient-success'
   if (percentage < 80) return 'bg-gradient-warning'
   return 'bg-gradient-danger'
 }
 
 const getStatusText = (percentage) => {
+  if (percentage === undefined || percentage === null || isNaN(percentage)) return 'Normal'
   if (percentage < 60) return 'Good'
   if (percentage < 80) return 'Warning'
   return 'Critical'

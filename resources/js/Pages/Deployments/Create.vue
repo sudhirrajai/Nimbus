@@ -207,24 +207,79 @@
 
                 <!-- Token input for private HTTPS repos -->
                 <div v-if="form.repo_type === 'private' && form.url_type === 'https'" class="form-group mb-4">
-                  <label class="form-control-label font-weight-bold">
-                    <i class="material-symbols-rounded text-sm me-1">key</i>
-                    GitHub Personal Access Token
-                  </label>
-                  <div class="input-group input-group-outline">
-                    <input
-                      :type="showToken ? 'text' : 'password'"
-                      v-model="form.access_token"
-                      class="form-control"
-                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    >
-                    <button class="btn btn-outline-dark mb-0" @click="showToken = !showToken" type="button">
-                      <i class="material-symbols-rounded text-sm">{{ showToken ? 'visibility_off' : 'visibility' }}</i>
-                    </button>
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-control-label font-weight-bold mb-0">
+                      <i class="material-symbols-rounded text-sm me-1 align-middle">key</i>
+                      Personal Access Token / App Password
+                    </label>
+                    <span v-if="savedTokens.length > 0" class="badge bg-light text-dark text-xxs font-weight-normal border">
+                      {{ savedTokens.length }} saved {{ savedTokens.length === 1 ? 'credential' : 'credentials' }} available
+                    </span>
                   </div>
-                  <small class="text-muted d-block mt-1">
-                    Required for private repositories. Generate at <a href="https://github.com/settings/tokens" target="_blank" class="text-dark">github.com/settings/tokens</a> (needs <code>repo</code> scope).
-                  </small>
+
+                  <!-- Quick Select Saved Token (Vault) -->
+                  <div v-if="savedTokens.length > 0" class="mb-3 p-3 bg-gray-100 border-radius-lg border">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <span class="text-xs font-weight-bold text-dark d-flex align-items-center">
+                        <i class="material-symbols-rounded text-sm text-success me-1">lock_reset</i>
+                        Reuse Saved Git Credential
+                      </span>
+                      <button
+                        v-if="selectedTokenMode === 'saved'"
+                        type="button"
+                        class="btn btn-link text-xs text-primary p-0 mb-0"
+                        @click="switchToManualToken"
+                      >
+                        + Enter New / Different Token
+                      </button>
+                      <button
+                        v-else
+                        type="button"
+                        class="btn btn-link text-xs text-success p-0 mb-0 font-weight-bold"
+                        @click="selectedTokenMode = 'saved'"
+                      >
+                        Select from Saved Tokens
+                      </button>
+                    </div>
+
+                    <div v-if="selectedTokenMode === 'saved'">
+                      <select
+                        class="form-select text-xs font-monospace bg-white border"
+                        v-model="selectedSavedTokenId"
+                        @change="onSelectSavedToken"
+                      >
+                        <option value="" disabled>-- Select a saved token to reuse --</option>
+                        <option v-for="t in savedTokens" :key="t.id" :value="t.id">
+                          [{{ t.provider }}] {{ t.masked_token }} — used in {{ t.domain }}{{ t.used_in.length > 1 ? ` (+${t.used_in.length - 1} more)` : '' }}
+                        </option>
+                      </select>
+                      <small class="text-secondary d-block mt-1 text-xxs">
+                        <i class="material-symbols-rounded text-xxs me-1 align-middle text-success">check_circle</i>
+                        Selecting a saved token reuses credentials securely without having to generate a new token in GitHub/GitLab.
+                      </small>
+                    </div>
+                  </div>
+
+                  <!-- Manual Token Input -->
+                  <div v-if="selectedTokenMode === 'manual' || savedTokens.length === 0">
+                    <div class="input-group input-group-outline">
+                      <input
+                        :type="showToken ? 'text' : 'password'"
+                        v-model="form.access_token"
+                        class="form-control"
+                        placeholder="ghp_xxxx or glpat-xxxx or app password"
+                      >
+                      <button class="btn btn-outline-dark mb-0" @click="showToken = !showToken" type="button">
+                        <i class="material-symbols-rounded text-sm">{{ showToken ? 'visibility_off' : 'visibility' }}</i>
+                      </button>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                      Required for private HTTPS repositories. 
+                      GitHub: <a href="https://github.com/settings/tokens" target="_blank" class="text-dark font-weight-bold">Personal Access Token</a> (needs <code>repo</code> scope) &bull; 
+                      GitLab: Token with <code>read_repository</code> &bull; 
+                      Bitbucket: App password with repository read permission.
+                    </small>
+                  </div>
                 </div>
 
                 <!-- SSH Key Display for SSH repos -->
@@ -522,6 +577,10 @@ const form = ref({
   branch: 'main',
 })
 
+const savedTokens = ref([])
+const selectedSavedTokenId = ref('')
+const selectedTokenMode = ref('saved') // 'saved' or 'manual'
+
 const alert = ref({
   show: false,
   type: 'success',
@@ -530,6 +589,7 @@ const alert = ref({
 
 onMounted(() => {
   loadDomains()
+  loadSavedTokens()
 })
 
 const showAlert = (type, message) => {
@@ -562,6 +622,39 @@ const loadDomains = async () => {
   } finally {
     loadingDomains.value = false
   }
+}
+
+const loadSavedTokens = async () => {
+  try {
+    const res = await axios.get('/deployments/saved-tokens')
+    if (res.data.success && res.data.tokens?.length > 0) {
+      savedTokens.value = res.data.tokens
+      // Pre-select first token if currently empty
+      if (!form.value.access_token && savedTokens.value.length > 0) {
+        selectedSavedTokenId.value = savedTokens.value[0].id
+        form.value.access_token = savedTokens.value[0].token
+      }
+    } else {
+      savedTokens.value = []
+      selectedTokenMode.value = 'manual'
+    }
+  } catch (error) {
+    console.warn('Could not load saved tokens:', error)
+    selectedTokenMode.value = 'manual'
+  }
+}
+
+const onSelectSavedToken = () => {
+  const chosen = savedTokens.value.find(t => t.id === selectedSavedTokenId.value)
+  if (chosen) {
+    form.value.access_token = chosen.token
+  }
+}
+
+const switchToManualToken = () => {
+  selectedTokenMode.value = 'manual'
+  selectedSavedTokenId.value = ''
+  form.value.access_token = ''
 }
 
 const nextStep = () => {
@@ -618,7 +711,7 @@ const fetchBranches = async () => {
       showAlert('danger', 'Failed to fetch branches: ' + (res.data.error || 'Unknown error'))
     }
   } catch (error) {
-    showAlert('danger', 'Failed to fetch branches')
+    showAlert('danger', error.response?.data?.error || error.response?.data?.message || 'Failed to fetch branches')
   } finally {
     fetchingBranches.value = false
   }
@@ -676,6 +769,12 @@ const copySshKey = () => {
 import { watch } from 'vue'
 watch(() => form.value.url_type, (newVal) => {
   if (newVal === 'ssh') {
+    loadSshKey();
+  }
+})
+
+watch(currentStep, (newStep) => {
+  if (newStep === 2 && form.value.url_type === 'ssh') {
     loadSshKey();
   }
 })

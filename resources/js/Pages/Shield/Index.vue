@@ -2,12 +2,12 @@
     <MainLayout>
         <div class="container-fluid py-4 bg-gray-100 min-vh-100">
             <!-- Header Section -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
                 <div>
                     <h3 class="font-weight-bolder mb-0">Nimbus Shield</h3>
                     <p class="text-sm mb-0 text-secondary">Advanced real-time protection & firewall management.</p>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex flex-wrap gap-2">
                     <div v-if="scanning" class="d-flex align-items-center me-3">
                         <div class="spinner-grow text-primary spinner-grow-sm me-2" role="status"></div>
                         <span class="text-xs font-weight-bold text-primary">System Scan in Progress...</span>
@@ -487,7 +487,7 @@
                                             <label class="text-sm font-weight-bold mb-1 d-block">Preferred Scan Time (24h format)</label>
                                             <div class="d-flex align-items-center gap-2">
                                                 <input type="time" v-model="stats.auto_scan_time" class="form-control border px-2 w-25" :disabled="!stats.auto_scan_enabled">
-                                                <span class="text-xs text-secondary">Server time: {{ new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
+                                                <span class="text-xs text-secondary">Server time: {{ formatTime(new Date()) }}</span>
                                             </div>
                                             <p class="text-xs text-secondary mt-2">
                                                 <i class="material-symbols-rounded text-xs me-1">info</i>
@@ -754,6 +754,7 @@
 import MainLayout from '@/Layouts/MainLayout.vue';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import { formatDate, formatTime } from '@/Utils/date';
 
 const loading = ref(true)
 const scanning = ref(false)
@@ -1170,18 +1171,7 @@ const getStatusBadgeClass = (status) => {
     }
 }
 
-const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-    }).format(date);
-}
+
 
 const showNotification = (message, type = 'success') => {
     toastMessage.value = message

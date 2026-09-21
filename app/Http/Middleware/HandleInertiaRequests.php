@@ -52,8 +52,23 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        // Resolve panel timezone from database settings, fallback to Asia/Kolkata
+        $panelTimezone = 'Asia/Kolkata';
+        try {
+            $dbTz = \App\Models\Setting::where('key', 'timezone')->value('value');
+            if (!empty($dbTz)) {
+                $panelTimezone = $dbTz;
+            }
+        } catch (\Exception $e) {
+            // fallback to default
+        }
+
+        $now = now();
+        $localizedNow = $now->copy()->setTimezone($panelTimezone);
+
         return [
             ...parent::share($request),
+            'timezone' => $panelTimezone,
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,
@@ -66,9 +81,18 @@ class HandleInertiaRequests extends Middleware
                     'assigned_domains' => $user->isRoot() ? [] : $assignedDomains,
                 ] : null,
             ],
+            'server_info' => [
+                'time' => $localizedNow->toIso8601String(),
+                'timestamp' => $now->getTimestamp(),
+                'timezone' => $panelTimezone,
+                'timezone_name' => $panelTimezone,
+                'timezone_offset' => $localizedNow->offset,
+                'formatted' => $localizedNow->format('Y-m-d H:i:s T'),
+            ],
             'license_warning' => \App\Support\LicenseGuard::shouldShowWarning()
                 ? \App\Support\LicenseGuard::warningMessage()
                 : null,
+            'license_modules' => \App\Support\LicenseGuard::allowedModules(),
         ];
     }
 }

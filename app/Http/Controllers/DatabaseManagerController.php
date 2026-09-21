@@ -748,7 +748,12 @@ class DatabaseManagerController extends Controller
             $safeDb = $this->sanitizeIdentifier($db);
             $safeTable = $this->sanitizeIdentifier($table);
 
-            $pdo->exec("DROP TABLE IF EXISTS `{$safeDb}`.`{$safeTable}`");
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS `{$safeDb}`.`{$safeTable}`");
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
 
             return response()->json([
                 'success' => true,
@@ -773,13 +778,141 @@ class DatabaseManagerController extends Controller
             $safeDb = $this->sanitizeIdentifier($db);
             $safeTable = $this->sanitizeIdentifier($table);
 
-            $pdo->exec("TRUNCATE TABLE `{$safeDb}`.`{$safeTable}`");
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                $pdo->exec("TRUNCATE TABLE `{$safeDb}`.`{$safeTable}`");
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => "Table '{$table}' truncated successfully"
             ]);
         } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Drop all tables and views in database with foreign key checks disabled
+     */
+    public function dropAllTables(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied: You do not have access to this database.'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+
+            // Fetch all tables and views from information_schema
+            $stmt = $pdo->prepare("SELECT TABLE_NAME, TABLE_TYPE FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?");
+            $stmt->execute([$db]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if (empty($rows)) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Database has no tables or views to drop',
+                    'dropped_tables' => 0,
+                    'dropped_views' => 0
+                ]);
+            }
+
+            $tables = [];
+            $views = [];
+            foreach ($rows as $row) {
+                $name = $row['TABLE_NAME'] ?? $row['table_name'] ?? '';
+                $type = strtoupper($row['TABLE_TYPE'] ?? $row['table_type'] ?? '');
+                if (!$name) continue;
+                if ($type === 'VIEW') {
+                    $views[] = $name;
+                } else {
+                    $tables[] = $name;
+                }
+            }
+
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                // Drop views first
+                foreach ($views as $view) {
+                    $safeView = $this->sanitizeIdentifier($view);
+                    $pdo->exec("DROP VIEW IF EXISTS `{$safeDb}`.`{$safeView}`");
+                }
+
+                // Drop all tables
+                foreach ($tables as $table) {
+                    $safeTable = $this->sanitizeIdentifier($table);
+                    $pdo->exec("DROP TABLE IF EXISTS `{$safeDb}`.`{$safeTable}`");
+                }
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
+
+            $totalCount = count($tables) + count($views);
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully dropped {$totalCount} objects (" . count($tables) . " tables, " . count($views) . " views).",
+                'dropped_tables' => count($tables),
+                'dropped_views' => count($views)
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to drop all tables for DB {$db}: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Truncate all tables in database with foreign key checks disabled
+     */
+    public function truncateAllTables(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied: You do not have access to this database.'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $safeDb = $this->sanitizeIdentifier($db);
+
+            // Fetch base tables only
+            $stmt = $pdo->prepare("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'");
+            $stmt->execute([$db]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if (empty($rows)) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Database has no tables to truncate',
+                    'truncated_tables' => 0
+                ]);
+            }
+
+            $tables = [];
+            foreach ($rows as $row) {
+                $name = $row['TABLE_NAME'] ?? $row['table_name'] ?? '';
+                if ($name) $tables[] = $name;
+            }
+
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                foreach ($tables as $table) {
+                    $safeTable = $this->sanitizeIdentifier($table);
+                    $pdo->exec("TRUNCATE TABLE `{$safeDb}`.`{$safeTable}`");
+                }
+            } finally {
+                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully truncated " . count($tables) . " tables.",
+                'truncated_tables' => count($tables)
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to truncate all tables for DB {$db}: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -1077,7 +1210,8 @@ class DatabaseManagerController extends Controller
                     'columns' => $columns,
                     'rows' => $rows,
                     'count' => count($rows),
-                    'execution_time_ms' => $executionTimeMs
+                    'execution_time_ms' => $executionTimeMs,
+                    'executed_query' => $sql,
                 ]);
             } else {
                 $affected = $pdo->exec($sql);
@@ -1088,7 +1222,8 @@ class DatabaseManagerController extends Controller
                     'type' => 'affected',
                     'affected_rows' => $affected !== false ? $affected : 0,
                     'message' => "Query executed successfully. Affected rows: " . ($affected !== false ? $affected : 0),
-                    'execution_time_ms' => $executionTimeMs
+                    'execution_time_ms' => $executionTimeMs,
+                    'executed_query' => $sql,
                 ]);
             }
         } catch (\Exception $e) {
@@ -1218,5 +1353,202 @@ class DatabaseManagerController extends Controller
         $pow = min($pow, count($units) - 1);
         $bytes /= pow(1024, $pow);
         return round($bytes, $precision) . ' ' . $units[$pow];
+    }
+
+    /**
+     * 13. Add Index to Table
+     */
+    public function addIndex(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $indexType = strtoupper($request->input('type', 'INDEX')); // INDEX, UNIQUE, FULLTEXT
+            $columns = $request->input('columns', []);
+            $indexName = $request->input('name');
+
+            if (empty($columns) || !is_array($columns)) {
+                return response()->json(['error' => 'At least one column must be selected'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            if (empty($indexName)) {
+                $indexName = "idx_" . implode('_', $columns);
+            }
+            $safeIndexName = $this->sanitizeIdentifier($indexName);
+
+            $safeCols = array_map(fn($c) => "`" . $this->sanitizeIdentifier($c) . "`", $columns);
+            $colsList = implode(', ', $safeCols);
+
+            $typeSql = in_array($indexType, ['UNIQUE', 'FULLTEXT']) ? $indexType : 'INDEX';
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` ADD {$typeSql} `{$safeIndexName}` ({$colsList})";
+            $pdo = $this->getPdoConnection($db);
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Index '{$indexName}' created successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 14. Drop Index from Table
+     */
+    public function dropIndex(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $indexName = $request->input('index_name');
+            if (empty($indexName)) {
+                return response()->json(['error' => 'Index name required'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+            $safeIndexName = $this->sanitizeIdentifier($indexName);
+
+            $pdo = $this->getPdoConnection($db);
+            if (strtoupper($indexName) === 'PRIMARY') {
+                $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` DROP PRIMARY KEY";
+            } else {
+                $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` DROP INDEX `{$safeIndexName}`";
+            }
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Index '{$indexName}' dropped"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 15. Add Foreign Key Constraint
+     */
+    public function addForeignKey(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $column = $request->input('column');
+            $refTable = $request->input('ref_table');
+            $refColumn = $request->input('ref_column');
+            $onDelete = strtoupper($request->input('on_delete', 'RESTRICT'));
+            $onUpdate = strtoupper($request->input('on_update', 'RESTRICT'));
+            $constraintName = $request->input('constraint_name');
+
+            if (empty($column) || empty($refTable) || empty($refColumn)) {
+                return response()->json(['error' => 'Column, referenced table, and referenced column are required'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+            $safeCol = $this->sanitizeIdentifier($column);
+            $safeRefTable = $this->sanitizeIdentifier($refTable);
+            $safeRefCol = $this->sanitizeIdentifier($refColumn);
+
+            if (empty($constraintName)) {
+                $constraintName = "fk_{$safeTable}_{$safeCol}";
+            }
+            $safeConstraintName = $this->sanitizeIdentifier($constraintName);
+
+            $validRules = ['RESTRICT', 'CASCADE', 'SET NULL', 'NO ACTION'];
+            $onDeleteRule = in_array($onDelete, $validRules) ? $onDelete : 'RESTRICT';
+            $onUpdateRule = in_array($onUpdate, $validRules) ? $onUpdate : 'RESTRICT';
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` ADD CONSTRAINT `{$safeConstraintName}` FOREIGN KEY (`{$safeCol}`) REFERENCES `{$safeDb}`.`{$safeRefTable}`(`{$safeRefCol}`) ON DELETE {$onDeleteRule} ON UPDATE {$onUpdateRule}";
+            
+            $pdo = $this->getPdoConnection($db);
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Foreign key constraint '{$constraintName}' added"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 16. Drop Foreign Key Constraint
+     */
+    public function dropForeignKey(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $constraintName = $request->input('constraint_name');
+            if (empty($constraintName)) {
+                return response()->json(['error' => 'Constraint name required'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+            $safeConstraintName = $this->sanitizeIdentifier($constraintName);
+
+            $sql = "ALTER TABLE `{$safeDb}`.`{$safeTable}` DROP FOREIGN KEY `{$safeConstraintName}`";
+            $pdo = $this->getPdoConnection($db);
+            $pdo->exec($sql);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Foreign key constraint '{$constraintName}' dropped"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 17. Lookup Foreign Key referenced row
+     */
+    public function lookupForeignKey(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $column = $request->input('column');
+            $val = $request->input('val');
+
+            if (empty($column) || $val === null) {
+                return response()->json(['error' => 'Column and value required'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+            $safeCol = $this->sanitizeIdentifier($column);
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->prepare("SELECT * FROM `{$safeDb}`.`{$safeTable}` WHERE `{$safeCol}` = :v LIMIT 1");
+            $stmt->execute([':v' => $val]);
+            $row = $stmt->fetch();
+
+            return response()->json([
+                'success' => true,
+                'row' => $row ?: null
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }
