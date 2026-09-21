@@ -1,9 +1,17 @@
 <template>
   <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
-    id="sidenav-main" style="display: block !important; overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; width: 14rem !important; max-width: 14rem !important; z-index: 999;">
+    id="sidenav-main" style="display: block !important; overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; width: 14rem !important; max-width: 14rem !important;">
     <div class="sidenav-header" style="height: 72px; width: 100%;">
-      <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
-        id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
+      <button 
+        type="button"
+        class="btn btn-link text-dark p-3 position-absolute end-0 top-0 d-xl-none m-0 shadow-none"
+        id="iconSidenav" 
+        @click="closeSidebar" 
+        style="cursor: pointer; z-index: 20; text-decoration: none; border: none; background: transparent; line-height: 1;"
+        aria-label="Close Sidebar"
+      >
+        <i class="material-symbols-rounded" style="font-size: 24px; color: #4b5563;">close</i>
+      </button>
 
       <Link class="navbar-brand px-4 py-3 m-0" href="/dashboard" style="display: flex; align-items: center; line-height: 1; gap: 8px;">
         <img :src="'/assets/img/nimbus_logo.png?v=2'" class="navbar-brand-img" alt="main_logo" style="width: 36px; height: 36px; border-radius: 6px;">
@@ -16,7 +24,7 @@
 
     <hr class="horizontal dark mt-0 mb-2" />
 
-    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" style="display: block !important; height: calc(100% - 155px) !important; max-height: calc(100% - 155px) !important; overflow-y: auto !important; overflow-x: hidden !important; width: 100% !important;">
+    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" @click="handleNavClick" style="display: block !important; height: calc(100% - 155px) !important; max-height: calc(100% - 155px) !important; overflow-y: auto !important; overflow-x: hidden !important; width: 100% !important; -webkit-overflow-scrolling: touch; touch-action: pan-y;">
       <ul class="navbar-nav">
 
         <li class="nav-item">
@@ -252,7 +260,7 @@
 
     <div class="sidenav-footer position-absolute w-100 bottom-0 bg-white" style="z-index: 10; border-top: 1px solid rgba(0, 0, 0, 0.06); padding-top: 8px; padding-bottom: 8px;">
       <div class="mx-3">
-        <a class="btn btn-outline-dark w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank">
+        <a class="btn btn-outline-dark w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank" @click="handleNavClick">
           <i class="material-symbols-rounded text-sm">menu_book</i>
           <span>Documentation</span>
         </a>
@@ -313,6 +321,12 @@ const closeSidebar = () => {
     const sidenav = document.getElementById('sidenav-main')
     sidenav?.classList.remove('show-mobile')
     document.body.style.overflow = ''
+  }
+}
+
+const handleNavClick = (event) => {
+  if (window.innerWidth < 1200 && event.target.closest('a')) {
+    closeSidebar()
   }
 }
 
@@ -380,5 +394,24 @@ onUnmounted(() => {
 :deep(.ps__rail-y),
 :deep(.ps__rail-x) {
   display: none !important;
+}
+</style>
+
+<style>
+#sidenav-main {
+  z-index: 999;
+}
+
+@media (max-width: 1199.98px) {
+  #sidenav-main {
+    transform: translateX(-110%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  #sidenav-main.show-mobile {
+    transform: translateX(0) !important;
+    z-index: 1050 !important;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
+  }
 }
 </style>

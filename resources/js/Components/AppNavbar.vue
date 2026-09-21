@@ -380,7 +380,9 @@ const logout = () => {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1039;
+  z-index: 1040;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 /* Premium Server Time Capsule */
@@ -494,15 +496,20 @@ const logout = () => {
 
 <style>
 /* Global styles for mobile sidebar */
+#sidenav-main {
+  z-index: 999;
+}
+
 @media (max-width: 1199.98px) {
   #sidenav-main {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-in-out;
+    transform: translateX(-110%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   #sidenav-main.show-mobile {
-    transform: translateX(0);
-    z-index: 1040;
+    transform: translateX(0) !important;
+    z-index: 1050 !important;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
   }
 }
 </style>
