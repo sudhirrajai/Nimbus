@@ -464,27 +464,37 @@
       </div>
 
       <!-- Output Modal -->
-      <div class="modal-backdrop fade show" v-if="showOutputModal" @click="showOutputModal = false"></div>
+      <div class="modal-backdrop fade show" v-if="showOutputModal" @click="isPollingSsl ? null : closeOutputModal()"></div>
       <div class="modal fade show d-block" v-if="showOutputModal">
         <div class="modal-dialog modal-lg modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="material-symbols-rounded me-2" :class="outputSuccess ? 'text-success' : 'text-danger'">
+              <h5 class="modal-title d-flex align-items-center">
+                <span v-if="isPollingSsl" class="spinner-border spinner-border-sm text-info me-2"></span>
+                <i v-else class="material-symbols-rounded me-2" :class="outputSuccess ? 'text-success' : 'text-danger'">
                   {{ outputSuccess ? 'check_circle' : 'error' }}
                 </i>
                 {{ outputTitle }}
               </h5>
-              <button type="button" class="btn-close" @click="showOutputModal = false"></button>
+              <button type="button" class="btn-close" @click="closeOutputModal" :disabled="isPollingSsl"></button>
             </div>
             <div class="modal-body">
-              <pre class="bg-dark text-light p-3 rounded" style="font-size: 12px; max-height: 400px; overflow: auto;">{{ outputContent }}</pre>
+              <div v-if="isPollingSsl" class="mb-3 d-flex align-items-center justify-content-between p-2 rounded bg-gray-100">
+                <span class="text-sm font-weight-bold text-dark d-flex align-items-center">
+                  <i class="material-symbols-rounded text-info text-sm me-1">sync</i>
+                  {{ currentProgressMessage || 'Installing SSL certificate in background...' }}
+                </span>
+                <span class="badge bg-gradient-info text-xxs">In Progress</span>
+              </div>
+              <pre class="bg-dark text-light p-3 rounded font-monospace" style="font-size: 12px; max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all;">{{ outputContent || 'Waiting for certbot output...' }}</pre>
             </div>
             <div class="modal-footer">
-              <button v-if="canForceDomain" class="btn bg-gradient-warning me-auto" @click="installSsl(canForceDomain, true); showOutputModal = false">
+              <button v-if="canForceDomain && !isPollingSsl" class="btn bg-gradient-warning me-auto" @click="installSsl(canForceDomain, true)">
                 <i class="material-symbols-rounded text-sm me-1">warning</i> Force Issue Anyway
               </button>
-              <button class="btn btn-outline-secondary" @click="showOutputModal = false">Close</button>
+              <button class="btn btn-outline-secondary" @click="closeOutputModal" :disabled="isPollingSsl">
+                {{ isPollingSsl ? 'Installing in background...' : 'Close' }}
+              </button>
             </div>
           </div>
         </div>
@@ -594,7 +604,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { formatDate } from '@/Utils/date'
 
@@ -635,6 +645,10 @@ const outputTitle = ref('')
 const outputContent = ref('')
 const outputSuccess = ref(true)
 const canForceDomain = ref(null)
+
+const isPollingSsl = ref(false)
+const currentProgressMessage = ref('')
+let pollingTimer = null
 
 const alert = ref({
   show: false,
@@ -834,30 +848,107 @@ const getDaysRemainingText = (daysRemaining) => {
 
 
 
+const closeOutputModal = () => {
+  if (isPollingSsl.value) return
+  showOutputModal.value = false
+  canForceDomain.value = null
+}
+
+onUnmounted(() => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+})
+
+const pollSslStatus = (domainName, isRenewal = false) => {
+  if (pollingTimer) clearInterval(pollingTimer)
+  isPollingSsl.value = true
+
+  pollingTimer = setInterval(async () => {
+    try {
+      const res = await axios.get('/ssl/install-status', {
+        params: { domain: domainName }
+      })
+
+      const { status, progress, log, error, details } = res.data
+
+      if (progress) {
+        currentProgressMessage.value = progress
+      }
+      if (log) {
+        outputContent.value = log
+      }
+
+      if (status === 'completed') {
+        clearInterval(pollingTimer)
+        pollingTimer = null
+        isPollingSsl.value = false
+        installing.value = null
+        renewing.value = null
+        outputSuccess.value = true
+        outputTitle.value = isRenewal ? 'SSL Renewal Complete' : 'SSL Installation Complete'
+        outputContent.value = details || log || 'Certificate installed successfully'
+        showAlert('success', `SSL certificate successfully ${isRenewal ? 'renewed' : 'installed'} for ${domainName}`)
+        await loadDomains()
+      } else if (status === 'failed') {
+        clearInterval(pollingTimer)
+        pollingTimer = null
+        isPollingSsl.value = false
+        installing.value = null
+        renewing.value = null
+        outputSuccess.value = false
+        outputTitle.value = isRenewal ? 'SSL Renewal Failed' : 'SSL Installation Failed'
+        outputContent.value = (error ? `${error}\n\n` : '') + (details || log || 'An error occurred during certbot execution.')
+        showAlert('danger', error || `Failed to ${isRenewal ? 'renew' : 'install'} SSL certificate`)
+      }
+    } catch (err) {
+      console.error('Failed to poll SSL status', err)
+    }
+  }, 2000)
+}
+
 const installSsl = async (domain, force = false) => {
+  const domainName = typeof domain === 'string' ? domain : (domain.domain || '')
   try {
-    installing.value = domain.domain
+    installing.value = domainName
     canForceDomain.value = null
-    showAlert('info', `Installing SSL certificate for ${domain.domain}... This may take a minute.`)
+    outputTitle.value = `Installing SSL: ${domainName}`
+    currentProgressMessage.value = 'Contacting server and launching background installation...'
+    outputContent.value = 'Preparing Let\'s Encrypt verification...'
+    outputSuccess.value = true
+    isPollingSsl.value = true
+    showOutputModal.value = true
     
     const response = await axios.post('/ssl/install', { 
-      domain: domain.domain,
+      domain: domainName,
       force: force 
     })
     
-    showAlert('success', response.data.message)
-    outputTitle.value = 'SSL Installation Complete'
-    outputContent.value = response.data.details || 'Certificate installed successfully'
-    outputSuccess.value = true
-    showOutputModal.value = true
-    
-    await loadDomains()
+    if (response.data.polling) {
+      pollSslStatus(domainName, false)
+    } else {
+      isPollingSsl.value = false
+      installing.value = null
+      showAlert('success', response.data.message)
+      outputTitle.value = 'SSL Installation Complete'
+      outputContent.value = response.data.details || 'Certificate installed successfully'
+      outputSuccess.value = true
+      await loadDomains()
+    }
   } catch (error) {
+    isPollingSsl.value = false
+    installing.value = null
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
+
     const errorData = error.response?.data
     showAlert('danger', errorData?.error || 'Failed to install SSL')
     
     if (errorData?.dns_warning && errorData?.can_force) {
-      canForceDomain.value = domain
+      canForceDomain.value = domainName
       outputTitle.value = 'DNS Verification Notice'
       outputContent.value = errorData.error + '\n\nIf you recently updated DNS records or your domain is proxied through a CDN (such as Cloudflare), you can click "Force Issue Anyway" below to proceed.'
       outputSuccess.value = false
@@ -868,21 +959,40 @@ const installSsl = async (domain, force = false) => {
       outputSuccess.value = false
       showOutputModal.value = true
     }
-  } finally {
-    installing.value = null
   }
 }
 
 const renewSsl = async (domain) => {
+  const domainName = typeof domain === 'string' ? domain : (domain.domain || '')
   try {
-    renewing.value = domain.domain
-    showAlert('info', `Renewing SSL certificate for ${domain.domain}...`)
+    renewing.value = domainName
+    outputTitle.value = `Renewing SSL: ${domainName}`
+    currentProgressMessage.value = 'Contacting server and launching background renewal...'
+    outputContent.value = 'Connecting to Let\'s Encrypt for renewal...'
+    outputSuccess.value = true
+    isPollingSsl.value = true
+    showOutputModal.value = true
     
-    const response = await axios.post('/ssl/renew', { domain: domain.domain })
+    const response = await axios.post('/ssl/renew', { domain: domainName })
     
-    showAlert('success', response.data.message)
-    await loadDomains()
+    if (response.data.polling) {
+      pollSslStatus(domainName, true)
+    } else {
+      isPollingSsl.value = false
+      renewing.value = null
+      showAlert('success', response.data.message)
+      outputTitle.value = 'SSL Renewal Complete'
+      outputContent.value = response.data.details || 'Certificate renewed successfully'
+      outputSuccess.value = true
+      await loadDomains()
+    }
   } catch (error) {
+    isPollingSsl.value = false
+    renewing.value = null
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
     showAlert('danger', error.response?.data?.error || 'Failed to renew SSL')
     if (error.response?.data?.details) {
       outputTitle.value = 'SSL Renewal Failed'
@@ -890,8 +1000,6 @@ const renewSsl = async (domain) => {
       outputSuccess.value = false
       showOutputModal.value = true
     }
-  } finally {
-    renewing.value = null
   }
 }
 

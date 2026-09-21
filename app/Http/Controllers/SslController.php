@@ -763,147 +763,74 @@ class SslController extends Controller
                 ], 422);
             }
 
-            // Ensure certbot is available (auto-install if needed)
-            $certbotPath = $this->ensureCertbot();
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
 
-            // Ensure all managed domain directories and log files exist before running certbot
-            // This prevents nginx -t from throwing [emerg] file not found errors
-            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
-
-            // Clean up any stale temp_checkpoint left by a previous failed certbot run.
-            // Without this, certbot fails with "Unable to revert temporary config" on every
-            // subsequent attempt, even though the certificate itself is issued successfully.
-            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
-
-            // Run certbot with nginx plugin
-            $output = [];
-            $returnCode = 0;
+            // Check if installation is already in progress
+            if (file_exists($statusFile)) {
+                $existing = json_decode(@file_get_contents($statusFile), true);
+                if (is_array($existing) && ($existing['status'] ?? '') === 'running') {
+                    $startedAt = isset($existing['started_at']) ? strtotime($existing['started_at']) : 0;
+                    if (time() - $startedAt < 600) {
+                        return response()->json([
+                            'status' => 'running',
+                            'message' => "SSL installation is already in progress for {$domain}",
+                            'domain' => $domain,
+                            'polling' => true
+                        ]);
+                    }
+                }
+            }
 
             // Determine if we should include the www. prefix
             $includeWww = false;
             $wwwDomain = "www.{$domain}";
-
-            // Heuristic to detect if it's a root domain (e.g., example.com) or a ccTLD (example.co.uk)
             $parts = explode('.', $domain);
-            $isRootDomain = false;
-            
-            if (count($parts) === 2) {
-                $isRootDomain = true;
-            } elseif (count($parts) === 3) {
+            $isRootDomain = (count($parts) === 2);
+            if (!$isRootDomain && count($parts) === 3) {
                 $commonSecondLevel = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
                 if (in_array($parts[1], $commonSecondLevel)) {
                     $isRootDomain = true;
                 }
             }
-            
-            // Only attempt to add www. for root domains, and ONLY if they actually resolve
+
             if ($isRootDomain) {
                 $dnsA = @dns_get_record($wwwDomain, DNS_A);
                 $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
-                
                 if (!empty($dnsA) || !empty($dnsAAAA)) {
                     $includeWww = true;
                 }
             }
 
-            // Build the certbot command dynamically based on DNS resolution
-            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain);
-            if ($includeWww) {
-                $cmd .= " -d " . escapeshellarg($wwwDomain);
-            }
-            $cmd .= " --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
+            // Initial status
+            $initialStatus = [
+                'status' => 'running',
+                'action' => 'install',
+                'domain' => $domain,
+                'progress' => "Starting SSL certificate installation for {$domain}...",
+                'started_at' => now()->toDateTimeString(),
+                'finished_at' => null,
+                'error' => null,
+                'details' => null
+            ];
+            File::put($statusFile, json_encode($initialStatus, JSON_PRETTY_PRINT));
+            File::put(storage_path("logs/ssl_{$domainSafe}.log"), "Queued SSL installation for {$domain} at " . now()->toDateTimeString() . "\n");
 
-            \Log::info("Running certbot: " . $cmd);
-            exec($cmd, $output, $returnCode);
-            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
-
-            $outputStr = implode("\n", $output);
-            \Log::info("Certbot output: " . $outputStr);
-
-            if ($returnCode !== 0) {
-                // Send failure notification
-                \App\Services\NotificationService::send(
-                    "SSL Certificate Installation Failed",
-                    "<p>Hello,</p><p>An attempt to install an SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($outputStr) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-                );
-
-                // Check for common errors
-                if (strpos($outputStr, 'too many certificates') !== false) {
-                    return response()->json([
-                        'error' => 'Rate limit reached. Please try again later.',
-                        'details' => $outputStr
-                    ], 429);
-                }
-
-                if (strpos($outputStr, 'DNS problem') !== false || strpos($outputStr, 'Could not reach') !== false) {
-                    return response()->json([
-                        'error' => 'DNS verification failed. Make sure your domain points to this server.',
-                        'details' => $outputStr
-                    ], 400);
-                }
-
-                if (strpos($outputStr, 'not found') !== false || strpos($outputStr, 'No module named') !== false) {
-                    return response()->json([
-                        'error' => 'Certbot plugin error. Try reinstalling: sudo apt-get install --reinstall python3-certbot-nginx',
-                        'details' => $outputStr
-                    ], 500);
-                }
-
-                if (strpos($outputStr, 'overwrite challenge file') !== false || strpos($outputStr, 'Unable to revert temporary config') !== false) {
-                    // The cert may still have been issued — try to deploy it
-                    exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
-                    $installOutput = [];
-                    $installCode = 0;
-                    exec("sudo {$certbotPath} install --cert-name " . escapeshellarg($domain) . " --nginx --non-interactive 2>&1", $installOutput, $installCode);
-                    exec("sudo systemctl reload nginx 2>/dev/null");
-                    cache()->forget("ssl_info_{$domain}");
-                    cache()->forget("dns_active_{$domain}");
-                    if ($installCode === 0) {
-                        return response()->json([
-                            'message' => "SSL certificate installed successfully for {$domain}",
-                            'details' => $outputStr . "\n" . implode("\n", $installOutput)
-                        ]);
-                    }
-                    return response()->json([
-                        'error' => 'Certificate was issued but nginx deployment hit a conflict with another site config. Run: certbot install --cert-name ' . $domain,
-                        'details' => $outputStr
-                    ], 500);
-                }
-
-                return response()->json([
-                    'error' => 'Failed to install SSL certificate',
-                    'details' => $outputStr
-                ], 500);
-            }
-
-            // Reload nginx to apply changes
-            exec("sudo systemctl reload nginx 2>&1");
-
-            // Clear cache to reflect the new certificate immediately
-            cache()->forget("ssl_info_{$domain}");
-            cache()->forget("dns_active_{$domain}");
-
-            // Send success notification
-            \App\Services\NotificationService::send(
-                "SSL Certificate Installed Successfully",
-                "<p>Hello,</p><p>An SSL certificate has been successfully installed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
+            // Launch background Artisan process
+            $artisan = base_path('artisan');
+            $cmd = "sudo nohup php " . escapeshellarg($artisan) . " ssl:provision " . escapeshellarg($domain) . " --action=install " . ($includeWww ? "--www " : "") . ($request->boolean('force') ? "--force " : "") . "> /dev/null 2>&1 &";
+            exec($cmd);
 
             return response()->json([
-                'message' => "SSL certificate installed successfully for {$domain}",
-                'details' => $outputStr
+                'status' => 'running',
+                'message' => "SSL certificate installation started for {$domain}",
+                'domain' => $domain,
+                'polling' => true
             ]);
+
         } catch (\Exception $e) {
-            \Log::error("Failed to install SSL: " . $e->getMessage());
-
-            \App\Services\NotificationService::send(
-                "SSL Certificate Installation Failed",
-                "<p>Hello,</p><p>An attempt to install an SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($e->getMessage()) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
-
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
+            \Log::error("Failed to start SSL install: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
@@ -952,101 +879,111 @@ class SslController extends Controller
                 return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
-            // Ensure certbot is available
-            $certbotPath = $this->ensureCertbot();
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
 
-            // Ensure all managed domain directories and log files exist before running certbot
-            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
-
-            // Clean up any stale temp_checkpoint from a previous failed run
-            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
-
-            // Run certbot renew for specific domain
-            $output = [];
-            $returnCode = 0;
-
-            // Determine if we should include the www. prefix
-            $includeWww = false;
-            $wwwDomain = "www.{$domain}";
-
-            // Heuristic to detect if it's a root domain (e.g., example.com) or a ccTLD (example.co.uk)
-            $parts = explode('.', $domain);
-            $isRootDomain = false;
-            
-            if (count($parts) === 2) {
-                $isRootDomain = true;
-            } elseif (count($parts) === 3) {
-                $commonSecondLevel = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
-                if (in_array($parts[1], $commonSecondLevel)) {
-                    $isRootDomain = true;
-                }
-            }
-            
-            // Only attempt to add www. for root domains, and ONLY if they actually resolve
-            if ($isRootDomain) {
-                $dnsA = @dns_get_record($wwwDomain, DNS_A);
-                $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
-                
-                if (!empty($dnsA) || !empty($dnsAAAA)) {
-                    $includeWww = true;
+            // Check if operation is already in progress
+            if (file_exists($statusFile)) {
+                $existing = json_decode(@file_get_contents($statusFile), true);
+                if (is_array($existing) && ($existing['status'] ?? '') === 'running') {
+                    $startedAt = isset($existing['started_at']) ? strtotime($existing['started_at']) : 0;
+                    if (time() - $startedAt < 600) {
+                        return response()->json([
+                            'status' => 'running',
+                            'message' => "SSL renewal is already in progress for {$domain}",
+                            'domain' => $domain,
+                            'polling' => true
+                        ]);
+                    }
                 }
             }
 
-            // By using --nginx -d instead of --cert-name, we bypass cert name mismatch issues
-            // and force reissue the certificate using the current active DNS resolution layout.
-            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain);
-            if ($includeWww) {
-                $cmd .= " -d " . escapeshellarg($wwwDomain);
-            }
-            $cmd .= " --force-renewal --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
+            $initialStatus = [
+                'status' => 'running',
+                'action' => 'renew',
+                'domain' => $domain,
+                'progress' => "Starting SSL certificate renewal for {$domain}...",
+                'started_at' => now()->toDateTimeString(),
+                'finished_at' => null,
+                'error' => null,
+                'details' => null
+            ];
+            File::put($statusFile, json_encode($initialStatus, JSON_PRETTY_PRINT));
+            File::put(storage_path("logs/ssl_{$domainSafe}.log"), "Queued SSL renewal for {$domain} at " . now()->toDateTimeString() . "\n");
 
-            \Log::info("Running certbot renew: " . $cmd);
-            exec($cmd, $output, $returnCode);
-            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
-
-            $outputStr = implode("\n", $output);
-            \Log::info("Certbot renew output: " . $outputStr);
-
-            if ($returnCode !== 0) {
-                // Send failure notification
-                \App\Services\NotificationService::send(
-                    "SSL Certificate Renewal Failed",
-                    "<p>Hello,</p><p>An attempt to renew the SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($outputStr) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-                );
-
-                return response()->json([
-                    'error' => 'Failed to renew SSL certificate',
-                    'details' => $outputStr
-                ], 500);
-            }
-
-            // Reload nginx
-            exec("sudo systemctl reload nginx 2>&1");
-
-            // Clear cache to reflect renewal
-            cache()->forget("ssl_info_{$domain}");
-
-            // Send success notification
-            \App\Services\NotificationService::send(
-                "SSL Certificate Renewed Successfully",
-                "<p>Hello,</p><p>The SSL certificate has been successfully renewed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
+            $artisan = base_path('artisan');
+            $cmd = "sudo nohup php " . escapeshellarg($artisan) . " ssl:provision " . escapeshellarg($domain) . " --action=renew > /dev/null 2>&1 &";
+            exec($cmd);
 
             return response()->json([
-                'message' => "SSL certificate renewed successfully for {$domain}",
-                'details' => $outputStr
+                'status' => 'running',
+                'message' => "SSL certificate renewal started for {$domain}",
+                'domain' => $domain,
+                'polling' => true
             ]);
         } catch (\Exception $e) {
-            \Log::error("Failed to renew SSL: " . $e->getMessage());
+            \Log::error("Failed to start SSL renewal: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 
-            \App\Services\NotificationService::send(
-                "SSL Certificate Renewal Failed",
-                "<p>Hello,</p><p>An attempt to renew the SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($e->getMessage()) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
+    /**
+     * Get SSL installation / renewal status and live log
+     */
+    public function getInstallStatus(Request $request)
+    {
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253'
+            ]);
+
+            $domain = strtolower(trim($request->input('domain')));
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
+            $logFile = storage_path("logs/ssl_{$domainSafe}.log");
+
+            if (!file_exists($statusFile)) {
+                return response()->json([
+                    'status' => 'idle',
+                    'domain' => $domain,
+                    'progress' => '',
+                    'log' => '',
+                    'error' => null,
+                    'details' => null
+                ]);
+            }
+
+            $statusData = json_decode(@file_get_contents($statusFile), true);
+            if (!is_array($statusData)) {
+                $statusData = ['status' => 'idle'];
+            }
+
+            $log = '';
+            if (file_exists($logFile)) {
+                $rawLog = file_get_contents($logFile);
+                $lines = explode("\n", $rawLog);
+                if (count($lines) > 80) {
+                    $log = implode("\n", array_slice($lines, -80));
+                } else {
+                    $log = $rawLog;
+                }
+            }
 
             return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
+                'status' => $statusData['status'] ?? 'idle',
+                'action' => $statusData['action'] ?? 'install',
+                'domain' => $domain,
+                'progress' => $statusData['progress'] ?? '',
+                'log' => $log,
+                'error' => $statusData['error'] ?? null,
+                'details' => $statusData['details'] ?? null
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 

@@ -188,6 +188,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/', [SslController::class, 'index'])->name('index');
         Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
         Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
+        Route::get('/install-status', [SslController::class, 'getInstallStatus'])->name('install-status');
         Route::post('/install-certbot', [SslController::class, 'installCertbotAction'])->name('install-certbot');
         Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
         Route::post('/custom', [SslController::class, 'installCustomCertificate'])->name('custom');
