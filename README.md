@@ -258,4 +258,4 @@ php artisan serve --port=2095
 
 ## 📄 License
 
-Nimbus Control Panel is proprietary software. All rights reserved. Distributed and managed through **VmCoreCentral**.
+Nimbus Control Panel is proprietary software. All rights reserved. Distributed and managed through **VMCORE**.
