@@ -19,22 +19,51 @@ NC='\033[0m' # No Color
 NIMBUS_DIR="/usr/local/nimbus"
 NIMBUS_USER="www-data"
 NIMBUS_PORT="2095"
-PHP_VERSION="8.2"
+PHP_VERSION="8.3"
 NODE_VERSION="20"
 GITHUB_REPO="https://github.com/sudhirrajai/Nimbus.git"
 INSTALL_MODE="git"
 VMCORE_URL="{{VMCORE_URL}}"
 SKIP_EXISTING=false
+LICENSE_KEY=""
 PANEL_SYSTEM_USER=""
 DB_ENGINE="mariadb"
 DB_ROOT_USER="root"
 DB_ROOT_PASS=""
 DB_AUTH_MODE="socket"
+IS_UNINSTALL=false
 
-if [ "${1}" = "--skip-existing" ]; then
-    SKIP_EXISTING=true
-    shift
-fi
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --skip-existing)
+            SKIP_EXISTING=true
+            shift
+            ;;
+        --license=*)
+            LICENSE_KEY="${1#*=}"
+            shift
+            ;;
+        --license|-l)
+            LICENSE_KEY="$2"
+            shift 2
+            ;;
+        --port=*)
+            NIMBUS_PORT="${1#*=}"
+            shift
+            ;;
+        --port|-p)
+            NIMBUS_PORT="$2"
+            shift 2
+            ;;
+        --uninstall|uninstall)
+            IS_UNINSTALL=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 detect_panel_system_user() {
     if [ -n "${SUDO_USER:-}" ] && id -u "${SUDO_USER}" >/dev/null 2>&1; then
@@ -161,7 +190,7 @@ fi
 # ─────────────────────────────────────────────────────────────────
 # UNINSTALL mode — redirect to dedicated uninstall.sh
 # ─────────────────────────────────────────────────────────────────
-if [ "${1}" = "--uninstall" ] || [ "${1}" = "uninstall" ]; then
+if [ "$IS_UNINSTALL" = true ]; then
     echo -e "${YELLOW}Redirecting to the dedicated Nimbus uninstaller...${NC}"
 
     # If uninstall.sh exists locally (e.g. cloned repo), use it directly
@@ -203,7 +232,7 @@ ESSENTIAL_PACKAGES=(
     apt-transport-https
     ca-certificates
     gnupg lsb-release
-    acl sudo
+    acl sudo fail2ban
 )
 if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${ESSENTIAL_PACKAGES[@]}"; then
     echo -e "${YELLOW}Essential packages already installed. Skipping.${NC}"
@@ -477,6 +506,17 @@ php artisan migrate --force
 # Seed default Asia/Kolkata timezone in panel settings
 php artisan tinker --execute="App\Models\Setting::updateOrCreate(['key' => 'timezone'], ['value' => 'Asia/Kolkata']);" >/dev/null 2>&1 || true
 
+# Activate license key if supplied via CLI
+if [ -n "$LICENSE_KEY" ]; then
+    echo -e "${YELLOW}Activating license key...${NC}"
+    php artisan tinker --execute="
+        \App\Models\Setting::updateOrCreate(['key' => 'license_key'], ['value' => '${LICENSE_KEY}']);
+        try {
+            app(\App\Services\LicenseService::class)->verify();
+        } catch (\Throwable \$e) {}
+    " >/dev/null 2>&1 || true
+fi
+
 # Initialize resource history baseline
 php artisan nimbus:collect-metrics >/dev/null 2>&1 || true
 
@@ -715,7 +755,7 @@ for PHP_DIR in /etc/php/*; do
         mkdir -p "/etc/systemd/system/php${V}-fpm.service.d"
         cat << EOF > "/etc/systemd/system/php${V}-fpm.service.d/nimbus.conf"
 [Service]
-ReadWritePaths=-${NIMBUS_DIR} -/var/www -/usr/share/adminer -/etc/nginx -/etc/php -/etc/supervisor -/etc/letsencrypt -/etc/postfix -/etc/dovecot
+ReadWritePaths=-${NIMBUS_DIR} -/var/www -/usr/share/adminer -/etc/nginx -/etc/php -/etc/supervisor -/etc/letsencrypt -/etc/postfix -/etc/dovecot -/etc/roundcube -/etc/opendkim
 EOF
         echo -e "Applied PHP-FPM write override for PHP version ${V}"
     fi
@@ -813,14 +853,15 @@ echo -e "  Sites:  /var/www/"
 echo -e "  Nginx:  /etc/nginx/sites-available/"
 echo -e "  Git/Queue User: ${PANEL_SYSTEM_USER}"
 echo ""
-echo -e "${BLUE}Services installed:${NC}"
-echo -e "  ✓ Nginx"
-echo -e "  ✓ PHP ${PHP_VERSION}-FPM"
+echo -e "${BLUE}Services & Security Stack installed:${NC}"
+echo -e "  ✓ Nginx (Reverse Proxy & Virtual Hosts)"
+echo -e "  ✓ PHP ${PHP_VERSION}-FPM (Multi-Version & Isolated Pools)"
 echo -e "  ✓ MariaDB"
-echo -e "  ✓ Composer"
-echo -e "  ✓ Node.js ${NODE_VERSION}"
-echo -e "  ✓ Supervisor"
-echo -e "  ✓ UFW Firewall"
+echo -e "  ✓ Composer & Node.js ${NODE_VERSION}"
+echo -e "  ✓ Supervisor (Queue Workers & Background Daemons)"
+echo -e "  ✓ UFW Firewall & Fail2Ban (Nimbus Shield)"
+echo -e "  ✓ Multi-Tenant ACL & Process Isolation"
+echo -e "  ✓ SQLite (Isolated Panel Database)"
 echo ""
 
 # Save credentials to file

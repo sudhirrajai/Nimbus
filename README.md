@@ -2,333 +2,260 @@
 
 # ☁️ Nimbus Control Panel
 
-### Modern, Lightweight Server Management for Laravel Developers
+### Next-Generation Cloud Server Management for Modern Web Applications
 
 [![Laravel](https://img.shields.io/badge/Laravel-12.x-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)](https://laravel.com)
-[![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://php.net)
+[![PHP](https://img.shields.io/badge/PHP-8.3+-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://php.net)
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.x-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white)](https://vuejs.org)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Inertia.js](https://img.shields.io/badge/Inertia.js-2.x-9553E9?style=for-the-badge&logo=inertia&logoColor=white)](https://inertiajs.com)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.x-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![License](https://img.shields.io/badge/License-Proprietary-blue?style=for-the-badge)](#)
 
 <br>
 
-<img src="https://img.shields.io/badge/Status-Beta-orange?style=flat-square" alt="Status">
-<img src="https://img.shields.io/badge/Version-1.0.0-green?style=flat-square" alt="Version">
+**Nimbus** is an ultra-fast, modern, and secure web hosting control panel engineered for Ubuntu and Debian servers. Designed from the ground up with Laravel 12 and Vue 3 (Inertia.js), Nimbus replaces legacy, clunky panels with a sleek glassmorphic interface, enterprise security, multi-PHP isolation, native mail services, and automated CI/CD workflows.
 
-<br><br>
+<br>
 
-**Nimbus** is a beautiful, intuitive web-based control panel for managing your Ubuntu/Debian servers. Built with Laravel and Vue.js, it provides a modern alternative to traditional panels like cPanel or Plesk.
-
-[Features](#-features) •
+[Key Features](#-key-features) •
+[Security & Shield](#-nimbus-shield--security) •
+[Mail & Webmail](#-mail--webmail-stack) •
+[Database Designer](#-native-database-manager--schema-designer) •
+[Backups](#-multi-destination-cloud-backups) •
 [Installation](#-installation) •
-[Screenshots](#-screenshots) •
-[Roadmap](#-roadmap) •
-[Contributing](#-contributing)
+[CLI Flags](#-installation-flags) •
+[Uninstallation](#-uninstallation)
 
 </div>
 
 ---
 
-## ✨ Features
+## ⚡ Key Features
 
 <table>
 <tr>
 <td width="50%">
- 
-### 🌐 Domain Management
-- Create and manage domains
-- Automatic Nginx configuration
-- Virtual host management
-- Directory browsing
-- **Upcoming:** Apache & Caddy support
+
+### 🌐 High-Performance Web & Domains
+- **Nginx Native:** Automated Virtual Host provisioning, HTTP/2 & HTTP/3 readiness, FastCGI caching, and WebSocket reverse-proxying.
+- **Multi-PHP Engine:** Run PHP **8.1, 8.2, 8.3, and 8.4** simultaneously.
+- **Isolated FPM Pools:** Every domain runs under its own dedicated FPM pool (`/etc/php/{version}/fpm/pool.d/{domain}.conf`) for strict performance and security isolation.
+- **One-Click SSL:** Automated Let's Encrypt certificate issuance, background queue renewals, and intelligent HTTP-01 pre-probing.
 
 </td>
 <td width="50%">
 
-### 📁 File Manager (Elite)
-- **Ace Editor Integration:** Pro syntax highlighting
-- **In-depth Search:** Find files by name or content
-- **Double-click Edit:** Seamless code editing
-- Web-based browser with glassmorphic UI
-- Permissions editor (chmod/chown)
+### 📁 Elite File Manager
+- **Ace Editor Pro:** Full-screen code editing with syntax highlighting for 50+ languages, code folding, and auto-completion.
+- **Smart Tail Preview:** High-speed, memory-efficient chunked reader for viewing massive log files without browser freezing.
+- **UTF-8 Sanitizer:** Clean text streaming that strips invalid byte sequences and avoids JSON encoding crashes.
+- **File Operations:** Visual permissions editor (`chmod`/`chown`), ZIP/TAR extraction & creation, deep content search.
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### 🔒 SSL Certificates
-- One-click Let's Encrypt SSL
-- Live certificate probing
-- Auto-renewal support
-- HTTPS redirects
+### 🌿 Git CI/CD & Deployments
+- **Zero-Downtime Deployments:** Automated Webhooks for GitHub, GitLab, and Bitbucket with custom deployment hooks (`deploy.sh`).
+- **Encrypted Token Vault:** Store Personal Access Tokens (PAT) and SSH deploy keys securely.
+- **Branch Management:** Switch branches, review commit logs, inspect line-by-line git diffs, and push/pull directly from the UI.
 
 </td>
 <td width="50%">
 
-### 🗄️ Database Management
-- Create MySQL/MariaDB databases
-- User management with permissions
-- phpMyAdmin integration
-- **Roadmap:** Multi-DB (SQLite, Postgre, NoSQL)
+### 🗄️ Native Database Studio
+- **No phpMyAdmin Required:** Complete in-panel database administration with zero third-party overhead.
+- **Visual Schema Designer:** Inspect tables, view columns, examine foreign keys, and optimize indexes.
+- **Interactive SQL Runner:** Execute queries with execution timers, pagination, and one-click CSV data export.
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### ⚡ Supervisor & Cron
-- Queue worker management
-- Process monitoring & logs
-- Visual cron scheduler
-- Human-readable schedules
+### ⚡ Background Workers & Cron
+- **Supervisor Manager:** Visual dashboard to start, stop, restart, and scale background queue processes and daemon workers.
+- **Visual Cron Scheduler:** Create and manage cron jobs with human-friendly frequency builders and execution output logs.
 
 </td>
 <td width="50%">
 
-### 🌿 Git & Deployment
-- Full Git integration (Status, Commit, Push/Pull)
-- Branch management & switching
-- Personal Access Token (PAT) auth
-- Repository path auto-detection
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🛒 WordPress Manager
-- Theme & Plugin management
-- User control & Settings
-- **Upcoming:** Quick One-click Install
-- Auto-configuration
-
-</td>
-<td width="50%">
-
-### 📊 Server Monitoring
-- Real-time CPU, RAM, Disk usage
-- Process list & controls
-- **Upcoming:** Long-term resource history
-- Network statistics
+### 👥 Multi-Tenancy & RBAC
+- **Tiered Role Architecture:** Super Admin (`root`), Tenant Administrator (`admin`), and Site Developer (`user`).
+- **Strict Tenant Boundaries:** Developers only see domains, databases, and cron jobs assigned to them.
 
 </td>
 </tr>
 </table>
 
-### Additional Features
+---
 
-- 🔧 **PHP Configuration** - Edit PHP.ini settings visually
-- 📝 **Log Viewer** - View Nginx, PHP, Laravel, and system logs
-- 🔄 **Auto Updates** - One-click panel updates from GitHub
-- 🎨 **Modern UI** - Beautiful Material Design interface
-- 🔐 **Secure** - Built-in security headers and permissions
+## 🛡️ Nimbus Shield & Security
+
+Nimbus treats server security as a first-class priority, packaging enterprise-grade defensive layers directly into the panel:
+
+```
+                  ┌────────────────────────────────────────────────────────┐
+                  │                 NIMBUS SHIELD DEFENSE                  │
+                  └────────────────────────────────────────────────────────┘
+                                              │
+         ┌───────────────────────────┼───────────────────────────┐
+         ▼                           ▼                           ▼
+ ┌───────────────┐           ┌───────────────┐           ┌───────────────┐
+ │ ClamAV Engine │           │ Fail2Ban Core │           │ UFW Firewall  │
+ │ Live Antivirus│           │ Brute Force   │           │ Dynamic Rule  │
+ │ & Quarantine  │           │ Protection    │           │ Management    │
+ └───────────────┘           └───────────────┘           └───────────────┘
+         │                           │                           │
+         └───────────────────────────┼───────────────────────────┘
+                                     │
+                                     ▼
+                  ┌─────────────────────────────────────┐
+                  │      Hardened Linux POSIX ACLs      │
+                  │  Per-domain user & folder isolation │
+                  │     Systemd Protected ReadPaths     │
+                  └─────────────────────────────────────┘
+```
+
+* **ClamAV Real-Time & Scheduled Antivirus:** Run on-demand malware sweeps or schedule automated daily/weekly scans across `/var/www`. Suspicious files can be safely inspected or isolated in the quarantine vault.
+* **Fail2Ban Intrusion Prevention:** Live tracking of failed authentication attempts. Monitors SSH, Nginx, Postfix, and Dovecot. View currently banned IP addresses, ban duration, and unban IPs with a single click.
+* **Visual UFW Firewall:** Define inbound and outbound firewall rules (Allow, Deny, Reject, Rate Limit) for standard ports or custom ranges without typing manual terminal commands.
+* **Hardened POSIX ACLs (Cross-Site Isolation):** Each project runs under its own dedicated unprivileged system user. Strict POSIX Access Control Lists prevent web scripts from traversing neighboring sites or reading sensitive `.env` configurations across directories.
+* **Systemd Path Hardening:** Nimbus background services are strictly sandboxed with `ReadWritePaths` overrides, protecting critical host directories (`/etc/postfix`, `/etc/dovecot`, `/etc/opendkim`, `/etc/roundcube`).
+
+---
+
+## ✉️ Mail & Webmail Stack
+
+Transform your server into a full-featured, high-deliverability mail server with complete DNS automation:
+
+* **Postfix & Dovecot Integration:** Enterprise SMTP/IMAP services with support for custom mailboxes, forwarders, wildcards, and disk quotas.
+* **Automated DKIM, SPF & DMARC:** Generate 2048-bit OpenDKIM private/public keypairs per domain with one click.
+* **Cloudflare DNS Synchronization:** Connect your Cloudflare API token to automatically push MX records, SPF TXT records, DKIM public keys, and DMARC policies straight to your DNS zone in seconds.
+* **Roundcube Webmail Integration:** Seamless webmail client pre-configured and accessible via secure HTTPS (`mail.yourdomain.com/webmail`).
+
+---
+
+## 💾 Multi-Destination Cloud Backups
+
+Protect your mission-critical applications with scheduled, redundant backup pipelines:
+
+* **Supported Destinations:**
+  * ☁️ **Google Drive** (OAuth2 token authentication & Service Account support)
+  * 🪣 **Backblaze B2** (Native B2 API integration)
+  * 📦 **Amazon S3 & S3-Compatible** (AWS S3, Cloudflare R2, Wasabi, MinIO, DigitalOcean Spaces)
+  * 🖥️ **Local / NFS Storage** (Mounted drives and isolated storage directories)
+* **Automated Retention & Pruning:** Define daily, weekly, or monthly retention rules (e.g. keep last 7 daily and 4 weekly backups). Old archives are automatically pruned to prevent disk saturation.
+* **Full Stack Backup:** Captures complete Nginx vhost configs, database dumps (gzipped SQL), and compressed file trees.
 
 ---
 
 ## 🚀 Installation
 
-### One-Command Install
+Nimbus features an intelligent, automated one-line installer that configures all necessary dependencies, system users, databases, and services.
+
+### Quick Install
+
+Run the following command on a clean **Ubuntu 22.04 / 24.04** or **Debian 11 / 12** server:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash
 ```
 
-### Requirements
+### Install with Instant License Activation
 
-- Ubuntu 22.04+ or Debian 11+
-- Minimum 1GB RAM
-- Root access
+If you have your Nimbus license key ready from **VmCoreCentral**, pass it directly during installation:
 
-### What Gets Installed
+```bash
+curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash -s -- --license=YOUR_LICENSE_KEY
+```
 
-| Component | Version |
-|-----------|---------|
-| Nginx | Latest |
-| PHP | 8.2 |
-| MariaDB | Latest |
-| Node.js | 20.x |
-| Composer | Latest |
-| Supervisor | Latest |
+---
 
-### After Installation
+## ⚙️ Installation Flags
 
-1. Access your panel at `http://YOUR_IP:2095`
-2. Create your admin account
-3. Start managing your server!
+The installer supports flexible flags for automated and headless deployments:
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--license=<KEY>` / `-l <KEY>` | Automatically activate your license key during setup | `None` (prompts on UI) |
+| `--skip-existing` | Skip re-installing packages that are already present (preserves existing web stacks) | `false` |
+| `--port=<PORT>` / `-p <PORT>` | Set a custom HTTP port for the Nimbus control panel | `2095` |
+| `--uninstall` | Run the uninstaller directly | `false` |
+
+#### Example: Preserving Existing LAMP/LEMP Stack on Custom Port
+```bash
+curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash -s -- --skip-existing --port=8443 --license=NIMBUS-PRO-XXXX
+```
+
+---
+
+## 📦 What Gets Installed
+
+| Component | Version / Engine | Role |
+|-----------|------------------|------|
+| **Nginx** | Latest Mainline/Stable | High-performance Reverse Proxy & Web Server |
+| **PHP** | 8.3 (Default), 8.1, 8.2, 8.4 available | Multi-PHP Runtime & FastCGI Process Managers |
+| **MariaDB** | 10.11+ / Latest LTS | Primary Relational Database Engine |
+| **Node.js & NPM** | Node 20 LTS | Asset building and frontend rendering |
+| **Supervisor** | Latest | Process supervisor for queue workers & daemons |
+| **Fail2Ban** | Latest | Brute force defense for SSH, Web & Mail |
+| **ClamAV** | Latest | Antivirus scanner daemon (`clamd`) |
+| **Postfix & Dovecot** | Latest | SMTP Mail Transfer Agent & IMAP/POP3 Delivery |
+| **OpenDKIM** | Latest | Cryptographic email signing daemon |
+| **Composer** | Latest 2.x | PHP dependency manager |
 
 ---
 
 ## 🗑️ Uninstallation
 
-### One-Command Uninstall
+If you ever need to decommission a node or remove Nimbus, run the interactive uninstaller:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | sudo bash
 ```
 
-The uninstaller is interactive and will ask you to choose a removal mode:
+The uninstaller provides four distinct wipe levels:
 
-| # | Mode | Portal | Services | Database | Projects (`/var/www`) |
-|---|------|--------|----------|----------|-----------------------|
-| 1 | **Full Uninstall** | ❌ Removed | ❌ Removed | ❌ Removed | ❌ Removed |
-| 2 | **Remove Services + Portal** | ❌ Removed | ❌ Removed | ❌ Removed | ✅ Kept |
-| 3 | **Remove Services (keep DB)** | ❌ Removed | ❌ Removed | ✅ Kept | ✅ Kept |
-| 4 | **Remove Portal Only** | ❌ Removed | ✅ Kept | ✅ Kept | ✅ Kept |
+| Mode | Nimbus Portal | System Services | Databases | Projects (`/var/www`) |
+|:-----|:-------------:|:---------------:|:---------:|:---------------------:|
+| **1. Full Wipe** | ❌ Removed | ❌ Removed | ❌ Dropped | ❌ Deleted |
+| **2. Remove Services + Portal** | ❌ Removed | ❌ Removed | ❌ Dropped | ✅ Preserved |
+| **3. Remove Services (Keep DB)** | ❌ Removed | ❌ Removed | ✅ Preserved | ✅ Preserved |
+| **4. Remove Portal Only** | ❌ Removed | ✅ Active | ✅ Preserved | ✅ Preserved |
 
-> ⚠️ **Warning:** Modes 1 and 2 will permanently delete all MySQL/MariaDB databases. Back up your data before proceeding.
-
-### What Each Mode Removes
-
-**Services** include: Nginx, PHP-FPM, Node.js, Composer, and Supervisor.
-
-- **Full Uninstall** — Complete wipe. Removes the panel, every installed service, all databases, and all hosted project files. Use this when decommissioning the server.
-- **Remove Services + Portal (Keep Projects)** — Removes everything except the files in `/var/www`. Useful if you want to migrate project files to another server.
-- **Remove Services except DB + Portal (Keep Projects)** — Keeps the database server running along with the project files. Ideal if you plan to export databases manually or migrate them later.
-- **Remove Portal Only** — Only removes the Nimbus panel application and its Nginx vhost. All services (Nginx, PHP, MariaDB, etc.) remain running with their current configurations, and all projects stay intact. Use this if you want to stop using the panel UI but keep your server operational.
+> ⚠️ **Caution:** Modes 1 and 2 permanently drop all databases. Always create a verified backup before running a full wipe.
 
 ---
 
-## 📸 Screenshots
+## 🛠️ Local Development
 
-<div align="center">
-
-| Dashboard | Domain Management |
-|-----------|-------------------|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Domains](docs/screenshots/domains.png) |
-
-| File Manager | Supervisor |
-|--------------|------------|
-| ![Files](docs/screenshots/files.png) | ![Supervisor](docs/screenshots/supervisor.png) |
-
-</div>
-
----
-
-## 🗺️ Roadmap
-
-### ✅ Available Now
-- [x] **Elite File Manager** (Ace Editor + In-depth Search)
-- [x] **Git Integration** (Commit, Pull, Push, Branches)
-- [x] **WordPress Manager** (Themes, Plugins, Users)
-- [x] Domain Management (Nginx)
-- [x] SSL Certificates (Let's Encrypt + Probing)
-- [x] Database Management (MariaDB)
-- [x] Supervisor & Cron Jobs
-- [x] Resource Monitoring (Real-time)
-- [x] PHP Configuration & Log Viewer
-
-### 🚧 Current Roadmap (Q2-Q3 2026)
-- [ ] **Apache & Caddy Support** - Alternative web server integrations
-- [ ] **Redis Manager** - Key management, status, and config
-- [ ] **Email Management** - Robust Postfix/Dovecot UI
-- [ ] **Auto Backups** - Scheduled backups to cloud (S3, Dropbox, etc.)
-
-### 🚀 Future Vision
-- [ ] **PHP Version Switcher** - Change PHP versions per project
-- [ ] **Multi-Database Support** - SQLite, PostgreSQL, MongoDB
-- [ ] **Longer Resource History** - Extended monitoring charts & logs
-- [ ] **Two-Factor Authentication (2FA)**
-- [ ] **Docker Support** - Container management
-
----
-
-## 🛠️ Development Setup
+To contribute to or customize Nimbus:
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/sudhirrajai/Nimbus.git
 cd Nimbus
 
-# Install PHP dependencies
+# 2. Install dependencies
 composer install
-
-# Install Node dependencies
 npm install
 
-# Setup environment
+# 3. Setup environment
 cp .env.example .env
 php artisan key:generate
 
-# Configure your database in .env, then:
+# 4. Migrate database
 php artisan migrate
 
-# Build frontend
-npm run build
-
-# Or for development with hot-reload:
+# 5. Build frontend assets & run dev server
 npm run dev
+php artisan serve --port=2095
 ```
-
----
-
-## 📁 Project Structure
-
-```
-Nimbus/
-├── app/
-│   └── Http/Controllers/    # API Controllers
-├── resources/
-│   └── js/
-│       ├── Pages/           # Vue Pages
-│       ├── Components/      # Vue Components
-│       └── Layouts/         # Layout Templates
-├── routes/
-│   └── web.php              # Web Routes
-├── public/                  # Public Assets
-├── install.sh               # One-command installer
-├── uninstall.sh             # Interactive uninstaller
-└── VERSION                  # Current version
-```
-
----
-
-## 🔒 Security
-
-- All routes protected by authentication
-- CSRF protection enabled
-- Security headers configured
-- Passwords hashed with bcrypt
-- Sensitive files protected
-
-**Report vulnerabilities:** security@sudhirrajai.com
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 👨‍💻 Author
-
-<div align="center">
-
-**Sudhir Rajai**
-
-[![GitHub](https://img.shields.io/badge/GitHub-sudhirrajai-181717?style=for-the-badge&logo=github)](https://github.com/sudhirrajai)
-[![Website](https://img.shields.io/badge/Website-sudhirrajai.com-blue?style=for-the-badge&logo=google-chrome&logoColor=white)](https://sudhirrajai.com)
-
-</div>
-
----
-
-<div align="center">
-
-Made with ❤️ by [Sudhir Rajai](https://sudhirrajai.com)
-
-⭐ Star this repo if you find it useful!
-
-</div>
+Nimbus Control Panel is proprietary software. All rights reserved. Distributed and managed through **VmCoreCentral**.
