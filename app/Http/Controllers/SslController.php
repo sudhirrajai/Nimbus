@@ -80,10 +80,14 @@ class SslController extends Controller
                 })
                 ->values();
 
+            $globalSetting = \App\Models\Setting::where('key', 'ssl_autorenew_global')->value('value');
+            $globalAutoRenew = ($globalSetting === null || $globalSetting === '1');
+
             return response()->json([
                 'domains' => $domains,
                 'certbotInstalled' => $this->isCertbotInstalled(),
-                'server_ip' => $serverIp
+                'server_ip' => $serverIp,
+                'globalAutoRenew' => $globalAutoRenew,
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get SSL domains: " . $e->getMessage());
@@ -430,11 +434,122 @@ class SslController extends Controller
      */
     private function checkAutoRenew($domain)
     {
+        $setting = \App\Models\Setting::where('key', "ssl_autorenew_{$domain}")->value('value');
+        if ($setting === '0') {
+            return false;
+        }
+
         // Check if renewal config exists
         $renewalConf = "/etc/letsencrypt/renewal/{$domain}.conf";
         $output = [];
         exec("sudo test -f " . escapeshellarg($renewalConf) . " && echo 'exists'", $output);
         return isset($output[0]) && $output[0] === 'exists';
+    }
+
+    /**
+     * Toggle Auto SSL (auto-renewal) for a single domain or globally for all domains
+     */
+    public function toggleAutoRenew(Request $request)
+    {
+        try {
+            $user = auth()->user();
+            $isGlobal = $request->boolean('all');
+
+            if ($isGlobal) {
+                if (!$user->isRoot()) {
+                    return response()->json(['error' => 'Permission denied: Only root can toggle global SSL auto-renew.'], 403);
+                }
+
+                $enabled = $request->boolean('enabled');
+                \App\Models\Setting::updateOrCreate(
+                    ['key' => 'ssl_autorenew_global'],
+                    ['value' => $enabled ? '1' : '0']
+                );
+
+                if (PHP_OS_FAMILY === 'Linux') {
+                    if ($enabled) {
+                        exec("sudo systemctl enable --now certbot.timer 2>&1");
+                        // Also restore any previously disabled .conf.disabled files
+                        $renewalDir = '/etc/letsencrypt/renewal/';
+                        if (file_exists($renewalDir)) {
+                            exec("sudo bash -c 'for f in {$renewalDir}*.conf.disabled; do [ -f \"\$f\" ] && mv \"\$f\" \"\${f%.disabled}\"; done' 2>&1");
+                        }
+                    } else {
+                        exec("sudo systemctl stop certbot.timer 2>&1");
+                        exec("sudo systemctl disable certbot.timer 2>&1");
+                    }
+                }
+
+                // Clear cache so changes reflect immediately
+                cache()->flush();
+
+                \App\Models\ActivityLog::log(
+                    'TOGGLE_GLOBAL_AUTO_SSL',
+                    'SSL',
+                    ($enabled ? 'Enabled' : 'Disabled') . ' global SSL auto-renewal for all domains'
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Global Auto SSL ' . ($enabled ? 'enabled' : 'disabled') . ' successfully.',
+                    'globalAutoRenew' => $enabled
+                ]);
+            }
+
+            // Single Domain Toggle
+            $request->validate([
+                'domain' => 'required|string|max:253'
+            ]);
+
+            $domain = strtolower(trim($request->input('domain')));
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!$user->isRoot() && !$user->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $enabled = $request->boolean('enabled');
+            \App\Models\Setting::updateOrCreate(
+                ['key' => "ssl_autorenew_{$domain}"],
+                ['value' => $enabled ? '1' : '0']
+            );
+
+            if (PHP_OS_FAMILY === 'Linux') {
+                $activeConf = "/etc/letsencrypt/renewal/{$domain}.conf";
+                $disabledConf = "/etc/letsencrypt/renewal/{$domain}.conf.disabled";
+
+                if (!$enabled) {
+                    if (file_exists($activeConf)) {
+                        exec("sudo mv " . escapeshellarg($activeConf) . " " . escapeshellarg($disabledConf) . " 2>&1");
+                    }
+                } else {
+                    if (file_exists($disabledConf)) {
+                        exec("sudo mv " . escapeshellarg($disabledConf) . " " . escapeshellarg($activeConf) . " 2>&1");
+                    }
+                }
+            }
+
+            cache()->forget("ssl_info_{$domain}");
+
+            \App\Models\ActivityLog::log(
+                'TOGGLE_DOMAIN_AUTO_SSL',
+                'SSL',
+                ($enabled ? 'Enabled' : 'Disabled') . " Auto SSL renewal for {$domain}"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Auto SSL " . ($enabled ? 'enabled' : 'disabled') . " for {$domain}.",
+                'autoRenew' => $enabled,
+                'domain' => $domain
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to toggle auto SSL: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -635,147 +750,87 @@ class SslController extends Controller
                 return response()->json(['error' => 'Domain directory not found'], 404);
             }
 
-            // Ensure certbot is available (auto-install if needed)
-            $certbotPath = $this->ensureCertbot();
+            // DNS Pre-flight check: ensure domain resolves before hitting Let's Encrypt rate limits
+            $serverIp = $this->getServerIp();
+            $dnsCheck = $this->verifyDomainDnsForSsl($domain, $serverIp, $request->boolean('force'));
+            if (!$dnsCheck['ok']) {
+                return response()->json([
+                    'error' => $dnsCheck['error'],
+                    'can_force' => $dnsCheck['can_force'] ?? false,
+                    'dns_warning' => true,
+                    'server_ip' => $serverIp,
+                    'resolved_ips' => $dnsCheck['resolved_ips'] ?? [],
+                ], 422);
+            }
 
-            // Ensure all managed domain directories and log files exist before running certbot
-            // This prevents nginx -t from throwing [emerg] file not found errors
-            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
 
-            // Clean up any stale temp_checkpoint left by a previous failed certbot run.
-            // Without this, certbot fails with "Unable to revert temporary config" on every
-            // subsequent attempt, even though the certificate itself is issued successfully.
-            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
-
-            // Run certbot with nginx plugin
-            $output = [];
-            $returnCode = 0;
+            // Check if installation is already in progress
+            if (file_exists($statusFile)) {
+                $existing = json_decode(@file_get_contents($statusFile), true);
+                if (is_array($existing) && ($existing['status'] ?? '') === 'running') {
+                    $startedAt = isset($existing['started_at']) ? strtotime($existing['started_at']) : 0;
+                    if (time() - $startedAt < 600) {
+                        return response()->json([
+                            'status' => 'running',
+                            'message' => "SSL installation is already in progress for {$domain}",
+                            'domain' => $domain,
+                            'polling' => true
+                        ]);
+                    }
+                }
+            }
 
             // Determine if we should include the www. prefix
             $includeWww = false;
             $wwwDomain = "www.{$domain}";
-
-            // Heuristic to detect if it's a root domain (e.g., example.com) or a ccTLD (example.co.uk)
             $parts = explode('.', $domain);
-            $isRootDomain = false;
-            
-            if (count($parts) === 2) {
-                $isRootDomain = true;
-            } elseif (count($parts) === 3) {
+            $isRootDomain = (count($parts) === 2);
+            if (!$isRootDomain && count($parts) === 3) {
                 $commonSecondLevel = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
                 if (in_array($parts[1], $commonSecondLevel)) {
                     $isRootDomain = true;
                 }
             }
-            
-            // Only attempt to add www. for root domains, and ONLY if they actually resolve
+
             if ($isRootDomain) {
                 $dnsA = @dns_get_record($wwwDomain, DNS_A);
                 $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
-                
                 if (!empty($dnsA) || !empty($dnsAAAA)) {
                     $includeWww = true;
                 }
             }
 
-            // Build the certbot command dynamically based on DNS resolution
-            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain);
-            if ($includeWww) {
-                $cmd .= " -d " . escapeshellarg($wwwDomain);
-            }
-            $cmd .= " --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
+            // Initial status
+            $initialStatus = [
+                'status' => 'running',
+                'action' => 'install',
+                'domain' => $domain,
+                'progress' => "Starting SSL certificate installation for {$domain}...",
+                'started_at' => now()->toDateTimeString(),
+                'finished_at' => null,
+                'error' => null,
+                'details' => null
+            ];
+            File::put($statusFile, json_encode($initialStatus, JSON_PRETTY_PRINT));
+            File::put(storage_path("logs/ssl_{$domainSafe}.log"), "Queued SSL installation for {$domain} at " . now()->toDateTimeString() . "\n");
 
-            \Log::info("Running certbot: " . $cmd);
-            exec($cmd, $output, $returnCode);
-            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
-
-            $outputStr = implode("\n", $output);
-            \Log::info("Certbot output: " . $outputStr);
-
-            if ($returnCode !== 0) {
-                // Send failure notification
-                \App\Services\NotificationService::send(
-                    "SSL Certificate Installation Failed",
-                    "<p>Hello,</p><p>An attempt to install an SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($outputStr) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-                );
-
-                // Check for common errors
-                if (strpos($outputStr, 'too many certificates') !== false) {
-                    return response()->json([
-                        'error' => 'Rate limit reached. Please try again later.',
-                        'details' => $outputStr
-                    ], 429);
-                }
-
-                if (strpos($outputStr, 'DNS problem') !== false || strpos($outputStr, 'Could not reach') !== false) {
-                    return response()->json([
-                        'error' => 'DNS verification failed. Make sure your domain points to this server.',
-                        'details' => $outputStr
-                    ], 400);
-                }
-
-                if (strpos($outputStr, 'not found') !== false || strpos($outputStr, 'No module named') !== false) {
-                    return response()->json([
-                        'error' => 'Certbot plugin error. Try reinstalling: sudo apt-get install --reinstall python3-certbot-nginx',
-                        'details' => $outputStr
-                    ], 500);
-                }
-
-                if (strpos($outputStr, 'overwrite challenge file') !== false || strpos($outputStr, 'Unable to revert temporary config') !== false) {
-                    // The cert may still have been issued — try to deploy it
-                    exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
-                    $installOutput = [];
-                    $installCode = 0;
-                    exec("sudo {$certbotPath} install --cert-name " . escapeshellarg($domain) . " --nginx --non-interactive 2>&1", $installOutput, $installCode);
-                    exec("sudo systemctl reload nginx 2>/dev/null");
-                    cache()->forget("ssl_info_{$domain}");
-                    cache()->forget("dns_active_{$domain}");
-                    if ($installCode === 0) {
-                        return response()->json([
-                            'message' => "SSL certificate installed successfully for {$domain}",
-                            'details' => $outputStr . "\n" . implode("\n", $installOutput)
-                        ]);
-                    }
-                    return response()->json([
-                        'error' => 'Certificate was issued but nginx deployment hit a conflict with another site config. Run: certbot install --cert-name ' . $domain,
-                        'details' => $outputStr
-                    ], 500);
-                }
-
-                return response()->json([
-                    'error' => 'Failed to install SSL certificate',
-                    'details' => $outputStr
-                ], 500);
-            }
-
-            // Reload nginx to apply changes
-            exec("sudo systemctl reload nginx 2>&1");
-
-            // Clear cache to reflect the new certificate immediately
-            cache()->forget("ssl_info_{$domain}");
-            cache()->forget("dns_active_{$domain}");
-
-            // Send success notification
-            \App\Services\NotificationService::send(
-                "SSL Certificate Installed Successfully",
-                "<p>Hello,</p><p>An SSL certificate has been successfully installed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
+            // Launch background Artisan process
+            $artisan = base_path('artisan');
+            $cmd = "sudo nohup php " . escapeshellarg($artisan) . " ssl:provision " . escapeshellarg($domain) . " --action=install " . ($includeWww ? "--www " : "") . ($request->boolean('force') ? "--force " : "") . "> /dev/null 2>&1 &";
+            exec($cmd);
 
             return response()->json([
-                'message' => "SSL certificate installed successfully for {$domain}",
-                'details' => $outputStr
+                'status' => 'running',
+                'message' => "SSL certificate installation started for {$domain}",
+                'domain' => $domain,
+                'polling' => true
             ]);
+
         } catch (\Exception $e) {
-            \Log::error("Failed to install SSL: " . $e->getMessage());
-
-            \App\Services\NotificationService::send(
-                "SSL Certificate Installation Failed",
-                "<p>Hello,</p><p>An attempt to install an SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($e->getMessage()) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
-
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
+            \Log::error("Failed to start SSL install: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
@@ -824,101 +879,111 @@ class SslController extends Controller
                 return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
-            // Ensure certbot is available
-            $certbotPath = $this->ensureCertbot();
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
 
-            // Ensure all managed domain directories and log files exist before running certbot
-            app(\App\Http\Controllers\DomainController::class)->repairManagedDomainStructures();
-
-            // Clean up any stale temp_checkpoint from a previous failed run
-            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
-
-            // Run certbot renew for specific domain
-            $output = [];
-            $returnCode = 0;
-
-            // Determine if we should include the www. prefix
-            $includeWww = false;
-            $wwwDomain = "www.{$domain}";
-
-            // Heuristic to detect if it's a root domain (e.g., example.com) or a ccTLD (example.co.uk)
-            $parts = explode('.', $domain);
-            $isRootDomain = false;
-            
-            if (count($parts) === 2) {
-                $isRootDomain = true;
-            } elseif (count($parts) === 3) {
-                $commonSecondLevel = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
-                if (in_array($parts[1], $commonSecondLevel)) {
-                    $isRootDomain = true;
-                }
-            }
-            
-            // Only attempt to add www. for root domains, and ONLY if they actually resolve
-            if ($isRootDomain) {
-                $dnsA = @dns_get_record($wwwDomain, DNS_A);
-                $dnsAAAA = @dns_get_record($wwwDomain, DNS_AAAA);
-                
-                if (!empty($dnsA) || !empty($dnsAAAA)) {
-                    $includeWww = true;
+            // Check if operation is already in progress
+            if (file_exists($statusFile)) {
+                $existing = json_decode(@file_get_contents($statusFile), true);
+                if (is_array($existing) && ($existing['status'] ?? '') === 'running') {
+                    $startedAt = isset($existing['started_at']) ? strtotime($existing['started_at']) : 0;
+                    if (time() - $startedAt < 600) {
+                        return response()->json([
+                            'status' => 'running',
+                            'message' => "SSL renewal is already in progress for {$domain}",
+                            'domain' => $domain,
+                            'polling' => true
+                        ]);
+                    }
                 }
             }
 
-            // By using --nginx -d instead of --cert-name, we bypass cert name mismatch issues
-            // and force reissue the certificate using the current active DNS resolution layout.
-            $cmd = "sudo {$certbotPath} --nginx -d " . escapeshellarg($domain);
-            if ($includeWww) {
-                $cmd .= " -d " . escapeshellarg($wwwDomain);
-            }
-            $cmd .= " --force-renewal --non-interactive --agree-tos --register-unsafely-without-email 2>&1";
+            $initialStatus = [
+                'status' => 'running',
+                'action' => 'renew',
+                'domain' => $domain,
+                'progress' => "Starting SSL certificate renewal for {$domain}...",
+                'started_at' => now()->toDateTimeString(),
+                'finished_at' => null,
+                'error' => null,
+                'details' => null
+            ];
+            File::put($statusFile, json_encode($initialStatus, JSON_PRETTY_PRINT));
+            File::put(storage_path("logs/ssl_{$domainSafe}.log"), "Queued SSL renewal for {$domain} at " . now()->toDateTimeString() . "\n");
 
-            \Log::info("Running certbot renew: " . $cmd);
-            exec($cmd, $output, $returnCode);
-            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf");
-
-            $outputStr = implode("\n", $output);
-            \Log::info("Certbot renew output: " . $outputStr);
-
-            if ($returnCode !== 0) {
-                // Send failure notification
-                \App\Services\NotificationService::send(
-                    "SSL Certificate Renewal Failed",
-                    "<p>Hello,</p><p>An attempt to renew the SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($outputStr) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-                );
-
-                return response()->json([
-                    'error' => 'Failed to renew SSL certificate',
-                    'details' => $outputStr
-                ], 500);
-            }
-
-            // Reload nginx
-            exec("sudo systemctl reload nginx 2>&1");
-
-            // Clear cache to reflect renewal
-            cache()->forget("ssl_info_{$domain}");
-
-            // Send success notification
-            \App\Services\NotificationService::send(
-                "SSL Certificate Renewed Successfully",
-                "<p>Hello,</p><p>The SSL certificate has been successfully renewed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
+            $artisan = base_path('artisan');
+            $cmd = "sudo nohup php " . escapeshellarg($artisan) . " ssl:provision " . escapeshellarg($domain) . " --action=renew > /dev/null 2>&1 &";
+            exec($cmd);
 
             return response()->json([
-                'message' => "SSL certificate renewed successfully for {$domain}",
-                'details' => $outputStr
+                'status' => 'running',
+                'message' => "SSL certificate renewal started for {$domain}",
+                'domain' => $domain,
+                'polling' => true
             ]);
         } catch (\Exception $e) {
-            \Log::error("Failed to renew SSL: " . $e->getMessage());
+            \Log::error("Failed to start SSL renewal: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 
-            \App\Services\NotificationService::send(
-                "SSL Certificate Renewal Failed",
-                "<p>Hello,</p><p>An attempt to renew the SSL certificate for the domain: <strong>{$domain}</strong> has failed.</p><p><strong>Error Details:</strong></p><pre>" . e($e->getMessage()) . "</pre><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
-            );
+    /**
+     * Get SSL installation / renewal status and live log
+     */
+    public function getInstallStatus(Request $request)
+    {
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253'
+            ]);
+
+            $domain = strtolower(trim($request->input('domain')));
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
+            $logFile = storage_path("logs/ssl_{$domainSafe}.log");
+
+            if (!file_exists($statusFile)) {
+                return response()->json([
+                    'status' => 'idle',
+                    'domain' => $domain,
+                    'progress' => '',
+                    'log' => '',
+                    'error' => null,
+                    'details' => null
+                ]);
+            }
+
+            $statusData = json_decode(@file_get_contents($statusFile), true);
+            if (!is_array($statusData)) {
+                $statusData = ['status' => 'idle'];
+            }
+
+            $log = '';
+            if (file_exists($logFile)) {
+                $rawLog = file_get_contents($logFile);
+                $lines = explode("\n", $rawLog);
+                if (count($lines) > 80) {
+                    $log = implode("\n", array_slice($lines, -80));
+                } else {
+                    $log = $rawLog;
+                }
+            }
 
             return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
+                'status' => $statusData['status'] ?? 'idle',
+                'action' => $statusData['action'] ?? 'install',
+                'domain' => $domain,
+                'progress' => $statusData['progress'] ?? '',
+                'log' => $log,
+                'error' => $statusData['error'] ?? null,
+                'details' => $statusData['details'] ?? null
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
@@ -982,6 +1047,195 @@ class SslController extends Controller
     }
 
     /**
+     * Install custom SSL certificate (Certificate + Private Key + optional CA Bundle)
+     */
+    public function installCustomCertificate(Request $request)
+    {
+        // Certificate provisioning service check
+        if (\App\Support\LicenseGuard::isBlocked('create')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('ssl')], 503);
+        }
+
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253',
+                'certificate' => 'required|string',
+                'private_key' => 'required|string',
+                'ca_bundle' => 'nullable|string',
+            ]);
+
+            $domain = strtolower(trim($request->input('domain')));
+
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $certificate = trim(str_replace("\r\n", "\n", $request->input('certificate')));
+            $privateKey = trim(str_replace("\r\n", "\n", $request->input('private_key')));
+            $caBundle = trim(str_replace("\r\n", "\n", (string)$request->input('ca_bundle', '')));
+
+            // 1. Validate Certificate PEM format
+            $certResource = @openssl_x509_read($certificate);
+            if (!$certResource) {
+                return response()->json([
+                    'error' => 'Invalid SSL certificate format. Please ensure it is a valid PEM formatted certificate (starts with -----BEGIN CERTIFICATE-----).'
+                ], 422);
+            }
+
+            // 2. Validate Private Key PEM format
+            $keyResource = @openssl_pkey_get_private($privateKey);
+            if (!$keyResource) {
+                return response()->json([
+                    'error' => 'Invalid private key format. Please ensure it is a valid PEM formatted private key (starts with -----BEGIN PRIVATE KEY----- or -----BEGIN RSA PRIVATE KEY-----).'
+                ], 422);
+            }
+
+            // 3. Verify that the private key matches the certificate
+            if (!openssl_x509_check_private_key($certResource, $keyResource)) {
+                return response()->json([
+                    'error' => 'The provided private key does not match the SSL certificate.'
+                ], 422);
+            }
+
+            // 4. Verify domain name matches certificate (CN or SAN)
+            $certInfo = @openssl_x509_parse($certResource);
+            if ($certInfo) {
+                $domainMatch = false;
+                $cn = $certInfo['subject']['CN'] ?? '';
+                if ($this->domainMatchesCert($domain, $cn)) {
+                    $domainMatch = true;
+                }
+
+                if (!$domainMatch && isset($certInfo['extensions']['subjectAltName'])) {
+                    $sans = explode(',', $certInfo['extensions']['subjectAltName']);
+                    foreach ($sans as $san) {
+                        $san = trim(str_replace('DNS:', '', $san));
+                        if ($this->domainMatchesCert($domain, $san)) {
+                            $domainMatch = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$domainMatch) {
+                    return response()->json([
+                        'error' => "The uploaded certificate is for '" . ($cn ?: 'another domain') . "' and does not match '{$domain}'."
+                    ], 422);
+                }
+            }
+
+            // 5. Construct full chain
+            $fullChain = $certificate;
+            if (!empty($caBundle)) {
+                $fullChain .= "\n" . $caBundle;
+            }
+
+            // 6. Write certificate and key files
+            $sslDir = "/etc/nginx/ssl/{$domain}";
+            $certFile = "{$sslDir}/fullchain.pem";
+            $keyFile = "{$sslDir}/privkey.pem";
+
+            $tmpCert = storage_path("app/ssl_{$domain}_" . time() . ".crt");
+            $tmpKey = storage_path("app/ssl_{$domain}_" . time() . ".key");
+
+            File::put($tmpCert, $fullChain . "\n");
+            File::put($tmpKey, $privateKey . "\n");
+
+            exec("sudo mkdir -p " . escapeshellarg($sslDir));
+            exec("sudo mv " . escapeshellarg($tmpCert) . " " . escapeshellarg($certFile));
+            exec("sudo mv " . escapeshellarg($tmpKey) . " " . escapeshellarg($keyFile));
+            exec("sudo chmod 644 " . escapeshellarg($certFile));
+            exec("sudo chmod 600 " . escapeshellarg($keyFile));
+            exec("sudo chown root:root " . escapeshellarg($certFile) . " " . escapeshellarg($keyFile));
+
+            // 7. Update Nginx Virtual Host configuration
+            $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+            $output = [];
+            exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
+            $configContent = implode("\n", $output);
+
+            if (!empty($configContent)) {
+                $backupPath = $configPath . '.bak_custom_ssl_' . time();
+                exec("sudo cp " . escapeshellarg($configPath) . " " . escapeshellarg($backupPath));
+
+                // If ssl_certificate directives exist, replace them
+                if (preg_match('/ssl_certificate\s+/i', $configContent)) {
+                    $configContent = preg_replace('/ssl_certificate\s+[^;]+;/i', "ssl_certificate {$certFile};", $configContent);
+                    $configContent = preg_replace('/ssl_certificate_key\s+[^;]+;/i', "ssl_certificate_key {$keyFile};", $configContent);
+                } else {
+                    // Inject SSL directives into the server block
+                    $sslDirectives = "\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate {$certFile};\n    ssl_certificate_key {$keyFile};\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n";
+                    if (preg_match('/(listen\s+\[::\]:80;)/i', $configContent)) {
+                        $configContent = preg_replace('/(listen\s+\[::\]:80;)/i', "$1" . $sslDirectives, $configContent, 1);
+                    } elseif (preg_match('/(listen\s+80;)/i', $configContent)) {
+                        $configContent = preg_replace('/(listen\s+80;)/i', "$1" . $sslDirectives, $configContent, 1);
+                    } else {
+                        $configContent = preg_replace('/server\s*\{/i', "server {" . $sslDirectives, $configContent, 1);
+                    }
+                }
+
+                $tmpConf = storage_path("app/nginx_{$domain}_custom_ssl_" . time() . ".conf");
+                File::put($tmpConf, $configContent);
+                exec("sudo cp " . escapeshellarg($tmpConf) . " " . escapeshellarg($configPath));
+                @unlink($tmpConf);
+
+                // Test nginx config
+                $testOutput = [];
+                $testCode = 0;
+                exec("sudo nginx -t 2>&1", $testOutput, $testCode);
+
+                if ($testCode !== 0) {
+                    // Revert to backup
+                    exec("sudo cp " . escapeshellarg($backupPath) . " " . escapeshellarg($configPath));
+                    exec("sudo rm -f " . escapeshellarg($backupPath));
+                    return response()->json([
+                        'error' => 'Nginx configuration test failed with custom SSL. Configuration changes reverted.',
+                        'details' => implode("\n", $testOutput)
+                    ], 400);
+                }
+
+                exec("sudo rm -f " . escapeshellarg($backupPath));
+            }
+
+            // Ensure symlink in sites-enabled
+            $enabledPath = $this->resolveNginxConfigPath('/etc/nginx/sites-enabled/', $domain);
+            $symlinkCheck = [];
+            exec("sudo test -f " . escapeshellarg($enabledPath) . " && echo 'exists'", $symlinkCheck);
+            if (empty($symlinkCheck) || $symlinkCheck[0] !== 'exists') {
+                $targetEnabled = '/etc/nginx/sites-enabled/' . basename($configPath);
+                exec("sudo ln -s " . escapeshellarg($configPath) . " " . escapeshellarg($targetEnabled));
+            }
+
+            // 8. Reload Nginx
+            exec("sudo systemctl reload nginx 2>&1");
+
+            // 9. Clear cache
+            cache()->forget("ssl_info_{$domain}");
+            cache()->forget("dns_active_{$domain}");
+
+            // 10. Send notification
+            \App\Services\NotificationService::send(
+                "Custom SSL Certificate Installed Successfully",
+                "<p>Hello,</p><p>A custom SSL certificate has been successfully installed for the domain: <strong>{$domain}</strong>.</p><p><strong>Time:</strong> " . now()->toDateTimeString() . "</p>"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Custom SSL certificate installed successfully for {$domain}"
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to install custom SSL: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to install custom SSL certificate: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Remove SSL certificate for a domain
      */
     public function removeCertificate(Request $request)
@@ -1001,7 +1255,42 @@ class SslController extends Controller
                 return response()->json(['error' => 'Permission denied for this domain'], 403);
             }
 
-            // Ensure certbot is available
+            // Check if this domain has a custom SSL installed
+            $customSslDir = "/etc/nginx/ssl/{$domain}";
+            $customCheck = [];
+            exec("sudo test -d " . escapeshellarg($customSslDir) . " && echo 'exists'", $customCheck);
+
+            if (isset($customCheck[0]) && $customCheck[0] === 'exists') {
+                exec("sudo rm -rf " . escapeshellarg($customSslDir));
+
+                // Revert custom SSL lines from nginx config
+                $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
+                $confOutput = [];
+                exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $confOutput);
+                $content = implode("\n", $confOutput);
+
+                if (!empty($content)) {
+                    $content = preg_replace('/^\s*listen\s+.*443\s+ssl;.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_certificate\s+.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_certificate_key\s+.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_protocols\s+.*$/m', '', $content);
+                    $content = preg_replace('/^\s*ssl_ciphers\s+.*$/m', '', $content);
+
+                    $tmpConf = storage_path("app/nginx_{$domain}_rm_ssl_" . time() . ".conf");
+                    File::put($tmpConf, $content);
+                    exec("sudo cp " . escapeshellarg($tmpConf) . " " . escapeshellarg($configPath));
+                    @unlink($tmpConf);
+                    exec("sudo nginx -t && sudo systemctl reload nginx 2>&1");
+                }
+
+                cache()->forget("ssl_info_{$domain}");
+
+                return response()->json([
+                    'message' => "Custom SSL certificate removed for {$domain}"
+                ]);
+            }
+
+            // Ensure certbot is available for Let's Encrypt certificates
             $certbotPath = $this->ensureCertbot();
 
             // Delete certificate using certbot
@@ -1087,5 +1376,60 @@ class SslController extends Controller
     private function isValidDomain($domain)
     {
         return preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i', $domain) && strlen($domain) <= 253;
+    }
+
+    /**
+     * Check if a domain's DNS is configured and resolves properly before requesting Let's Encrypt.
+     */
+    private function verifyDomainDnsForSsl(string $domain, string $serverIp, bool $force = false): array
+    {
+        if ($force) {
+            return ['ok' => true];
+        }
+
+        try {
+            $recordsA = @dns_get_record($domain, DNS_A) ?: [];
+            $recordsAAAA = @dns_get_record($domain, DNS_AAAA) ?: [];
+            $recordsCNAME = @dns_get_record($domain, DNS_CNAME) ?: [];
+
+            $resolvedIps = array_filter(array_merge(
+                array_column($recordsA, 'ip'),
+                array_column($recordsAAAA, 'ipv6')
+            ));
+
+            // Fallback to gethostbyname if dns_get_record returned empty
+            if (empty($resolvedIps)) {
+                $fallback = @gethostbyname($domain);
+                if ($fallback && $fallback !== $domain) {
+                    $resolvedIps[] = $fallback;
+                }
+            }
+
+            // 1. If domain does not resolve at all
+            if (empty($resolvedIps) && empty($recordsCNAME)) {
+                return [
+                    'ok' => false,
+                    'error' => "DNS record not found for '{$domain}'. Please point your domain's DNS A-record to this server ({$serverIp}) before issuing a Let's Encrypt certificate.",
+                    'can_force' => true,
+                ];
+            }
+
+            // 2. If domain resolves, check if serverIp matches (only if server has a public IP)
+            $isPublicServerIp = filter_var($serverIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+            if ($isPublicServerIp && !empty($resolvedIps) && !in_array($serverIp, $resolvedIps)) {
+                return [
+                    'ok' => false,
+                    'error' => "Domain '{$domain}' currently resolves to " . implode(', ', $resolvedIps) . ", but this server's public IP is {$serverIp}. If DNS was recently updated, please wait for propagation or click 'Force Issue' if using a proxy/CDN.",
+                    'can_force' => true,
+                    'resolved_ips' => $resolvedIps,
+                    'server_ip' => $serverIp,
+                ];
+            }
+
+            return ['ok' => true];
+        } catch (\Exception $e) {
+            \Log::warning("DNS preflight check warning for {$domain}: " . $e->getMessage());
+            return ['ok' => true]; // Fail open if local resolver errors
+        }
     }
 }

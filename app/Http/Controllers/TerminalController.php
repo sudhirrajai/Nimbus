@@ -182,9 +182,14 @@ class TerminalController extends Controller
                 }
             }
 
+            // Determine domain's isolated system user (e.g. site_maharaj_sr)
+            $siteUser = \App\Services\SiteIsolationService::siteUser($domain);
+            $userCheck = exec("id -u " . escapeshellarg($siteUser) . " 2>/dev/null");
+            $runUser = (!empty($userCheck) && is_numeric($userCheck)) ? $siteUser : 'www-data';
+
             // Execute the command with a timeout
             $escapedWorkDir = escapeshellarg($realWorkDir);
-            $fullCommand = "cd {$escapedWorkDir} && sudo -u www-data bash -c " . escapeshellarg($command) . " 2>&1";
+            $fullCommand = "cd {$escapedWorkDir} && sudo -u " . escapeshellarg($runUser) . " -H bash -c " . escapeshellarg($command) . " 2>&1";
 
             $descriptors = [
                 0 => ['pipe', 'r'],  // stdin
@@ -193,8 +198,8 @@ class TerminalController extends Controller
             ];
 
             $process = proc_open($fullCommand, $descriptors, $pipes, $realWorkDir, [
-                'HOME' => '/tmp',
-                'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/www-data/.config/composer/vendor/bin',
+                'HOME' => $realWorkDir,
+                'PATH' => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/www-data/.config/composer/vendor/bin:' . $realWorkDir . '/node_modules/.bin',
                 'TERM' => 'xterm-256color',
             ]);
 
@@ -237,6 +242,7 @@ class TerminalController extends Controller
                 'output' => $combinedOutput,
                 'exit_code' => $exitCode,
                 'cwd' => $path,
+                'user' => $runUser,
             ]);
         } catch (\Exception $e) {
             Log::error("Terminal execution error: " . $e->getMessage());

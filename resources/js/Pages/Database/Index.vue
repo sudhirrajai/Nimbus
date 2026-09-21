@@ -6,12 +6,12 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
               <h4 class="font-weight-bolder mb-0">Database Management</h4>
               <p class="mb-0 text-sm">Manage MySQL databases, users, and Nimbus DB</p>
             </div>
-            <div class="d-flex gap-2" v-if="status.viewerInstalled">
+            <div class="d-flex flex-wrap gap-2" v-if="status.viewerInstalled">
               <button class="btn btn-outline-warning mb-0" @click="reinstallDatabaseViewer" :disabled="reinstalling">
                 <span v-if="reinstalling" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">refresh</i>
@@ -173,9 +173,59 @@
                   <label class="form-label text-xs text-uppercase">Username</label>
                   <input type="text" class="form-control" v-model="newUser.username" placeholder="db_user">
                 </div>
+                <div class="mb-2">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label text-xs text-uppercase font-weight-bolder text-secondary mb-0">Password</label>
+                    <button 
+                      type="button" 
+                      class="btn-auto-gen" 
+                      @click="generateStrongPassword('create')"
+                      title="Generate strong password and copy to clipboard"
+                    >
+                      <i class="material-symbols-rounded text-xs me-1">auto_awesome</i>
+                      Auto-Generate & Copy
+                    </button>
+                  </div>
+                  <div class="password-box-unified">
+                    <input 
+                      :type="showCreatePassword ? 'text' : 'password'" 
+                      v-model="newUser.password" 
+                      placeholder="Enter or generate password"
+                      class="font-monospace"
+                    >
+                    <div class="d-flex align-items-center gap-1">
+                      <button 
+                        type="button" 
+                        class="icon-action-btn"
+                        @click="showCreatePassword = !showCreatePassword"
+                        :title="showCreatePassword ? 'Hide password' : 'Show password'"
+                      >
+                        <i class="material-symbols-rounded text-sm">{{ showCreatePassword ? 'visibility_off' : 'visibility' }}</i>
+                      </button>
+                      <button 
+                        type="button" 
+                        class="icon-action-btn"
+                        :class="{ 'text-success': copiedField === 'create' }"
+                        @click="copyToClipboard(newUser.password, 'create')"
+                        :disabled="!newUser.password"
+                        title="Copy password to clipboard"
+                      >
+                        <i class="material-symbols-rounded text-sm">{{ copiedField === 'create' ? 'check' : 'content_copy' }}</i>
+                      </button>
+                    </div>
+                  </div>
+                  <transition name="fade">
+                    <span v-if="copiedField === 'create'" class="text-xxs text-success font-weight-bold mt-1 d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xs me-1">check_circle</i> Copied to clipboard!
+                    </span>
+                  </transition>
+                </div>
                 <div class="mb-3">
-                  <label class="form-label text-xs text-uppercase">Password</label>
-                  <input type="password" class="form-control" v-model="newUser.password" placeholder="********">
+                  <label class="form-label text-xs text-uppercase">Host Access</label>
+                  <select class="form-select form-control" v-model="newUser.host">
+                    <option value="localhost">Localhost (localhost)</option>
+                    <option value="%">Any Host (%) - Remote Access</option>
+                  </select>
                 </div>
                 <button class="btn bg-gradient-success w-100" @click="createUser"
                   :disabled="!newUser.username || !newUser.password || creatingUser">
@@ -290,9 +340,13 @@
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
-                          <button class="action-btn btn-view" @click="openDatabaseViewer(db)"
-                            title="Open in Nimbus DB">
-                            <i class="material-symbols-rounded">open_in_new</i>
+                          <button class="action-btn btn-view" @click="openNativeManager(db.name)" :disabled="openingManager[db.name]" title="Open Database Workspace">
+                            <span v-if="openingManager[db.name]" class="spinner-border spinner-border-sm"></span>
+                            <i v-else class="material-symbols-rounded">table_chart</i>
+                          </button>
+                          <button class="action-btn btn-backup" @click="quickBackupDatabase(db.name)" :disabled="backingUpDb[db.name]" title="Quick Backup Database">
+                            <span v-if="backingUpDb[db.name]" class="spinner-border spinner-border-sm text-success"></span>
+                            <i v-else class="material-symbols-rounded">archive</i>
                           </button>
                           <button class="action-btn btn-link-proj" @click="openLinkProjectModal(db)"
                             title="Link Project / Domain">
@@ -412,8 +466,15 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="user in managingDb?.users" :key="user.username">
-                      <td>{{ user.username }}@{{ user.host }}</td>
+                    <tr v-for="user in managingDb?.users" :key="user.username + '@' + user.host">
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <span class="font-weight-bold text-sm">{{ user.username }}</span>
+                          <span class="badge ms-2" :class="user.host === '%' ? 'bg-gradient-warning' : (user.host === 'localhost' ? 'bg-light text-dark border' : 'bg-gradient-info')">
+                            {{ user.host === '%' ? 'Remote (%)' : user.host }}
+                          </span>
+                        </div>
+                      </td>
                       <td>
                         <span v-for="priv in user.privileges?.slice(0, 3)" :key="priv"
                           class="badge bg-secondary me-1">{{ priv
@@ -430,6 +491,10 @@
                         <button class="btn btn-link text-warning p-0 me-2" @click="changeUserPassword(user)"
                           title="Change password">
                           <i class="material-symbols-rounded text-sm">key</i>
+                        </button>
+                        <button class="btn btn-link text-info p-0 me-2" @click="openHostModal(user)"
+                          title="Change Host / Remote Access">
+                          <i class="material-symbols-rounded text-sm">lan</i>
                         </button>
                         <button class="btn btn-link text-danger p-0" @click="removeUserAccess(user)"
                           title="Remove access">
@@ -463,8 +528,51 @@
             <div class="modal-body">
               <p class="text-sm">Change password for <strong>{{ editingUser?.username }}</strong></p>
               <div class="mb-3">
-                <label class="form-label">New Password</label>
-                <input type="password" class="form-control" v-model="newPassword" placeholder="Enter new password">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label text-xs text-uppercase font-weight-bolder text-secondary mb-0">New Password</label>
+                  <button 
+                    type="button" 
+                    class="btn-auto-gen" 
+                    @click="generateStrongPassword('change')"
+                    title="Generate strong password and copy to clipboard"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">auto_awesome</i>
+                    Auto-Generate & Copy
+                  </button>
+                </div>
+                <div class="password-box-unified">
+                  <input 
+                    :type="showChangePassword ? 'text' : 'password'" 
+                    v-model="newPassword" 
+                    placeholder="Enter or generate new password"
+                    class="font-monospace"
+                  >
+                  <div class="d-flex align-items-center gap-1">
+                    <button 
+                      type="button" 
+                      class="icon-action-btn"
+                      @click="showChangePassword = !showChangePassword"
+                      :title="showChangePassword ? 'Hide password' : 'Show password'"
+                    >
+                      <i class="material-symbols-rounded text-sm">{{ showChangePassword ? 'visibility_off' : 'visibility' }}</i>
+                    </button>
+                    <button 
+                      type="button" 
+                      class="icon-action-btn"
+                      :class="{ 'text-success': copiedField === 'change' }"
+                      @click="copyToClipboard(newPassword, 'change')"
+                      :disabled="!newPassword"
+                      title="Copy password to clipboard"
+                    >
+                      <i class="material-symbols-rounded text-sm">{{ copiedField === 'change' ? 'check' : 'content_copy' }}</i>
+                    </button>
+                  </div>
+                </div>
+                <transition name="fade">
+                  <span v-if="copiedField === 'change'" class="text-xxs text-success font-weight-bold mt-1 d-inline-flex align-items-center">
+                    <i class="material-symbols-rounded text-xs me-1">check_circle</i> Copied to clipboard!
+                  </span>
+                </transition>
               </div>
             </div>
             <div class="modal-footer">
@@ -473,6 +581,58 @@
                 :disabled="!newPassword || updatingPassword">
                 <span v-if="updatingPassword" class="spinner-border spinner-border-sm me-1"></span>
                 Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Change Host Modal -->
+      <div class="modal-backdrop fade show" v-if="showHostModal" @click="showHostModal = false"></div>
+      <div class="modal fade show d-block" v-if="showHostModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title d-flex align-items-center">
+                <i class="material-symbols-rounded text-info me-2">lan</i>
+                User Host & Remote Access
+              </h5>
+              <button type="button" class="btn-close" @click="showHostModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm">
+                Configuring allowed host for user <strong>{{ hostTargetUser?.username }}</strong>
+                (currently <code>{{ hostTargetUser?.host }}</code>).
+              </p>
+
+              <div class="form-group mb-3">
+                <label class="form-control-label text-xs text-uppercase font-weight-bold">Allowed Connection Host</label>
+                <select class="form-select form-control" v-model="selectedHostType">
+                  <option value="localhost">Localhost only (localhost) — For sites on this server</option>
+                  <option value="%">Any Host (%) — Remote connection from external clients</option>
+                  <option value="custom">Specific IP / Subnet</option>
+                </select>
+              </div>
+
+              <div class="form-group mb-3" v-if="selectedHostType === 'custom'">
+                <label class="form-control-label text-xs text-uppercase font-weight-bold">Custom Client IP or CIDR</label>
+                <input type="text" class="form-control" v-model="customHostInput" placeholder="e.g. 192.168.1.50 or 203.0.113.10">
+              </div>
+
+              <div class="alert alert-warning text-white text-xs mb-0" v-if="selectedHostType === '%'">
+                <div class="d-flex align-items-start">
+                  <i class="material-symbols-rounded me-2" style="font-size: 1.2rem;">warning</i>
+                  <div>
+                    <strong>Security Notice:</strong> Any host (<code>%</code>) allows connections from external tools (Navicat, DBeaver, external servers). Ensure the user has a strong password and firewall allows port 3306 only from trusted sources.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary" @click="showHostModal = false">Cancel</button>
+              <button class="btn bg-gradient-info" @click="submitHostChange" :disabled="updatingHost || (selectedHostType === 'custom' && !customHostInput.trim())">
+                <span v-if="updatingHost" class="spinner-border spinner-border-sm me-1"></span>
+                Save Host Setting
               </button>
             </div>
           </div>
@@ -543,6 +703,9 @@
         </div>
       </div>
 
+      <!-- Native Database Manager Workspace Modal -->
+      <DatabaseManagerModal :show="showNativeManager" :database-name="selectedDbForManager" @close="showNativeManager = false" />
+
     </div>
   </MainLayout>
 </template>
@@ -550,8 +713,43 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
+import DatabaseManagerModal from '@/Components/DatabaseManagerModal.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+
+const openingManager = ref({})
+const backingUpDb = ref({})
+
+const openNativeManager = async (dbName) => {
+  try {
+    openingManager.value[dbName] = true
+    const response = await axios.post('/database/manager/token', { database: dbName })
+    if (response.data?.url) {
+      window.open(response.data.url, '_blank')
+    }
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to generate database session token')
+  } finally {
+    openingManager.value[dbName] = false
+  }
+}
+
+const quickBackupDatabase = async (dbName) => {
+  try {
+    backingUpDb.value[dbName] = true
+    const response = await axios.post('/backups', {
+      database_name: dbName,
+      type: 'database'
+    })
+    const msg = response.data?.message || `Backup for "${dbName}" created successfully!`
+    showAlert('success', msg)
+  } catch (err) {
+    const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to create database backup'
+    showAlert('danger', errorMsg)
+  } finally {
+    backingUpDb.value[dbName] = false
+  }
+}
 
 const loading = ref(false)
 const installing = ref(false)
@@ -577,18 +775,79 @@ const dbCurrentPage = ref(1)
 const itemsPerPage = ref(10)
 
 const newDatabase = ref({ name: '' })
-const newUser = ref({ username: '', password: '' })
+const newUser = ref({ username: '', password: '', host: 'localhost' })
 const assignment = ref({ database: '', username: '', privileges: [] })
+
+const showCreatePassword = ref(false)
+const showChangePassword = ref(false)
+const copiedField = ref(null)
+
+const generateStrongPassword = (target = 'create') => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+-=[]{}|'
+  let password = ''
+  const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const lowers = 'abcdefghijkmnopqrstuvwxyz'
+  const numbers = '23456789'
+  const specials = '!@#$%^&*()_+-='
+
+  password += uppers[Math.floor(Math.random() * uppers.length)]
+  password += lowers[Math.floor(Math.random() * lowers.length)]
+  password += numbers[Math.floor(Math.random() * numbers.length)]
+  password += specials[Math.floor(Math.random() * specials.length)]
+
+  for (let i = 0; i < 12; i++) {
+    password += chars[Math.floor(Math.random() * chars.length)]
+  }
+
+  password = password.split('').sort(() => 0.5 - Math.random()).join('')
+
+  if (target === 'create') {
+    newUser.value.password = password
+    showCreatePassword.value = true
+  } else if (target === 'change') {
+    newPassword.value = password
+    showChangePassword.value = true
+  }
+
+  copyToClipboard(password, target)
+}
+
+const copyToClipboard = async (text, target = 'create') => {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    copiedField.value = target
+    setTimeout(() => {
+      if (copiedField.value === target) copiedField.value = null
+    }, 3000)
+  } catch (err) {
+    const el = document.createElement('textarea')
+    el.value = text
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    copiedField.value = target
+    setTimeout(() => {
+      if (copiedField.value === target) copiedField.value = null
+    }, 3000)
+  }
+}
 
 const showAssignModal = ref(false)
 const showManageModal = ref(false)
 const showPasswordModal = ref(false)
+const showHostModal = ref(false)
 const showDeleteModal = ref(false)
 const showPmaModal = ref(false)
 const showLinkModal = ref(false)
 
 const managingDb = ref(null)
 const editingUser = ref(null)
+const hostTargetUser = ref(null)
+const selectedHostType = ref('localhost')
+const customHostInput = ref('')
+const updatingHost = ref(false)
 const dbToDelete = ref(null)
 const pmaAccess = ref(null)
 const newPassword = ref('')
@@ -850,8 +1109,8 @@ const createUser = async () => {
   try {
     creatingUser.value = true
     await axios.post('/database/user/create', newUser.value)
-    showAlert('success', `User '${newUser.value.username}' created successfully`)
-    newUser.value = { username: '', password: '' }
+    showAlert('success', `User '${newUser.value.username}'@'${newUser.value.host}' created successfully`)
+    newUser.value = { username: '', password: '', host: 'localhost' }
     await loadData()
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to create user')
@@ -936,6 +1195,58 @@ const removeUserAccess = async (user) => {
     managingDb.value = databases.value.find(d => d.name === managingDb.value.name)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to remove user access')
+  }
+}
+
+const openHostModal = (user) => {
+  hostTargetUser.value = user
+  if (user.host === 'localhost') {
+    selectedHostType.value = 'localhost'
+    customHostInput.value = ''
+  } else if (user.host === '%') {
+    selectedHostType.value = '%'
+    customHostInput.value = ''
+  } else {
+    selectedHostType.value = 'custom'
+    customHostInput.value = user.host
+  }
+  showHostModal.value = true
+}
+
+const submitHostChange = async () => {
+  if (!hostTargetUser.value) return
+  let targetHost = selectedHostType.value
+  if (targetHost === 'custom') {
+    targetHost = customHostInput.value.trim()
+    if (!targetHost) {
+      showAlert('danger', 'Please provide a valid host or IP address')
+      return
+    }
+  }
+
+  try {
+    updatingHost.value = true
+    const response = await axios.post('/database/user/update-host', {
+      username: hostTargetUser.value.username,
+      current_host: hostTargetUser.value.host,
+      new_host: targetHost
+    })
+
+    showAlert('success', response.data?.message || 'User host updated successfully')
+    showHostModal.value = false
+
+    if (managingDb.value && managingDb.value.users) {
+      const u = managingDb.value.users.find(u => u.username === hostTargetUser.value.username && u.host === hostTargetUser.value.host)
+      if (u) {
+        u.host = targetHost
+      }
+    }
+
+    await loadData()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || err.response?.data?.message || 'Failed to update user host')
+  } finally {
+    updatingHost.value = false
   }
 }
 
@@ -1062,6 +1373,7 @@ const saveProjectLink = async () => {
 .btn-sso:hover { background: #1171ef; color: #fff; }
 .btn-settings:hover { background: #5e72e4; color: #fff; }
 .btn-delete:hover { background: #f5365c; color: #fff; }
+.btn-backup:hover { background: #2dce89; color: #fff; }
 
 .action-btn:disabled {
   opacity: 0.5;
@@ -1081,6 +1393,66 @@ const saveProjectLink = async () => {
 }
 .terminal-output::-webkit-scrollbar-thumb:hover {
   background: #444;
+}
+
+.password-box-unified {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d2d6da;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0 0.5rem 0 0.75rem;
+  transition: all 0.2s ease;
+}
+.password-box-unified:focus-within {
+  border-color: #5e72e4;
+  box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.2);
+}
+.password-box-unified input {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0.45rem 0.25rem 0.45rem 0;
+  font-size: 0.875rem;
+  color: #495057;
+  width: 100%;
+}
+.icon-action-btn {
+  background: transparent;
+  border: none;
+  color: #8392ab;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.icon-action-btn:hover {
+  background: #f1f5f9;
+  color: #344767;
+}
+.btn-auto-gen {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  border-radius: 50rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+.btn-auto-gen:hover {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+  transform: translateY(-1px);
 }
 </style>
 

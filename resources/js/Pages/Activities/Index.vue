@@ -270,6 +270,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import { formatDateTime } from '@/Utils/date'
 
 const loading = ref(false)
 const activities = ref([])
@@ -517,17 +518,7 @@ const formatName = (str) => {
   return str.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-}
+
 </script>
 
 <style scoped>

@@ -140,13 +140,34 @@
                   <p class="text-sm text-secondary mb-0">Quickly modify common PHP settings</p>
                 </div>
                 <div class="card-body">
+                  <!-- Preset Profiles -->
+                  <div class="p-3 bg-gray-100 border-radius-md mb-4">
+                    <span class="text-xs text-uppercase font-weight-bolder text-secondary d-block mb-2">
+                      <i class="material-symbols-rounded text-sm me-1 align-middle">tune</i>
+                      1-Click Optimization Profiles
+                    </span>
+                    <div class="d-flex flex-wrap gap-2">
+                      <button 
+                        v-for="profile in profiles" 
+                        :key="profile.name" 
+                        type="button"
+                        class="btn btn-sm btn-white mb-0 d-flex align-items-center gap-1 shadow-sm"
+                        @click="applyProfile(profile)"
+                        :disabled="applyingProfile"
+                      >
+                        <span class="badge badge-sm me-1" :class="profile.badge">{{ profile.name }}</span>
+                        <span class="text-xs text-muted d-none d-md-inline">{{ profile.description }}</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <div class="row">
                     <div class="col-md-6 col-lg-4 mb-3" v-for="(value, key) in currentSettings" :key="key">
                       <div class="quick-setting-item">
                         <label class="form-label text-xs text-uppercase fw-bold text-secondary mb-1">
                           {{ formatSettingName(key) }}
                         </label>
-                        <div class="input-group input-group-sm">
+                        <div class="input-group input-group-sm mb-1">
                           <input type="text" class="form-control" :value="value" :ref="`input-${key}`"
                             @keyup.enter="updateQuickSetting(key, $event.target.value)" />
                           <button class="btn btn-sm bg-gradient-primary mb-0"
@@ -155,6 +176,19 @@
                             <span v-if="updatingSettings[key]" class="spinner-border spinner-border-sm"></span>
                             <i v-else class="material-symbols-rounded text-xs">save</i>
                           </button>
+                        </div>
+                        <!-- Quick Value Chips -->
+                        <div v-if="settingPresets[key]" class="d-flex flex-wrap gap-1 mt-1">
+                          <span 
+                            v-for="opt in settingPresets[key]" 
+                            :key="opt"
+                            class="badge badge-sm bg-light text-dark cursor-pointer border"
+                            style="font-size: 10px; padding: 2px 6px;"
+                            :class="{ 'border-primary text-primary font-weight-bold': value === opt }"
+                            @click="updateQuickSetting(key, opt)"
+                          >
+                            {{ opt }}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -589,6 +623,55 @@ const saving = ref(false)
 const restarting = ref(false)
 const syncing = ref(false)
 const updatingSettings = reactive({})
+const applyingProfile = ref(false)
+
+const settingPresets = {
+  upload_max_filesize: ['32M', '64M', '128M', '256M', '512M'],
+  post_max_size: ['32M', '64M', '128M', '256M', '512M'],
+  memory_limit: ['128M', '256M', '512M', '1G'],
+  max_execution_time: ['30', '60', '120', '300'],
+  max_input_time: ['30', '60', '120', '300'],
+  display_errors: ['Off', 'On'],
+}
+
+const profiles = [
+  {
+    name: 'WordPress Recommended',
+    description: '256M RAM, 64M uploads, 120s execution',
+    badge: 'bg-gradient-info',
+    settings: {
+      memory_limit: '256M',
+      upload_max_filesize: '64M',
+      post_max_size: '64M',
+      max_execution_time: '120',
+      max_input_time: '60',
+    }
+  },
+  {
+    name: 'High-Capacity Uploads',
+    description: '512M RAM, 256M uploads, 300s execution',
+    badge: 'bg-gradient-primary',
+    settings: {
+      memory_limit: '512M',
+      upload_max_filesize: '256M',
+      post_max_size: '256M',
+      max_execution_time: '300',
+      max_input_time: '300',
+    }
+  },
+  {
+    name: 'Standard Defaults',
+    description: '128M RAM, 32M uploads, 60s execution',
+    badge: 'bg-gradient-secondary',
+    settings: {
+      memory_limit: '128M',
+      upload_max_filesize: '32M',
+      post_max_size: '32M',
+      max_execution_time: '60',
+      max_input_time: '60',
+    }
+  }
+]
 
 const phpInfo = ref(null)
 const iniFiles = ref([])
@@ -770,6 +853,52 @@ const autoRestartPhp = async () => {
   } catch (error) {
     console.error('Auto-restart failed:', error)
     throw error
+  }
+}
+
+const applyProfile = async (profile) => {
+  const fpmIni = iniFiles.value.find(ini => ini.label.includes('FPM'))
+  const cliIni = iniFiles.value.find(ini => ini.label.includes('CLI'))
+
+  if (!fpmIni) {
+    showAlert('danger', 'PHP-FPM configuration file not found')
+    return
+  }
+
+  try {
+    applyingProfile.value = true
+    showAlert('info', `Applying '${profile.name}' profile settings...`)
+
+    for (const [setting, value] of Object.entries(profile.settings)) {
+      await axios.post('/php/update-setting', {
+        path: fpmIni.path,
+        setting: setting,
+        value: value
+      })
+      if (cliIni) {
+        try {
+          await axios.post('/php/update-setting', {
+            path: cliIni.path,
+            setting: setting,
+            value: value
+          })
+        } catch (e) {}
+      }
+      currentSettings.value[setting] = value
+    }
+
+    showAlert('info', `Restarting PHP-FPM to apply '${profile.name}' profile...`)
+    await autoRestartPhp()
+
+    setTimeout(async () => {
+      await loadInfo()
+      showAlert('success', `Profile '${profile.name}' applied and active!`)
+    }, 4000)
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to apply profile settings')
+    await loadInfo()
+  } finally {
+    applyingProfile.value = false
   }
 }
 

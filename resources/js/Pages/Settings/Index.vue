@@ -466,6 +466,7 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head } from '@inertiajs/vue3'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { formatDateTime } from '@/Utils/date'
 
 const props = defineProps({
     panelVersion: { type: String, default: '1.0.0' },
@@ -650,11 +651,7 @@ const executeDeleteRule = async () => {
     }
 }
 
-const formatDate = (dateString) => {
-    if (!dateString) return '-'
-    const date = new Date(dateString)
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+const formatDate = (dateString) => formatDateTime(dateString)
 
 const setupPanelDomain = async () => {
     if (!panelDomain.value) {

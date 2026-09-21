@@ -10,11 +10,17 @@ use App\Http\Controllers\PhpController;
 use App\Http\Controllers\NginxController;
 use App\Http\Controllers\SslController;
 use App\Http\Controllers\DatabaseController;
+use App\Http\Controllers\DatabaseManagerController;
 use App\Http\Controllers\EmailController;
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\GitDeploymentController;
 use App\Http\Controllers\ActivationController;
+use App\Http\Controllers\WebmailController;
+use App\Http\Controllers\SsoController;
+
+// 1-Click Single Sign-On (SSO) from VmCoreCentral
+Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
 
 // Auth routes (public)
 Route::middleware('guest')->group(function () {
@@ -26,8 +32,18 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout')->middleware('auth');
 
-// Redirect root to dashboard
-Route::get('/', function () {
+// Redirect root to dashboard (or Webmail if accessed via webmail/mail/nimbus-mail subdomain)
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    $host = strtolower($request->getHost());
+    if (
+        str_starts_with($host, 'webmail.') || 
+        str_starts_with($host, 'nimbus-mail.') || 
+        str_starts_with($host, 'mail.') || 
+        str_contains($host, '.webmail.') ||
+        str_contains($host, 'webmail.nimbus.')
+    ) {
+        return app(\App\Http\Controllers\WebmailController::class)->index($request);
+    }
     return redirect()->route('dashboard');
 });
 
@@ -35,6 +51,32 @@ Route::get('/', function () {
 Route::middleware([\App\Http\Middleware\EnsureSetupComplete::class])->group(function () {
     Route::get('/activate', [ActivationController::class, 'index'])->name('activate.index');
     Route::post('/activate', [ActivationController::class, 'activate'])->name('activate.submit');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Webmail Routes (Standalone Login, SSO & In-App Webmail)
+// ═══════════════════════════════════════════════════════════════
+Route::prefix('webmail')->name('webmail.')->group(function () {
+    Route::get('/login', [WebmailController::class, 'showLogin'])->name('login');
+    Route::post('/login', [WebmailController::class, 'login'])->name('login.post');
+    Route::post('/logout', [WebmailController::class, 'logout'])->name('logout');
+    Route::get('/', [WebmailController::class, 'index'])->name('index');
+    Route::post('/sso', [WebmailController::class, 'ssoLogin'])->name('sso');
+    Route::post('/switch-account', [WebmailController::class, 'switchAccount'])->name('switch-account');
+
+    // Webmail AJAX / API
+    Route::prefix('api')->name('api.')->group(function () {
+        Route::get('/folders', [WebmailController::class, 'getFolders'])->name('folders');
+        Route::get('/messages', [WebmailController::class, 'getMessages'])->name('messages');
+        Route::get('/message/{id?}', [WebmailController::class, 'getMessage'])->name('message')->where('id', '.*');
+        Route::post('/send', [WebmailController::class, 'sendMessage'])->name('send');
+        Route::post('/draft', [WebmailController::class, 'saveDraft'])->name('draft');
+        Route::post('/flags', [WebmailController::class, 'updateFlags'])->name('flags');
+        Route::post('/move', [WebmailController::class, 'moveMessages'])->name('move');
+        Route::post('/delete', [WebmailController::class, 'deleteMessages'])->name('delete');
+        Route::post('/keep-alive', [WebmailController::class, 'keepAlive'])->name('keep-alive');
+        Route::get('/attachment/{id?}/{index?}', [WebmailController::class, 'downloadAttachment'])->name('attachment');
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -71,6 +113,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         return Inertia::render('Domains/Index');
     })->name('domains.list');
 
+    // FTP Accounts (Coming Soon — accessible to all users)
+    Route::get('/ftp', function () {
+        return Inertia::render('FTP/Index');
+    })->name('ftp.index');
+
     Route::prefix('domains')->group(function () {
         Route::get('/api', [DomainController::class, 'index'])->name('domain.index');
         Route::get('/api/{domain}/details', [DomainController::class, 'getDomainDetails'])->name('domain.details');
@@ -79,26 +126,15 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     // Domain create/update/delete — root, admin, and user
     Route::middleware(['role:root,admin,user'])->prefix('domains')->group(function () {
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
-        Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
         Route::put('/{domain}/php-version', [DomainController::class, 'updatePhpVersion'])->name('domain.update.php-version');
+        Route::post('/{domain}/toggle-status', [DomainController::class, 'toggleStatus'])->name('domain.toggle-status');
         Route::delete('/{domain}', [DomainController::class, 'destroy'])->name('domain.destroy');
     });
 
-    // File Manager shortcut — redirects to primary assigned domain or list
-    Route::get('/file-manager', function (\Illuminate\Http\Request $request) {
-        $user = $request->user();
-        if (!$user) return redirect()->route('auth.login');
-        $domains = $user->accessibleDomains();
-        if (!empty($domains)) {
-            return redirect()->route('file-manager.index', ['domain' => $domains[0]]);
-        }
-        return redirect()->route('domains.list');
-    })->name('file-manager.shortcut');
-
-    // File Manager — domain-scoped access via middleware
+    // File Manager — supports root, projects (/var/www), and domain scopes
     Route::middleware(['domain.access', 'permission:files'])->prefix('file-manager')->name('file-manager.')->group(function () {
-        Route::get('/{domain}', [FileManagerController::class, 'index'])->name('index');
+        Route::get('/{domain?}', [FileManagerController::class, 'index'])->name('index');
         Route::post('/{domain}/list', [FileManagerController::class, 'list'])->name('list');
         Route::post('/{domain}/read', [FileManagerController::class, 'read'])->name('read');
         Route::post('/{domain}/save', [FileManagerController::class, 'save'])->name('save');
@@ -136,6 +172,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/validate-repo', [GitDeploymentController::class, 'validateRepo'])->name('validate-repo');
             Route::post('/branches', [GitDeploymentController::class, 'getBranches'])->name('branches');
             Route::get('/ssh-key', [GitDeploymentController::class, 'getServerSshKey'])->name('ssh-key');
+            Route::get('/saved-tokens', [GitDeploymentController::class, 'getSavedTokens'])->name('saved-tokens');
             Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
             Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
             Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
@@ -151,11 +188,14 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/', [SslController::class, 'index'])->name('index');
         Route::get('/domains', [SslController::class, 'getDomains'])->name('domains');
         Route::get('/certbot-status', [SslController::class, 'certbotStatus'])->name('certbot-status');
+        Route::get('/install-status', [SslController::class, 'getInstallStatus'])->name('install-status');
         Route::post('/install-certbot', [SslController::class, 'installCertbotAction'])->name('install-certbot');
         Route::post('/install', [SslController::class, 'installCertificate'])->name('install');
+        Route::post('/custom', [SslController::class, 'installCustomCertificate'])->name('custom');
         Route::post('/renew', [SslController::class, 'renewCertificate'])->name('renew');
         Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
         Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');
+        Route::post('/toggle-auto-renew', [SslController::class, 'toggleAutoRenew'])->name('toggle-auto-renew');
     });
 
     // Database Management — accessible to users with 'database' permission (controller filters)
@@ -177,10 +217,39 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/user/assign', [DatabaseController::class, 'assignUser'])->name('user.assign');
         Route::post('/user/permissions', [DatabaseController::class, 'updatePermissions'])->name('user.permissions');
         Route::post('/user/password', [DatabaseController::class, 'updatePassword'])->name('user.password');
+        Route::post('/user/update-host', [DatabaseController::class, 'updateUserHost'])->name('user.update-host');
         Route::post('/viewer/access', [DatabaseController::class, 'getDatabaseViewerUrl'])->name('viewer.access');
         Route::get('/viewer/sso', [DatabaseController::class, 'openDatabaseViewerSSO'])->name('viewer.sso');
         Route::get('/viewer/signon/{token}', [DatabaseController::class, 'databaseViewerSignon'])->name('viewer.signon');
         Route::get('/viewer-view', [DatabaseController::class, 'DatabaseViewerView'])->name('viewer.view');
+
+        // Native Database Manager APIs & Single-Use Token SSO
+        Route::post('/manager/token', [DatabaseManagerController::class, 'generateToken'])->name('manager.token');
+        Route::get('/manager/view/{token}', [DatabaseManagerController::class, 'viewPage'])->name('manager.view');
+        Route::get('/manager/{db}/tables', [DatabaseManagerController::class, 'getTables'])->name('manager.tables');
+        Route::get('/manager/{db}/tables/{table}/schema', [DatabaseManagerController::class, 'getTableSchema'])->name('manager.schema');
+        Route::post('/manager/{db}/tables/{table}/data', [DatabaseManagerController::class, 'getTableData'])->name('manager.data');
+        Route::post('/manager/{db}/tables/{table}/row/insert', [DatabaseManagerController::class, 'insertRow'])->name('manager.row.insert');
+        Route::post('/manager/{db}/tables/{table}/row/update', [DatabaseManagerController::class, 'updateRow'])->name('manager.row.update');
+        Route::post('/manager/{db}/tables/{table}/row/delete', [DatabaseManagerController::class, 'deleteRow'])->name('manager.row.delete');
+        Route::post('/manager/{db}/tables/create', [DatabaseManagerController::class, 'createTable'])->name('manager.table.create');
+        Route::post('/manager/{db}/tables/drop-all', [DatabaseManagerController::class, 'dropAllTables'])->name('manager.tables.drop-all');
+        Route::post('/manager/{db}/tables/truncate-all', [DatabaseManagerController::class, 'truncateAllTables'])->name('manager.tables.truncate-all');
+        Route::post('/manager/{db}/tables/{table}/drop', [DatabaseManagerController::class, 'dropTable'])->name('manager.table.drop');
+        Route::post('/manager/{db}/tables/{table}/truncate', [DatabaseManagerController::class, 'truncateTable'])->name('manager.table.truncate');
+        Route::post('/manager/{db}/tables/{table}/column/update', [DatabaseManagerController::class, 'updateColumn'])->name('manager.column.update');
+        Route::post('/manager/{db}/tables/{table}/column/add', [DatabaseManagerController::class, 'addColumn'])->name('manager.column.add');
+        Route::post('/manager/{db}/tables/{table}/column/drop', [DatabaseManagerController::class, 'dropColumn'])->name('manager.column.drop');
+        Route::post('/manager/{db}/tables/{table}/alter-props', [DatabaseManagerController::class, 'alterTableProps'])->name('manager.table.alter-props');
+        Route::post('/manager/{db}/query', [DatabaseManagerController::class, 'executeQuery'])->name('manager.query');
+        Route::get('/manager/{db}/export', [DatabaseManagerController::class, 'exportDatabase'])->name('manager.export');
+        Route::post('/manager/{db}/import', [DatabaseManagerController::class, 'importDatabase'])->name('manager.import');
+        Route::get('/manager/{db}/designer', [DatabaseManagerController::class, 'getDbDesignerSchema'])->name('manager.designer');
+        Route::post('/manager/{db}/tables/{table}/index/add', [DatabaseManagerController::class, 'addIndex'])->name('manager.index.add');
+        Route::post('/manager/{db}/tables/{table}/index/drop', [DatabaseManagerController::class, 'dropIndex'])->name('manager.index.drop');
+        Route::post('/manager/{db}/tables/{table}/foreign-key/add', [DatabaseManagerController::class, 'addForeignKey'])->name('manager.fk.add');
+        Route::post('/manager/{db}/tables/{table}/foreign-key/drop', [DatabaseManagerController::class, 'dropForeignKey'])->name('manager.fk.drop');
+        Route::post('/manager/{db}/tables/{table}/fk-lookup', [DatabaseManagerController::class, 'lookupForeignKey'])->name('manager.fk.lookup');
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)
@@ -220,6 +289,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/test', [NginxController::class, 'testConfig'])->name('test');
         Route::post('/reload', [NginxController::class, 'reloadNginx'])->name('reload');
         Route::post('/toggle', [NginxController::class, 'toggleDomain'])->name('toggle');
+        Route::post('/proxy/status', [NginxController::class, 'getProxyStatus'])->name('proxy.status');
+        Route::post('/proxy/apply', [NginxController::class, 'applyReverseProxy'])->name('proxy.apply');
+        Route::post('/proxy/remove', [NginxController::class, 'removeReverseProxy'])->name('proxy.remove');
     });
 
     // Supervisor Management — accessible to root, admin, or users with 'supervisor' permission
@@ -253,6 +325,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/update', [CronController::class, 'updateJob'])->name('update');
         Route::post('/delete', [CronController::class, 'deleteJob'])->name('delete');
         Route::post('/run', [CronController::class, 'runNow'])->name('run');
+        Route::get('/history', [CronController::class, 'getJobHistory'])->name('history');
+        Route::post('/clear-history', [CronController::class, 'clearJobHistory'])->name('clear-history');
         Route::post('/describe', [CronController::class, 'describeSchedule'])->name('describe');
     });
 
@@ -300,6 +374,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::get('/webmail', [EmailController::class, 'getWebmailUrl'])->name('webmail');
             Route::post('/webmail-login', [EmailController::class, 'webmailLogin'])->name('webmail-login');
             Route::get('/client-settings', [EmailController::class, 'getClientSettings'])->name('client-settings');
+            Route::get('/dns-records', [EmailController::class, 'getDnsRecords'])->name('dns-records');
+            Route::post('/dns-records/cloudflare', [EmailController::class, 'applyCloudflareDns'])->name('dns-records.cloudflare');
             Route::post('/configure-roundcube', [EmailController::class, 'configureRoundcube'])->name('configure-roundcube');
             Route::post('/uninstall', [EmailController::class, 'uninstallMailServer'])->name('uninstall');
         });
@@ -327,6 +403,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::prefix('resources')->name('resources.')->group(function () {
             Route::get('/', [\App\Http\Controllers\ResourceController::class, 'index'])->name('index');
             Route::get('/usage', [\App\Http\Controllers\ResourceController::class, 'getUsage'])->name('usage');
+            Route::get('/history', [\App\Http\Controllers\ResourceController::class, 'getHistory'])->name('history');
+            Route::get('/projects', [\App\Http\Controllers\ResourceController::class, 'getProjectsUsage'])->name('projects');
+            Route::get('/projects/{domain}/history', [\App\Http\Controllers\ResourceController::class, 'getSingleProjectHistory'])->name('project.history');
+            Route::post('/projects/{domain}/toggle-status', [\App\Http\Controllers\ResourceController::class, 'toggleProjectStatus'])->name('project.toggle-status');
         });
 
         // Settings routes
@@ -349,15 +429,29 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/security/panel-domain', [\App\Http\Controllers\PanelDomainController::class, 'setup'])->name('security.panel-domain');
         });
 
-        // Backups (Coming Soon)
-        Route::get('/backups', function () {
-            return \Inertia\Inertia::render('Backups/Index');
-        })->name('backups.index');
+        // Backups management routes
+        Route::prefix('backups')->name('backups.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\BackupController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\BackupController::class, 'store'])->name('store');
+            Route::post('/schedules', [\App\Http\Controllers\BackupController::class, 'storeSchedule'])->name('schedules.store');
+            Route::put('/schedules/{schedule}', [\App\Http\Controllers\BackupController::class, 'updateSchedule'])->name('schedules.update');
+            Route::post('/schedules/{schedule}/toggle', [\App\Http\Controllers\BackupController::class, 'toggleSchedule'])->name('schedules.toggle');
+            Route::post('/schedules/{schedule}/run', [\App\Http\Controllers\BackupController::class, 'runScheduleNow'])->name('schedules.run');
+            Route::delete('/schedules/{schedule}', [\App\Http\Controllers\BackupController::class, 'deleteSchedule'])->name('schedules.delete');
+            // Storage Destinations (Google Drive, Backblaze B2, S3/Wasabi/R2, Local)
+            Route::post('/destinations', [\App\Http\Controllers\BackupController::class, 'saveDestination'])->name('destinations.store');
+            Route::post('/destinations/save', [\App\Http\Controllers\BackupController::class, 'saveDestination'])->name('destinations.save');
+            Route::post('/destinations/test', [\App\Http\Controllers\BackupController::class, 'testDestination'])->name('destinations.test');
+            Route::delete('/destinations/{destination}', [\App\Http\Controllers\BackupController::class, 'deleteDestination'])->name('destinations.delete');
+            Route::post('/destinations/{destination}/default', [\App\Http\Controllers\BackupController::class, 'setDefaultDestination'])->name('destinations.default');
+            Route::post('/destinations/{destination}/set-default', [\App\Http\Controllers\BackupController::class, 'setDefaultDestination'])->name('destinations.set-default');
 
-        // FTP Accounts (Coming Soon)
-        Route::get('/ftp', function () {
-            return \Inertia\Inertia::render('FTP/Index');
-        })->name('ftp.index');
+            Route::post('/{backup}/restore', [\App\Http\Controllers\BackupController::class, 'restore'])->name('restore');
+            Route::get('/{backup}/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('download');
+            Route::post('/{backup}/retry-upload', [\App\Http\Controllers\BackupController::class, 'retryRemoteUpload'])->name('retry-upload');
+            Route::delete('/{backup}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('destroy');
+        });
+
 
         // Updates routes
         Route::prefix('updates')->name('updates.')->group(function () {

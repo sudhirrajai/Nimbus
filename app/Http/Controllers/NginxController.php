@@ -48,12 +48,38 @@ class NginxController extends Controller
                 ->map(function ($domain) {
                     $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
                     $enabledPath = $this->resolveNginxConfigPath($this->sitesEnabled, $domain);
+                    $hasConfig = file_exists($configPath);
+                    $isProxy = false;
+                    $proxyTarget = null;
+                    $proxyPreset = null;
+
+                    if ($hasConfig) {
+                        $content = @file_get_contents($configPath) ?: '';
+                        if (empty($content) && PHP_OS_FAMILY === 'Linux') {
+                            try {
+                                $content = $this->readFileWithSudo($configPath);
+                            } catch (\Throwable $e) {}
+                        }
+
+                        if (str_contains($content, 'proxy_pass') || str_contains($content, 'NIMBUS REVERSE PROXY')) {
+                            $isProxy = true;
+                            if (preg_match('/proxy_pass\s+([^;]+);/', $content, $m)) {
+                                $proxyTarget = trim($m[1]);
+                            }
+                            if (preg_match('/#\s*Preset:\s*([^\s|]+)/', $content, $pm)) {
+                                $proxyPreset = trim($pm[1]);
+                            }
+                        }
+                    }
                     
                     return [
                         'domain' => $domain,
-                        'hasConfig' => file_exists($configPath),
+                        'hasConfig' => $hasConfig,
                         'isEnabled' => file_exists($enabledPath),
                         'configPath' => $configPath,
+                        'isProxy' => $isProxy,
+                        'proxyTarget' => $proxyTarget,
+                        'proxyPreset' => $proxyPreset ?: ($isProxy ? 'custom' : null),
                     ];
                 })
                 ->values();
@@ -400,22 +426,359 @@ BASH;
     }
 
     /**
-     * Execute sudo command
+     * Execute a command with sudo
      */
     private function executeSudoCommand($command)
     {
         $output = [];
         $returnCode = 0;
 
-        \Log::debug("Executing sudo command: sudo $command");
-        exec("sudo $command 2>&1", $output, $returnCode);
+        \Log::debug("Executing sudo command in NginxController: sudo {$command}");
+        exec("sudo {$command} 2>&1", $output, $returnCode);
 
         if ($returnCode !== 0) {
-            $errorMsg = "Command execution failed: " . implode("\n", $output);
+            $errorMsg = "Command execution failed (code {$returnCode}): " . implode("\n", $output);
             \Log::error($errorMsg);
             throw new \Exception($errorMsg);
         }
 
         return $output;
     }
+
+    /**
+     * Get Reverse Proxy status and details for a domain
+     */
+    public function getProxyStatus(Request $request)
+    {
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253'
+            ]);
+
+            $domain = trim($request->input('domain'));
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'nginx')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
+            if (!file_exists($configPath)) {
+                return response()->json(['error' => 'Configuration file not found'], 404);
+            }
+
+            $content = $this->readFileWithSudo($configPath);
+
+            $isProxy = str_contains($content, 'proxy_pass') || str_contains($content, 'NIMBUS REVERSE PROXY');
+            $targetUrl = 'http://127.0.0.1:3000';
+            $preset = 'nodejs';
+            $enableWebsocket = true;
+            $maxBodySize = '100M';
+            $buffering = true;
+            $timeout = 600;
+
+            if ($isProxy) {
+                if (preg_match('/proxy_pass\s+([^;]+);/', $content, $m)) {
+                    $targetUrl = trim($m[1]);
+                }
+                if (preg_match('/#\s*Preset:\s*([^\s|]+)/', $content, $m)) {
+                    $preset = trim($m[1]);
+                }
+                if (preg_match('/client_max_body_size\s+([^;]+);/', $content, $m)) {
+                    $maxBodySize = trim($m[1]);
+                }
+                if (preg_match('/proxy_buffering\s+(off|on);/', $content, $m)) {
+                    $buffering = trim($m[1]) === 'on';
+                }
+                if (preg_match('/proxy_read_timeout\s+(\d+)s?;/', $content, $m)) {
+                    $timeout = (int)$m[1];
+                }
+                $enableWebsocket = str_contains($content, 'Upgrade $http_upgrade');
+            }
+
+            return response()->json([
+                'domain' => $domain,
+                'is_proxy' => $isProxy,
+                'target_url' => $targetUrl,
+                'preset' => $preset,
+                'enable_websocket' => $enableWebsocket,
+                'client_max_body_size' => $maxBodySize,
+                'proxy_buffering' => $buffering,
+                'proxy_read_timeout' => $timeout,
+                'has_pre_proxy_backup' => file_exists($configPath . '.nimbus_pre_proxy.bak')
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to get reverse proxy status: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Apply Reverse Proxy preset configuration to domain
+     */
+    public function applyReverseProxy(Request $request)
+    {
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253',
+                'target_url' => 'required|string|max:255',
+                'preset' => 'nullable|string|in:nodejs,python,go,docker,custom',
+                'enable_websocket' => 'nullable|boolean',
+                'client_max_body_size' => 'nullable|string|max:15',
+                'proxy_buffering' => 'nullable|boolean',
+                'proxy_read_timeout' => 'nullable|integer|min:10|max:3600',
+            ]);
+
+            $domain = trim($request->input('domain'));
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'nginx')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
+            if (!file_exists($configPath)) {
+                return response()->json(['error' => 'Configuration file not found'], 404);
+            }
+
+            $rawTarget = trim($request->input('target_url'));
+            // Normalize target URL (port number, localhost, unix socket)
+            if (is_numeric($rawTarget)) {
+                $targetUrl = "http://127.0.0.1:{$rawTarget}";
+            } elseif (preg_match('/^:([0-9]+)$/', $rawTarget, $pm)) {
+                $targetUrl = "http://127.0.0.1:{$pm[1]}";
+            } elseif (!str_starts_with($rawTarget, 'http://') && !str_starts_with($rawTarget, 'https://') && !str_starts_with($rawTarget, 'unix:')) {
+                $targetUrl = "http://" . $rawTarget;
+            } else {
+                $targetUrl = $rawTarget;
+            }
+
+            $preset = $request->input('preset', 'custom');
+            $enableWs = $request->boolean('enable_websocket', true);
+            $maxBodySize = $request->input('client_max_body_size', '100M');
+            $buffering = $request->boolean('proxy_buffering', true) ? 'on' : 'off';
+            $timeout = (int)$request->input('proxy_read_timeout', 600);
+
+            $currentContent = $this->readFileWithSudo($configPath);
+
+            // 1. Create a safety snapshot and pre-proxy backup if not already present
+            $preProxyBak = $configPath . '.nimbus_pre_proxy.bak';
+            if (!file_exists($preProxyBak)) {
+                $this->executeSudoCommand("cp " . escapeshellarg($configPath) . " " . escapeshellarg($preProxyBak));
+            }
+            $activeBackup = $configPath . '.backup.' . date('Y-m-d-His');
+            $this->executeSudoCommand("cp " . escapeshellarg($configPath) . " " . escapeshellarg($activeBackup));
+
+            // 2. Build the reverse proxy block
+            $wsSnippet = $enableWs ? "        proxy_set_header Upgrade \$http_upgrade;\n        proxy_set_header Connection \"upgrade\";\n" : "";
+            $nowStr = date('Y-m-d H:i:s');
+            
+            $proxyBlock = <<<NGINX
+    # === NIMBUS REVERSE PROXY START ===
+    # Preset: {$preset} | Target: {$targetUrl} | Applied: {$nowStr}
+    client_max_body_size {$maxBodySize};
+
+    location / {
+        proxy_pass {$targetUrl};
+        proxy_http_version 1.1;
+{$wsSnippet}        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_buffering {$buffering};
+        proxy_read_timeout {$timeout}s;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout {$timeout}s;
+    }
+    # === NIMBUS REVERSE PROXY END ===
+NGINX;
+
+            $newContent = $currentContent;
+
+            // 3. Replace existing reverse proxy block if present
+            if (preg_match('/# === NIMBUS REVERSE PROXY START ===.*?# === NIMBUS REVERSE PROXY END ===/s', $newContent)) {
+                $newContent = preg_replace(
+                    '/# === NIMBUS REVERSE PROXY START ===.*?# === NIMBUS REVERSE PROXY END ===/s',
+                    $proxyBlock,
+                    $newContent
+                );
+            } else {
+                // Comment out PHP fastcgi block if present to prevent bypass
+                if (preg_match('/location\s*~\s*\\\.php\$\s*\{[^}]*\}/s', $newContent, $phpMatch)) {
+                    $commentedPhp = "# NIMBUS_PHP_DISABLED_START\n" . preg_replace('/^/m', '    # ', $phpMatch[0]) . "\n    # NIMBUS_PHP_DISABLED_END";
+                    $newContent = str_replace($phpMatch[0], $commentedPhp, $newContent);
+                }
+
+                // Replace primary location / { ... }
+                if (preg_match('/location\s+\/\s*\{[^}]*\}/s', $newContent, $locMatch)) {
+                    $newContent = str_replace($locMatch[0], $proxyBlock, $newContent);
+                } else {
+                    // Inject before the last closing brace
+                    $lastBracePos = strrpos($newContent, '}');
+                    if ($lastBracePos !== false) {
+                        $newContent = substr_replace($newContent, "\n" . $proxyBlock . "\n}", $lastBracePos, 1);
+                    } else {
+                        $newContent .= "\n" . $proxyBlock;
+                    }
+                }
+            }
+
+            // 4. Save to temporary file & atomically update
+            $tempFile = tempnam(sys_get_temp_dir(), 'nginx_proxy_');
+            File::put($tempFile, $newContent);
+            $this->executeSudoCommand("cp " . escapeshellarg($tempFile) . " " . escapeshellarg($configPath));
+            $this->executeSudoCommand("chmod 644 " . escapeshellarg($configPath));
+            @unlink($tempFile);
+
+            // 5. Test configuration
+            $testResult = $this->testNginxConfig();
+            if (!$testResult['success']) {
+                // Rollback immediately
+                $this->executeSudoCommand("cp " . escapeshellarg($activeBackup) . " " . escapeshellarg($configPath));
+                return response()->json([
+                    'error' => 'Reverse proxy configuration test failed. Reverted to previous state.',
+                    'details' => $testResult['output']
+                ], 400);
+            }
+
+            // 6. Reload Nginx
+            $this->executeSudoCommand("systemctl reload nginx");
+
+            \App\Models\ActivityLog::log(
+                'APPLY_REVERSE_PROXY',
+                'Nginx',
+                "Configured Reverse Proxy preset '{$preset}' -> {$targetUrl} for {$domain}"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Reverse proxy to {$targetUrl} configured and reloaded successfully.",
+                'target_url' => $targetUrl,
+                'preset' => $preset,
+                'is_proxy' => true
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to apply reverse proxy: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Remove Reverse Proxy and restore standard PHP/Static site config
+     */
+    public function removeReverseProxy(Request $request)
+    {
+        try {
+            $request->validate([
+                'domain' => 'required|string|max:253'
+            ]);
+
+            $domain = trim($request->input('domain'));
+            if (!$this->isValidDomain($domain)) {
+                return response()->json(['error' => 'Invalid domain name'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'nginx')) {
+                return response()->json(['error' => 'Permission denied for this domain'], 403);
+            }
+
+            $configPath = $this->resolveNginxConfigPath($this->sitesAvailable, $domain);
+            if (!file_exists($configPath)) {
+                return response()->json(['error' => 'Configuration file not found'], 404);
+            }
+
+            $preProxyBak = $configPath . '.nimbus_pre_proxy.bak';
+            $activeBackup = $configPath . '.backup.' . date('Y-m-d-His');
+            $this->executeSudoCommand("cp " . escapeshellarg($configPath) . " " . escapeshellarg($activeBackup));
+
+            // Option A: If pre-proxy backup exists, try restoring it
+            $restoredFromBak = false;
+            if (file_exists($preProxyBak)) {
+                $this->executeSudoCommand("cp " . escapeshellarg($preProxyBak) . " " . escapeshellarg($configPath));
+                $testResult = $this->testNginxConfig();
+                if ($testResult['success']) {
+                    $restoredFromBak = true;
+                    @unlink($preProxyBak);
+                } else {
+                    // Fall back to surgical revert if backup had old invalid syntax
+                    $this->executeSudoCommand("cp " . escapeshellarg($activeBackup) . " " . escapeshellarg($configPath));
+                }
+            }
+
+            if (!$restoredFromBak) {
+                // Option B: Surgical reversal
+                $content = $this->readFileWithSudo($configPath);
+
+                // 1. Uncomment PHP block if previously commented out by Nimbus
+                if (str_contains($content, '# NIMBUS_PHP_DISABLED_START')) {
+                    $content = preg_replace_callback(
+                        '/# NIMBUS_PHP_DISABLED_START\s*\n(.*?)\s*# NIMBUS_PHP_DISABLED_END/s',
+                        function ($matches) {
+                            return preg_replace('/^\s*#\s?/m', '', $matches[1]);
+                        },
+                        $content
+                    );
+                }
+
+                // 2. Replace Reverse Proxy block with standard try_files
+                $standardBlock = "    location / {\n        try_files \$uri \$uri/ /index.php?\$query_string;\n    }";
+                if (preg_match('/# === NIMBUS REVERSE PROXY START ===.*?# === NIMBUS REVERSE PROXY END ===/s', $content)) {
+                    $content = preg_replace(
+                        '/# === NIMBUS REVERSE PROXY START ===.*?# === NIMBUS REVERSE PROXY END ===/s',
+                        $standardBlock,
+                        $content
+                    );
+                } else {
+                    // Fallback replace proxy_pass location block
+                    $content = preg_replace(
+                        '/location\s+\/\s*\{[^}]*proxy_pass[^}]*\}/s',
+                        $standardBlock,
+                        $content
+                    );
+                }
+
+                $tempFile = tempnam(sys_get_temp_dir(), 'nginx_unproxy_');
+                File::put($tempFile, $content);
+                $this->executeSudoCommand("cp " . escapeshellarg($tempFile) . " " . escapeshellarg($configPath));
+                $this->executeSudoCommand("chmod 644 " . escapeshellarg($configPath));
+                @unlink($tempFile);
+
+                $testResult = $this->testNginxConfig();
+                if (!$testResult['success']) {
+                    // Rollback
+                    $this->executeSudoCommand("cp " . escapeshellarg($activeBackup) . " " . escapeshellarg($configPath));
+                    return response()->json([
+                        'error' => 'Reverting reverse proxy failed configuration test. Restored to proxy mode.',
+                        'details' => $testResult['output']
+                    ], 400);
+                }
+            }
+
+            // Reload Nginx
+            $this->executeSudoCommand("systemctl reload nginx");
+
+            \App\Models\ActivityLog::log(
+                'REMOVE_REVERSE_PROXY',
+                'Nginx',
+                "Disabled Reverse Proxy for {$domain}, restored PHP / standard handler"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Reverse proxy disabled. Standard PHP/Static handler restored.",
+                'is_proxy' => false
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Failed to remove reverse proxy: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
+

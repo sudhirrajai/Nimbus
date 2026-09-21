@@ -39,4 +39,8 @@ return [
         'api_url' => env('VMCORE_API_URL', 'http://localhost:8001'),
     ],
 
+    'nimbus' => [
+        'sso_secret' => env('NIMBUS_SSO_SECRET'),
+    ],
+
 ];

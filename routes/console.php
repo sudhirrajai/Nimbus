@@ -55,8 +55,10 @@ Schedule::command('shield:scan /var/www')
         return false;
     });
 
+Schedule::command('nimbus:collect-metrics')->everyFiveMinutes();
 Schedule::command('monitor:resources')->everyFiveMinutes();
 Schedule::command('activity-log:clean')->dailyAt('00:00');
+Schedule::command('nimbus:backups-run')->everyMinute();
 
 // ─── License Security Checks ─────────────────────────────────────────────
 // Hourly full verification (forces network call to VmCoreCentral)

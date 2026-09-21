@@ -6,25 +6,82 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="glass-card d-flex justify-content-between align-items-center p-3">
-            <div class="d-flex align-items-center">
-              <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
-                <i class="material-symbols-rounded opacity-10">folder_open</i>
+          <div class="glass-card p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+              <!-- Left: Title & Path Info -->
+              <div class="d-flex align-items-center">
+                <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
+                  <i class="material-symbols-rounded opacity-10">folder_open</i>
+                </div>
+                <div>
+                  <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                    <h4 class="font-weight-bolder mb-0">File Manager</h4>
+                    <!-- Scope Badge -->
+                    <span v-if="scope === 'root'" class="badge bg-gradient-danger text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">admin_panel_settings</i> Server Root (/)
+                    </span>
+                    <span v-else-if="scope === 'projects'" class="badge bg-gradient-info text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">folder_special</i> Web Projects (/var/www)
+                    </span>
+                    <span v-else class="badge bg-gradient-primary text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">language</i> {{ domain }}
+                    </span>
+                  </div>
+                  <p class="mb-0 text-xs text-secondary font-monospace">
+                    <span class="text-muted">{{ scope === 'root' ? '' : (scope === 'projects' ? '/var/www' : `/var/www/${domain}`) }}</span>
+                    <span class="text-dark font-weight-bold">{{ currentPath ? (scope === 'root' ? '/' + currentPath : '/' + currentPath) : (scope === 'root' ? '/' : '') }}</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 class="font-weight-bolder mb-0">File Manager</h4>
-                <p class="mb-0 text-sm text-secondary">
-                  <span class="text-primary font-weight-bold">{{ domain }}</span> 
-                  <span class="mx-2 text-lighter">/</span> 
-                  <span class="text-muted">/var/www/{{ domain }}</span>
-                  <span v-if="currentPath" class="text-dark font-weight-bold">/{{ currentPath }}</span>
-                </p>
+
+              <!-- Right: Scope Switchers & Quick Jump -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Scope Switch Buttons (for users with projects or root access) -->
+                <div v-if="allowedScopes.includes('projects') || allowedScopes.includes('root')" class="btn-group btn-group-sm shadow-sm border-radius-lg overflow-hidden">
+                  <button 
+                    type="button" 
+                    class="btn btn-sm mb-0" 
+                    :class="scope === 'projects' ? 'bg-gradient-info text-white' : 'bg-white text-dark'"
+                    @click="switchScope('projects')"
+                    title="Browse all website projects in /var/www"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">folder_special</i>
+                    <span>Web Projects</span>
+                  </button>
+                  <button 
+                    v-if="allowedScopes.includes('root')" 
+                    type="button" 
+                    class="btn btn-sm mb-0" 
+                    :class="scope === 'root' ? 'bg-gradient-danger text-white' : 'bg-white text-dark'"
+                    @click="switchScope('root')"
+                    title="Full Server Root access (/)"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">admin_panel_settings</i>
+                    <span>Server Root</span>
+                  </button>
+                </div>
+
+                <!-- Quick Domain Selector -->
+                <div v-if="availableDomains && availableDomains.length > 0" class="d-flex align-items-center" style="min-width: 170px;">
+                  <select 
+                    class="form-select form-select-sm border-radius-lg shadow-sm" 
+                    :value="scope === 'domain' ? domain : ''"
+                    @change="onDomainSelect($event.target.value)"
+                  >
+                    <option value="" disabled selected>Jump to Website...</option>
+                    <option v-for="d in availableDomains" :key="d" :value="d">
+                      🌐 {{ d }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Back button -->
+                <button class="btn btn-sm btn-link text-secondary mb-0" @click="goBack">
+                  <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
+                  {{ scope === 'domain' ? 'Domains' : 'Dashboard' }}
+                </button>
               </div>
             </div>
-            <button class="btn btn-link text-secondary mb-0" @click="goBack">
-              <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
-              Back to Domains
-            </button>
           </div>
         </div>
       </div>
@@ -51,10 +108,10 @@
             <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-3">Quick Navigation</h6>
             <div class="nav-pills-container">
               <button class="nav-pill-btn" :class="{ active: !currentPath }" @click="navigateTo('')">
-                <i class="material-symbols-rounded">home</i>
-                <span>Root Directory</span>
+                <i class="material-symbols-rounded">{{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}</i>
+                <span>{{ displayScope || (scope === 'root' ? 'Server Root (/)' : (scope === 'projects' ? 'Web Projects (/var/www)' : 'Root Directory')) }}</span>
               </button>
-              <button v-for="(crumb, index) in breadcrumbs.slice(0, -1)" :key="index" class="nav-pill-btn" @click="navigateTo(crumb.path)">
+              <button v-for="(crumb, index) in breadcrumbs.slice(1, -1)" :key="index" class="nav-pill-btn" @click="navigateTo(crumb.path)">
                 <i class="material-symbols-rounded">subdirectory_arrow_right</i>
                 <span>{{ crumb.name }}</span>
               </button>
@@ -89,31 +146,37 @@
         <div class="col-lg-9 col-md-8">
           <!-- Toolbar -->
           <div class="glass-card mb-3 p-3">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <div class="btn-group shadow-sm border-radius-lg overflow-hidden">
-                <button class="btn btn-sm bg-white mb-0 border-end" @click="showCreateFileModal = true">
-                  <i class="material-symbols-rounded text-primary text-sm me-1">note_add</i>
-                  New File
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+              
+              <!-- Action Buttons Group -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group shadow-sm border-radius-lg overflow-hidden">
+                  <button class="btn btn-sm bg-white mb-0 border-end" @click="showCreateFileModal = true">
+                    <i class="material-symbols-rounded text-primary text-sm me-1">note_add</i>
+                    <span>New File</span>
+                  </button>
+                  <button class="btn btn-sm bg-white mb-0" @click="showCreateDirModal = true">
+                    <i class="material-symbols-rounded text-info text-sm me-1">create_new_folder</i>
+                    <span>Folder</span>
+                  </button>
+                </div>
+
+                <button class="btn btn-sm bg-gradient-primary mb-0 shadow-sm" @click="triggerUpload">
+                  <i class="material-symbols-rounded text-sm me-1">upload</i>
+                  <span>Upload</span>
                 </button>
-                <button class="btn btn-sm bg-white mb-0" @click="showCreateDirModal = true">
-                  <i class="material-symbols-rounded text-info text-sm me-1">create_new_folder</i>
-                  Folder
+                <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" multiple />
+
+                <button class="btn btn-sm bg-white mb-0 shadow-sm text-dark" @click="webTerminalRef?.openTerminal()">
+                  <i class="material-symbols-rounded text-sm me-1 text-success">terminal</i>
+                  <span>Terminal</span>
                 </button>
               </div>
 
-              <button class="btn btn-sm bg-gradient-primary mb-0 shadow-sm" @click="triggerUpload">
-                <i class="material-symbols-rounded text-sm me-1">upload</i>
-                Upload
-              </button>
-              <input ref="fileInput" type="file" style="display:none" @change="handleFileUpload" multiple />
-
-              <button class="btn btn-sm bg-white mb-0 shadow-sm text-dark" @click="webTerminalRef?.openTerminal()">
-                <i class="material-symbols-rounded text-sm me-1 text-success">terminal</i>
-                Terminal
-              </button>
-
-              <div class="ms-auto d-flex align-items-center gap-3">
-                <div class="search-wrapper-premium shadow-sm">
+              <!-- Search & Controls Group -->
+              <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1 flex-xl-grow-0 justify-content-start justify-content-md-end">
+                <!-- Search Box -->
+                <div class="search-wrapper-premium shadow-sm flex-grow-1 flex-md-grow-0">
                   <div class="search-type-selector">
                     <i class="material-symbols-rounded text-sm">filter_list</i>
                     <select v-model="searchType" class="form-select border-0 bg-transparent text-xxs font-weight-bold">
@@ -132,41 +195,47 @@
                   </div>
                 </div>
                 
-                <div class="d-flex align-items-center gap-3 bg-gray-100 px-3 py-1 border-radius-lg border">
-                  <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
-                    <input class="form-check-input ms-0" type="checkbox" id="deepSearchToggle" v-model="deepSearch">
-                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="deepSearchToggle">In-depth</label>
+                <!-- Toggle Switches Container (In-depth & Hidden) -->
+                <div class="toggle-switches-bar bg-gray-100 px-3 py-1 border-radius-lg border d-flex align-items-center gap-3">
+                  <div class="form-check form-switch mb-0 ps-0 d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0 me-1" type="checkbox" id="deepSearchToggle" v-model="deepSearch" style="width: 32px; height: 16px; min-width: 32px;">
+                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer user-select-none" for="deepSearchToggle">In-depth</label>
                   </div>
                   <div class="vr bg-gray-300" style="height: 15px;"></div>
-                  <div class="form-check form-switch mb-0 p-0 d-flex align-items-center gap-2">
-                    <input class="form-check-input ms-0" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="onToggleHidden">
-                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer" for="showHiddenToggle">Hidden</label>
+                  <div class="form-check form-switch mb-0 ps-0 d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0 me-1" type="checkbox" id="showHiddenToggle" v-model="showHidden" @change="onToggleHidden" style="width: 32px; height: 16px; min-width: 32px;">
+                    <label class="form-check-label text-xxs text-dark font-weight-bold mb-0 cursor-pointer user-select-none" for="showHiddenToggle">Hidden</label>
                   </div>
                 </div>
 
-                <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)">
-                  <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
-                </button>
+                <!-- Action Icon Buttons -->
+                <div class="d-flex align-items-center gap-1">
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="showShortcutsHelp = true" title="Keyboard Shortcuts (F1 or ?)">
+                    <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
+                  </button>
 
-                <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
-                  <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
-                </button>
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles(true)" :disabled="loading" title="Refresh files (F5)">
+                    <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
+                  </button>
+                </div>
               </div>
             </div>
 
             <!-- Bulk actions overlay -->
             <transition name="slide-up">
-              <div v-if="hasSelected" class="bulk-actions-overlay mt-3 p-2 border-radius-lg bg-gradient-dark d-flex align-items-center gap-2 shadow-lg">
+              <div v-if="hasSelected" class="bulk-actions-overlay mt-3 p-2 border-radius-lg bg-gradient-dark d-flex flex-wrap align-items-center gap-2 shadow-lg">
                 <span class="text-white text-xs font-weight-bold ms-3 me-auto">
                   <i class="material-symbols-rounded text-xs me-1">check_circle</i>
                   {{ selectedItems.length }} selected
                 </span>
-                <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('copy')">Copy</button>
-                <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('move')">Move</button>
-                <button class="btn btn-xs btn-link text-white mb-0" @click="bulkZip">Zip</button>
-                <button class="btn btn-xs btn-link text-danger mb-0" @click="bulkDelete">Delete</button>
-                <div class="vr bg-white opacity-2 mx-2" style="height: 20px;"></div>
-                <button class="btn btn-xs btn-link text-white mb-0 opacity-7" @click="selectedItems = []; allSelected = false">Cancel</button>
+                <div class="d-flex align-items-center gap-1 flex-wrap ms-auto">
+                  <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('copy')">Copy</button>
+                  <button class="btn btn-xs btn-link text-white mb-0" @click="bulkCopyMove('move')">Move</button>
+                  <button class="btn btn-xs btn-link text-white mb-0" @click="bulkZip">Zip</button>
+                  <button class="btn btn-xs btn-link text-danger mb-0" @click="bulkDelete">Delete</button>
+                  <div class="vr bg-white opacity-2 mx-1 d-none d-sm-block" style="height: 20px;"></div>
+                  <button class="btn btn-xs btn-link text-white mb-0 opacity-7" @click="selectedItems = []; allSelected = false">Cancel</button>
+                </div>
               </div>
             </transition>
           </div>
@@ -174,15 +243,20 @@
           <!-- Breadcrumbs bar -->
           <div class="glass-card mb-3 p-2 px-3 d-flex align-items-center shadow-sm">
             <nav aria-label="breadcrumb" class="flex-grow-1">
-              <ol class="breadcrumb bg-transparent mb-0 p-0">
-                <li class="breadcrumb-item text-xs">
-                  <a href="#" @click.prevent="navigateTo('')" class="text-secondary">
-                    <i class="material-symbols-rounded text-xs">home</i>
-                  </a>
-                </li>
+              <ol class="breadcrumb bg-transparent mb-0 p-0 align-items-center">
                 <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item text-xs" :class="{ active: index === breadcrumbs.length - 1 }">
-                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)" class="text-secondary">{{ crumb.name }}</a>
-                  <span v-else class="text-dark font-weight-bold">{{ crumb.name }}</span>
+                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)" class="text-secondary text-decoration-none d-inline-flex align-items-center">
+                    <i v-if="index === 0" class="material-symbols-rounded text-xs me-1">
+                      {{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}
+                    </i>
+                    <span>{{ crumb.name }}</span>
+                  </a>
+                  <span v-else class="text-dark font-weight-bold d-inline-flex align-items-center">
+                    <i v-if="index === 0" class="material-symbols-rounded text-xs me-1">
+                      {{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}
+                    </i>
+                    <span>{{ crumb.name }}</span>
+                  </span>
                 </li>
               </ol>
             </nav>
@@ -200,9 +274,9 @@
               <table class="table align-items-center mb-0">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th style="width:48px" class="ps-3">
-                      <div class="form-check mb-0">
-                        <input type="checkbox" class="form-check-input" :checked="allSelected" @click.prevent="toggleSelectAll" title="Select All / Deselect All">
+                    <th style="width:48px" class="ps-3 text-center align-middle cursor-pointer" @click="toggleSelectAll">
+                      <div class="form-check mb-0 d-flex align-items-center justify-content-center p-0">
+                        <input type="checkbox" class="form-check-input ms-0 me-0 cursor-pointer" :checked="allSelected" @change="toggleSelectAll" @click.stop style="width: 18px; height: 18px; cursor: pointer; float: none;" title="Select All / Deselect All">
                       </div>
                     </th>
                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Name</th>
@@ -217,9 +291,9 @@
                     @dblclick="handleDoubleClick(item)"
                     class="file-row-modern"
                     :class="{ 'selected': isSelected(item), 'opacity-5': item.hidden }">
-                    <td class="ps-3">
-                      <div class="form-check mb-0">
-                        <input type="checkbox" class="form-check-input" :checked="isSelected(item)" @click.prevent.stop="toggleSelectItem(item, $event)">
+                    <td style="width:48px" class="ps-3 text-center align-middle cursor-pointer" @click.stop="toggleSelectItem(item, $event)">
+                      <div class="form-check mb-0 d-flex align-items-center justify-content-center p-0">
+                        <input type="checkbox" class="form-check-input ms-0 me-0 cursor-pointer" :checked="isSelected(item)" @change.stop="toggleSelectItem(item, $event)" @click.stop style="width: 18px; height: 18px; cursor: pointer; float: none;" title="Select item">
                       </div>
                     </td>
                     <td>
@@ -280,35 +354,122 @@
               <p class="text-xs text-secondary mt-3 font-weight-bold">Fetching files...</p>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="filteredItems.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top bg-gray-50 border-radius-bottom-lg">
-              <span class="text-xxs text-secondary font-weight-bold">Page {{ currentPage }} of {{ totalPages }}</span>
-              <ul class="pagination pagination-primary pagination-xs mb-0">
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button class="page-link shadow-none" @click="currentPage--"><i class="material-symbols-rounded">chevron_left</i></button>
-                </li>
-                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                  <button class="page-link shadow-none" @click="currentPage++"><i class="material-symbols-rounded">chevron_right</i></button>
-                </li>
-              </ul>
+            <!-- Pagination Footer -->
+            <div v-if="filteredItems.length > 0" class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-gray-50 border-radius-bottom-lg gap-2">
+              <!-- Left: Showing range and Per Page Selector -->
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="text-xs text-secondary mb-0">
+                  Showing <strong class="text-dark">{{ showingStart }}</strong> to <strong class="text-dark">{{ showingEnd }}</strong> of <strong class="text-dark">{{ filteredItems.length }}</strong> items
+                </span>
+                
+                <div class="d-flex align-items-center gap-1">
+                  <label class="text-xxs text-secondary mb-0 text-uppercase font-weight-bold">Rows:</label>
+                  <select 
+                    v-model.number="itemsPerPage" 
+                    @change="onItemsPerPageChange" 
+                    class="form-select form-select-sm border shadow-none bg-white py-1 px-2 text-xs border-radius-md"
+                    style="width: auto; min-width: 65px; height: 30px;"
+                  >
+                    <option :value="15">15</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                    <option :value="99999">All</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Right: Pagination Buttons -->
+              <div v-if="totalPages > 1" class="d-flex align-items-center gap-2">
+                <ul class="pagination pagination-sm pagination-primary mb-0 gap-1 align-items-center">
+                  <!-- First Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(1)" 
+                            title="First Page" 
+                            :disabled="currentPage === 1">
+                      <i class="material-symbols-rounded text-sm">first_page</i>
+                    </button>
+                  </li>
+                  <!-- Previous Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(currentPage - 1)" 
+                            title="Previous Page" 
+                            :disabled="currentPage === 1">
+                      <i class="material-symbols-rounded text-sm">chevron_left</i>
+                    </button>
+                  </li>
+
+                  <!-- Numbered Pages with Ellipsis -->
+                  <li v-for="(p, index) in displayedPages" :key="index" class="page-item" :class="{ active: p === currentPage, disabled: p === '...' }">
+                    <span v-if="p === '...'" class="page-link border-0 text-muted px-2 py-1 text-xs">...</span>
+                    <button v-else 
+                            class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none text-xs font-weight-bold" 
+                            :class="p === currentPage ? 'bg-gradient-primary text-white border-0 shadow-sm' : 'bg-white text-dark'"
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(p)">
+                      {{ p }}
+                    </button>
+                  </li>
+
+                  <!-- Next Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(currentPage + 1)" 
+                            title="Next Page" 
+                            :disabled="currentPage === totalPages">
+                      <i class="material-symbols-rounded text-sm">chevron_right</i>
+                    </button>
+                  </li>
+                  <!-- Last Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(totalPages)" 
+                            title="Last Page" 
+                            :disabled="currentPage === totalPages">
+                      <i class="material-symbols-rounded text-sm">last_page</i>
+                    </button>
+                  </li>
+                </ul>
+                <span class="text-xxs text-secondary ms-2 font-weight-bold d-none d-sm-inline">
+                  Page {{ currentPage }} of {{ totalPages }}
+                </span>
+              </div>
             </div>
           </div>
 
           <!-- Git Management Panel -->
           <div id="git-panel" class="glass-card p-4 shadow-lg mb-4">
-            <div class="d-flex justify-content-between align-items-start mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
               <div>
-                <h5 class="mb-1 font-weight-bolder">Git Repository Control</h5>
-                <p class="text-sm text-secondary mb-0">Manage versioning, branches, and deployment flows.</p>
+                <h5 class="mb-1 font-weight-bolder d-flex align-items-center gap-2">
+                  <i class="material-symbols-rounded text-primary">account_tree</i>
+                  Git Repository Control
+                </h5>
+                <p class="text-sm text-secondary mb-0">Manage branches, fetch from remote, commit, and deploy code directly.</p>
               </div>
-              <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-dark mb-0 border-radius-lg" @click="showGitTokenForm = !showGitTokenForm">
-                  <i class="material-symbols-rounded text-sm me-1">key</i>
-                  {{ showGitTokenForm ? 'Hide Token' : 'Auth Token' }}
+              <div class="d-flex flex-wrap gap-2">
+                <button v-if="gitInfo.available" class="btn btn-sm bg-gradient-info mb-0 border-radius-lg text-white" @click="runGitFetch" :disabled="gitActionLoading">
+                  <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': gitActionLoading }">cloud_sync</i>
+                  Fetch Remote
+                </button>
+                <button v-if="gitInfo.available" class="btn btn-sm bg-gradient-success mb-0 border-radius-lg text-white" @click="runGitPull" :disabled="gitActionLoading">
+                  <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': gitActionLoading }">cloud_download</i>
+                  Pull Latest
+                </button>
+                <button class="btn btn-sm btn-outline-dark mb-0 border-radius-lg d-flex align-items-center gap-1" @click="showGitTokenForm = !showGitTokenForm">
+                  <i class="material-symbols-rounded text-sm">key</i>
+                  <span>{{ showGitTokenForm ? 'Hide Token' : 'Auth Token' }}</span>
+                  <span v-if="gitTokenExists" class="badge badge-xs bg-success rounded-circle ms-1" style="width: 8px; height: 8px; padding: 0;" title="Token Active"></span>
                 </button>
                 <button class="btn btn-sm bg-gradient-dark mb-0 border-radius-lg" @click="loadGitStatus" :disabled="gitLoading">
                   <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': gitLoading }">refresh</i>
-                  Sync Status
+                  Sync
                 </button>
               </div>
             </div>
@@ -316,105 +477,163 @@
             <!-- Token Form -->
             <transition name="fade">
               <div v-if="showGitTokenForm" class="bg-gray-100 p-3 border-radius-lg mb-4 border border-white shadow-inner">
-                <label class="form-label text-xs font-weight-bolder text-uppercase opacity-7">Personal Access Token (GitHub/GitLab)</label>
-                <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden">
-                  <input v-model="gitTokenInput" :type="showTokenText ? 'text' : 'password'" class="form-control border-0 ps-3" placeholder="ghp_xxxx..." />
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label text-xs font-weight-bolder text-uppercase opacity-7 mb-0">Personal Access Token (GitHub / GitLab / GCP)</label>
+                  <span v-if="gitTokenExists" class="badge badge-sm bg-gradient-success">✓ Token Configured</span>
+                  <span v-else class="badge badge-sm bg-gradient-secondary">No Token Set</span>
+                </div>
+                <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden mb-2">
+                  <input v-model="gitTokenInput" :type="showTokenText ? 'text' : 'password'" class="form-control border-0 ps-3" placeholder="ghp_xxxx / GCP token..." />
                   <button class="btn btn-link text-dark mb-0 px-3 border-start" @click="showTokenText = !showTokenText">
                     <i class="material-symbols-rounded text-sm">{{ showTokenText ? 'visibility_off' : 'visibility' }}</i>
                   </button>
-                  <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="saveGitToken" :disabled="gitTokenSaving">
+                  <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="saveGitToken" :disabled="gitTokenSaving || !gitTokenInput.trim()">
                     <span v-if="gitTokenSaving" class="spinner-border spinner-border-sm"></span>
-                    <span v-else>Save</span>
+                    <span v-else>Save Token</span>
                   </button>
                 </div>
-                <small class="text-muted mt-2 d-block">
-                  <i class="material-symbols-rounded text-xs align-middle me-1">info</i>
-                  Required for authenticated operations like Pull and Push over HTTPS.
+                <small class="text-muted d-block">
+                  <i class="material-symbols-rounded text-xs align-middle me-1">lock</i>
+                  Stored securely on server in <code>.git-token</code> (chmod 600). Used automatically for HTTPS Fetch, Pull, and Push without prompting for credentials.
                 </small>
               </div>
             </transition>
 
             <div v-if="gitInfo.available">
+              <!-- Info Cards Row -->
               <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                  <div class="p-3 bg-white border-radius-lg shadow-sm border">
-                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Branch</p>
-                    <h6 class="mb-0 text-primary font-weight-bold">
-                      <i class="material-symbols-rounded text-sm me-1">account_tree</i>
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Active Branch</p>
+                    <h6 class="mb-0 text-primary font-weight-bold d-flex align-items-center text-truncate">
+                      <i class="material-symbols-rounded text-sm me-1">fork_right</i>
                       {{ gitInfo.branch }}
                     </h6>
+                    <span class="badge badge-sm bg-light text-dark border mt-1">
+                      {{ gitInfo.branches.length }} local / {{ gitInfo.remoteBranches.length }} remote
+                    </span>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="p-3 bg-white border-radius-lg shadow-sm border">
-                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Tree Status</p>
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Working Tree</p>
                     <h6 class="mb-0 font-weight-bold" :class="gitInfo.dirty ? 'text-warning' : 'text-success'">
                       <i class="material-symbols-rounded text-sm me-1">{{ gitInfo.dirty ? 'warning' : 'check_circle' }}</i>
-                      {{ gitInfo.dirty ? 'Dirty' : 'Clean' }}
+                      {{ gitInfo.dirty ? 'Uncommitted Changes' : 'Clean (Up to date)' }}
                     </h6>
+                    <span class="text-xxs text-secondary">{{ gitInfo.statusLines.length }} file(s) changed</span>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="p-3 bg-white border-radius-lg shadow-sm border">
-                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Root Path</p>
-                    <h6 class="mb-0 text-xs text-truncate text-dark font-weight-bold" :title="gitInfo.repoRoot">
-                      <i class="material-symbols-rounded text-sm me-1 text-secondary">folder_shared</i>
-                      /var/www/{{ domain }}{{ gitInfo.repoRoot ? '/' + gitInfo.repoRoot : '' }}
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Last Commit</p>
+                    <div v-if="gitInfo.lastCommit" class="text-truncate">
+                      <span class="badge badge-xs bg-dark font-monospace me-1">{{ gitInfo.lastCommit.hash }}</span>
+                      <span class="text-xs font-weight-bold text-dark" :title="gitInfo.lastCommit.subject">{{ gitInfo.lastCommit.subject }}</span>
+                      <p class="text-xxs text-muted mb-0 mt-1">{{ gitInfo.lastCommit.author }} • {{ gitInfo.lastCommit.date }}</p>
+                    </div>
+                    <div v-else class="text-xs text-muted">No commits yet</div>
+                  </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                  <div class="p-3 bg-white border-radius-lg shadow-sm border h-100">
+                    <p class="text-xs font-weight-bolder text-uppercase opacity-5 mb-1">Authentication</p>
+                    <h6 class="mb-0 font-weight-bold" :class="gitTokenExists ? 'text-success' : 'text-secondary'">
+                      <i class="material-symbols-rounded text-sm me-1">{{ gitTokenExists ? 'verified_user' : 'no_encryption' }}</i>
+                      {{ gitTokenExists ? 'Token Active' : 'No Token Set' }}
                     </h6>
+                    <span class="text-xxs text-secondary">Auto-injected for remote ops</span>
                   </div>
                 </div>
               </div>
 
-              <div class="row mb-4">
+              <!-- Action Controls Row -->
+              <div class="row g-3 mb-4">
+                <!-- Branch Management Column -->
                 <div class="col-lg-6">
-                  <div class="form-group mb-3">
-                    <label class="form-label text-xs font-weight-bold text-uppercase opacity-7">Commit Changes</label>
-                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm">
-                      <input v-model="gitCommitMessage" type="text" class="form-control border-0 ps-3" placeholder="Message..." />
-                      <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="runGitCommit" :disabled="!gitCommitMessage.trim() || gitActionLoading">
-                        Commit
+                  <div class="p-3 bg-white border-radius-lg border shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label text-xs font-weight-bold text-uppercase opacity-7 mb-0">Switch / Checkout Branch</label>
+                      <button class="btn btn-link text-primary text-xs p-0 mb-0 font-weight-bold" @click="showNewBranchModal = true">
+                        <i class="material-symbols-rounded text-xs align-middle me-1">add_circle</i>
+                        New Branch
                       </button>
                     </div>
-                  </div>
-                  <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-sm btn-outline-success mb-0 border-radius-lg px-3" @click="performGitAction('pull')" :disabled="gitActionLoading">
-                      <i class="material-symbols-rounded text-sm me-1">south</i> Pull
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary mb-0 border-radius-lg px-3" @click="performGitAction('push')" :disabled="gitActionLoading">
-                      <i class="material-symbols-rounded text-sm me-1">north</i> Push
-                    </button>
-                  </div>
-                </div>
-                <div class="col-lg-6">
-                  <div class="form-group mb-3">
-                    <label class="form-label text-xs font-weight-bold text-uppercase opacity-7">Switch Branch</label>
-                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm">
+                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm mb-3">
                       <select v-model="gitSelectedBranch" class="form-select border-0 ps-3">
-                        <option v-for="branch in gitInfo.branches" :key="branch" :value="branch">{{ branch }}</option>
+                        <optgroup label="📍 Local Branches">
+                          <option v-for="b in gitInfo.branches" :key="'local-' + b" :value="b">
+                            {{ b }} {{ b === gitInfo.branch ? '(current)' : '' }}
+                          </option>
+                        </optgroup>
+                        <optgroup label="☁️ Remote Branches (from GitHub/GCP)" v-if="gitInfo.remoteBranches && gitInfo.remoteBranches.length">
+                          <option v-for="rb in gitInfo.remoteBranches" :key="'remote-' + rb" :value="rb">
+                            {{ rb }} {{ gitInfo.branches.includes(rb) ? '(local tracking exists)' : '(remote only)' }}
+                          </option>
+                        </optgroup>
                       </select>
-                      <button class="btn bg-gradient-info mb-0 border-radius-0 px-4" @click="runGitSwitchBranch" :disabled="gitActionLoading">
-                        Switch
+                      <button class="btn bg-gradient-info mb-0 border-radius-0 px-4" @click="runGitSwitchBranch" :disabled="gitActionLoading || !gitSelectedBranch || gitSelectedBranch === gitInfo.branch">
+                        <span v-if="gitActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        <span v-else>Switch</span>
+                      </button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <button class="btn btn-sm btn-outline-info mb-0 border-radius-lg" @click="runGitFetch" :disabled="gitActionLoading">
+                        <i class="material-symbols-rounded text-sm me-1">cloud_sync</i>
+                        Fetch All Branches
+                      </button>
+                      <button class="btn btn-sm btn-outline-success mb-0 border-radius-lg" @click="runGitPull" :disabled="gitActionLoading">
+                        <i class="material-symbols-rounded text-sm me-1">south</i>
+                        Pull ({{ gitInfo.branch }})
+                      </button>
+                      <button class="btn btn-sm btn-outline-primary mb-0 border-radius-lg" @click="runGitPush" :disabled="gitActionLoading">
+                        <i class="material-symbols-rounded text-sm me-1">north</i>
+                        Push ({{ gitInfo.branch }})
                       </button>
                     </div>
                   </div>
                 </div>
+
+                <!-- Commit Changes Column -->
+                <div class="col-lg-6">
+                  <div class="p-3 bg-white border-radius-lg border shadow-sm h-100">
+                    <label class="form-label text-xs font-weight-bold text-uppercase opacity-7 mb-2">Stage & Commit Changes</label>
+                    <div class="input-group input-group-outline bg-white border-radius-lg overflow-hidden border shadow-sm mb-3">
+                      <input v-model="gitCommitMessage" type="text" class="form-control border-0 ps-3" placeholder="Commit message (e.g. Update styles and assets)..." @keyup.enter="runGitCommit" />
+                      <button class="btn bg-gradient-primary mb-0 border-radius-0 px-4" @click="runGitCommit" :disabled="!gitCommitMessage.trim() || gitActionLoading">
+                        <span v-if="gitActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        Commit All
+                      </button>
+                    </div>
+                    <small class="text-muted d-block">
+                      <i class="material-symbols-rounded text-xs align-middle me-1">info</i>
+                      Stages all modified files (<code>git add -A</code>) and creates a commit on the current branch <strong>{{ gitInfo.branch }}</strong>.
+                    </small>
+                  </div>
+                </div>
               </div>
 
-              <div class="git-console-container mt-4">
-                <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-2">Live Git Status</p>
-                <pre class="git-console shadow-inner">{{ gitInfo.statusLines.join('\n') || 'Working tree clean' }}</pre>
+              <!-- Console Output -->
+              <div class="git-console-container">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-0">Status & Terminal Output</p>
+                  <span class="text-xxs text-secondary">Repo: /var/www/{{ domain }}{{ gitInfo.repoRoot ? '/' + gitInfo.repoRoot : '' }}</span>
+                </div>
+                <pre class="git-console shadow-inner mb-2">{{ gitInfo.statusLines.join('\n') || 'Working tree clean' }}</pre>
                 <transition name="fade">
-                  <div v-if="gitLastOutput" class="mt-3">
-                    <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-2 text-info">Last Action Output</p>
-                    <pre class="git-console border-info text-info shadow-inner" style="background: rgba(17, 205, 239, 0.05);">{{ gitLastOutput }}</pre>
+                  <div v-if="gitLastOutput" class="mt-2">
+                    <p class="text-xs font-weight-bold text-uppercase opacity-7 mb-1 text-info">Last Action Result</p>
+                    <pre class="git-console border-info text-info shadow-inner" style="background: rgba(17, 205, 239, 0.05); max-height: 180px; overflow-y: auto;">{{ gitLastOutput }}</pre>
                   </div>
                 </transition>
               </div>
             </div>
+
+            <!-- No Git Repo State -->
             <div v-else class="text-center py-5 bg-gray-50 border-radius-lg border border-dashed">
               <i class="material-symbols-rounded text-secondary opacity-3 fs-1 mb-3">account_tree</i>
               <h5 class="text-dark font-weight-bold">No Git Repository Detected</h5>
-              <p class="text-sm text-secondary px-5">This directory or its parent folders are not initialized with Git. Use the terminal to <code>git init</code> if needed.</p>
+              <p class="text-sm text-secondary px-5">This directory or its parent folders are not initialized with Git. Use the terminal button to <code>git init</code> if needed.</p>
             </div>
           </div>
         </div>
@@ -479,6 +698,39 @@
             <div class="modal-footer border-0">
               <button class="btn btn-link text-secondary mb-0" @click="showPermissionsModal = false">Cancel</button>
               <button class="btn bg-gradient-primary mb-0 border-radius-lg" @click="changePermissions">Update</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create New Branch Modal -->
+      <div class="modal-backdrop fade show" v-if="showNewBranchModal" @click="showNewBranchModal = false"></div>
+      <div class="modal fade show d-block" v-if="showNewBranchModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="glass-card modal-content border-0">
+            <div class="modal-header border-0 pb-0">
+              <h5 class="modal-title font-weight-bolder d-flex align-items-center">
+                <i class="material-symbols-rounded text-primary me-2">add_circle</i>
+                Create New Git Branch
+              </h5>
+              <button type="button" class="btn-close" @click="showNewBranchModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm text-secondary mb-3">
+                Branch off from current branch: <span class="text-dark font-weight-bold">{{ gitInfo.branch }}</span>
+              </p>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs font-weight-bold">New Branch Name</label>
+                <input v-model="newBranchInput" type="text" class="form-control form-control-lg border ps-3" placeholder="feature/user-auth or fix/login" @keyup.enter="runGitCreateBranch" />
+                <small class="text-muted mt-2 d-block">Use letters, numbers, hyphens, and slashes.</small>
+              </div>
+            </div>
+            <div class="modal-footer border-0">
+              <button class="btn btn-link text-secondary mb-0" @click="showNewBranchModal = false">Cancel</button>
+              <button class="btn bg-gradient-primary mb-0" @click="runGitCreateBranch" :disabled="!newBranchInput.trim() || gitActionLoading">
+                <span v-if="gitActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                Create & Switch
+              </button>
             </div>
           </div>
         </div>
@@ -652,13 +904,16 @@
               <i class="material-symbols-rounded text-white me-2">edit_note</i>
               <span class="text-white font-weight-bold">{{ editingFile }}</span>
               <span class="badge badge-sm bg-primary ms-3">{{ detectedMode }}</span>
+              <span v-if="fileIsReadOnly" class="badge badge-sm bg-warning text-dark ms-2 font-weight-bold">
+                <i class="material-symbols-rounded text-xs align-middle me-1">lock</i>Read-Only Preview
+              </span>
             </div>
             <div class="d-flex gap-2">
               <button v-if="detectedMode === 'json'" class="btn btn-sm btn-outline-info mb-0" @click="formatContent">
                 <i class="material-symbols-rounded text-sm me-1">format_align_left</i>
                 Format
               </button>
-              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving">
+              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving || fileIsReadOnly" :title="fileIsReadOnly ? 'Saving disabled for large preview files' : 'Save Changes'">
                 <i class="material-symbols-rounded text-sm me-1">{{ saving ? 'sync' : 'save' }}</i>
                 {{ saving ? 'Saving...' : 'Save Changes' }}
               </button>
@@ -667,6 +922,14 @@
                 Close
               </button>
             </div>
+          </div>
+          <!-- Large File / Truncated Warning Banner -->
+          <div v-if="fileIsTruncated" class="bg-warning-subtle border-bottom border-warning px-4 py-2 d-flex align-items-center justify-content-between text-xs font-weight-bold text-dark">
+            <div class="d-flex align-items-center">
+              <i class="material-symbols-rounded text-sm text-warning me-2">info</i>
+              <span>{{ fileTruncatedMessage }}</span>
+            </div>
+            <span class="badge badge-xs bg-warning text-dark text-uppercase">Preview Mode</span>
           </div>
           <!-- Floating Toast Alert inside Editor -->
           <transition name="fade">
@@ -848,7 +1111,27 @@ const userId = computed(() => page.props.auth?.user?.id || 'guest')
 
 const props = defineProps({
   domain: String,
-  initialPath: String
+  initialPath: String,
+  scope: {
+    type: String,
+    default: 'domain'
+  },
+  displayScope: {
+    type: String,
+    default: ''
+  },
+  userScope: {
+    type: String,
+    default: 'domain'
+  },
+  allowedScopes: {
+    type: Array,
+    default: () => ['domain']
+  },
+  availableDomains: {
+    type: Array,
+    default: () => []
+  }
 })
 
 const webTerminalRef = ref(null)
@@ -857,7 +1140,8 @@ const lastSelected = ref(null)
 const items = ref([])
 const searchQuery = ref('')
 const currentPage = ref(1)
-const itemsPerPage = ref(15)
+const savedItemsPerPage = typeof window !== 'undefined' ? Number(localStorage.getItem('nimbus_fm_items_per_page')) : null
+const itemsPerPage = ref(savedItemsPerPage && savedItemsPerPage > 0 ? savedItemsPerPage : 25)
 const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
@@ -879,10 +1163,16 @@ const gitInfo = ref({
   repoRoot: '',
   branch: '',
   branches: [],
+  remoteBranches: [],
+  allBranches: [],
+  lastCommit: null,
+  hasToken: false,
   statusLines: [],
   stashes: [],
   dirty: false
 })
+const showNewBranchModal = ref(false)
+const newBranchInput = ref('')
 
 // Git token state
 const showGitTokenForm = ref(false)
@@ -918,6 +1208,9 @@ const editingFile = ref('')
 const fileContent = ref('')
 const originalFileContent = ref('')
 const detectedMode = ref('text')
+const fileIsTruncated = ref(false)
+const fileTruncatedMessage = ref('')
+const fileIsReadOnly = ref(false)
 let aceEditor = null
 const fileInput = ref(null)
 const newPermissions = ref('')
@@ -974,9 +1267,57 @@ const filteredItems = computed(() => {
   )
 })
 
-const totalPages = computed(() => Math.ceil(filteredItems.value.length / itemsPerPage.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / itemsPerPage.value)))
 const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
 const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const showingStart = computed(() => {
+  if (filteredItems.value.length === 0) return 0
+  return paginationStart.value + 1
+})
+
+const showingEnd = computed(() => {
+  return Math.min(paginationEnd.value, filteredItems.value.length)
+})
+
+const displayedPages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+
+  const pages = []
+  const left = Math.max(1, current - 2)
+  const right = Math.min(total, current + 2)
+
+  for (let i = left; i <= right; i++) {
+    pages.push(i)
+  }
+
+  if (left > 1) {
+    if (left > 2) pages.unshift('...')
+    pages.unshift(1)
+  }
+
+  if (right < total) {
+    if (right < total - 1) pages.push('...')
+    pages.push(total)
+  }
+
+  return pages
+})
+
+const goToPage = (p) => {
+  if (p === '...' || p < 1 || p > totalPages.value || p === currentPage.value) return
+  currentPage.value = p
+}
+
+const onItemsPerPageChange = () => {
+  currentPage.value = 1
+  localStorage.setItem('nimbus_fm_items_per_page', itemsPerPage.value)
+}
 
 const paginatedItems = computed(() => {
   return filteredItems.value.slice(paginationStart.value, paginationEnd.value)
@@ -1151,7 +1492,7 @@ const handleKeyboardShortcuts = (e) => {
   // F5 — Refresh
   if (e.key === 'F5') {
     e.preventDefault()
-    loadFiles()
+    loadFiles(true)
   }
 
   // Backspace — Go up one level
@@ -1254,24 +1595,26 @@ const changePermissions = async () => {
   }
 }
 
-const loadFiles = async () => {
+const loadFiles = async (forceRefresh = false) => {
   try {
     loading.value = true
     isSearching.value = false
     searchResults.value = []
     const response = await axios.post(`/file-manager/${props.domain}/list`, {
       path: currentPath.value || '',
-      showHidden: showHidden.value
+      showHidden: showHidden.value,
+      refresh: forceRefresh
     })
     items.value = response.data.items
     breadcrumbs.value = response.data.breadcrumbs
     selectedItems.value = []
     allSelected.value = false
-    await loadGitStatus()
   } catch (error) {
     showAlert('danger', 'Failed to load files')
   } finally {
     loading.value = false
+    // Load git status in background without blocking file list rendering!
+    loadGitStatus()
   }
 }
 
@@ -1315,9 +1658,17 @@ const loadGitStatus = async () => {
       repoRoot: response.data.repoRoot || '',
       branch: response.data.branch || '',
       branches: response.data.branches || [],
+      remoteBranches: response.data.remoteBranches || [],
+      allBranches: response.data.allBranches || [],
+      lastCommit: response.data.lastCommit || null,
+      hasToken: response.data.hasToken ?? false,
       statusLines: response.data.statusLines || [],
       stashes: response.data.stashes || [],
       dirty: response.data.dirty || false
+    }
+
+    if (response.data.hasToken !== undefined) {
+      gitTokenExists.value = response.data.hasToken
     }
 
     if (gitInfo.value.branch && !gitSelectedBranch.value) {
@@ -1343,6 +1694,7 @@ const performGitAction = async (action, payload = {}) => {
     showAlert('success', response.data.message || 'Action completed')
 
     if (action === 'commit') gitCommitMessage.value = ''
+    if (action === 'switch_branch' && payload.branch) gitSelectedBranch.value = payload.branch
     
     await loadFiles()
   } catch (error) {
@@ -1355,9 +1707,19 @@ const performGitAction = async (action, payload = {}) => {
 
 const runGitCommit = () => performGitAction('commit', { message: gitCommitMessage.value.trim() })
 const runGitSwitchBranch = () => performGitAction('switch_branch', { branch: gitSelectedBranch.value })
+const runGitFetch = () => performGitAction('fetch')
+const runGitPull = () => performGitAction('pull')
+const runGitPush = () => performGitAction('push')
+const runGitCreateBranch = async () => {
+  if (!newBranchInput.value.trim()) return
+  await performGitAction('create_branch', { branch: newBranchInput.value.trim() })
+  newBranchInput.value = ''
+  showNewBranchModal.value = false
+}
 
 const navigateTo = (path) => {
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = path 
     ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
@@ -1368,6 +1730,7 @@ const navigateTo = (path) => {
 const openDirectory = (name) => {
   const path = currentPath.value ? `${currentPath.value}/${name}` : name
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = `${window.location.pathname}?path=${encodeURIComponent(path)}`
   window.history.pushState({ path }, '', newUrl)
@@ -1379,6 +1742,7 @@ const goUpOneLevel = () => {
   pathParts.pop()
   const path = pathParts.join('/')
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = path 
     ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
@@ -1386,7 +1750,27 @@ const goUpOneLevel = () => {
   window.history.pushState({ path }, '', newUrl)
 }
 
-const goBack = () => router.visit('/domains')
+const switchScope = (targetScope) => {
+  if (targetScope === 'projects') {
+    router.visit('/file-manager/projects')
+  } else if (targetScope === 'root') {
+    router.visit('/file-manager/root')
+  }
+}
+
+const onDomainSelect = (selectedDomain) => {
+  if (selectedDomain) {
+    router.visit(`/file-manager/${selectedDomain}`)
+  }
+}
+
+const goBack = () => {
+  if (props.scope === 'domain') {
+    router.visit('/domains')
+  } else {
+    router.visit('/dashboard')
+  }
+}
 
 const createFile = async () => {
   try {
@@ -1478,6 +1862,9 @@ const editFile = async (name) => {
     fileContent.value = response.data.content
     originalFileContent.value = response.data.content
     editingFile.value = name
+    fileIsTruncated.value = Boolean(response.data.is_truncated)
+    fileTruncatedMessage.value = response.data.truncated_message || ''
+    fileIsReadOnly.value = Boolean(response.data.read_only)
     showEditorModal.value = true
     
     // Auto-detect language
@@ -1509,11 +1896,12 @@ const initAceEditor = () => {
   // Options
   aceEditor.setOptions({
     fontSize: "14px",
-    enableBasicAutocompletion: true,
-    enableLiveAutocompletion: true,
+    enableBasicAutocompletion: !fileIsReadOnly.value,
+    enableLiveAutocompletion: !fileIsReadOnly.value,
     showPrintMargin: false,
     scrollPastEnd: 0.5,
-    wrap: true
+    wrap: true,
+    readOnly: fileIsReadOnly.value
   })
 
   // Close editor on pressing Esc inside the Ace Editor
@@ -1530,7 +1918,9 @@ const initAceEditor = () => {
     name: 'saveFileOnCtrlS',
     bindKey: {win: 'Ctrl-S', mac: 'Command-S'},
     exec: function(editor) {
-      saveFile()
+      if (!fileIsReadOnly.value) {
+        saveFile()
+      }
     }
   })
 
@@ -1540,6 +1930,10 @@ const initAceEditor = () => {
 }
 
 const saveFile = async () => {
+  if (fileIsReadOnly.value) {
+    showAlert('warning', 'Saving is disabled because this file is in read-only preview mode.')
+    return
+  }
   try {
     saving.value = true
     const filePath = currentPath.value ? `${currentPath.value}/${editingFile.value}` : editingFile.value
@@ -1563,6 +1957,9 @@ const closeEditor = () => {
   showEditorModal.value = false
   editingFile.value = ''
   fileContent.value = ''
+  fileIsTruncated.value = false
+  fileTruncatedMessage.value = ''
+  fileIsReadOnly.value = false
   document.body.style.overflow = '' // Restore scroll
 }
 
@@ -1768,12 +2165,23 @@ const toggleSelectItem = (item, event = null) => {
     selectedItems.value.push({ name: item.name, type: item.type })
     lastSelected.value = item
   }
+
+  // Update allSelected state automatically
+  if (items.value.length > 0 && selectedItems.value.length === items.value.length) {
+    allSelected.value = true
+  } else {
+    allSelected.value = false
+  }
 }
 
 const toggleSelectAll = () => {
-  if (allSelected.value) selectedItems.value = []
-  else selectedItems.value = items.value.map(i => ({ name: i.name, type: i.type }))
-  allSelected.value = !allSelected.value
+  if (allSelected.value) {
+    selectedItems.value = []
+    allSelected.value = false
+  } else {
+    selectedItems.value = items.value.map(i => ({ name: i.name, type: i.type }))
+    allSelected.value = true
+  }
 }
 
 const bulkDelete = () => { isBulkDelete.value = true; showDeleteModal.value = true }
@@ -2065,5 +2473,67 @@ const scrollToGit = () => document.getElementById('git-panel')?.scrollIntoView({
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+}
+
+.form-check-input {
+  cursor: pointer;
+  border: 1.5px solid #d2d6da !important;
+  border-radius: 4px !important;
+  transition: all 0.2s ease;
+  width: 18px !important;
+  height: 18px !important;
+  margin-top: 0 !important;
+}
+
+.form-check-input:checked {
+  background-color: #5e72e4 !important;
+  border-color: #5e72e4 !important;
+}
+
+.form-check-input:hover {
+  border-color: #5e72e4 !important;
+}
+
+/* Responsive Media Queries for All Screen Sizes */
+@media (max-width: 1199.98px) {
+  .search-wrapper-premium {
+    min-width: 250px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .search-wrapper-premium {
+    min-width: 220px;
+    width: 100%;
+  }
+  .toggle-switches-bar {
+    width: 100%;
+    justify-content: space-around;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .search-wrapper-premium {
+    min-width: 100%;
+    width: 100%;
+  }
+  .toggle-switches-bar {
+    width: 100%;
+    justify-content: space-between;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  .file-row-modern td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .bulk-actions-overlay {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .bulk-actions-overlay .d-flex {
+    justify-content: space-between;
+    width: 100%;
+  }
 }
 </style>
