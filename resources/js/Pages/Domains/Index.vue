@@ -282,14 +282,6 @@
                               </button>
                               <button 
                                 v-if="isRootOrAdmin"
-                                class="action-btn btn-edit" 
-                                @click="openEditModal(group.main.name)"
-                                title="Edit domain"
-                              >
-                                <i class="material-symbols-rounded">edit</i>
-                              </button>
-                              <button 
-                                v-if="isRootOrAdmin"
                                 class="action-btn btn-delete" 
                                 @click="confirmDelete(group.main.name)"
                                 title="Delete domain"
@@ -419,14 +411,6 @@
                                 </button>
                                 <button 
                                   v-if="isRootOrAdmin"
-                                  class="action-btn btn-edit" 
-                                  @click="openEditModal(sub.name)"
-                                  title="Edit domain"
-                                >
-                                  <i class="material-symbols-rounded">edit</i>
-                                </button>
-                                <button 
-                                  v-if="isRootOrAdmin"
                                   class="action-btn btn-delete" 
                                   @click="confirmDelete(sub.name)"
                                   title="Delete domain"
@@ -540,14 +524,6 @@
                             </button>
                             <button 
                               v-if="isRootOrAdmin"
-                              class="action-btn btn-edit" 
-                              @click="openEditModal(domain.name)"
-                              title="Edit domain"
-                            >
-                              <i class="material-symbols-rounded">edit</i>
-                            </button>
-                            <button 
-                              v-if="isRootOrAdmin"
                               class="action-btn btn-delete" 
                               @click="confirmDelete(domain.name)"
                               title="Delete domain"
@@ -619,14 +595,14 @@
 
             <div class="modal-header">
               <h5 class="modal-title font-weight-bolder">
-                {{ isEdit ? "Edit Domain" : "Add New Domain" }}
+                Add New Domain
               </h5>
               <button type="button" class="btn-close" @click="closeModal" :disabled="submitting"></button>
             </div>
 
             <div class="modal-body">
               <!-- DNS Tip -->
-              <div v-if="!isEdit" class="alert alert-info py-2 mb-3 text-white">
+              <div class="alert alert-info py-2 mb-3 text-white">
                 <div class="d-flex align-items-center">
                   <i class="material-symbols-rounded me-2 text-sm">info</i>
                   <small>
@@ -647,7 +623,7 @@
                     :class="{ 'is-invalid': validationError }"
                     placeholder="example.com or sub.example.com"
                     @input="clearValidationError"
-                    @keyup.enter="isEdit ? updateDomain() : saveDomain()"
+                    @keyup.enter="saveDomain"
                     :disabled="submitting"
                   >
                 </div>
@@ -660,7 +636,7 @@
               </div>
 
               <!-- PHP Version selection for new domains -->
-              <div v-if="!isEdit" class="form-group mb-3">
+              <div class="form-group mb-3">
                 <label class="form-control-label">PHP Version</label>
                 <select v-model="createPhpVersion" class="form-select" :disabled="submitting">
                   <option value="8.4">PHP 8.4</option>
@@ -684,11 +660,11 @@
               </button>
               <button 
                 class="btn bg-gradient-dark mb-0" 
-                @click="isEdit ? updateDomain() : saveDomain()"
+                @click="saveDomain"
                 :disabled="submitting || !domainInput.trim()"
               >
                 <span v-if="submitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
-                {{ isEdit ? "Update Domain" : "Create Domain" }}
+                Create Domain
               </button>
             </div>
 
@@ -965,11 +941,10 @@ const showModal = ref(false)
 const showDeleteModal = ref(false)
 const showRootModal = ref(false)
 const showPhpModal = ref(false)
-const isEdit = ref(false)
 const domainInput = ref("")
 const createPhpVersion = ref("8.2")
 const rootInput = ref("")
-const oldDomain = ref("")
+const selectedDomainForRoot = ref("")
 const domainToDelete = ref("")
 const validationError = ref("")
 const rootValidationError = ref("")
@@ -1246,15 +1221,6 @@ const openAddModal = () => {
   domainInput.value = ""
   createPhpVersion.value = "8.2"
   validationError.value = ""
-  isEdit.value = false
-  showModal.value = true
-}
-
-const openEditModal = (domain) => {
-  isEdit.value = true
-  oldDomain.value = domain
-  domainInput.value = domain
-  validationError.value = ""
   showModal.value = true
 }
 
@@ -1296,35 +1262,6 @@ const saveDomain = async () => {
   }
 }
 
-const updateDomain = async () => {
-  const error = validateDomain(domainInput.value)
-  if (error) {
-    validationError.value = error
-    return
-  }
-
-  try {
-    submitting.value = true
-    await axios.put(`/domains/${oldDomain.value}`, { 
-      domain: domainInput.value.trim().toLowerCase() 
-    })
-    showAlert('success', `Domain has been updated successfully`)
-    closeModal()
-    loadDomains()
-  } catch (error) {
-    if (error.response?.status === 409) {
-      validationError.value = "This domain already exists"
-    } else if (error.response?.status === 404) {
-      validationError.value = "Original domain not found"
-    } else if (error.response?.data?.error) {
-      validationError.value = error.response.data.error
-    } else {
-      showAlert('danger', 'Failed to update domain. Please try again.')
-    }
-  } finally {
-    submitting.value = false
-  }
-}
 
 const confirmDelete = (domain) => {
   domainToDelete.value = domain
@@ -1406,7 +1343,7 @@ const updateDocumentRoot = async () => {
 
   try {
     submitting.value = true
-    await axios.put(`/domains/${oldDomain.value}/root`, { 
+    await axios.put(`/domains/${selectedDomainForRoot.value}/root`, { 
       document_root: rootInput.value.trim()
     })
     showAlert('success', `Document root has been updated successfully`)
@@ -1424,7 +1361,7 @@ const updateDocumentRoot = async () => {
 }
 
 const openRootModal = (domain) => {
-  oldDomain.value = domain.name
+  selectedDomainForRoot.value = domain.name
   rootInput.value = domain.document_root || `/var/www/${domain.name}`
   rootValidationError.value = ""
   showRootModal.value = true

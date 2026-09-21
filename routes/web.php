@@ -126,7 +126,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
     // Domain create/update/delete — root, admin, and user
     Route::middleware(['role:root,admin,user'])->prefix('domains')->group(function () {
         Route::post('/', [DomainController::class, 'store'])->name('domain.store');
-        Route::put('/{domain}', [DomainController::class, 'update'])->name('domain.update');
         Route::put('/{domain}/root', [DomainController::class, 'updateRoot'])->name('domain.update.root');
         Route::put('/{domain}/php-version', [DomainController::class, 'updatePhpVersion'])->name('domain.update.php-version');
         Route::post('/{domain}/toggle-status', [DomainController::class, 'toggleStatus'])->name('domain.toggle-status');
