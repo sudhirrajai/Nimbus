@@ -20,6 +20,7 @@ class BackupSchedule extends Model
         'day_of_week',
         'day_of_month',
         'retention_count',
+        'destination_id',
         'storage_driver',
         'storage_config',
         'email_notifications',
@@ -44,6 +45,11 @@ class BackupSchedule extends Model
     public function records(): HasMany
     {
         return $this->hasMany(BackupRecord::class, 'schedule_id');
+    }
+
+    public function destination(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(BackupDestination::class, 'destination_id');
     }
 
     /**

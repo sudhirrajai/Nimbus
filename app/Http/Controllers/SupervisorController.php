@@ -13,6 +13,58 @@ class SupervisorController extends Controller
         return env('NIMBUS_GIT_USER', 'www-data');
     }
 
+    /**
+     * Resolve the associated project / domain name for a supervisor process or group
+     */
+    private function getProcessDomain(string $name): ?string
+    {
+        $groupName = str_contains($name, ':') ? explode(':', $name)[0] : $name;
+
+        // 1. Check if the group name directly corresponds to a /var/www/ directory
+        if (is_dir("/var/www/{$groupName}")) {
+            return $groupName;
+        }
+
+        // 2. Check the supervisor config file in /etc/supervisor/conf.d/
+        $configPath = "/etc/supervisor/conf.d/{$groupName}.conf";
+        $content = null;
+        if (file_exists($configPath)) {
+            $content = @file_get_contents($configPath);
+        }
+        if (!$content) {
+            exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $contentArray, $catCode);
+            if ($catCode === 0 && !empty($contentArray)) {
+                $content = implode("\n", $contentArray);
+            }
+        }
+
+        if ($content) {
+            // Match explicit directory first: directory = /var/www/<domain>
+            if (preg_match('/^\s*directory\s*=\s*["\']?\/var\/www\/([a-zA-Z0-9_\.\-]+)/m', $content, $m)) {
+                return trim($m[1]);
+            }
+            // Or look for any /var/www/<domain> in command, stdout_logfile, etc.
+            if (preg_match('#/var/www/([a-zA-Z0-9_\.\-]+)#', $content, $m)) {
+                return trim($m[1]);
+            }
+        }
+
+        // 3. Check GitDeployment records
+        try {
+            $deployments = \App\Models\GitDeployment::whereNotNull('yaml_config')->get(['domain', 'yaml_config']);
+            foreach ($deployments as $deployment) {
+                $prog = $deployment->yaml_config['supervisor']['program'] ?? null;
+                if ($prog === $groupName && !empty($deployment->domain)) {
+                    return $deployment->domain;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore if table/query fails
+        }
+
+        return null;
+    }
+
     private function canUserManageProcess(string $name): bool
     {
         $user = auth()->user();
@@ -26,16 +78,41 @@ class SupervisorController extends Controller
             return true;
         }
 
-        // 2. Check the config file to see if the directory is a domain they have permission for
+        // 2. Check the config file to see if any referenced directory/domain is allowed
         $configPath = "/etc/supervisor/conf.d/{$groupName}.conf";
+        $content = null;
         if (file_exists($configPath)) {
-            $content = file_get_contents($configPath);
-            if (preg_match('/^\s*directory\s*=\s*\/var\/www\/([^/]+)/m', $content, $m)) {
-                $domain = trim($m[1]);
-                if ($user->hasDomainPermission($domain, 'supervisor')) {
+            $content = @file_get_contents($configPath);
+        }
+        if (!$content) {
+            exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $contentArray, $catCode);
+            if ($catCode === 0 && !empty($contentArray)) {
+                $content = implode("\n", $contentArray);
+            }
+        }
+
+        if ($content && preg_match_all('#/var/www/([a-zA-Z0-9_\.\-]+)#', $content, $matches)) {
+            foreach (array_unique($matches[1]) as $candidateDomain) {
+                $candidateDomain = trim($candidateDomain);
+                if ($candidateDomain && $user->hasDomainPermission($candidateDomain, 'supervisor')) {
                     return true;
                 }
             }
+        }
+
+        // 3. Check GitDeployment records
+        try {
+            $deployments = \App\Models\GitDeployment::whereNotNull('yaml_config')->get(['domain', 'yaml_config']);
+            foreach ($deployments as $deployment) {
+                $prog = $deployment->yaml_config['supervisor']['program'] ?? null;
+                if ($prog === $groupName && !empty($deployment->domain)) {
+                    if ($user->hasDomainPermission($deployment->domain, 'supervisor')) {
+                        return true;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore
         }
 
         return false;
@@ -339,27 +416,18 @@ BASH;
                 }
             }
 
-            $user = auth()->user();
+            $allowedGroups = [];
+            foreach ($groups as $group) {
+                if ($this->canUserManageProcess($group['name'])) {
+                    $group['domain'] = $this->getProcessDomain($group['name']);
+                    $allowedGroups[] = $group;
+                }
+            }
+
             return response()->json([
                 'success' => true,
-                'groups' => array_values(array_filter($groups, function($group) use ($user) {
-                    // Root can see everything
-                    if ($user->isRoot()) return true;
-                    
-                    // For others, check if the group name (usually the project name or starts with it)
-                    // or the directory in the config matches their allowed websites
-                    if ($user->hasDomainPermission($group['name'], 'supervisor')) return true;
-                    
-                    // Check if any process in the group has a directory the user can access
-                    foreach ($group['processes'] as $proc) {
-                        if (isset($proc['info']) && preg_match('#/var/www/([^/]+)#', $proc['info'], $m)) {
-                            if ($user->hasDomainPermission($m[1], 'supervisor')) return true;
-                        }
-                    }
-                    
-                    return false;
-                })),
-                'count' => count($groups)
+                'groups' => $allowedGroups,
+                'count' => count($allowedGroups)
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -463,7 +531,7 @@ BASH;
             if (!auth()->user()->isRoot()) {
                 $domain = null;
                 if ($manualMode && $rawConfig) {
-                    if (preg_match('/^\s*directory\s*=\s*\/var\/www\/([^/]+)/m', $rawConfig, $m)) {
+                    if (preg_match('/^\s*directory\s*=\s*["\']?\/var\/www\/([a-zA-Z0-9_\.\-]+)/m', $rawConfig, $m) || preg_match('#/var/www/([a-zA-Z0-9_\.\-]+)#', $rawConfig, $m)) {
                         $domain = trim($m[1]);
                     } else {
                         $domain = $name;
@@ -721,6 +789,10 @@ CONFIG;
                 $logPath = trim($m[1]);
                 $config['logfile'] = basename($logPath);
             }
+
+            if (empty($config['project'])) {
+                $config['project'] = $this->getProcessDomain($configName) ?: '';
+            }
             
             return response()->json([
                 'success' => true,
@@ -749,7 +821,7 @@ CONFIG;
             if (!auth()->user()->isRoot()) {
                 $domain = null;
                 if ($manualMode && $rawConfig) {
-                    if (preg_match('/^\s*directory\s*=\s*\/var\/www\/([^/]+)/m', $rawConfig, $m)) {
+                    if (preg_match('/^\s*directory\s*=\s*["\']?\/var\/www\/([a-zA-Z0-9_\.\-]+)/m', $rawConfig, $m) || preg_match('#/var/www/([a-zA-Z0-9_\.\-]+)#', $rawConfig, $m)) {
                         $domain = trim($m[1]);
                     } else {
                         $domain = $name;

@@ -30,34 +30,35 @@ class DomainController extends Controller
 
             // Load assignments to identify creators and timestamps
             $assignments = UserWebsite::with('user')->get()->groupBy('domain');
+            $suspendedList = \App\Services\ProjectControlService::getSuspendedDomains();
 
             $directories = collect(File::directories($this->basePath))
-                ->map(function ($path) use ($assignments) {
+                ->map(function ($path) use ($assignments, $suspendedList) {
                     $domain = basename($path);
 
-                    // Quick nginx config check — just test file existence
+                    // Quick nginx config check — direct read when readable, sudo fallback
                     $nginxConfig = '/etc/nginx/sites-enabled/' . $domain;
-                    $configExists = false;
+                    $configContent = null;
                     $documentRoot = $path;
-                    try {
-                        $output = [];
-                        exec("sudo test -f " . escapeshellarg($nginxConfig) . " && echo 'exists'", $output);
-                        $configExists = isset($output[0]) && $output[0] === 'exists';
-                    } catch (\Exception $e) {
-                        $configExists = false;
-                    }
 
-                    if ($configExists) {
+                    if (@is_readable($nginxConfig)) {
+                        $configContent = @file_get_contents($nginxConfig);
+                    } else {
                         try {
                             $output = [];
-                            exec("sudo cat " . escapeshellarg($nginxConfig) . " 2>/dev/null", $output);
-                            $configContent = implode("\n", $output);
-                            if (preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
-                                $documentRoot = trim($matches[1]);
+                            exec("sudo test -f " . escapeshellarg($nginxConfig) . " && echo 'exists'", $output);
+                            if (isset($output[0]) && $output[0] === 'exists') {
+                                $catOutput = [];
+                                exec("sudo cat " . escapeshellarg($nginxConfig) . " 2>/dev/null", $catOutput);
+                                $configContent = implode("\n", $catOutput);
                             }
                         } catch (\Exception $e) {
-                            \Log::warning("Failed to read Nginx config for $domain: " . $e->getMessage());
+                            $configContent = null;
                         }
+                    }
+
+                    if ($configContent && preg_match('/root\s+([^;]+);/', $configContent, $matches)) {
+                        $documentRoot = trim($matches[1]);
                     }
 
                     $createdBy = 'System';
@@ -86,6 +87,7 @@ class DomainController extends Controller
                         'document_root' => $documentRoot,
                         'storage' => null,       // Loaded lazily
                         'is_active' => null,     // Loaded lazily
+                        'is_suspended' => in_array(strtolower($domain), $suspendedList, true),
                         'server_ip' => null,
                         'created_by' => $createdBy,
                         'created_at' => $createdAt
@@ -152,15 +154,20 @@ class DomainController extends Controller
             $phpVersion = '8.2'; // default fallback
             try {
                 $configPath = $this->resolveNginxConfigPath('/etc/nginx/sites-available/', $domain);
-                $output = [];
-                exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
-                if (isset($output[0]) && $output[0] === 'exists') {
-                    $catOutput = [];
-                    exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $catOutput);
-                    $configContent = implode("\n", $catOutput);
-                    if (preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-nimbus)?\.sock;/', $configContent, $matches)) {
-                        $phpVersion = $matches[1];
+                $configContent = null;
+                if (@is_readable($configPath)) {
+                    $configContent = @file_get_contents($configPath);
+                } else {
+                    $output = [];
+                    exec("sudo test -f " . escapeshellarg($configPath) . " && echo 'exists'", $output);
+                    if (isset($output[0]) && $output[0] === 'exists') {
+                        $catOutput = [];
+                        exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $catOutput);
+                        $configContent = implode("\n", $catOutput);
                     }
+                }
+                if ($configContent && preg_match('/fastcgi_pass\s+unix:(?:\/var)?\/run\/php\/php([0-9.]+)-fpm(?:-[a-zA-Z0-9_]+)?\.sock;/', $configContent, $matches)) {
+                    $phpVersion = $matches[1];
                 }
             } catch (\Exception $e) {
                 \Log::warning("Failed to detect PHP version for $domain: " . $e->getMessage());
@@ -300,9 +307,10 @@ class DomainController extends Controller
                 ], 409);
             }
 
-            // Create folder structure using sudo for proper permissions
+            // Create folder structure with isolated system user
             $this->executeSudoCommand("mkdir -p {$path}");
-            $this->executeSudoCommand("chown -R www-data:www-data {$path}");
+            $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $path);
+            $this->executeSudoCommand("chown -R {$siteUser}:{$siteUser} {$path}");
             $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
             $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
             $createdDirs = true;
@@ -330,6 +338,12 @@ class DomainController extends Controller
             if (!preg_match('/^[0-9]+\.[0-9]+$/', $phpVersion) || !File::exists("/etc/php/{$phpVersion}/fpm")) {
                 $phpVersion = '8.2'; // absolute fallback
             }
+
+            // Create isolated PHP-FPM pool
+            \App\Services\SiteIsolationService::createOrUpdatePool($domain, $path, $phpVersion);
+
+            // Secure site permissions and lock down .env
+            \App\Services\SiteIsolationService::securePath($path, $domain);
 
             // Create Nginx configuration
             $this->createNginxConfig($domain, $phpVersion);
@@ -389,106 +403,6 @@ class DomainController extends Controller
             
             return response()->json([
                 'error' => 'Failed to create domain: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Edit domain → rename folder
-     */
-    public function update(Request $request, $oldDomain)
-    {
-        $renamed = false;
-        $oldConfigDeleted = false;
-        $newConfigCreated = false;
-        
-        try {
-            // Validate domain format
-            $request->validate([
-                'domain' => [
-                    'required',
-                    'string',
-                    'max:253',
-                    'regex:/^[a-z0-9_.-]+$/i'
-                ]
-            ], [
-                'domain.required' => 'Domain name is required',
-                'domain.regex' => 'Please enter a valid domain name (e.g., example.com)',
-                'domain.max' => 'Domain name is too long (max 253 characters)'
-            ]);
-
-            $oldPath = $this->basePath . $oldDomain;
-            $newDomain = trim($request->domain);
-            $newPath = $this->basePath . $newDomain;
-
-            // Check if old domain exists
-            if (!File::exists($oldPath)) {
-                return response()->json([
-                    'error' => 'Domain not found'
-                ], 404);
-            }
-
-            // If domain name unchanged, return success
-            if ($oldDomain === $newDomain) {
-                return response()->json([
-                    'message' => 'Domain unchanged',
-                    'domain' => $newDomain
-                ]);
-            }
-
-            // Check if new domain already exists
-            if (File::exists($newPath)) {
-                return response()->json([
-                    'error' => 'New domain name already exists'
-                ], 409);
-            }
-
-            // Delete old Nginx config
-            $this->deleteNginxConfig($oldDomain);
-            $oldConfigDeleted = true;
-
-            // Rename the directory
-            $this->executeSudoCommand("mv {$oldPath} {$newPath}");
-            $this->executeSudoCommand("chown -R www-data:www-data {$newPath}");
-            $renamed = true;
-
-            // Create new Nginx config
-            $this->createNginxConfig($newDomain);
-            $newConfigCreated = true;
-
-            // Ensure all managed domains have the directories/files their nginx configs expect
-            $this->repairManagedDomainStructures();
-
-            // Test and reload Nginx
-            $this->executeSudoCommand("nginx -t");
-            $this->executeSudoCommand("systemctl reload nginx");
-
-            // Update database records referencing the old domain name
-            UserWebsite::where('domain', $oldDomain)->update(['domain' => $newDomain]);
-            \App\Models\DomainCloudflareSetting::where('domain', $oldDomain)->update(['domain' => $newDomain]);
-            \App\Models\WordPressSite::where('domain', $oldDomain)->update(['domain' => $newDomain]);
-            \App\Models\GitDeployment::where('domain', $oldDomain)->update(['domain' => $newDomain]);
-
-            // Log the update
-            \Log::info("Domain updated: $oldDomain -> $newDomain by user " . auth()->id());
-
-            return response()->json([
-                'message' => 'Domain updated successfully',
-                'domain' => $newDomain
-            ]);
-
-        } catch (ValidationException $e) {
-            return response()->json([
-                'error' => $e->validator->errors()->first('domain')
-            ], 422);
-        } catch (\Exception $e) {
-            \Log::error("Failed to update domain: " . $e->getMessage());
-            
-            // Rollback on error
-            $this->rollbackDomainUpdate($oldDomain, $newDomain, $oldPath, $newPath, $renamed, $oldConfigDeleted, $newConfigCreated);
-            
-            return response()->json([
-                'error' => 'Failed to update domain: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -621,22 +535,25 @@ class DomainController extends Controller
                 $this->executeSudoCommand("rm -f {$configPath}");
             }
 
-            // Ensure remaining managed domains still have the directories/files their nginx configs expect
-            $this->repairManagedDomainStructures();
-
             // Step 3: Test and reload Nginx configuration
             \Log::info("Testing Nginx configuration...");
             try {
                 $this->executeSudoCommand("nginx -t");
                 \Log::info("Nginx config test passed");
             } catch (\Exception $e) {
-                \Log::error("Nginx config test failed: " . $e->getMessage());
-                throw new \Exception("Nginx configuration test failed. Please check your Nginx configuration.");
+                \Log::warning("Nginx config test warning during delete: " . $e->getMessage());
             }
 
             \Log::info("Reloading Nginx...");
-            $this->executeSudoCommand("systemctl reload nginx");
-            \Log::info("Nginx reloaded successfully");
+            try {
+                $this->executeSudoCommand("systemctl reload nginx");
+                \Log::info("Nginx reloaded successfully");
+            } catch (\Exception $e) {
+                \Log::warning("Nginx reload warning during delete: " . $e->getMessage());
+            }
+
+            // Delete isolated PHP pool
+            \App\Services\SiteIsolationService::deletePool($domain);
 
             // Step 4: Delete the domain directory
             \Log::info("Removing domain directory: $path");
@@ -653,14 +570,14 @@ class DomainController extends Controller
 
             \Log::info("Domain deleted successfully: $domain by user " . auth()->id());
 
-            // ─── NEW: Cleanup database assignments ────────────────────
-            UserWebsite::where('domain', $domain)->delete();
-            \Log::info("UserWebsite assignments removed for $domain");
-            // ──────────────────────────────────────────────────────────
+            // ─── Comprehensive Cleanup: Files, Crons, Supervisors, Processes, SSL, DB ──
+            $cleanup = \App\Services\ProjectControlService::cleanupDomainCompletely($domain);
+            \Log::info("Comprehensive cleanup finished for $domain: " . json_encode($cleanup));
 
             return response()->json([
-                'message' => 'Domain deleted successfully',
-                'domain' => $domain
+                'message' => 'Domain and all associated resources (crons, supervisor workers, files, SSL) deleted successfully',
+                'domain' => $domain,
+                'cleanup' => $cleanup
             ], 200);
 
         } catch (\Exception $e) {
@@ -669,6 +586,41 @@ class DomainController extends Controller
             
             return response()->json([
                 'error' => 'Failed to delete domain: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Toggle domain resource suspension on/off
+     */
+    public function toggleStatus(Request $request, $domain)
+    {
+        try {
+            $domain = trim($domain);
+            if (empty($domain)) {
+                return response()->json(['error' => 'Domain name is required'], 400);
+            }
+
+            $user = auth()->user();
+            if (!$user->isRoot() && !$user->hasDomainPermission($domain, 'edit')) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $result = \App\Services\ProjectControlService::toggle($domain);
+
+            return response()->json([
+                'success' => $result['success'] ?? true,
+                'status' => $result['status'] ?? 'unknown',
+                'is_suspended' => ($result['status'] ?? '') === 'suspended',
+                'message' => ($result['status'] ?? '') === 'suspended'
+                    ? "Project {$domain} temporarily suspended. All workers, crons, and web resources stopped."
+                    : "Project {$domain} resumed. All workers, crons, and web resources active.",
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to toggle domain status: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1052,13 +1004,11 @@ HTML;
         $output = [];
         $returnCode = 0;
         
-        // Log the command being executed (for debugging)
         \Log::debug("Executing sudo command: sudo $command");
         
-        // Execute command with proper error handling
-        exec("sudo $command 2>&1", $output, $returnCode);
+        $escaped = escapeshellarg($command);
+        exec("sudo bash -c {$escaped} 2>&1", $output, $returnCode);
         
-        // Log the output
         $outputStr = implode("\n", $output);
         \Log::debug("Command output: " . $outputStr);
         \Log::debug("Return code: $returnCode");
@@ -1107,6 +1057,8 @@ HTML;
         $domainPath = $this->basePath . $domain;
         $tempPath = "/tmp/nginx_{$domain}_" . time() . ".conf";
 
+        $sockPath = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
+
         $config = <<<NGINX
 server {
     listen 80;
@@ -1132,7 +1084,7 @@ server {
     # PHP handling
     location ~ \.php$ {
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;
+        fastcgi_pass unix:{$sockPath};
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
@@ -1225,13 +1177,14 @@ NGINX;
      */
     public function repairManagedDomainStructures()
     {
-        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus'];
+        $protectedDirs = ['html', 'default', 'public', 'cgi-bin', 'nimbus', 'nimbus_panel', '000-nimbus', '000-default'];
         $domainsToRepair = [];
 
-        // 1. Gather all domains from existing directories
+        // 1. Gather all domains from existing directories (only valid domains containing '.')
         if (File::exists($this->basePath)) {
             foreach (File::directories($this->basePath) as $directory) {
                 $name = basename($directory);
+                if (!str_contains($name, '.')) continue;
                 if (!in_array(strtolower($name), $protectedDirs, true)) {
                     $domainsToRepair[] = $name;
                 }
@@ -1239,26 +1192,27 @@ NGINX;
         }
 
         // 2. Gather all domains from Nginx enabled configs
-        // Even if the directory was deleted, if Nginx expects it, we must recreate it to prevent crashes!
         $sitesPath = '/etc/nginx/sites-enabled/';
         if (is_dir($sitesPath)) {
             foreach (scandir($sitesPath) as $file) {
                 if ($file === '.' || $file === '..') continue;
-                $name = str_replace('.conf', '', basename($file));
+                $name = str_replace(['.conf', '.nimbus_suspended'], '', basename($file));
+                if (!str_contains($name, '.')) continue;
                 if ($name !== 'default' && !empty($name) && !in_array(strtolower($name), $protectedDirs, true)) {
                     $domainsToRepair[] = $name;
                 }
             }
         }
 
-        // 3. Repair all unique domains
+        // 3. Repair all unique domains safely without crashing on individual failures
         $domainsToRepair = array_unique($domainsToRepair);
         foreach ($domainsToRepair as $domain) {
-            $this->ensureDomainStructure($this->basePath . $domain);
-            
-            // ─── NEW: Auto-migrate Nginx logs to system path ─────
-            $this->migrateNginxLogsToSystemPath($domain);
-            // ──────────────────────────────────────────────────
+            try {
+                $this->ensureDomainStructure($this->basePath . $domain);
+                $this->migrateNginxLogsToSystemPath($domain);
+            } catch (\Throwable $e) {
+                \Log::warning("Skipping domain repair for {$domain}: " . $e->getMessage());
+            }
         }
     }
 
@@ -1314,18 +1268,21 @@ NGINX;
             $this->executeSudoCommand('mkdir -p ' . escapeshellarg($domainPath));
         }
 
-        $this->executeSudoCommand('chown -R www-data:www-data ' . escapeshellarg($domainPath));
-        $this->executeSudoCommand('chmod 2775 ' . escapeshellarg($domainPath));
+        $domain = basename($domainPath);
+        $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
+        $this->executeSudoCommand("chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath));
+        $this->executeSudoCommand('chmod 750 ' . escapeshellarg($domainPath));
         
         // Ensure index.html exists if empty
         $indexFile = $domainPath . '/index.html';
         if (!File::exists($indexFile) && count(File::files($domainPath)) === 0) {
-            $domain = basename($domainPath);
             $indexContent = $this->getDefaultIndexContent($domain);
             file_put_contents($indexFile, $indexContent);
-            $this->executeSudoCommand('chown www-data:www-data ' . escapeshellarg($indexFile));
-            $this->executeSudoCommand('chmod 664 ' . escapeshellarg($indexFile));
+            $this->executeSudoCommand("chown {$siteUser}:{$siteUser} " . escapeshellarg($indexFile));
+            $this->executeSudoCommand('chmod 640 ' . escapeshellarg($indexFile));
         }
+
+        \App\Services\SiteIsolationService::securePath($domainPath, $domain);
     }
 
     /**
@@ -1362,44 +1319,6 @@ NGINX;
         }
     }
 
-    /**
-     * Rollback domain update on error
-     */
-    private function rollbackDomainUpdate($oldDomain, $newDomain, $oldPath, $newPath, $renamed, $oldConfigDeleted, $newConfigCreated)
-    {
-        try {
-            \Log::warning("Rolling back domain update: $oldDomain -> $newDomain");
-            
-            // Remove new Nginx config if created
-            if ($newConfigCreated) {
-                \Log::info("Removing new Nginx config for: $newDomain");
-                $this->deleteNginxConfig($newDomain);
-            }
-            
-            // Rename directory back if it was renamed
-            if ($renamed && File::exists($newPath)) {
-                \Log::info("Renaming directory back: $newPath -> $oldPath");
-                $this->executeSudoCommand("mv {$newPath} {$oldPath}");
-            }
-            
-            // Recreate old Nginx config if it was deleted
-            if ($oldConfigDeleted && File::exists($oldPath)) {
-                \Log::info("Recreating old Nginx config for: $oldDomain");
-                $this->createNginxConfig($oldDomain);
-            }
-            
-            // Try to reload nginx
-            try {
-                $this->executeSudoCommand("nginx -t && systemctl reload nginx");
-            } catch (\Exception $e) {
-                \Log::warning("Failed to reload nginx during rollback: " . $e->getMessage());
-            }
-            
-            \Log::info("Rollback completed for domain update");
-        } catch (\Exception $e) {
-            \Log::error("Rollback failed for domain update: " . $e->getMessage());
-        }
-    }
 
     /**
      * Update PHP version for a domain
@@ -1437,16 +1356,14 @@ NGINX;
             exec("sudo cat " . escapeshellarg($configPath) . " 2>/dev/null", $output);
             $configContent = implode("\n", $output);
 
-            // Replace fastcgi_pass socket path
-            $pattern = '/(fastcgi_pass\s+unix:)(?:\/var)?(\/run\/php\/php)[0-9.]+(-fpm(?:-nimbus)?\.sock;)/';
-            $replacement = '${1}${2}' . $phpVersion . '${3}';
-            
-            // Double check if pattern matches
-            if (!preg_match($pattern, $configContent)) {
-                $pattern = '/(fastcgi_pass\s+unix:[^;]+\.sock;)/';
-                $replacement = "fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm.sock;";
-            }
+            // Update isolated PHP pool for the new version
+            $domainPath = $this->basePath . $domain;
+            \App\Services\SiteIsolationService::createOrUpdatePool($domain, $domainPath, $phpVersion);
+            $sockPath = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
 
+            // Replace fastcgi_pass socket path
+            $pattern = '/fastcgi_pass\s+unix:[^;]+\.sock;/';
+            $replacement = "fastcgi_pass unix:{$sockPath};";
             $newConfigContent = preg_replace($pattern, $replacement, $configContent);
 
             // Write updated config to a temp file, then move to Nginx directory

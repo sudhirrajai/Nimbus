@@ -44,6 +44,16 @@
                 position: static !important;
                 transform: none !important;
             }
+            /* Rigid sidebar fix: prevent aside container from scrolling */
+            .sidenav, #sidenav-main {
+                display: block !important;
+                overflow: hidden !important;
+                overflow-x: hidden !important;
+                overflow-y: hidden !important;
+            }
+            .sidenav > .ps__rail-y, .sidenav > .ps__rail-x {
+                display: none !important;
+            }
         </style>
     </head>
     <body class="font-sans antialiased">

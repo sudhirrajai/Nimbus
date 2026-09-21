@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use App\Services\SiteIsolationService;
 
 class DatabaseController extends Controller
 {
@@ -772,6 +773,75 @@ BASH;
     }
 
     /**
+     * Update user host (remote access switcher)
+     */
+    public function updateUserHost(Request $request)
+    {
+        try {
+            $request->validate([
+                'username' => 'required|string|max:32',
+                'current_host' => 'required|string|max:255',
+                'new_host' => 'required|string|max:255'
+            ]);
+
+            $username = $request->input('username');
+            $currentHost = $request->input('current_host');
+            $newHost = trim($request->input('new_host'));
+
+            if ($currentHost === $newHost) {
+                return response()->json(['message' => 'Host is already set to ' . $newHost]);
+            }
+
+            // Prevent modifying system users
+            $systemUsers = ['root', 'debian-sys-maint', 'mariadb.sys', 'nimbus', 'nimbus_admin', 'phpmyadmin', 'roundcube', 'mysql', 'mysql.session', 'mysql.sys', 'mysql.infoschema'];
+            if (in_array($username, $systemUsers)) {
+                return response()->json(['error' => 'Cannot modify system user'], 403);
+            }
+
+            if (!auth()->user()->isRoot()) {
+                $sql = "SELECT DISTINCT Db FROM mysql.db WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $currentHost) . "'";
+                $res = $this->runMysqlQuery($sql, true);
+                if ($res['code'] === 0) {
+                    foreach ($res['output'] as $line) {
+                        $dbName = trim($line);
+                        $dbName = str_replace('\\_', '_', $dbName);
+                        if (!empty($dbName) && !auth()->user()->canAccessDatabase($dbName)) {
+                            return response()->json(['error' => 'Permission denied: This MySQL user has access to databases you do not own.'], 403);
+                        }
+                    }
+                }
+            }
+
+            // Check if destination user@new_host already exists
+            $checkSql = "SELECT User FROM mysql.user WHERE User = '" . str_replace("'", "''", $username) . "' AND Host = '" . str_replace("'", "''", $newHost) . "'";
+            $checkRes = $this->runMysqlQuery($checkSql, true);
+            if ($checkRes['code'] === 0 && !empty($checkRes['output']) && trim($checkRes['output'][0]) !== '') {
+                return response()->json(['error' => "User '{$username}'@'{$newHost}' already exists."], 400);
+            }
+
+            // Rename user: RENAME USER 'user'@'old_host' TO 'user'@'new_host'
+            $renameSql = "RENAME USER '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $currentHost) . "' TO '" . str_replace("'", "''", $username) . "'@'" . str_replace("'", "''", $newHost) . "'";
+            $res = $this->runMysqlQuery($renameSql);
+
+            if ($res['code'] !== 0) {
+                throw new \Exception("Failed to update user host: " . implode("\n", $res['output']));
+            }
+
+            $this->runMysqlQuery("FLUSH PRIVILEGES");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Host for user '{$username}' updated to '{$newHost}' successfully.",
+                'username' => $username,
+                'host' => $newHost
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to update user host: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get Database Viewer access URL for a specific database (with auto-login SSO token)
      */
     public function getDatabaseViewerUrl(Request $request)
@@ -1322,8 +1392,8 @@ PHP;
                     // Check .env file
                     $envPath = $checkPath . '/.env';
                     if (file_exists($envPath)) {
-                        $content = file_get_contents($envPath);
-                        if (preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
+                        $content = SiteIsolationService::readFile($envPath);
+                        if ($content && preg_match('/^\s*DB_DATABASE\s*=\s*(.+)$/m', $content, $matches)) {
                             $db = trim($matches[1], "\"' \r\n");
                             if (!empty($db)) {
                                 $associations[strtolower($db)][] = [
@@ -1332,13 +1402,33 @@ PHP;
                                 ];
                             }
                         }
+
+                        // Support DATABASE_URL / DB_URL / JAWSDB_URL (Node.js, Prisma, TypeORM, Rails, Django, etc.)
+                        // Example: mysql://user:pass@127.0.0.1:3306/maharaj
+                        if ($content && preg_match('/^\s*(?:DATABASE_URL|DB_URL|JAWSDB_URL|CLEARDB_DATABASE_URL|MYSQL_URL)\s*=\s*(.+)$/m', $content, $urlMatches)) {
+                            $rawDbUrl = trim($urlMatches[1], "\"' \r\n");
+                            $parsedPath = parse_url($rawDbUrl, PHP_URL_PATH);
+                            if ($parsedPath) {
+                                $extractedDb = trim($parsedPath, '/');
+                                // Remove any URL query parameters if present, e.g. /dbname?charset=utf8
+                                if (str_contains($extractedDb, '?')) {
+                                    $extractedDb = explode('?', $extractedDb)[0];
+                                }
+                                if (!empty($extractedDb)) {
+                                    $associations[strtolower($extractedDb)][] = [
+                                        'project' => $relativeProjectName,
+                                        'type' => 'Node.js / DATABASE_URL'
+                                    ];
+                                }
+                            }
+                        }
                     }
 
                     // Check wp-config.php file
                     $wpPath = $checkPath . '/wp-config.php';
                     if (file_exists($wpPath)) {
-                        $content = file_get_contents($wpPath);
-                        if (preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
+                        $content = SiteIsolationService::readFile($wpPath);
+                        if ($content && preg_match('/define\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"](.+)[\'"]\s*\)/', $content, $matches)) {
                             $db = trim($matches[1]);
                             if (!empty($db)) {
                                 $associations[strtolower($db)][] = [
@@ -1362,7 +1452,8 @@ PHP;
 
                     foreach ($corePhpFiles as $phpFile) {
                         if (file_exists($phpFile)) {
-                            $content = file_get_contents($phpFile);
+                            $content = SiteIsolationService::readFile($phpFile);
+                            if (!$content) continue;
                             $foundDb = null;
                             if (preg_match('/define\(\s*[\'"](?:DB_NAME|DB_DATABASE|DB_DB|DATABASE_NAME)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $content, $matches)) {
                                 $foundDb = trim($matches[1]);

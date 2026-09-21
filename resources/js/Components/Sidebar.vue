@@ -1,9 +1,17 @@
 <template>
   <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
-    id="sidenav-main">
-    <div class="sidenav-header">
-      <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-xl-none"
-        id="iconSidenav" @click="closeSidebar" style="cursor: pointer; z-index: 10;"></i>
+    id="sidenav-main" style="display: block !important; overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; width: 14rem !important; max-width: 14rem !important;">
+    <div class="sidenav-header" style="height: 72px; width: 100%;">
+      <button 
+        type="button"
+        class="btn btn-link text-dark p-3 position-absolute end-0 top-0 d-xl-none m-0 shadow-none"
+        id="iconSidenav" 
+        @click="closeSidebar" 
+        style="cursor: pointer; z-index: 20; text-decoration: none; border: none; background: transparent; line-height: 1;"
+        aria-label="Close Sidebar"
+      >
+        <i class="material-symbols-rounded" style="font-size: 24px; color: #4b5563;">close</i>
+      </button>
 
       <Link class="navbar-brand px-4 py-3 m-0" href="/dashboard" style="display: flex; align-items: center; line-height: 1; gap: 8px;">
         <img :src="'/assets/img/nimbus_logo.png?v=2'" class="navbar-brand-img" alt="main_logo" style="width: 36px; height: 36px; border-radius: 6px;">
@@ -16,7 +24,7 @@
 
     <hr class="horizontal dark mt-0 mb-2" />
 
-    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" style="max-height: calc(100vh - 170px); overflow-y: auto;">
+    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" @click="handleNavClick" style="display: block !important; height: calc(100% - 155px) !important; max-height: calc(100% - 155px) !important; overflow-y: auto !important; overflow-x: hidden !important; width: 100% !important; -webkit-overflow-scrolling: touch; touch-action: pan-y;">
       <ul class="navbar-nav">
 
         <li class="nav-item">
@@ -40,7 +48,7 @@
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('files')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('files')) && hasModule('file_manager')" class="nav-item">
           <Link :href="fileManagerLink" class="nav-link" :class="isActive('/file-manager')">
             <i class="material-symbols-rounded opacity-5">folder</i>
             <span class="nav-link-text ms-1">File Manager</span>
@@ -54,21 +62,21 @@
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('deployments')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('deployments')) && hasModule('git_deploy')" class="nav-item">
           <Link href="/deployments" class="nav-link" :class="isActive('/deployments')">
             <i class="material-symbols-rounded opacity-5">rocket_launch</i>
             <span class="nav-link-text ms-1">Git Deployments</span>
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('database')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('database')) && hasModule('databases')" class="nav-item">
           <Link href="/database" class="nav-link" :class="isActive('/database')">
             <i class="material-symbols-rounded opacity-5">storage</i>
             <span class="nav-link-text ms-1">Databases</span>
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('ssl')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('ssl')) && hasModule('ssl')" class="nav-item">
           <Link href="/ssl" class="nav-link" :class="isActive('/ssl')">
             <i class="material-symbols-rounded opacity-5">lock</i>
             <span class="nav-link-text ms-1">SSL Certificates</span>
@@ -89,7 +97,7 @@
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('wordpress')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('wordpress')) && hasModule('wordpress')" class="nav-item">
           <Link href="/wordpress" class="nav-link" :class="isActive('/wordpress')">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.52 122.523" width="20" height="20" class="opacity-5" style="min-width:20px"><g fill="currentColor"><path d="M8.708 61.26c0 20.802 12.089 38.779 29.619 47.298L13.258 39.872a52.354 52.354 0 0 0-4.55 21.388z"/><path d="M96.74 58.608c0-6.495-2.333-10.993-4.334-14.494-2.664-4.329-5.161-7.995-5.161-12.324 0-4.831 3.664-9.328 8.825-9.328.233 0 .454.029.681.042-9.35-8.566-21.807-13.796-35.489-13.796-18.36 0-34.513 9.42-43.91 23.688 1.233.037 2.395.063 3.382.063 5.497 0 14.006-.668 14.006-.668 2.833-.166 3.167 3.994.337 4.329 0 0-2.847.335-6.015.501L48.2 93.547l11.501-34.493-8.188-22.434c-2.83-.166-5.511-.501-5.511-.501-2.832-.166-2.5-4.496.332-4.329 0 0 8.679.668 13.843.668 5.496 0 14.006-.668 14.006-.668 2.835-.166 3.168 3.994.337 4.329 0 0-2.853.335-6.015.501l18.992 56.494 5.242-17.517c2.272-7.269 4.001-12.49 4.001-16.989z"/><path d="M62.184 65.857l-15.768 45.819a52.552 52.552 0 0 0 32.29-.84 4.7 4.7 0 0 1-.377-.726L62.184 65.857z"/><path d="M107.376 36.046c.226 1.674.354 3.471.354 5.404 0 5.333-.996 11.328-3.996 18.824l-16.053 46.413C101.291 98.083 113.812 81.18 113.812 61.26c0-9.192-2.39-17.833-6.436-25.214z"/><path d="M61.262 0C27.483 0 0 27.481 0 61.26c0 33.783 27.483 61.263 61.262 61.263 33.778 0 61.258-27.48 61.258-61.263C122.52 27.481 95.04 0 61.262 0zm0 119.715c-32.23 0-58.453-26.223-58.453-58.455 0-32.23 26.222-58.451 58.453-58.451 32.229 0 58.45 26.221 58.45 58.451 0 32.232-26.221 58.455-58.45 58.455z"/></g></svg>
             <span class="nav-link-text ms-1">WordPress</span>
@@ -98,13 +106,13 @@
 
         <!-- ═══ FILES & RESOURCES (Root & Admin) ═══ -->
         <template v-if="isRootOrAdmin">
-          <li class="nav-item mt-3">
+          <li v-if="hasModule('backups')" class="nav-item mt-3">
             <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
               Files & Resources
             </h6>
           </li>
 
-          <li class="nav-item">
+          <li v-if="hasModule('backups')" class="nav-item">
             <Link href="/backups" class="nav-link" :class="isActive('/backups')">
               <i class="material-symbols-rounded opacity-5">backup</i>
               <span class="nav-link-text ms-1">Backups</span>
@@ -112,44 +120,51 @@
           </li>
 
           <li class="nav-item">
-            <Link href="/ftp" class="nav-link" :class="isActive('/ftp-accounts')">
+            <Link href="/ftp" class="nav-link d-flex align-items-center" :class="isActive('/ftp')">
               <i class="material-symbols-rounded opacity-5">cloud_upload</i>
               <span class="nav-link-text ms-1">FTP Accounts</span>
+              <span class="badge bg-light text-muted ms-auto text-xxs font-weight-bold" style="border: 1px solid #e2e8f0; padding: 2px 6px;">Soon</span>
             </Link>
           </li>
         </template>
 
-        <!-- ═══ EMAIL (Root & Admin) ═══ -->
-        <template v-if="isRootOrAdmin">
-          <li class="nav-item mt-3">
-            <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
-              Email
-            </h6>
-          </li>
+        <!-- ═══ EMAIL ═══ -->
+        <li v-if="(isRootOrAdmin || hasPerm('email')) && hasModule('emails')" class="nav-item mt-3">
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
+            Email
+          </h6>
+        </li>
 
-          <li class="nav-item">
-            <Link href="/email" class="nav-link" :class="isActive('/email')">
-              <i class="material-symbols-rounded opacity-5">email</i>
-              <span class="nav-link-text ms-1">Email Accounts</span>
-            </Link>
-          </li>
-        </template>
+        <li v-if="(isRootOrAdmin || hasPerm('email')) && hasModule('emails')" class="nav-item">
+          <Link href="/email" class="nav-link" :class="isActive('/email')">
+            <i class="material-symbols-rounded opacity-5">email</i>
+            <span class="nav-link-text ms-1">Email Accounts</span>
+          </Link>
+        </li>
+
+        <li v-if="hasModule('emails')" class="nav-item">
+          <a href="/webmail" target="_blank" class="nav-link d-flex align-items-center" :class="isActive('/webmail')">
+            <i class="material-symbols-rounded opacity-5">mark_email_unread</i>
+            <span class="nav-link-text ms-1">Webmail Client</span>
+            <i class="material-symbols-rounded text-xxs ms-auto text-secondary opacity-6">open_in_new</i>
+          </a>
+        </li>
 
         <!-- ═══ AUTOMATION ═══ -->
-        <li v-if="isRootOrAdmin || hasPerm('supervisor') || hasPerm('cron')" class="nav-item mt-3">
+        <li v-if="(isRootOrAdmin || hasPerm('supervisor') || hasPerm('cron')) && (hasModule('supervisor') || hasModule('cron'))" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Automation
           </h6>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('supervisor')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('supervisor')) && hasModule('supervisor')" class="nav-item">
           <Link href="/supervisor" class="nav-link" :class="isActive('/supervisor')">
             <i class="material-symbols-rounded opacity-5">memory</i>
             <span class="nav-link-text ms-1">Supervisor</span>
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin || hasPerm('cron')" class="nav-item">
+        <li v-if="(isRootOrAdmin || hasPerm('cron')) && hasModule('cron')" class="nav-item">
           <Link href="/cron" class="nav-link" :class="isActive('/cron')">
             <i class="material-symbols-rounded opacity-5">schedule</i>
             <span class="nav-link-text ms-1">Cron Jobs</span>
@@ -157,13 +172,13 @@
         </li>
 
         <!-- ═══ SECURITY & PROTECTION (Root & Admin) ═══ -->
-        <li v-if="isRootOrAdmin" class="nav-item mt-3">
+        <li v-if="isRootOrAdmin && hasModule('security')" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Security & Protection
           </h6>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li v-if="isRootOrAdmin && hasModule('security')" class="nav-item">
           <Link href="/shield" class="nav-link" :class="isActive('/shield')">
             <i class="material-symbols-rounded opacity-5">shield</i>
             <span class="nav-link-text ms-1">Nimbus Shield</span>
@@ -171,20 +186,20 @@
         </li>
 
         <!-- ═══ MONITORING (Root & Admin) ═══ -->
-        <li v-if="isRootOrAdmin" class="nav-item mt-3">
+        <li v-if="isRootOrAdmin && hasModule('monitoring')" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Monitoring
           </h6>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li v-if="isRootOrAdmin && hasModule('monitoring')" class="nav-item">
           <Link href="/logs" class="nav-link" :class="isActive('/logs')">
             <i class="material-symbols-rounded opacity-5">description</i>
             <span class="nav-link-text ms-1">Logs</span>
           </Link>
         </li>
 
-        <li v-if="isRootOrAdmin" class="nav-item">
+        <li v-if="isRootOrAdmin && hasModule('monitoring')" class="nav-item">
           <Link href="/activities" class="nav-link" :class="isActive('/activities')">
             <i class="material-symbols-rounded opacity-5">history</i>
             <span class="nav-link-text ms-1">Activity Log</span>
@@ -220,7 +235,7 @@
         </li>
 
         <li v-if="isRoot" class="nav-item">
-          <Link href="/settings" class="nav-link" :class="isActive('/settings')">
+          <Link href="/settings" class="nav-link" :class="isActive('/settings', true)">
             <i class="material-symbols-rounded opacity-5">settings</i>
             <span class="nav-link-text ms-1">Settings</span>
           </Link>
@@ -243,11 +258,11 @@
       </ul>
     </div>
 
-    <div class="sidenav-footer position-absolute w-100 bottom-0">
+    <div class="sidenav-footer position-absolute w-100 bottom-0 bg-white" style="z-index: 10; border-top: 1px solid rgba(0, 0, 0, 0.06); padding-top: 8px; padding-bottom: 8px;">
       <div class="mx-3">
-        <a class="btn btn-outline-dark mt-4 w-100" href="https://nimbus-docs.vmcore.in/" target="_blank">
-          <i class="material-symbols-rounded text-sm me-1">menu_book</i>
-          Documentation
+        <a class="btn btn-outline-dark w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank" @click="handleNavClick">
+          <i class="material-symbols-rounded text-sm">menu_book</i>
+          <span>Documentation</span>
         </a>
       </div>
     </div>
@@ -266,17 +281,28 @@ const isRootOrAdmin = computed(() => isRoot.value || userRole.value === 'admin')
 const userPermissions = computed(() => page.props.auth?.user?.permissions || [])
 const assignedDomains = computed(() => page.props.auth?.user?.assigned_domains || [])
 
+const allowedModules = computed(() => page.props.license_modules || ['wordpress', 'security', 'databases', 'cron', 'supervisor', 'file_manager', 'terminal', 'backups', 'git_deploy', 'ssl', 'emails', 'monitoring'])
+const hasModule = (mod) => allowedModules.value.includes(mod)
+
 const hasPerm = (perm) => isRoot.value || userPermissions.value.includes(perm)
 
 const fileManagerLink = computed(() => {
+  const scope = page.props.auth?.user?.file_manager_scope
+  if (isRoot.value || scope === 'root' || scope === 'projects') {
+    return '/file-manager'
+  }
   if (assignedDomains.value.length > 0) {
     return `/file-manager/${assignedDomains.value[0]}`
   }
   return '/file-manager'
 })
 
-const isActive = (path) => {
-  const currentPath = page.url
+const isActive = (path, exact = false) => {
+  const currentPath = (page.url || '').split('?')[0]
+
+  if (exact || path === '/settings') {
+    return currentPath === path ? 'active bg-gradient-dark text-white' : 'text-dark'
+  }
 
   // Check if current path matches or starts with the given path
   if (currentPath === path || currentPath.startsWith(path + '/')) {
@@ -298,11 +324,19 @@ const closeSidebar = () => {
   }
 }
 
+const handleNavClick = (event) => {
+  if (window.innerWidth < 1200 && event.target.closest('a')) {
+    closeSidebar()
+  }
+}
+
 // Close sidebar on navigation (fixes scroll issue)
 let removeListener = null
 
 onMounted(() => {
   // Ensure sidebar scroll position resets to top on initial mount
+  const sidenav = document.getElementById('sidenav-main')
+  if (sidenav) sidenav.scrollTop = 0
   const container = document.getElementById('sidenav-collapse-main')
   if (container) container.scrollTop = 0
 
@@ -310,7 +344,7 @@ onMounted(() => {
     closeSidebar()
     // Extra safety: ensure body overflow is reset & sidebar container scrolled up
     document.body.style.overflow = ''
-    if (container) container.scrollTop = 0
+    if (sidenav) sidenav.scrollTop = 0
   })
 })
 
@@ -333,5 +367,51 @@ onUnmounted(() => {
 
 .nav-link.active {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+#sidenav-collapse-main {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar {
+  width: 5px;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+}
+
+#sidenav-collapse-main::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+:deep(.ps__rail-y),
+:deep(.ps__rail-x) {
+  display: none !important;
+}
+</style>
+
+<style>
+#sidenav-main {
+  z-index: 999;
+}
+
+@media (max-width: 1199.98px) {
+  #sidenav-main {
+    transform: translateX(-110%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  #sidenav-main.show-mobile {
+    transform: translateX(0) !important;
+    z-index: 1050 !important;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
+  }
 }
 </style>

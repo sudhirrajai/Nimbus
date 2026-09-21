@@ -145,6 +145,46 @@ class LicenseGuard
     }
 
     /**
+     * Get the active modules unlocked by the license (plan defaults + promotional overrides).
+     *
+     * @return array
+     */
+    public static function allowedModules(): array
+    {
+        try {
+            $service = app(\App\Services\LicenseService::class);
+            $tokenData = $service->getLicenseToken();
+
+            if ($tokenData && isset($tokenData['modules']) && is_array($tokenData['modules'])) {
+                return $tokenData['modules'];
+            }
+
+            // Fallback defaults based on plan
+            $plan = strtolower($tokenData['plan'] ?? 'free');
+            if ($plan === 'enterprise' || $plan === 'pro_plus') {
+                return ['wordpress', 'security', 'databases', 'cron', 'supervisor', 'file_manager', 'terminal', 'backups', 'git_deploy', 'ssl', 'emails', 'monitoring'];
+            }
+            if ($plan === 'pro') {
+                return ['wordpress', 'security', 'databases', 'cron', 'supervisor', 'file_manager', 'backups', 'git_deploy', 'ssl', 'emails', 'monitoring'];
+            }
+
+            // Free tier defaults
+            return ['databases', 'cron', 'file_manager', 'ssl', 'monitoring'];
+        } catch (\Exception $e) {
+            return ['wordpress', 'security', 'databases', 'cron', 'supervisor', 'file_manager', 'terminal', 'backups', 'git_deploy', 'ssl', 'emails', 'monitoring'];
+        }
+    }
+
+    /**
+     * Check if a specific module/tool is enabled for this panel installation.
+     */
+    public static function hasModule(string $module): bool
+    {
+        $allowed = self::allowedModules();
+        return in_array($module, $allowed, true);
+    }
+
+    /**
      * Check if a dashboard warning should be shown (any degradation state).
      */
     public static function shouldShowWarning(): bool

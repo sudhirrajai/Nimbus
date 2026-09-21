@@ -25,11 +25,36 @@ class DashboardController extends Controller
 
     private function getServerStats()
     {
-        $cpuData = $this->getCpuUsage();
-        $memoryData = $this->getMemoryUsage();
-        $diskData = $this->getDiskUsage();
-        $loadData = $this->getLoadAverage();
-        $uptimeData = $this->getUptime();
+        $cpuData = \App\Services\ServerMetricsService::getCpuUsage();
+        $memoryData = \App\Services\ServerMetricsService::getMemoryUsage();
+        
+        $disks = \App\Services\ServerMetricsService::getDiskUsage();
+        if (!empty($disks)) {
+            $rootDisk = null;
+            foreach ($disks as $d) {
+                if (($d['mount'] ?? '') === '/') {
+                    $rootDisk = $d;
+                    break;
+                }
+            }
+            if (!$rootDisk) {
+                $rootDisk = $disks[0];
+            }
+            $diskData = [
+                'total' => $rootDisk['total'] ?? '0 B',
+                'used' => $rootDisk['used'] ?? '0 B',
+                'free' => $rootDisk['free'] ?? '0 B',
+                'usage_percent' => $rootDisk['percentage'] ?? 0,
+                'total_bytes' => $rootDisk['total_bytes'] ?? 0,
+                'used_bytes' => $rootDisk['used_bytes'] ?? 0,
+                'disks' => $disks,
+            ];
+        } else {
+            $diskData = $this->getDiskUsage();
+        }
+
+        $loadData = \App\Services\ServerMetricsService::getLoadAverage();
+        $uptimeData = \App\Services\ServerMetricsService::getUptime();
         $processCount = $this->getProcessCount();
 
         $postfixInstalled = file_exists('/etc/postfix/main.cf');

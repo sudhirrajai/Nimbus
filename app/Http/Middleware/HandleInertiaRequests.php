@@ -52,25 +52,23 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // Resolve Linux system timezone and time
-        $serverTimezone = date_default_timezone_get() ?: config('app.timezone', 'UTC');
-        if (PHP_OS_FAMILY === 'Linux') {
-            try {
-                if (file_exists('/etc/timezone')) {
-                    $sysTz = trim(file_get_contents('/etc/timezone'));
-                    if (!empty($sysTz)) {
-                        $serverTimezone = $sysTz;
-                    }
-                }
-            } catch (\Exception $e) {
-                // fallback to default
+        // Resolve panel timezone from database settings, fallback to Asia/Kolkata
+        $panelTimezone = 'Asia/Kolkata';
+        try {
+            $dbTz = \App\Models\Setting::where('key', 'timezone')->value('value');
+            if (!empty($dbTz)) {
+                $panelTimezone = $dbTz;
             }
+        } catch (\Exception $e) {
+            // fallback to default
         }
 
         $now = now();
+        $localizedNow = $now->copy()->setTimezone($panelTimezone);
 
         return [
             ...parent::share($request),
+            'timezone' => $panelTimezone,
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,
@@ -84,16 +82,17 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'server_info' => [
-                'time' => $now->toIso8601String(),
+                'time' => $localizedNow->toIso8601String(),
                 'timestamp' => $now->getTimestamp(),
-                'timezone' => $serverTimezone,
-                'timezone_name' => $now->tzName,
-                'timezone_offset' => $now->offset,
-                'formatted' => $now->format('Y-m-d H:i:s T'),
+                'timezone' => $panelTimezone,
+                'timezone_name' => $panelTimezone,
+                'timezone_offset' => $localizedNow->offset,
+                'formatted' => $localizedNow->format('Y-m-d H:i:s T'),
             ],
             'license_warning' => \App\Support\LicenseGuard::shouldShowWarning()
                 ? \App\Support\LicenseGuard::warningMessage()
                 : null,
+            'license_modules' => \App\Support\LicenseGuard::allowedModules(),
         ];
     }
 }

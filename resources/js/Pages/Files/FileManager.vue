@@ -6,25 +6,82 @@
       <!-- Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="glass-card d-flex justify-content-between align-items-center p-3">
-            <div class="d-flex align-items-center">
-              <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
-                <i class="material-symbols-rounded opacity-10">folder_open</i>
+          <div class="glass-card p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+              <!-- Left: Title & Path Info -->
+              <div class="d-flex align-items-center">
+                <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
+                  <i class="material-symbols-rounded opacity-10">folder_open</i>
+                </div>
+                <div>
+                  <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                    <h4 class="font-weight-bolder mb-0">File Manager</h4>
+                    <!-- Scope Badge -->
+                    <span v-if="scope === 'root'" class="badge bg-gradient-danger text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">admin_panel_settings</i> Server Root (/)
+                    </span>
+                    <span v-else-if="scope === 'projects'" class="badge bg-gradient-info text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">folder_special</i> Web Projects (/var/www)
+                    </span>
+                    <span v-else class="badge bg-gradient-primary text-xxs d-inline-flex align-items-center">
+                      <i class="material-symbols-rounded text-xxs me-1">language</i> {{ domain }}
+                    </span>
+                  </div>
+                  <p class="mb-0 text-xs text-secondary font-monospace">
+                    <span class="text-muted">{{ scope === 'root' ? '' : (scope === 'projects' ? '/var/www' : `/var/www/${domain}`) }}</span>
+                    <span class="text-dark font-weight-bold">{{ currentPath ? (scope === 'root' ? '/' + currentPath : '/' + currentPath) : (scope === 'root' ? '/' : '') }}</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 class="font-weight-bolder mb-0">File Manager</h4>
-                <p class="mb-0 text-sm text-secondary">
-                  <span class="text-primary font-weight-bold">{{ domain }}</span> 
-                  <span class="mx-2 text-lighter">/</span> 
-                  <span class="text-muted">/var/www/{{ domain }}</span>
-                  <span v-if="currentPath" class="text-dark font-weight-bold">/{{ currentPath }}</span>
-                </p>
+
+              <!-- Right: Scope Switchers & Quick Jump -->
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Scope Switch Buttons (for users with projects or root access) -->
+                <div v-if="allowedScopes.includes('projects') || allowedScopes.includes('root')" class="btn-group btn-group-sm shadow-sm border-radius-lg overflow-hidden">
+                  <button 
+                    type="button" 
+                    class="btn btn-sm mb-0" 
+                    :class="scope === 'projects' ? 'bg-gradient-info text-white' : 'bg-white text-dark'"
+                    @click="switchScope('projects')"
+                    title="Browse all website projects in /var/www"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">folder_special</i>
+                    <span>Web Projects</span>
+                  </button>
+                  <button 
+                    v-if="allowedScopes.includes('root')" 
+                    type="button" 
+                    class="btn btn-sm mb-0" 
+                    :class="scope === 'root' ? 'bg-gradient-danger text-white' : 'bg-white text-dark'"
+                    @click="switchScope('root')"
+                    title="Full Server Root access (/)"
+                  >
+                    <i class="material-symbols-rounded text-xs me-1">admin_panel_settings</i>
+                    <span>Server Root</span>
+                  </button>
+                </div>
+
+                <!-- Quick Domain Selector -->
+                <div v-if="availableDomains && availableDomains.length > 0" class="d-flex align-items-center" style="min-width: 170px;">
+                  <select 
+                    class="form-select form-select-sm border-radius-lg shadow-sm" 
+                    :value="scope === 'domain' ? domain : ''"
+                    @change="onDomainSelect($event.target.value)"
+                  >
+                    <option value="" disabled selected>Jump to Website...</option>
+                    <option v-for="d in availableDomains" :key="d" :value="d">
+                      🌐 {{ d }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Back button -->
+                <button class="btn btn-sm btn-link text-secondary mb-0" @click="goBack">
+                  <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
+                  {{ scope === 'domain' ? 'Domains' : 'Dashboard' }}
+                </button>
               </div>
             </div>
-            <button class="btn btn-link text-secondary mb-0" @click="goBack">
-              <i class="material-symbols-rounded text-sm me-1">arrow_back</i>
-              Back to Domains
-            </button>
           </div>
         </div>
       </div>
@@ -51,10 +108,10 @@
             <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-3">Quick Navigation</h6>
             <div class="nav-pills-container">
               <button class="nav-pill-btn" :class="{ active: !currentPath }" @click="navigateTo('')">
-                <i class="material-symbols-rounded">home</i>
-                <span>Root Directory</span>
+                <i class="material-symbols-rounded">{{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}</i>
+                <span>{{ displayScope || (scope === 'root' ? 'Server Root (/)' : (scope === 'projects' ? 'Web Projects (/var/www)' : 'Root Directory')) }}</span>
               </button>
-              <button v-for="(crumb, index) in breadcrumbs.slice(0, -1)" :key="index" class="nav-pill-btn" @click="navigateTo(crumb.path)">
+              <button v-for="(crumb, index) in breadcrumbs.slice(1, -1)" :key="index" class="nav-pill-btn" @click="navigateTo(crumb.path)">
                 <i class="material-symbols-rounded">subdirectory_arrow_right</i>
                 <span>{{ crumb.name }}</span>
               </button>
@@ -157,7 +214,7 @@
                     <i class="material-symbols-rounded text-lg text-dark">keyboard</i>
                   </button>
 
-                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles" :disabled="loading">
+                  <button class="btn btn-icon-only btn-rounded bg-white mb-0 shadow-sm border" @click="loadFiles(true)" :disabled="loading" title="Refresh files (F5)">
                     <i class="material-symbols-rounded text-lg text-dark" :class="{ 'spin-animation': loading }">refresh</i>
                   </button>
                 </div>
@@ -186,15 +243,20 @@
           <!-- Breadcrumbs bar -->
           <div class="glass-card mb-3 p-2 px-3 d-flex align-items-center shadow-sm">
             <nav aria-label="breadcrumb" class="flex-grow-1">
-              <ol class="breadcrumb bg-transparent mb-0 p-0">
-                <li class="breadcrumb-item text-xs">
-                  <a href="#" @click.prevent="navigateTo('')" class="text-secondary">
-                    <i class="material-symbols-rounded text-xs">home</i>
-                  </a>
-                </li>
+              <ol class="breadcrumb bg-transparent mb-0 p-0 align-items-center">
                 <li v-for="(crumb, index) in breadcrumbs" :key="index" class="breadcrumb-item text-xs" :class="{ active: index === breadcrumbs.length - 1 }">
-                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)" class="text-secondary">{{ crumb.name }}</a>
-                  <span v-else class="text-dark font-weight-bold">{{ crumb.name }}</span>
+                  <a v-if="index < breadcrumbs.length - 1" href="#" @click.prevent="navigateTo(crumb.path)" class="text-secondary text-decoration-none d-inline-flex align-items-center">
+                    <i v-if="index === 0" class="material-symbols-rounded text-xs me-1">
+                      {{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}
+                    </i>
+                    <span>{{ crumb.name }}</span>
+                  </a>
+                  <span v-else class="text-dark font-weight-bold d-inline-flex align-items-center">
+                    <i v-if="index === 0" class="material-symbols-rounded text-xs me-1">
+                      {{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}
+                    </i>
+                    <span>{{ crumb.name }}</span>
+                  </span>
                 </li>
               </ol>
             </nav>
@@ -292,17 +354,92 @@
               <p class="text-xs text-secondary mt-3 font-weight-bold">Fetching files...</p>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="filteredItems.length > itemsPerPage" class="d-flex justify-content-between align-items-center p-3 border-top bg-gray-50 border-radius-bottom-lg">
-              <span class="text-xxs text-secondary font-weight-bold">Page {{ currentPage }} of {{ totalPages }}</span>
-              <ul class="pagination pagination-primary pagination-xs mb-0">
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button class="page-link shadow-none" @click="currentPage--"><i class="material-symbols-rounded">chevron_left</i></button>
-                </li>
-                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                  <button class="page-link shadow-none" @click="currentPage++"><i class="material-symbols-rounded">chevron_right</i></button>
-                </li>
-              </ul>
+            <!-- Pagination Footer -->
+            <div v-if="filteredItems.length > 0" class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-gray-50 border-radius-bottom-lg gap-2">
+              <!-- Left: Showing range and Per Page Selector -->
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="text-xs text-secondary mb-0">
+                  Showing <strong class="text-dark">{{ showingStart }}</strong> to <strong class="text-dark">{{ showingEnd }}</strong> of <strong class="text-dark">{{ filteredItems.length }}</strong> items
+                </span>
+                
+                <div class="d-flex align-items-center gap-1">
+                  <label class="text-xxs text-secondary mb-0 text-uppercase font-weight-bold">Rows:</label>
+                  <select 
+                    v-model.number="itemsPerPage" 
+                    @change="onItemsPerPageChange" 
+                    class="form-select form-select-sm border shadow-none bg-white py-1 px-2 text-xs border-radius-md"
+                    style="width: auto; min-width: 65px; height: 30px;"
+                  >
+                    <option :value="15">15</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                    <option :value="99999">All</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Right: Pagination Buttons -->
+              <div v-if="totalPages > 1" class="d-flex align-items-center gap-2">
+                <ul class="pagination pagination-sm pagination-primary mb-0 gap-1 align-items-center">
+                  <!-- First Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(1)" 
+                            title="First Page" 
+                            :disabled="currentPage === 1">
+                      <i class="material-symbols-rounded text-sm">first_page</i>
+                    </button>
+                  </li>
+                  <!-- Previous Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(currentPage - 1)" 
+                            title="Previous Page" 
+                            :disabled="currentPage === 1">
+                      <i class="material-symbols-rounded text-sm">chevron_left</i>
+                    </button>
+                  </li>
+
+                  <!-- Numbered Pages with Ellipsis -->
+                  <li v-for="(p, index) in displayedPages" :key="index" class="page-item" :class="{ active: p === currentPage, disabled: p === '...' }">
+                    <span v-if="p === '...'" class="page-link border-0 text-muted px-2 py-1 text-xs">...</span>
+                    <button v-else 
+                            class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none text-xs font-weight-bold" 
+                            :class="p === currentPage ? 'bg-gradient-primary text-white border-0 shadow-sm' : 'bg-white text-dark'"
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(p)">
+                      {{ p }}
+                    </button>
+                  </li>
+
+                  <!-- Next Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(currentPage + 1)" 
+                            title="Next Page" 
+                            :disabled="currentPage === totalPages">
+                      <i class="material-symbols-rounded text-sm">chevron_right</i>
+                    </button>
+                  </li>
+                  <!-- Last Page -->
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link border-radius-md border p-0 d-flex align-items-center justify-content-center shadow-none" 
+                            style="width: 32px; height: 32px;" 
+                            @click="goToPage(totalPages)" 
+                            title="Last Page" 
+                            :disabled="currentPage === totalPages">
+                      <i class="material-symbols-rounded text-sm">last_page</i>
+                    </button>
+                  </li>
+                </ul>
+                <span class="text-xxs text-secondary ms-2 font-weight-bold d-none d-sm-inline">
+                  Page {{ currentPage }} of {{ totalPages }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -767,13 +904,16 @@
               <i class="material-symbols-rounded text-white me-2">edit_note</i>
               <span class="text-white font-weight-bold">{{ editingFile }}</span>
               <span class="badge badge-sm bg-primary ms-3">{{ detectedMode }}</span>
+              <span v-if="fileIsReadOnly" class="badge badge-sm bg-warning text-dark ms-2 font-weight-bold">
+                <i class="material-symbols-rounded text-xs align-middle me-1">lock</i>Read-Only Preview
+              </span>
             </div>
             <div class="d-flex gap-2">
               <button v-if="detectedMode === 'json'" class="btn btn-sm btn-outline-info mb-0" @click="formatContent">
                 <i class="material-symbols-rounded text-sm me-1">format_align_left</i>
                 Format
               </button>
-              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving">
+              <button class="btn btn-sm btn-success mb-0" @click="saveFile" :disabled="saving || fileIsReadOnly" :title="fileIsReadOnly ? 'Saving disabled for large preview files' : 'Save Changes'">
                 <i class="material-symbols-rounded text-sm me-1">{{ saving ? 'sync' : 'save' }}</i>
                 {{ saving ? 'Saving...' : 'Save Changes' }}
               </button>
@@ -782,6 +922,14 @@
                 Close
               </button>
             </div>
+          </div>
+          <!-- Large File / Truncated Warning Banner -->
+          <div v-if="fileIsTruncated" class="bg-warning-subtle border-bottom border-warning px-4 py-2 d-flex align-items-center justify-content-between text-xs font-weight-bold text-dark">
+            <div class="d-flex align-items-center">
+              <i class="material-symbols-rounded text-sm text-warning me-2">info</i>
+              <span>{{ fileTruncatedMessage }}</span>
+            </div>
+            <span class="badge badge-xs bg-warning text-dark text-uppercase">Preview Mode</span>
           </div>
           <!-- Floating Toast Alert inside Editor -->
           <transition name="fade">
@@ -963,7 +1111,27 @@ const userId = computed(() => page.props.auth?.user?.id || 'guest')
 
 const props = defineProps({
   domain: String,
-  initialPath: String
+  initialPath: String,
+  scope: {
+    type: String,
+    default: 'domain'
+  },
+  displayScope: {
+    type: String,
+    default: ''
+  },
+  userScope: {
+    type: String,
+    default: 'domain'
+  },
+  allowedScopes: {
+    type: Array,
+    default: () => ['domain']
+  },
+  availableDomains: {
+    type: Array,
+    default: () => []
+  }
 })
 
 const webTerminalRef = ref(null)
@@ -972,7 +1140,8 @@ const lastSelected = ref(null)
 const items = ref([])
 const searchQuery = ref('')
 const currentPage = ref(1)
-const itemsPerPage = ref(15)
+const savedItemsPerPage = typeof window !== 'undefined' ? Number(localStorage.getItem('nimbus_fm_items_per_page')) : null
+const itemsPerPage = ref(savedItemsPerPage && savedItemsPerPage > 0 ? savedItemsPerPage : 25)
 const currentPath = ref(props.initialPath || '')
 const breadcrumbs = ref([])
 const loading = ref(false)
@@ -1039,6 +1208,9 @@ const editingFile = ref('')
 const fileContent = ref('')
 const originalFileContent = ref('')
 const detectedMode = ref('text')
+const fileIsTruncated = ref(false)
+const fileTruncatedMessage = ref('')
+const fileIsReadOnly = ref(false)
 let aceEditor = null
 const fileInput = ref(null)
 const newPermissions = ref('')
@@ -1095,9 +1267,57 @@ const filteredItems = computed(() => {
   )
 })
 
-const totalPages = computed(() => Math.ceil(filteredItems.value.length / itemsPerPage.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / itemsPerPage.value)))
 const paginationStart = computed(() => (currentPage.value - 1) * itemsPerPage.value)
 const paginationEnd = computed(() => currentPage.value * itemsPerPage.value)
+
+const showingStart = computed(() => {
+  if (filteredItems.value.length === 0) return 0
+  return paginationStart.value + 1
+})
+
+const showingEnd = computed(() => {
+  return Math.min(paginationEnd.value, filteredItems.value.length)
+})
+
+const displayedPages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+
+  const pages = []
+  const left = Math.max(1, current - 2)
+  const right = Math.min(total, current + 2)
+
+  for (let i = left; i <= right; i++) {
+    pages.push(i)
+  }
+
+  if (left > 1) {
+    if (left > 2) pages.unshift('...')
+    pages.unshift(1)
+  }
+
+  if (right < total) {
+    if (right < total - 1) pages.push('...')
+    pages.push(total)
+  }
+
+  return pages
+})
+
+const goToPage = (p) => {
+  if (p === '...' || p < 1 || p > totalPages.value || p === currentPage.value) return
+  currentPage.value = p
+}
+
+const onItemsPerPageChange = () => {
+  currentPage.value = 1
+  localStorage.setItem('nimbus_fm_items_per_page', itemsPerPage.value)
+}
 
 const paginatedItems = computed(() => {
   return filteredItems.value.slice(paginationStart.value, paginationEnd.value)
@@ -1272,7 +1492,7 @@ const handleKeyboardShortcuts = (e) => {
   // F5 — Refresh
   if (e.key === 'F5') {
     e.preventDefault()
-    loadFiles()
+    loadFiles(true)
   }
 
   // Backspace — Go up one level
@@ -1375,24 +1595,26 @@ const changePermissions = async () => {
   }
 }
 
-const loadFiles = async () => {
+const loadFiles = async (forceRefresh = false) => {
   try {
     loading.value = true
     isSearching.value = false
     searchResults.value = []
     const response = await axios.post(`/file-manager/${props.domain}/list`, {
       path: currentPath.value || '',
-      showHidden: showHidden.value
+      showHidden: showHidden.value,
+      refresh: forceRefresh
     })
     items.value = response.data.items
     breadcrumbs.value = response.data.breadcrumbs
     selectedItems.value = []
     allSelected.value = false
-    await loadGitStatus()
   } catch (error) {
     showAlert('danger', 'Failed to load files')
   } finally {
     loading.value = false
+    // Load git status in background without blocking file list rendering!
+    loadGitStatus()
   }
 }
 
@@ -1497,6 +1719,7 @@ const runGitCreateBranch = async () => {
 
 const navigateTo = (path) => {
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = path 
     ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
@@ -1507,6 +1730,7 @@ const navigateTo = (path) => {
 const openDirectory = (name) => {
   const path = currentPath.value ? `${currentPath.value}/${name}` : name
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = `${window.location.pathname}?path=${encodeURIComponent(path)}`
   window.history.pushState({ path }, '', newUrl)
@@ -1518,6 +1742,7 @@ const goUpOneLevel = () => {
   pathParts.pop()
   const path = pathParts.join('/')
   currentPath.value = path
+  currentPage.value = 1
   loadFiles()
   const newUrl = path 
     ? `${window.location.pathname}?path=${encodeURIComponent(path)}` 
@@ -1525,7 +1750,27 @@ const goUpOneLevel = () => {
   window.history.pushState({ path }, '', newUrl)
 }
 
-const goBack = () => router.visit('/domains')
+const switchScope = (targetScope) => {
+  if (targetScope === 'projects') {
+    router.visit('/file-manager/projects')
+  } else if (targetScope === 'root') {
+    router.visit('/file-manager/root')
+  }
+}
+
+const onDomainSelect = (selectedDomain) => {
+  if (selectedDomain) {
+    router.visit(`/file-manager/${selectedDomain}`)
+  }
+}
+
+const goBack = () => {
+  if (props.scope === 'domain') {
+    router.visit('/domains')
+  } else {
+    router.visit('/dashboard')
+  }
+}
 
 const createFile = async () => {
   try {
@@ -1617,6 +1862,9 @@ const editFile = async (name) => {
     fileContent.value = response.data.content
     originalFileContent.value = response.data.content
     editingFile.value = name
+    fileIsTruncated.value = Boolean(response.data.is_truncated)
+    fileTruncatedMessage.value = response.data.truncated_message || ''
+    fileIsReadOnly.value = Boolean(response.data.read_only)
     showEditorModal.value = true
     
     // Auto-detect language
@@ -1648,11 +1896,12 @@ const initAceEditor = () => {
   // Options
   aceEditor.setOptions({
     fontSize: "14px",
-    enableBasicAutocompletion: true,
-    enableLiveAutocompletion: true,
+    enableBasicAutocompletion: !fileIsReadOnly.value,
+    enableLiveAutocompletion: !fileIsReadOnly.value,
     showPrintMargin: false,
     scrollPastEnd: 0.5,
-    wrap: true
+    wrap: true,
+    readOnly: fileIsReadOnly.value
   })
 
   // Close editor on pressing Esc inside the Ace Editor
@@ -1669,7 +1918,9 @@ const initAceEditor = () => {
     name: 'saveFileOnCtrlS',
     bindKey: {win: 'Ctrl-S', mac: 'Command-S'},
     exec: function(editor) {
-      saveFile()
+      if (!fileIsReadOnly.value) {
+        saveFile()
+      }
     }
   })
 
@@ -1679,6 +1930,10 @@ const initAceEditor = () => {
 }
 
 const saveFile = async () => {
+  if (fileIsReadOnly.value) {
+    showAlert('warning', 'Saving is disabled because this file is in read-only preview mode.')
+    return
+  }
   try {
     saving.value = true
     const filePath = currentPath.value ? `${currentPath.value}/${editingFile.value}` : editingFile.value
@@ -1702,6 +1957,9 @@ const closeEditor = () => {
   showEditorModal.value = false
   editingFile.value = ''
   fileContent.value = ''
+  fileIsTruncated.value = false
+  fileTruncatedMessage.value = ''
+  fileIsReadOnly.value = false
   document.body.style.overflow = '' // Restore scroll
 }
 

@@ -44,10 +44,12 @@ onMounted(() => {
   ];
 
   scripts.forEach(src => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    document.body.appendChild(script);
+    if (!document.querySelector(`script[src="${src}"]`)) {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      document.body.appendChild(script);
+    }
   });
 
   // Initialize scrollbar

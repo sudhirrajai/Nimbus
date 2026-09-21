@@ -115,10 +115,27 @@
                           <div v-else class="status-pill status-secondary" style="font-size: 9px; padding: 2px 8px;">
                             Disabled
                           </div>
+
+                          <div v-if="domain.isProxy" class="status-pill status-proxy mt-1" style="font-size: 9px; padding: 2px 8px;">
+                            <i class="material-symbols-rounded text-xs me-1">alt_route</i>
+                            Proxy: {{ domain.proxyTarget }}
+                          </div>
+                          <div v-else-if="domain.hasConfig" class="status-pill status-secondary mt-1" style="font-size: 9px; padding: 2px 8px; opacity: 0.85;">
+                            PHP / Static
+                          </div>
                         </div>
                       </td>
                       <td class="text-center">
                         <div class="d-flex justify-content-center gap-1">
+                          <button 
+                            class="action-btn"
+                            :class="domain.isProxy ? 'btn-proxy-active' : 'btn-proxy'"
+                            @click="openProxyModal(domain)"
+                            :title="domain.isProxy ? 'Reverse Proxy Active — Click to Configure' : 'Configure Reverse Proxy (Node.js, Python, Go, Docker)'"
+                            :disabled="!domain.hasConfig"
+                          >
+                            <i class="material-symbols-rounded">{{ domain.isProxy ? 'alt_route' : 'hub' }}</i>
+                          </button>
                           <button 
                             class="action-btn btn-edit" 
                             @click="openEditor(domain)"
@@ -345,6 +362,177 @@
                 <i class="material-symbols-rounded text-sm me-1">restart_alt</i>
                 Reload Nginx
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reverse Proxy Modal -->
+      <div class="modal-backdrop fade show" v-if="showProxyModal" @click="showProxyModal = false"></div>
+      <div class="modal fade show d-block" v-if="showProxyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content border-0 shadow-2xl">
+            <div class="modal-header border-0 pb-0 d-flex justify-content-between align-items-center">
+              <div>
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="modal-title font-weight-bolder text-dark mb-0">
+                    Reverse Proxy: {{ proxyDomain?.domain }}
+                  </h5>
+                  <span v-if="proxyForm.is_proxy" class="badge bg-gradient-success text-xxs font-weight-bold">
+                    Active ({{ proxyForm.target_url }})
+                  </span>
+                  <span v-else class="badge bg-light text-secondary text-xxs font-weight-bold">
+                    Standard PHP / Static
+                  </span>
+                </div>
+                <p class="text-xs text-secondary mb-0 mt-1">
+                  Forward HTTP/WebSocket traffic for this domain to a local application port or service.
+                </p>
+              </div>
+              <button type="button" class="btn-close" @click="showProxyModal = false"></button>
+            </div>
+
+            <div class="modal-body py-3">
+              <!-- Isolation / Same Server Notice -->
+              <div class="alert alert-light border py-2 px-3 mb-3 d-flex align-items-start gap-2 text-dark">
+                <i class="material-symbols-rounded text-info mt-1">info</i>
+                <div class="text-xs">
+                  <strong>Same-Server Routing & Full Isolation:</strong> Runs directly on this server. Nginx forwards requests for <code>{{ proxyDomain?.domain }}</code> to <code>127.0.0.1:PORT</code>. <u>All other websites on this server remain untouched and isolated</u> in their own server blocks.
+                </div>
+              </div>
+
+              <!-- Presets Grid -->
+              <label class="form-label text-xs font-weight-bold text-uppercase text-secondary mb-1">Select Preset</label>
+              <div class="row g-2 mb-3">
+                <div class="col-6 col-md-3" v-for="p in proxyPresets" :key="p.id">
+                  <div 
+                    class="preset-card p-2 rounded-3 border text-center cursor-pointer h-100 d-flex flex-column align-items-center justify-content-center transition"
+                    :class="{ 'preset-card-selected': proxyForm.preset === p.id }"
+                    @click="applyPreset(p)"
+                  >
+                    <span class="preset-icon mb-1" style="font-size: 24px;">{{ p.icon }}</span>
+                    <span class="text-xs font-weight-bold text-dark">{{ p.name }}</span>
+                    <span class="text-xxs text-secondary font-monospace">:{{ p.defaultPort }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Form Inputs -->
+              <div class="row g-3">
+                <div class="col-12 col-md-8">
+                  <label class="form-label text-xs font-weight-bold text-dark mb-1">
+                    Target Address / Port <span class="text-danger">*</span>
+                  </label>
+                  <div class="input-group input-group-outline">
+                    <input 
+                      v-model="proxyForm.target_url" 
+                      type="text" 
+                      class="form-control" 
+                      placeholder="e.g. 3000, or http://127.0.0.1:3000"
+                      :disabled="proxyLoading"
+                    />
+                  </div>
+                  <span class="text-xxs text-secondary">Accepts port number (<code>3000</code>), full URL (<code>http://127.0.0.1:3000</code>), or unix socket.</span>
+                </div>
+
+                <div class="col-12 col-md-4">
+                  <label class="form-label text-xs font-weight-bold text-dark mb-1">Max Upload Body Size</label>
+                  <div class="input-group input-group-outline">
+                    <input 
+                      v-model="proxyForm.client_max_body_size" 
+                      type="text" 
+                      class="form-control" 
+                      placeholder="100M"
+                      :disabled="proxyLoading"
+                    />
+                  </div>
+                  <span class="text-xxs text-secondary">e.g. 50M, 100M, 500M</span>
+                </div>
+
+                <!-- Toggles -->
+                <div class="col-12">
+                  <div class="p-3 bg-light rounded-3 d-flex flex-wrap gap-4 align-items-center justify-content-between">
+                    <div class="form-check form-switch mb-0">
+                      <input 
+                        class="form-check-input" 
+                        type="checkbox" 
+                        id="proxyWsCheck" 
+                        v-model="proxyForm.enable_websocket"
+                      >
+                      <label class="form-check-label text-xs font-weight-bold text-dark" for="proxyWsCheck">
+                        WebSocket Support (Upgrade / Connection)
+                      </label>
+                      <div class="text-xxs text-secondary">Enables real-time apps (Socket.io, Next.js HMR, GraphQL)</div>
+                    </div>
+
+                    <div class="form-check form-switch mb-0">
+                      <input 
+                        class="form-check-input" 
+                        type="checkbox" 
+                        id="proxyBufferingCheck" 
+                        v-model="proxyForm.proxy_buffering"
+                      >
+                      <label class="form-check-label text-xs font-weight-bold text-dark" for="proxyBufferingCheck">
+                        Proxy Buffering
+                      </label>
+                      <div class="text-xxs text-secondary">Turn off for streaming responses (LLM AI streams, SSE)</div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                      <label class="text-xs font-weight-bold text-dark mb-0">Timeout:</label>
+                      <input 
+                        v-model.number="proxyForm.proxy_read_timeout" 
+                        type="number" 
+                        class="form-control form-control-sm text-center" 
+                        style="width: 70px;"
+                        min="10"
+                        max="3600"
+                      />
+                      <span class="text-xxs text-secondary">sec</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Live Preview -->
+                <div class="col-12">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label text-xs font-weight-bold text-uppercase text-secondary mb-0">
+                      Generated Nginx Directive Preview
+                    </label>
+                    <span class="text-xxs text-secondary">Applied inside server block for {{ proxyDomain?.domain }}</span>
+                  </div>
+                  <pre class="bg-dark text-light p-2 rounded-3 mb-0 font-monospace text-xxs" style="max-height: 140px; overflow-y: auto;">{{ generatedProxyPreview }}</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer border-0 pt-0 d-flex justify-content-between">
+              <div>
+                <button 
+                  v-if="proxyForm.is_proxy" 
+                  class="btn btn-outline-danger btn-sm mb-0" 
+                  @click="removeProxy" 
+                  :disabled="proxyLoading"
+                >
+                  <span v-if="proxyLoading" class="spinner-border spinner-border-sm me-1"></span>
+                  <i v-else class="material-symbols-rounded text-sm me-1">undo</i>
+                  Revert to Standard PHP
+                </button>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm mb-0" @click="showProxyModal = false">
+                  Cancel
+                </button>
+                <button 
+                  class="btn bg-gradient-info btn-sm mb-0 text-white" 
+                  @click="saveProxy" 
+                  :disabled="proxyLoading || !proxyForm.target_url"
+                >
+                  <span v-if="proxyLoading" class="spinner-border spinner-border-sm me-1"></span>
+                  <i v-else class="material-symbols-rounded text-sm me-1">check</i>
+                  {{ proxyForm.is_proxy ? 'Update Reverse Proxy' : 'Apply Reverse Proxy' }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -658,9 +846,181 @@ const reloadAfterTest = async () => {
   showTestModal.value = false
   await reloadNginx()
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Reverse Proxy Management
+// ═══════════════════════════════════════════════════════════════
+const showProxyModal = ref(false)
+const proxyDomain = ref(null)
+const proxyLoading = ref(false)
+const proxyForm = ref({
+  domain: '',
+  target_url: 'http://127.0.0.1:3000',
+  preset: 'nodejs',
+  enable_websocket: true,
+  client_max_body_size: '100M',
+  proxy_buffering: true,
+  proxy_read_timeout: 600,
+  is_proxy: false
+})
+
+const proxyPresets = [
+  { id: 'nodejs', name: 'Node.js / Next', defaultPort: '3000', icon: '🚀' },
+  { id: 'python', name: 'Python / FastAPI', defaultPort: '8000', icon: '🐍' },
+  { id: 'go', name: 'Go / Rust', defaultPort: '8080', icon: '🐹' },
+  { id: 'docker', name: 'Docker / Custom', defaultPort: '5000', icon: '🐳' }
+]
+
+const applyPreset = (preset) => {
+  proxyForm.value.preset = preset.id
+  if (!proxyForm.value.target_url || proxyForm.value.target_url.includes('127.0.0.1') || /^\d+$/.test(proxyForm.value.target_url)) {
+    proxyForm.value.target_url = `http://127.0.0.1:${preset.defaultPort}`
+  }
+}
+
+const generatedProxyPreview = computed(() => {
+  let target = proxyForm.value.target_url || 'http://127.0.0.1:3000'
+  if (/^\d+$/.test(target)) target = `http://127.0.0.1:${target}`
+  else if (/^:\d+$/.test(target)) target = `http://127.0.0.1${target}`
+  else if (!target.startsWith('http://') && !target.startsWith('https://') && !target.startsWith('unix:')) target = `http://${target}`
+
+  const ws = proxyForm.value.enable_websocket
+    ? `    proxy_set_header Upgrade $http_upgrade;\n    proxy_set_header Connection "upgrade";\n`
+    : ''
+  const buffering = proxyForm.value.proxy_buffering ? 'on' : 'off'
+  const timeout = proxyForm.value.proxy_read_timeout || 600
+  const maxBody = proxyForm.value.client_max_body_size || '100M'
+
+  return `client_max_body_size ${maxBody};
+
+location / {
+    proxy_pass ${target};
+    proxy_http_version 1.1;
+${ws}    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering ${buffering};
+    proxy_read_timeout ${timeout}s;
+}`
+})
+
+const openProxyModal = async (domain) => {
+  proxyDomain.value = domain
+  proxyLoading.value = true
+  showProxyModal.value = true
+
+  // Set fallback values
+  proxyForm.value = {
+    domain: domain.domain,
+    target_url: domain.proxyTarget || 'http://127.0.0.1:3000',
+    preset: domain.proxyPreset || 'nodejs',
+    enable_websocket: true,
+    client_max_body_size: '100M',
+    proxy_buffering: true,
+    proxy_read_timeout: 600,
+    is_proxy: domain.isProxy || false
+  }
+
+  try {
+    const res = await axios.post('/nginx/proxy/status', { domain: domain.domain })
+    if (res.data) {
+      proxyForm.value = {
+        domain: domain.domain,
+        target_url: res.data.target_url || 'http://127.0.0.1:3000',
+        preset: res.data.preset || 'nodejs',
+        enable_websocket: res.data.enable_websocket !== false,
+        client_max_body_size: res.data.client_max_body_size || '100M',
+        proxy_buffering: res.data.proxy_buffering !== false,
+        proxy_read_timeout: res.data.proxy_read_timeout || 600,
+        is_proxy: res.data.is_proxy || false
+      }
+    }
+  } catch (err) {
+    // Keep fallback
+  } finally {
+    proxyLoading.value = false
+  }
+}
+
+const saveProxy = async () => {
+  try {
+    proxyLoading.value = true
+    const res = await axios.post('/nginx/proxy/apply', {
+      domain: proxyDomain.value.domain,
+      target_url: proxyForm.value.target_url,
+      preset: proxyForm.value.preset,
+      enable_websocket: proxyForm.value.enable_websocket,
+      client_max_body_size: proxyForm.value.client_max_body_size,
+      proxy_buffering: proxyForm.value.proxy_buffering,
+      proxy_read_timeout: proxyForm.value.proxy_read_timeout
+    })
+    showAlert('success', res.data.message || 'Reverse proxy applied successfully!')
+    showProxyModal.value = false
+    await loadDomains()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || err.response?.data?.details || 'Failed to apply reverse proxy')
+  } finally {
+    proxyLoading.value = false
+  }
+}
+
+const removeProxy = async () => {
+  if (!confirm(`Are you sure you want to disable reverse proxy for ${proxyDomain.value.domain} and restore standard PHP / static handling?`)) {
+    return
+  }
+  try {
+    proxyLoading.value = true
+    const res = await axios.post('/nginx/proxy/remove', {
+      domain: proxyDomain.value.domain
+    })
+    showAlert('success', res.data.message || 'Reverse proxy disabled.')
+    showProxyModal.value = false
+    await loadDomains()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || err.response?.data?.details || 'Failed to remove reverse proxy')
+  } finally {
+    proxyLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
+.preset-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  transition: all 0.2s ease;
+}
+.preset-card:hover {
+  border-color: #1171ef !important;
+  background: #f0f7ff;
+  transform: translateY(-2px);
+}
+.preset-card-selected {
+  border-color: #1171ef !important;
+  background: #e9f2ff !important;
+  box-shadow: 0 0 0 2px rgba(17, 113, 239, 0.2);
+}
+.btn-proxy {
+  color: #5e72e4;
+}
+.btn-proxy:hover {
+  background: #5e72e4;
+  color: #fff;
+}
+.btn-proxy-active {
+  background: #2dce89;
+  color: #fff;
+}
+.btn-proxy-active:hover {
+  background: #28b879;
+  color: #fff;
+}
+.status-proxy {
+  background: #e6f9f0;
+  color: #0c6b36;
+  font-weight: 700;
+}
 .domain-row {
   transition: all 0.2s ease;
 }
