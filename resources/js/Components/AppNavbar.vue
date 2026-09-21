@@ -115,7 +115,7 @@
                   Profile
                 </a>
               </li>
-              <li>
+              <li v-if="isRoot">
                 <a class="dropdown-item border-radius-md" href="/settings" @click="closeDropdown">
                   <i class="material-symbols-rounded me-2 text-sm">settings</i>
                   Settings
@@ -164,6 +164,9 @@ const reportModalOpen = ref(false)
 const userName = computed(() => {
   return page.props.auth?.user?.name || 'Admin'
 })
+
+const userRole = computed(() => page.props.auth?.user?.role || 'user')
+const isRoot = computed(() => Boolean(page.props.auth?.user?.is_root || userRole.value === 'root'))
 
 const isClockOpen = ref(false)
 const clockDropdownRef = ref(null)
