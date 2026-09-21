@@ -22,7 +22,7 @@
           <div class="terminal-title">
             <i class="material-symbols-rounded terminal-title-icon">terminal</i>
             <span class="terminal-title-text">
-              www-data@nimbus: {{ displayTerminalPath }}
+              {{ terminalUser }}@nimbus: {{ displayTerminalPath }}
             </span>
           </div>
         </div>
@@ -44,7 +44,7 @@
         <!-- Output Lines -->
         <div v-for="(line, index) in outputLines" :key="index" class="terminal-line">
           <template v-if="line.type === 'prompt'">
-            <span class="prompt-user">www-data</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ line.cwd ? '~/' + line.cwd : '~' }}</span><span class="prompt-dollar">$</span>
+            <span class="prompt-user">{{ line.user || terminalUser }}</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ line.cwd ? '~/' + line.cwd : '~' }}</span><span class="prompt-dollar">$</span>
             <span class="prompt-command">{{ line.command }}</span>
           </template>
           <template v-else-if="line.type === 'output'">
@@ -62,7 +62,7 @@
 
         <!-- Active Input Line -->
         <div class="terminal-input-line" v-if="!isExecuting">
-          <span class="prompt-user">www-data</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ terminalCwd ? '~/' + terminalCwd : '~' }}</span><span class="prompt-dollar">$</span>
+          <span class="prompt-user">{{ terminalUser }}</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ terminalCwd ? '~/' + terminalCwd : '~' }}</span><span class="prompt-dollar">$</span>
           <input
             ref="terminalInput"
             v-model="currentCommand"
@@ -108,10 +108,30 @@ const displayTerminalPath = computed(() => {
 const emit = defineEmits(['refresh-files'])
 
 // Terminal state
+const getInitialUser = () => {
+  if (props.domain && props.domain !== 'projects' && props.domain !== 'root') {
+    const slug = props.domain
+      .replace(/\.ownsoftwaresolutions\.com|\.sudhirrajai\.com|\.vmcore\.in|\.socialspecta\.com|\.com|\.in/g, (m) => {
+        if (m === '.ownsoftwaresolutions.com') return '_own'
+        if (m === '.sudhirrajai.com') return '_sr'
+        if (m === '.vmcore.in') return '_vm'
+        if (m === '.socialspecta.com') return '_ss'
+        return ''
+      })
+      .replace(/[^a-zA-Z0-9_]/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase()
+      .substring(0, 18)
+    return slug ? 'site_' + slug : 'www-data'
+  }
+  return 'www-data'
+}
+
 const isOpen = ref(false)
 const isMaximized = ref(false)
 const isExecuting = ref(false)
 const currentCommand = ref('')
+const terminalUser = ref(getInitialUser())
 const terminalCwd = ref(props.currentPath || '')
 const outputLines = ref([])
 const commandHistory = ref([])
@@ -267,6 +287,7 @@ const executeCommand = async () => {
     type: 'prompt',
     cwd: terminalCwd.value,
     command: command,
+    user: terminalUser.value,
   })
 
   currentCommand.value = ''
@@ -311,7 +332,7 @@ const executeCommand = async () => {
     })
     outputLines.value.push({
       type: 'info',
-      text: '  ⚠ Commands run as www-data user. Some system commands are restricted.',
+      text: `  ⚠ Commands run as ${terminalUser.value} user. Some system commands are restricted.`,
     })
     scrollToBottom()
     return
@@ -345,6 +366,10 @@ const executeCommand = async () => {
     // Update cwd if changed (from cd command)
     if (data.cwd !== undefined) {
       terminalCwd.value = data.cwd
+    }
+
+    if (data.user) {
+      terminalUser.value = data.user
     }
 
     // If command was file-modifying, emit refresh

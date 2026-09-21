@@ -124,13 +124,16 @@ CONF;
         $safePath = escapeshellarg($basePath);
 
         self::executeSudo("chown -R {$safeUser}:{$safeUser} {$safePath}");
-        self::executeSudo("chmod 750 {$safePath}");
         self::executeSudo("find {$safePath} -type d -exec chmod 750 {} \\;");
-        self::executeSudo("find {$safePath} -type f -exec chmod 640 {} \\;");
+        self::executeSudo("find {$safePath} -type f -not -path '*/node_modules/*' -not -path '*/vendor/*' -exec chmod 640 {} \\;");
 
         // Grant Nginx (www-data) read and traverse access via ACL
         self::executeSudo("setfacl -R -m u:www-data:rx {$safePath}");
         self::executeSudo("setfacl -R -d -m u:www-data:rx {$safePath}");
+
+        // Ensure all .bin executables and symlink targets remain executable
+        self::executeSudo("find {$safePath} -name '.bin' -type d -exec sh -c 'for d; do for f in \"\$d\"/*; do [ -e \"\$f\" ] && chmod +x \"\$(readlink -f \"\$f\")\"; done; done' _ {} + 2>/dev/null");
+        self::executeSudo("find {$safePath} -name 'vendor' -type d -path '*/vendor' -exec sh -c 'for d; do [ -d \"\$d/bin\" ] && chmod -R +x \"\$d/bin\"; done' _ {} + 2>/dev/null");
 
         // Strictly lock down .env if present (strip ACLs and lock to 600)
         $envPath = rtrim($basePath, '/') . '/.env';
