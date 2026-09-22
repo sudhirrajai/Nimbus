@@ -498,5 +498,22 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::put('/{id}/websites', [\App\Http\Controllers\UserController::class, 'updateWebsites'])->name('websites');
             Route::delete('/{id}', [\App\Http\Controllers\UserController::class, 'destroy'])->name('destroy');
         });
+
+        // Redis Manager routes
+        Route::prefix('redis')->name('redis.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\RedisController::class, 'index'])->name('index');
+            Route::get('/status', [\App\Http\Controllers\RedisController::class, 'status'])->name('status');
+            Route::post('/install', [\App\Http\Controllers\RedisController::class, 'install'])->name('install');
+            Route::post('/service/{action}', [\App\Http\Controllers\RedisController::class, 'serviceAction'])->name('service');
+            Route::post('/config', [\App\Http\Controllers\RedisController::class, 'updateConfig'])->name('config.update');
+            Route::post('/security/password', [\App\Http\Controllers\RedisController::class, 'updatePassword'])->name('security.password');
+            Route::get('/keys', [\App\Http\Controllers\RedisController::class, 'getKeys'])->name('keys.list');
+            Route::get('/keys/view', [\App\Http\Controllers\RedisController::class, 'viewKey'])->name('keys.view');
+            Route::delete('/keys', [\App\Http\Controllers\RedisController::class, 'deleteKey'])->name('keys.delete');
+            Route::post('/flush-pattern', [\App\Http\Controllers\RedisController::class, 'flushPattern'])->name('flush.pattern');
+            Route::post('/flush-db', [\App\Http\Controllers\RedisController::class, 'flushDb'])->name('flush.db');
+            Route::get('/slowlog', [\App\Http\Controllers\RedisController::class, 'getSlowLog'])->name('slowlog');
+            Route::get('/clients', [\App\Http\Controllers\RedisController::class, 'getClients'])->name('clients');
+        });
     });
 });
