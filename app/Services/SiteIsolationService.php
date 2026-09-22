@@ -131,9 +131,8 @@ CONF;
         self::executeSudo("setfacl -R -m u:www-data:rx {$safePath}");
         self::executeSudo("setfacl -R -d -m u:www-data:rx {$safePath}");
 
-        // Ensure all .bin executables and symlink targets remain executable
-        self::executeSudo("find {$safePath} -name '.bin' -type d -exec sh -c 'for d; do for f in \"\$d\"/*; do [ -e \"\$f\" ] && chmod +x \"\$(readlink -f \"\$f\")\"; done; done' _ {} + 2>/dev/null");
-        self::executeSudo("find {$safePath} -name 'vendor' -type d -path '*/vendor' -exec sh -c 'for d; do [ -d \"\$d/bin\" ] && chmod -R +x \"\$d/bin\"; done' _ {} + 2>/dev/null");
+        // Ensure all binaries, scripts, and artisan remain executable
+        self::ensureExecutables($basePath);
 
         // Strictly lock down .env if present (strip ACLs and lock to 600)
         $envPath = rtrim($basePath, '/') . '/.env';
@@ -153,6 +152,26 @@ CONF;
         if (is_dir($bootstrapCache)) {
             self::executeSudo("chmod -R 775 " . escapeshellarg($bootstrapCache));
         }
+    }
+
+    /**
+     * Ensure all binaries in bin/ directories, symlink targets, artisan, and scripts have +x permissions.
+     */
+    public static function ensureExecutables(string $basePath): void
+    {
+        $safePath = escapeshellarg($basePath);
+
+        // 1. All directories named 'bin' or '.bin' (inside node_modules, vendor, packages, etc.)
+        self::executeSudo("find {$safePath} -type d \\( -name 'bin' -o -name '.bin' \\) -exec chmod -R +x {} + 2>/dev/null");
+
+        // 2. Resolve symlinks inside .bin and ensure the real target files are executable
+        self::executeSudo("find {$safePath} -name '.bin' -type d -exec sh -c 'for d; do for f in \"\$d\"/*; do [ -e \"\$f\" ] && chmod +x \"\$(readlink -f \"\$f\")\"; done; done' _ {} + 2>/dev/null");
+
+        // 3. Ensure artisan is executable if present
+        self::executeSudo("[ -f {$safePath}/artisan ] && chmod +x {$safePath}/artisan 2>/dev/null");
+
+        // 4. Ensure shell scripts are executable
+        self::executeSudo("find {$safePath} -maxdepth 3 -name '*.sh' -type f -exec chmod +x {} + 2>/dev/null");
     }
 
     /**

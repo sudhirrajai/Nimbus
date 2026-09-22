@@ -187,6 +187,11 @@ class TerminalController extends Controller
             $userCheck = exec("id -u " . escapeshellarg($siteUser) . " 2>/dev/null");
             $runUser = (!empty($userCheck) && is_numeric($userCheck)) ? $siteUser : 'www-data';
 
+            // Ensure all binaries in bin/ directories and scripts are executable before build/package commands
+            if (preg_match('/\b(npm|yarn|pnpm|npx|vite|composer)\b/i', $command)) {
+                \App\Services\SiteIsolationService::ensureExecutables($realWorkDir);
+            }
+
             // Execute the command with a timeout
             $escapedWorkDir = escapeshellarg($realWorkDir);
             $fullCommand = "cd {$escapedWorkDir} && sudo -u " . escapeshellarg($runUser) . " -H bash -c " . escapeshellarg($command) . " 2>&1";
@@ -225,6 +230,11 @@ class TerminalController extends Controller
             fclose($pipes[2]);
 
             $exitCode = proc_close($process);
+
+            // If an install or update command was executed, ensure any newly unpacked binaries get +x
+            if (preg_match('/\b(npm|yarn|pnpm|composer)\s+(install|add|update|require|i)\b/i', $command)) {
+                \App\Services\SiteIsolationService::ensureExecutables($realWorkDir);
+            }
 
             $combinedOutput = $output;
             if (!empty($stderr) && empty($output)) {

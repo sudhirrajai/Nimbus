@@ -1517,6 +1517,7 @@ class FileManagerController extends Controller
         $escapedArguments = implode(' ', array_map('escapeshellarg', $arguments));
 
         // Detect the domain from the repo path to find the .git-token file
+        $domainName = '';
         $domainRoot = $repoPath;
         $domainBase = realpath($this->basePath);
         if ($domainBase && strpos($repoPath, $domainBase) === 0) {
@@ -1572,6 +1573,13 @@ class FileManagerController extends Controller
             $errorMsg = trim(implode("\n", $output)) ?: 'Git command failed.';
             \Log::error($errorMsg);
             throw new \Exception($errorMsg);
+        }
+
+        // Restore ownership to domain user and ensure executables if git modified working tree files
+        if (!empty($domainName)) {
+            $siteUser = \App\Services\SiteIsolationService::siteUser($domainName);
+            exec("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($repoPath) . " 2>&1");
+            \App\Services\SiteIsolationService::ensureExecutables($repoPath);
         }
 
         return $output;
