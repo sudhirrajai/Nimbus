@@ -678,28 +678,20 @@ class GitDeploymentService
         $log = $this->createLog($deployment, 'permissions', 'running');
 
         try {
-            $siteUser = \App\Services\SiteIsolationService::siteUser($deployment->domain);
-            $this->executeCommand("sudo chown -R {$siteUser}:{$siteUser} {$domainPath}");
-            $this->executeCommand("sudo find {$domainPath} -type d -exec chmod 750 {} \\;");
-            $this->executeCommand("sudo find {$domainPath} -type f -not -path '*/node_modules/*' -not -path '*/vendor/*' -exec chmod 640 {} \\;");
+            \App\Services\SiteIsolationService::securePath($domainPath, $deployment->domain);
 
-            // Make common directories writable if they exist
-            $writableDirs = ['storage', 'bootstrap/cache', 'var', 'tmp', 'cache', 'writable'];
-            foreach ($writableDirs as $dir) {
+            // Make additional common custom directories writable if they exist
+            $extraWritableDirs = ['var', 'tmp', 'cache', 'writable'];
+            foreach ($extraWritableDirs as $dir) {
                 if (is_dir("{$domainPath}/{$dir}")) {
                     $this->executeCommand("sudo chmod -R 775 {$domainPath}/{$dir}");
                 }
             }
 
-            // Fix for Node.js: ensure binaries in node_modules/.bin are executable
-            if (is_dir("{$domainPath}/node_modules/.bin")) {
-                $this->executeCommand("sudo chmod -R +x {$domainPath}/node_modules/.bin");
-            }
-
             $duration = (int)(microtime(true) - $startTime);
             $log->update([
                 'status' => 'success',
-                'output' => "Permissions set successfully.\nOwner: www-data:www-data\nDirs: 755, Files: 644\nWritable dirs: " . implode(', ', $writableDirs),
+                'output' => "Permissions set successfully via SiteIsolationService.\nOwner: " . \App\Services\SiteIsolationService::siteUser($deployment->domain) . "\nDirs: 750, Files: 640, Executables: +x",
                 'duration_seconds' => $duration,
             ]);
         } catch (\Exception $e) {
