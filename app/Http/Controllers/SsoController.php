@@ -112,7 +112,7 @@ class SsoController extends Controller
             if (!$hasWebsite) {
                 $user->websites()->create([
                     'domain' => $targetDomain,
-                    'permissions' => ['files', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron', 'dns'],
+                    'permissions' => ['files', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron', 'dns', 'backups'],
                 ]);
             }
         }

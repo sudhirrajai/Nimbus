@@ -30,7 +30,7 @@ class BackupController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $isRoot = $user->isRoot();
+        $isRootOrAdmin = $user->isRootOrAdmin();
 
         // Ensure default local destination exists
         if (BackupDestination::count() === 0) {
@@ -45,17 +45,38 @@ class BackupController extends Controller
             ]);
         }
 
+        // Determine accessible domains & databases for non-admin user
+        $allowedDomains = [];
+        $allowedDbs = [];
+        if (!$isRootOrAdmin) {
+            $allowedDomains = $user->websites()
+                ->get()
+                ->filter(function ($w) {
+                    $perms = $w->permissions ?? [];
+                    return in_array('backups', $perms);
+                })
+                ->pluck('domain')
+                ->map(fn($d) => strtolower(trim($d)))
+                ->values()
+                ->toArray();
+
+            foreach ($allowedDomains as $dom) {
+                $db = $this->backupService->resolveDatabaseForDomain($dom);
+                if ($db) {
+                    $allowedDbs[] = strtolower($db);
+                }
+            }
+            $allowedDbs = array_unique(array_filter($allowedDbs));
+        }
+
         // 1. Fetch Backups
         $backupsQuery = BackupRecord::with(['schedule', 'destination'])->orderBy('created_at', 'desc');
-        if (!$isRoot) {
-            $accessibleDomains = array_map('strtolower', $user->accessibleDomains());
-            $accessibleDbs = array_map('strtolower', $user->accessibleDatabases());
-            $userEmail = $user->email;
-
-            $backupsQuery->where(function ($q) use ($accessibleDomains, $accessibleDbs, $userEmail) {
-                $q->whereIn('domain', $accessibleDomains)
-                  ->orWhereIn('database_name', $accessibleDbs)
-                  ->orWhere('created_by', $userEmail);
+        if (!$isRootOrAdmin) {
+            $backupsQuery->where(function ($q) use ($allowedDomains, $allowedDbs) {
+                $q->whereIn('domain', $allowedDomains);
+                if (!empty($allowedDbs)) {
+                    $q->orWhereIn('database_name', $allowedDbs);
+                }
             });
         }
         $backups = $backupsQuery->get()->map(function ($b) {
@@ -88,12 +109,12 @@ class BackupController extends Controller
 
         // 2. Fetch Schedules
         $schedulesQuery = BackupSchedule::with(['destination'])->withCount('records')->orderBy('created_at', 'desc');
-        if (!$isRoot) {
-            $accessibleDomains = array_map('strtolower', $user->accessibleDomains());
-            $accessibleDbs = array_map('strtolower', $user->accessibleDatabases());
-            $schedulesQuery->where(function ($q) use ($accessibleDomains, $accessibleDbs) {
-                $q->whereIn('domain', $accessibleDomains)
-                  ->orWhereIn('database_name', $accessibleDbs);
+        if (!$isRootOrAdmin) {
+            $schedulesQuery->where(function ($q) use ($allowedDomains, $allowedDbs) {
+                $q->whereIn('domain', $allowedDomains);
+                if (!empty($allowedDbs)) {
+                    $q->orWhereIn('database_name', $allowedDbs);
+                }
             });
         }
         $schedules = $schedulesQuery->get()->map(function ($s) {
@@ -191,11 +212,28 @@ class BackupController extends Controller
         // Check permissions
         $user = auth()->user();
         if (!$user->isRootOrAdmin()) {
-            if (!empty($domain) && !$user->canAccessDomain($domain)) {
+            if (!empty($domain) && !$user->hasDomainPermission($domain, 'backups')) {
                 return back()->with('error', 'You do not have permission to backup this domain.');
             }
-            if (!empty($databaseName) && !$user->canAccessDatabase($databaseName)) {
-                return back()->with('error', 'You do not have permission to backup this database.');
+            if (!empty($databaseName)) {
+                $allowedDomains = $user->websites()
+                    ->get()
+                    ->filter(fn($w) => in_array('backups', $w->permissions ?? []))
+                    ->pluck('domain')
+                    ->map(fn($d) => strtolower(trim($d)))
+                    ->toArray();
+
+                $matched = false;
+                foreach ($allowedDomains as $dom) {
+                    $db = $this->backupService->resolveDatabaseForDomain($dom);
+                    if ($db && strtolower($db) === strtolower($databaseName)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    return back()->with('error', 'You do not have permission to backup this database.');
+                }
             }
         }
 
@@ -266,6 +304,33 @@ class BackupController extends Controller
             return back()->with('error', 'Please select either a domain or a database for the schedule.');
         }
 
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            if (!empty($domain) && !$user->hasDomainPermission($domain, 'backups')) {
+                return back()->with('error', 'You do not have permission to schedule backups for this domain.');
+            }
+            if (!empty($databaseName)) {
+                $allowedDomains = $user->websites()
+                    ->get()
+                    ->filter(fn($w) => in_array('backups', $w->permissions ?? []))
+                    ->pluck('domain')
+                    ->map(fn($d) => strtolower(trim($d)))
+                    ->toArray();
+
+                $matched = false;
+                foreach ($allowedDomains as $dom) {
+                    $db = $this->backupService->resolveDatabaseForDomain($dom);
+                    if ($db && strtolower($db) === strtolower($databaseName)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    return back()->with('error', 'You do not have permission to schedule backups for this database.');
+                }
+            }
+        }
+
         $schedule = new BackupSchedule($request->only([
             'name', 'domain', 'database_name', 'type', 'frequency', 'time',
             'day_of_week', 'day_of_month', 'retention_count', 'destination_id', 'email_notifications'
@@ -290,6 +355,17 @@ class BackupController extends Controller
      */
     public function updateSchedule(Request $request, BackupSchedule $schedule)
     {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            if (!empty($schedule->domain) && !$user->hasDomainPermission($schedule->domain, 'backups')) {
+                return back()->with('error', 'Permission denied.');
+            }
+            $targetDomain = $request->input('domain');
+            if (!empty($targetDomain) && !$user->hasDomainPermission($targetDomain, 'backups')) {
+                return back()->with('error', 'Permission denied for selected domain.');
+            }
+        }
+
         $request->validate([
             'name' => 'required|string|max:100',
             'domain' => 'nullable|string|max:255',
@@ -327,6 +403,13 @@ class BackupController extends Controller
      */
     public function toggleSchedule(BackupSchedule $schedule)
     {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            if (!empty($schedule->domain) && !$user->hasDomainPermission($schedule->domain, 'backups')) {
+                return back()->with('error', 'Permission denied.');
+            }
+        }
+
         $schedule->is_active = !$schedule->is_active;
         if ($schedule->is_active) {
             $schedule->calculateNextRun();
@@ -342,6 +425,13 @@ class BackupController extends Controller
      */
     public function deleteSchedule(BackupSchedule $schedule)
     {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            if (!empty($schedule->domain) && !$user->hasDomainPermission($schedule->domain, 'backups')) {
+                return back()->with('error', 'Permission denied.');
+            }
+        }
+
         $name = $schedule->name;
         $schedule->delete();
 
@@ -359,6 +449,13 @@ class BackupController extends Controller
      */
     public function runScheduleNow(BackupSchedule $schedule)
     {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            if (!empty($schedule->domain) && !$user->hasDomainPermission($schedule->domain, 'backups')) {
+                return back()->with('error', 'Permission denied.');
+            }
+        }
+
         try {
             $this->backupService->createBackup([
                 'schedule_id' => $schedule->id,
@@ -389,7 +486,7 @@ class BackupController extends Controller
     {
         $user = auth()->user();
         if (!$user->isRootOrAdmin()) {
-            if (!empty($backup->domain) && !$user->canAccessDomain($backup->domain)) {
+            if (!empty($backup->domain) && !$user->hasDomainPermission($backup->domain, 'backups')) {
                 return back()->with('error', 'Permission denied.');
             }
         }
@@ -427,7 +524,7 @@ class BackupController extends Controller
     {
         $user = auth()->user();
         if (!$user->isRootOrAdmin()) {
-            if (!empty($backup->domain) && !$user->canAccessDomain($backup->domain)) {
+            if (!empty($backup->domain) && !$user->hasDomainPermission($backup->domain, 'backups')) {
                 abort(403, 'Permission denied.');
             }
         }
@@ -468,7 +565,7 @@ class BackupController extends Controller
     {
         $user = auth()->user();
         if (!$user->isRootOrAdmin()) {
-            if (!empty($backup->domain) && !$user->canAccessDomain($backup->domain)) {
+            if (!empty($backup->domain) && !$user->hasDomainPermission($backup->domain, 'backups')) {
                 return back()->with('error', 'Permission denied.');
             }
         }
@@ -493,8 +590,18 @@ class BackupController extends Controller
         $basePath = '/var/www';
         $domains = [];
         $user = auth()->user();
-        $isRoot = $user->isRoot();
-        $accessibleDomains = array_map('strtolower', $user->accessibleDomains());
+        $isRootOrAdmin = $user->isRootOrAdmin();
+
+        $allowedDomains = [];
+        if (!$isRootOrAdmin) {
+            $allowedDomains = $user->websites()
+                ->get()
+                ->filter(fn($w) => in_array('backups', $w->permissions ?? []))
+                ->pluck('domain')
+                ->map(fn($d) => strtolower(trim($d)))
+                ->values()
+                ->toArray();
+        }
 
         if (File::exists($basePath)) {
             try {
@@ -502,8 +609,8 @@ class BackupController extends Controller
                 foreach ($directories as $dir) {
                     $domain = basename($dir);
                     if (!in_array(strtolower($domain), ['html', 'default', 'public', 'cgi-bin', 'nimbus'])) {
-                        // Enforce access control for non-root users
-                        if (!$isRoot && !in_array(strtolower($domain), $accessibleDomains)) {
+                        // Enforce access control for non-admin users
+                        if (!$isRootOrAdmin && !in_array(strtolower($domain), $allowedDomains)) {
                             continue;
                         }
 
@@ -529,10 +636,25 @@ class BackupController extends Controller
     private function getAvailableDatabases(): array
     {
         $user = auth()->user();
-        $isRoot = $user->isRoot();
+        $isRootOrAdmin = $user->isRootOrAdmin();
 
-        if (!$isRoot) {
-            return $user->accessibleDatabases();
+        if (!$isRootOrAdmin) {
+            $allowedDomains = $user->websites()
+                ->get()
+                ->filter(fn($w) => in_array('backups', $w->permissions ?? []))
+                ->pluck('domain')
+                ->map(fn($d) => strtolower(trim($d)))
+                ->values()
+                ->toArray();
+
+            $databases = [];
+            foreach ($allowedDomains as $dom) {
+                $db = $this->backupService->resolveDatabaseForDomain($dom);
+                if ($db) {
+                    $databases[] = $db;
+                }
+            }
+            return array_values(array_unique(array_filter($databases)));
         }
 
         $databases = [];

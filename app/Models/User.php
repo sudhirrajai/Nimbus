@@ -125,7 +125,7 @@ class User extends Authenticatable
      */
     public function canAccessDomain(string $domain): bool
     {
-        if ($this->isRoot()) return true;
+        if ($this->isRootOrAdmin()) return true;
 
         $targetDomain = strtolower(trim($domain));
         return $this->websites()->get()->contains(function ($w) use ($targetDomain) {
@@ -138,7 +138,7 @@ class User extends Authenticatable
      */
     public function hasDomainPermission(string $domain, string $permission): bool
     {
-        if ($this->isRoot()) return true;
+        if ($this->isRootOrAdmin()) return true;
 
         $targetDomain = strtolower(trim($domain));
         $website = $this->websites()->get()->first(function ($w) use ($targetDomain) {

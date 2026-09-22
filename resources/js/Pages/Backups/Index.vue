@@ -16,7 +16,7 @@
                 <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-icon': isPolling }">refresh</i>
                 Refresh
               </button>
-              <button class="btn btn-outline-dark mb-0" @click="activeTab = 'destinations'">
+              <button v-if="isRootOrAdmin" class="btn btn-outline-dark mb-0" @click="activeTab = 'destinations'">
                 <i class="material-symbols-rounded text-sm me-1">cloud_sync</i>
                 Storage Providers ({{ destinations.length }})
               </button>
@@ -205,7 +205,7 @@
                   Email Alerts & Policies
                 </a>
               </li>
-              <li class="nav-item">
+              <li v-if="isRootOrAdmin" class="nav-item">
                 <a class="nav-link mb-0 px-0 py-1 font-weight-bold cursor-pointer"
                    :class="{ 'active bg-white text-dark shadow-sm': activeTab === 'destinations', 'text-secondary': activeTab !== 'destinations' }"
                    @click="activeTab = 'destinations'">
@@ -224,16 +224,34 @@
           <div class="card my-4">
             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
               <div class="bg-gradient-primary shadow-primary border-radius-lg pt-4 pb-3 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h6 class="text-white text-capitalize mb-0">Backup Snapshots</h6>
-                <div class="d-flex gap-2 align-items-center">
-                  <div class="input-group input-group-sm input-group-outline bg-white rounded" style="width: 220px;">
+                <div class="d-flex align-items-center gap-2">
+                  <h6 class="text-white text-capitalize mb-0">Backup Snapshots</h6>
+                  <span class="badge bg-white text-primary text-xxs font-weight-bold">{{ filteredBackups.length }}</span>
+                </div>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                  <div class="input-group input-group-sm input-group-outline bg-white rounded" style="width: 190px;">
                     <input type="text" v-model="searchQuery" class="form-control form-control-sm px-2" placeholder="Search target or file...">
                   </div>
-                  <select v-model="filterType" class="form-select form-select-sm bg-white border-0" style="width: 140px;">
+                  <!-- Project / Domain Filter -->
+                  <select v-model="filterDomain" class="form-select form-select-sm bg-white border-0" style="min-width: 150px; max-width: 190px;">
+                    <option value="all">All Projects</option>
+                    <option v-for="d in filterDomainOptions" :key="d" :value="d">
+                      {{ d }}
+                    </option>
+                  </select>
+                  <!-- Type Filter -->
+                  <select v-model="filterType" class="form-select form-select-sm bg-white border-0" style="width: 120px;">
                     <option value="all">All Types</option>
                     <option value="full">Full (Both)</option>
                     <option value="database">Database</option>
                     <option value="files">Project Files</option>
+                  </select>
+                  <!-- Per Page Selector -->
+                  <select v-model="itemsPerPage" class="form-select form-select-sm bg-white border-0" style="width: 95px;">
+                    <option :value="10">10 / page</option>
+                    <option :value="25">25 / page</option>
+                    <option :value="50">50 / page</option>
+                    <option :value="100">100 / page</option>
                   </select>
                 </div>
               </div>
@@ -243,6 +261,7 @@
                 <table class="table align-items-center mb-0">
                   <thead>
                     <tr>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-3" style="width: 50px;">#</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Target / Domain</th>
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Type</th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Size</th>
@@ -254,7 +273,7 @@
                   </thead>
                   <tbody>
                     <tr v-if="filteredBackups.length === 0">
-                      <td colspan="7" class="text-center py-5">
+                      <td colspan="8" class="text-center py-5">
                         <i class="material-symbols-rounded text-secondary mb-2" style="font-size: 3rem;">inventory_2</i>
                         <h6 class="text-secondary font-weight-normal mb-1">No backups found</h6>
                         <p class="text-xs text-muted mb-3">Create your first on-demand backup or schedule automated snapshots.</p>
@@ -263,7 +282,12 @@
                         </button>
                       </td>
                     </tr>
-                    <tr v-for="backup in filteredBackups" :key="backup.id">
+                    <tr v-for="(backup, index) in paginatedBackups" :key="backup.id">
+                      <td class="text-center align-middle ps-3" style="width: 50px;">
+                        <span class="text-xs font-weight-bold text-secondary">
+                          {{ (currentPage - 1) * itemsPerPage + index + 1 }}
+                        </span>
+                      </td>
                       <td>
                         <div class="d-flex px-3 py-1">
                           <div class="avatar avatar-sm me-3 border-radius-md d-flex align-items-center justify-content-center"
@@ -402,6 +426,35 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <!-- Pagination Footer -->
+              <div v-if="filteredBackups.length > 0" class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-3 border-top">
+                <div class="text-xs text-secondary">
+                  Showing <span class="font-weight-bold text-dark">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to
+                  <span class="font-weight-bold text-dark">{{ Math.min(currentPage * itemsPerPage, filteredBackups.length) }}</span> of
+                  <span class="font-weight-bold text-dark">{{ filteredBackups.length }}</span> backups
+                  <span v-if="filterDomain !== 'all'" class="badge bg-light text-secondary ms-2 border">Project: {{ filterDomain }}</span>
+                  <span v-if="filterType !== 'all'" class="badge bg-light text-secondary ms-1 border">Type: {{ filterType }}</span>
+                </div>
+                <ul v-if="totalPages > 1" class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link" @click="currentPage--" :disabled="currentPage === 1" aria-label="Previous">
+                      <i class="material-symbols-rounded text-xs">chevron_left</i>
+                    </button>
+                  </li>
+                  <li v-for="pageNumber in visiblePages" :key="pageNumber" class="page-item"
+                      :class="{ active: currentPage === pageNumber, disabled: pageNumber === '...' }">
+                    <button class="page-link" @click="pageNumber !== '...' && (currentPage = pageNumber)">
+                      {{ pageNumber }}
+                    </button>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link" @click="currentPage++" :disabled="currentPage === totalPages" aria-label="Next">
+                      <i class="material-symbols-rounded text-xs">chevron_right</i>
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -862,7 +915,7 @@
               <div class="mb-3">
                 <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1 d-flex justify-content-between align-items-center">
                   <span>Storage Destination</span>
-                  <a href="javascript:;" class="text-xxs text-info font-weight-bold" @click="openCreateDestinationModal()">+ Add New Destination</a>
+                  <a v-if="isRootOrAdmin" href="javascript:;" class="text-xxs text-info font-weight-bold" @click="openCreateDestinationModal()">+ Add New Destination</a>
                 </label>
                 <select v-model="backupForm.destination_id" class="form-select custom-form-select">
                   <option :value="null">Default Destination ({{ defaultDestinationName }})</option>
@@ -1545,7 +1598,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import SearchableSelect from '@/Components/SearchableSelect.vue'
@@ -1562,9 +1615,31 @@ const props = defineProps({
   destinations: { type: Array, default: () => [] },
 })
 
+const authUser = computed(() => page.props.auth?.user || {})
+const isRootOrAdmin = computed(() => Boolean(authUser.value.is_root || ['root', 'admin'].includes(authUser.value.role)))
+
 const activeTab = ref('backups')
 const searchQuery = ref('')
 const filterType = ref('all')
+const filterDomain = ref('all')
+const itemsPerPage = ref(10)
+const currentPage = ref(1)
+
+const filterDomainOptions = computed(() => {
+  const list = new Set()
+  if (props.domains && props.domains.length > 0) {
+    props.domains.forEach(d => {
+      if (d && d.domain) list.add(d.domain)
+      else if (typeof d === 'string') list.add(d)
+    })
+  }
+  if (props.backups && props.backups.length > 0) {
+    props.backups.forEach(b => {
+      if (b && b.domain) list.add(b.domain)
+    })
+  }
+  return Array.from(list).sort()
+})
 
 const localAlert = ref({ show: false, message: '', type: 'success' })
 
@@ -1787,12 +1862,43 @@ const stopPolling = () => {
 const filteredBackups = computed(() => {
   return props.backups.filter(b => {
     const matchesType = filterType.value === 'all' || b.type === filterType.value
+    const matchesDomain = filterDomain.value === 'all' || (b.domain && b.domain.toLowerCase() === filterDomain.value.toLowerCase())
     const target = (b.domain || b.database_name || '').toLowerCase()
     const fileName = (b.file_name || '').toLowerCase()
     const query = searchQuery.value.toLowerCase()
     const matchesSearch = !query || target.includes(query) || fileName.includes(query)
-    return matchesType && matchesSearch
+    return matchesType && matchesDomain && matchesSearch
   })
+})
+
+const totalPages = computed(() => Math.ceil(filteredBackups.value.length / itemsPerPage.value) || 1)
+
+const paginatedBackups = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return filteredBackups.value.slice(start, start + itemsPerPage.value)
+})
+
+const visiblePages = computed(() => {
+  const pages = []
+  const total = totalPages.value
+  const current = currentPage.value
+
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i)
+  } else {
+    pages.push(1)
+    if (current > 3) pages.push('...')
+    const start = Math.max(2, current - 1)
+    const end = Math.min(total - 1, current + 1)
+    for (let i = start; i <= end; i++) pages.push(i)
+    if (current < total - 2) pages.push('...')
+    pages.push(total)
+  }
+  return pages
+})
+
+watch([searchQuery, filterType, filterDomain, itemsPerPage], () => {
+  currentPage.value = 1
 })
 
 const refreshData = () => {

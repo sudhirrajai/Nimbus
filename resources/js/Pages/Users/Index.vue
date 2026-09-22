@@ -376,6 +376,7 @@ const allPermissions = [
   { key: 'nginx', label: 'Nginx', icon: 'settings_input_component' },
   { key: 'supervisor', label: 'Supervisor', icon: 'bolt' },
   { key: 'cron', label: 'Cron', icon: 'schedule' },
+  { key: 'backups', label: 'Backups', icon: 'backup' },
 ]
 
 const statsCards = computed(() => [
