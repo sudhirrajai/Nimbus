@@ -111,29 +111,27 @@
           </Link>
         </li>
 
-        <!-- ═══ FILES & RESOURCES (Root & Admin) ═══ -->
-        <template v-if="isRootOrAdmin">
-          <li v-if="hasModule('backups')" class="nav-item mt-3">
-            <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
-              Files & Resources
-            </h6>
-          </li>
+        <!-- ═══ FILES & RESOURCES ═══ -->
+        <li v-if="(isRootOrAdmin || hasPerm('backups')) && hasModule('backups')" class="nav-item mt-3">
+          <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
+            Files & Resources
+          </h6>
+        </li>
 
-          <li v-if="hasModule('backups')" class="nav-item">
-            <Link href="/backups" class="nav-link" :class="isActive('/backups')">
-              <i class="material-symbols-rounded opacity-5">backup</i>
-              <span class="nav-link-text ms-1">Backups</span>
-            </Link>
-          </li>
+        <li v-if="(isRootOrAdmin || hasPerm('backups')) && hasModule('backups')" class="nav-item">
+          <Link href="/backups" class="nav-link" :class="isActive('/backups')">
+            <i class="material-symbols-rounded opacity-5">backup</i>
+            <span class="nav-link-text ms-1">Backups</span>
+          </Link>
+        </li>
 
-          <li class="nav-item">
-            <Link href="/ftp" class="nav-link d-flex align-items-center" :class="isActive('/ftp')">
-              <i class="material-symbols-rounded opacity-5">cloud_upload</i>
-              <span class="nav-link-text ms-1">FTP Accounts</span>
-              <span class="badge bg-light text-muted ms-auto text-xxs font-weight-bold" style="border: 1px solid #e2e8f0; padding: 2px 6px;">Soon</span>
-            </Link>
-          </li>
-        </template>
+        <li v-if="isRootOrAdmin" class="nav-item">
+          <Link href="/ftp" class="nav-link d-flex align-items-center" :class="isActive('/ftp')">
+            <i class="material-symbols-rounded opacity-5">cloud_upload</i>
+            <span class="nav-link-text ms-1">FTP Accounts</span>
+            <span class="badge bg-light text-muted ms-auto text-xxs font-weight-bold" style="border: 1px solid #e2e8f0; padding: 2px 6px;">Soon</span>
+          </Link>
+        </li>
 
         <!-- ═══ EMAIL ═══ -->
         <li v-if="(isRootOrAdmin || hasPerm('email')) && hasModule('emails')" class="nav-item mt-3">

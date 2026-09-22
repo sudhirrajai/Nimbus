@@ -367,7 +367,7 @@ class DomainController extends Controller
             UserWebsite::create([
                 'user_id' => $user->id,
                 'domain' => $domain,
-                'permissions' => ['files', 'deployments', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron'],
+                'permissions' => ['files', 'deployments', 'wordpress', 'database', 'ssl', 'nginx', 'supervisor', 'cron', 'backups'],
             ]);
 
             if (!$user->isRoot()) {

@@ -430,7 +430,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         });
 
         // Backups management routes
-        Route::prefix('backups')->name('backups.')->group(function () {
+        Route::middleware(['permission:backups'])->prefix('backups')->name('backups.')->group(function () {
             Route::get('/', [\App\Http\Controllers\BackupController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\BackupController::class, 'store'])->name('store');
             Route::post('/schedules', [\App\Http\Controllers\BackupController::class, 'storeSchedule'])->name('schedules.store');

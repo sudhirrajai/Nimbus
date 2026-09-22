@@ -77,7 +77,7 @@ class HandleInertiaRequests extends Middleware
                     'role' => $user->role ?? 'root',
                     'linux_user' => $user->linux_user,
                     'is_root' => $user->role === 'root' || $user->id === 1,
-                    'permissions' => $user->isRoot() ? ['files','deployments','wordpress','database','ssl','dns','nginx','supervisor','cron'] : $permissions,
+                    'permissions' => $user->isRootOrAdmin() ? ['files','deployments','wordpress','database','ssl','dns','nginx','supervisor','cron','backups'] : $permissions,
                     'assigned_domains' => $user->isRoot() ? [] : $assignedDomains,
                 ] : null,
             ],
