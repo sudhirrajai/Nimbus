@@ -145,8 +145,13 @@ class DomainController extends Controller
                 \Log::warning("Failed to get storage for $domain: " . $e->getMessage());
             }
 
-            // DNS check — cached per domain for 5 minutes
-            $isActive = cache()->remember("domain_dns_{$domain}", 300, function () use ($domain, $serverIp) {
+            // DNS check — cached per domain for 5 minutes (bypass if refresh/force requested)
+            $cacheKey = "domain_dns_{$domain}";
+            if (request()->boolean('refresh') || request()->boolean('force')) {
+                cache()->forget($cacheKey);
+            }
+
+            $isActive = cache()->remember($cacheKey, 300, function () use ($domain, $serverIp) {
                 return $this->checkDomainDns($domain, $serverIp);
             });
 
@@ -221,23 +226,137 @@ class DomainController extends Controller
     }
 
     /**
-     * Check if a domain points to the server IP
+     * Check if a domain points to the server IP (directly or via Cloudflare proxy)
      */
     private function checkDomainDns($domain, $serverIp)
     {
         try {
-            $records = @dns_get_record($domain, DNS_A);
-            if (!$records) return false;
+            $records = @dns_get_record($domain, DNS_A) ?: [];
 
+            // 1. Direct DNS A-record match
             foreach ($records as $record) {
                 if (isset($record['ip']) && $record['ip'] === $serverIp) {
                     return true;
+                }
+            }
+
+            // 2. Check if domain is connected via Cloudflare in Nimbus DNS manager
+            $mainDomain = self::getMainDomain($domain);
+            $cfSetting = \App\Models\DomainCloudflareSetting::where('domain', $domain)
+                ->orWhere('domain', $mainDomain)
+                ->first();
+
+            if ($cfSetting) {
+                try {
+                    $cfRes = \Illuminate\Support\Facades\Http::withToken($cfSetting->api_token)
+                        ->timeout(3)
+                        ->get("https://api.cloudflare.com/client/v4/zones/{$cfSetting->zone_id}/dns_records", [
+                            'name' => $domain,
+                            'type' => 'A'
+                        ]);
+
+                    if ($cfRes->successful()) {
+                        $cfRecords = $cfRes->json('result', []);
+                        foreach ($cfRecords as $cfr) {
+                            if (isset($cfr['content']) && $cfr['content'] === $serverIp) {
+                                return true;
+                            }
+                        }
+                    }
+                } catch (\Throwable $cfEx) {
+                    // Fallthrough to probe
+                }
+            }
+
+            // 3. Fallback: If domain resolves to Cloudflare proxy and responds to HTTP requests
+            if (!empty($records)) {
+                foreach ($records as $record) {
+                    $ip = $record['ip'] ?? '';
+                    if ($this->isCloudflareIp($ip)) {
+                        try {
+                            $probe = \Illuminate\Support\Facades\Http::timeout(2)
+                                ->withoutVerifying()
+                                ->head("https://{$domain}");
+                            if ($probe->status() >= 200 && $probe->status() < 500) {
+                                return true;
+                            }
+                        } catch (\Throwable $probeEx) {
+                            try {
+                                $probeHttp = \Illuminate\Support\Facades\Http::timeout(2)
+                                    ->withoutVerifying()
+                                    ->head("http://{$domain}");
+                                if ($probeHttp->status() >= 200 && $probeHttp->status() < 500) {
+                                    return true;
+                                }
+                            } catch (\Throwable $e) {}
+                        }
+                    }
                 }
             }
         } catch (\Exception $e) {
             \Log::error("DNS check failed for $domain: " . $e->getMessage());
         }
         return false;
+    }
+
+    /**
+     * Check if an IP address belongs to known Cloudflare Anycast IP ranges
+     */
+    private function isCloudflareIp($ip): bool
+    {
+        $cfRanges = [
+            '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+            '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+            '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+            '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22'
+        ];
+
+        $ipLong = ip2long($ip);
+        if ($ipLong === false) return false;
+
+        foreach ($cfRanges as $range) {
+            [$subnet, $bits] = explode('/', $range);
+            $subnetLong = ip2long($subnet);
+            $mask = -1 << (32 - (int)$bits);
+            $subnetMasked = $subnetLong & $mask;
+            if (($ipLong & $mask) === $subnetMasked) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get main registerable domain
+     */
+    private static function getMainDomain($domain)
+    {
+        $domain = strtolower($domain);
+        $parts = explode('.', $domain);
+        $count = count($parts);
+        
+        if ($count <= 2) {
+            return $domain;
+        }
+        
+        $lastTwo = $parts[$count - 2] . '.' . $parts[$count - 1];
+        $multipartTlds = [
+            'co.uk', 'me.uk', 'org.uk', 'net.uk', 'ltd.uk',
+            'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
+            'co.in', 'net.in', 'org.in', 'gen.in', 'firm.in', 'ind.in',
+            'com.br', 'net.br', 'org.br', 'co.nz', 'net.nz', 'org.nz',
+            'com.sg', 'net.sg', 'org.sg', 'com.tw', 'net.tw', 'org.tw',
+            'co.za', 'net.za', 'org.za', 'com.mx', 'net.mx', 'org.mx'
+        ];
+        
+        if (in_array($lastTwo, $multipartTlds)) {
+            if ($count == 3) {
+                return $domain;
+            }
+            return $parts[$count - 3] . '.' . $lastTwo;
+        }
+        
+        return $parts[$count - 2] . '.' . $parts[$count - 1];
     }
 
     /**
