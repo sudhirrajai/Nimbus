@@ -711,7 +711,7 @@
                                             </div>
                                             <div class="mt-1 text-xxs text-secondary d-flex justify-content-between">
                                                 <span>{{ projectRange.toUpperCase() }} Peak:</span>
-                                                <span class="font-weight-bold text-dark">{{ projectsData.top_memory_project?.range_peak_mem_mb || 0 }} MB</span>
+                                                <span class="font-weight-bold text-dark">{{ projectsData.top_memory_project?.range_peak_mem_mb ?? projectsData.top_memory_project?.range_peak_memory_mb ?? 0 }} MB</span>
                                             </div>
                                         </div>
                                     </div>
@@ -866,8 +866,8 @@
                                                         </div>
                                                         <div class="mt-0.5">
                                                             <span class="text-secondary text-xxs">RAM:</span>
-                                                            <strong class="text-dark ms-1">{{ proj.range_avg_mem_mb }} MB</strong>
-                                                            <span class="text-muted text-xxs ms-1">(peak {{ proj.range_peak_mem_mb }} MB)</span>
+                                                            <strong class="text-dark ms-1">{{ proj.range_avg_mem_mb ?? proj.range_avg_memory_mb ?? 0 }} MB</strong>
+                                                            <span class="text-muted text-xxs ms-1">(peak {{ proj.range_peak_mem_mb ?? proj.range_peak_memory_mb ?? 0 }} MB)</span>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -957,7 +957,7 @@
                                     </div>
                                     <div>
                                         <span class="text-xxs text-secondary">
-                                            Points recorded: <strong>{{ projectHistory?.summary?.samples_count || 0 }}</strong>
+                                            Points recorded: <strong>{{ projectHistory?.summary?.samples_count ?? projectHistory?.summary?.total_samples ?? 0 }}</strong>
                                         </span>
                                     </div>
                                 </div>
@@ -977,14 +977,14 @@
                                             <div class="p-3 bg-light rounded-3 border">
                                                 <span class="text-xxs text-uppercase font-weight-bold text-secondary">Average CPU</span>
                                                 <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_cpu || 0 }}%</h4>
-                                                <span class="text-xxs text-danger">Peak: {{ projectHistory?.summary?.peak_cpu || 0 }}%</span>
+                                                <span class="text-xxs text-danger">Peak: {{ projectHistory?.summary?.peak_cpu?.value ?? projectHistory?.summary?.peak_cpu ?? 0 }}%</span>
                                             </div>
                                         </div>
                                         <div class="col-md-3 col-6">
                                             <div class="p-3 bg-light rounded-3 border">
                                                 <span class="text-xxs text-uppercase font-weight-bold text-secondary">Average RAM</span>
                                                 <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_memory_mb || 0 }} MB</h4>
-                                                <span class="text-xxs text-warning">Peak: {{ projectHistory?.summary?.peak_memory_mb || 0 }} MB</span>
+                                                <span class="text-xxs text-warning">Peak: {{ projectHistory?.summary?.peak_memory_mb?.value ?? projectHistory?.summary?.peak_memory_mb ?? 0 }} MB</span>
                                             </div>
                                         </div>
                                         <div class="col-md-3 col-6">
@@ -997,14 +997,21 @@
                                         <div class="col-md-3 col-6">
                                             <div class="p-3 bg-light rounded-3 border">
                                                 <span class="text-xxs text-uppercase font-weight-bold text-secondary">Processes (Avg)</span>
-                                                <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_process_count || 0 }}</h4>
+                                                <h4 class="mb-0 text-dark font-weight-bolder mt-1">{{ projectHistory?.summary?.avg_process_count ?? selectedProject?.process_count ?? 0 }}</h4>
                                                 <span class="text-xxs text-success">Live: {{ selectedProject?.process_count || 0 }} active</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <!-- Dual History Charts -->
-                                    <div class="row">
+                                    <!-- Dual History Charts or Clean Empty State -->
+                                    <div v-if="!projectHistory?.points || projectHistory.points.length === 0" class="text-center py-5 border rounded-3 bg-light my-2">
+                                        <i class="material-symbols-rounded text-secondary text-4xl mb-2">query_stats</i>
+                                        <h6 class="text-dark font-weight-bold mb-1">No Historical Metric Snapshots Yet</h6>
+                                        <p class="text-secondary text-xs mb-0">
+                                            System samples background metrics every 5 minutes. Real-time statistics are active above.
+                                        </p>
+                                    </div>
+                                    <div v-else class="row">
                                         <div class="col-lg-6 mb-3">
                                             <div class="border rounded-3 p-3 bg-white">
                                                 <h6 class="text-xs font-weight-bold mb-2 text-dark d-flex align-items-center">
@@ -1497,14 +1504,14 @@ const loadProjectHistory = async () => {
         })
         if (res.data.success) {
             projectHistory.value = res.data.data
-            await nextTick()
-            renderProjectCharts(res.data.data?.points || [])
         }
     } catch (e) {
         console.error('Failed to load single project history:', e)
     } finally {
         loadingProjectHistory.value = false
     }
+    await nextTick()
+    renderProjectCharts(projectHistory.value?.points || [])
 }
 
 const closeProjectModal = () => {
