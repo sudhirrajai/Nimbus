@@ -397,7 +397,14 @@ class ResourceController extends Controller
                 return response()->json(['error' => 'Permission denied'], 403);
             }
 
-            $result = \App\Services\ProjectControlService::toggle($domain);
+            $action = $request->input('action');
+            if ($action === 'suspend') {
+                $result = \App\Services\ProjectControlService::suspend($domain);
+            } elseif ($action === 'resume') {
+                $result = \App\Services\ProjectControlService::resume($domain);
+            } else {
+                $result = \App\Services\ProjectControlService::toggle($domain);
+            }
 
             return response()->json([
                 'success' => $result['success'] ?? true,

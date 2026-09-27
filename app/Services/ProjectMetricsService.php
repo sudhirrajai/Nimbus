@@ -106,7 +106,7 @@ class ProjectMetricsService
                 $p['cpu_percent'] = round($p['cpu_percent'], 1);
                 $p['memory_mb'] = round($p['memory_mb'], 1);
                 $p['memory_percent'] = round($p['memory_percent'], 1);
-                $p['is_suspended'] = in_array(strtolower($d), $suspendedDomains, true);
+                $p['is_suspended'] = in_array(strtolower($d), $suspendedDomains, true) || ProjectControlService::isSuspended($d);
                 if ($p['is_suspended']) {
                     $p['status'] = 'suspended';
                     $p['is_active'] = false;
@@ -187,20 +187,22 @@ class ProjectMetricsService
                 'range_avg_cpu' => $avgCpu,
                 'range_peak_cpu' => $peakCpu,
                 'range_avg_memory_mb' => $avgMemMb,
+                'range_avg_mem_mb' => $avgMemMb,
                 'range_peak_memory_mb' => $peakMemMb,
+                'range_peak_mem_mb' => $peakMemMb,
                 'samples_count' => $metrics ? $metrics->count() : 0,
             ]);
 
             $projectList[] = $entry;
 
-            // Track top consumers
-            if (!$topCpu || $entry['range_peak_cpu'] > $topCpu['range_peak_cpu']) {
+            // Track top consumers (only non-zero consumers to avoid arbitrarily selecting an idle 0 MB site)
+            if ($entry['range_peak_cpu'] > 0 && (!$topCpu || $entry['range_peak_cpu'] > ($topCpu['range_peak_cpu'] ?? 0))) {
                 $topCpu = $entry;
             }
-            if (!$topMemory || $entry['range_peak_memory_mb'] > $topMemory['range_peak_memory_mb']) {
+            if ($entry['range_peak_memory_mb'] > 0 && (!$topMemory || $entry['range_peak_memory_mb'] > ($topMemory['range_peak_memory_mb'] ?? 0))) {
                 $topMemory = $entry;
             }
-            if (!$topStorage || $entry['disk_mb'] > $topStorage['disk_mb']) {
+            if ($entry['disk_mb'] > 0 && (!$topStorage || $entry['disk_mb'] > ($topStorage['disk_mb'] ?? 0))) {
                 $topStorage = $entry;
             }
         }
@@ -298,6 +300,7 @@ class ProjectMetricsService
         // Summary statistics
         $cpuValues = $metrics->pluck('cpu_percent')->filter(fn($v) => is_numeric($v))->map(fn($v) => (float)$v)->all();
         $memValues = $metrics->pluck('memory_mb')->filter(fn($v) => is_numeric($v))->map(fn($v) => (float)$v)->all();
+        $procValues = $metrics->pluck('process_count')->filter(fn($v) => is_numeric($v))->map(fn($v) => (int)$v)->all();
 
         $avgCpu = !empty($cpuValues) ? round(array_sum($cpuValues) / count($cpuValues), 1) : 0.0;
         $peakCpuMetric = $metrics->sortByDesc('cpu_percent')->first();
@@ -315,6 +318,52 @@ class ProjectMetricsService
             'full_time' => $peakMemMetric->created_at->copy()->setTimezone($panelTimezone)->format('M d, Y H:i:s'),
         ] : null;
 
+        $avgProc = !empty($procValues) ? (int) round(array_sum($procValues) / count($procValues)) : 0;
+
+        // If no background historical points recorded yet, synthesize current real-time point
+        if (empty($points)) {
+            $realtimeList = self::getRealtimeProjectUsage();
+            foreach ($realtimeList as $rp) {
+                if (strtolower($rp['domain']) === strtolower($domain)) {
+                    $nowLoc = Carbon::now($panelTimezone);
+                    $points[] = [
+                        'time' => $nowLoc->format('H:i'),
+                        'full_time' => $nowLoc->format('M d, H:i'),
+                        'timestamp' => Carbon::now('UTC')->timestamp,
+                        'cpu' => (float) $rp['cpu_percent'],
+                        'memory_mb' => (float) $rp['memory_mb'],
+                        'memory_percent' => (float) $rp['memory_percent'],
+                        'disk_mb' => (float) $rp['disk_mb'],
+                        'processes' => (int) $rp['process_count'],
+                    ];
+                    if (empty($cpuValues)) {
+                        $avgCpu = (float) $rp['cpu_percent'];
+                        if ($rp['cpu_percent'] > 0) {
+                            $peakCpu = [
+                                'value' => (float) $rp['cpu_percent'],
+                                'time' => $nowLoc->format('H:i'),
+                                'full_time' => $nowLoc->format('M d, Y H:i:s'),
+                            ];
+                        }
+                    }
+                    if (empty($memValues)) {
+                        $avgMem = (float) $rp['memory_mb'];
+                        if ($rp['memory_mb'] > 0) {
+                            $peakMem = [
+                                'value' => (float) $rp['memory_mb'],
+                                'time' => $nowLoc->format('H:i'),
+                                'full_time' => $nowLoc->format('M d, Y H:i:s'),
+                            ];
+                        }
+                    }
+                    if (empty($procValues)) {
+                        $avgProc = (int) $rp['process_count'];
+                    }
+                    break;
+                }
+            }
+        }
+
         $sitePath = "/var/www/{$domain}";
         $currentDiskMb = self::getCachedProjectDiskMb($domain, $sitePath);
 
@@ -329,7 +378,9 @@ class ProjectMetricsService
                 'peak_cpu' => $peakCpu,
                 'avg_memory_mb' => $avgMem,
                 'peak_memory_mb' => $peakMem,
+                'avg_process_count' => $avgProc,
                 'total_samples' => count($points),
+                'samples_count' => count($points),
             ],
             'points' => $points,
         ];

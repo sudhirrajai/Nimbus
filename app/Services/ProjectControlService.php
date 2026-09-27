@@ -49,20 +49,22 @@ class ProjectControlService
     public static function getSuspendedDomains(): array
     {
         return Cache::remember('nimbus_suspended_projects_list', 10, function () {
+            $domains = [];
+
+            // 1. Check database Setting
             try {
                 $record = Setting::where('key', self::SETTING_KEY)->first();
                 if ($record && !empty($record->value)) {
                     $decoded = json_decode($record->value, true);
                     if (is_array($decoded)) {
-                        return array_values(array_unique(array_map('strtolower', $decoded)));
+                        $domains = array_merge($domains, array_map('strtolower', $decoded));
                     }
                 }
             } catch (\Throwable $e) {
                 Log::warning("Failed to fetch suspended projects setting: " . $e->getMessage());
             }
 
-            // Fallback to directory scan
-            $domains = [];
+            // 2. Check /etc/nimbus/suspended/*.json
             if (is_dir(self::SUSPENDED_DIR)) {
                 $files = @glob(self::SUSPENDED_DIR . '/*.json') ?: [];
                 foreach ($files as $f) {
@@ -72,7 +74,19 @@ class ProjectControlService
                     }
                 }
             }
-            return array_values(array_unique($domains));
+
+            // 3. Check in-site markers /var/www/*/.nimbus_suspended
+            if (is_dir('/var/www')) {
+                $siteMarkers = @glob('/var/www/*/.nimbus_suspended') ?: [];
+                foreach ($siteMarkers as $marker) {
+                    $d = basename(dirname($marker));
+                    if (!empty($d)) {
+                        $domains[] = strtolower($d);
+                    }
+                }
+            }
+
+            return array_values(array_unique(array_filter($domains)));
         });
     }
 
@@ -115,14 +129,18 @@ class ProjectControlService
 
             // 5. Create in-site marker
             if (is_dir("/var/www/{$domain}")) {
-                @file_put_contents("/var/www/{$domain}/.nimbus_suspended", json_encode([
+                $siteMarker = json_encode([
                     'suspended_at' => now()->toIso8601String(),
                     'reason' => $reason,
-                ]));
+                ]);
+                $tempSite = tempnam('/tmp', 'nimbus_site_susp_');
+                file_put_contents($tempSite, $siteMarker);
+                self::executeSudo("cp " . escapeshellarg($tempSite) . " " . escapeshellarg("/var/www/{$domain}/.nimbus_suspended") . " && chmod 644 " . escapeshellarg("/var/www/{$domain}/.nimbus_suspended"));
+                @unlink($tempSite);
             }
 
             // 6. Persist system marker in /etc/nimbus/suspended/{domain}.json
-            self::executeSudo("mkdir -p " . escapeshellarg(self::SUSPENDED_DIR));
+            self::executeSudo("mkdir -p " . escapeshellarg(self::SUSPENDED_DIR) . " && chmod 755 /etc/nimbus " . escapeshellarg(self::SUSPENDED_DIR));
             $markerData = json_encode([
                 'domain' => $domain,
                 'suspended_at' => now()->toIso8601String(),
@@ -135,6 +153,10 @@ class ProjectControlService
             file_put_contents($tempPath, $markerData);
             self::executeSudo("mv " . escapeshellarg($tempPath) . " " . escapeshellarg(self::SUSPENDED_DIR . "/{$domainLower}.json"));
             self::executeSudo("chmod 644 " . escapeshellarg(self::SUSPENDED_DIR . "/{$domainLower}.json"));
+
+            // Reload PHP-FPM so idle pool workers for this site terminate
+            self::executeSudo("systemctl reload php8.3-fpm 2>/dev/null || true");
+            self::executeSudo("systemctl reload php8.2-fpm 2>/dev/null || true");
 
             // 7. Update database setting and clear cache
             self::addSuspendedSetting($domainLower);
@@ -677,8 +699,19 @@ class ProjectControlService
             $vhost .= "    server_name {$domainLower} www.{$domainLower} *.{$domainLower};\n\n";
             $vhost .= "    ssl_certificate {$certPath};\n";
             $vhost .= "    ssl_certificate_key {$keyPath};\n";
-            $vhost .= "    include /etc/letsencrypt/options-ssl-nginx.conf;\n";
-            $vhost .= "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\n";
+            $vhost .= "    ssl_protocols TLSv1.2 TLSv1.3;\n";
+            $vhost .= "    ssl_ciphers HIGH:!aNULL:!MD5;\n";
+
+            // Only include if files exist to avoid nginx -t failures
+            $testOptions = self::executeSudo("test -f /etc/letsencrypt/options-ssl-nginx.conf");
+            if (($testOptions['code'] ?? 1) === 0) {
+                $vhost .= "    include /etc/letsencrypt/options-ssl-nginx.conf;\n";
+            }
+            $testDh = self::executeSudo("test -f /etc/letsencrypt/ssl-dhparams.pem");
+            if (($testDh['code'] ?? 1) === 0) {
+                $vhost .= "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n";
+            }
+            $vhost .= "\n";
             $vhost .= "    error_page 503 /suspended.html;\n";
             $vhost .= "    location = /suspended.html {\n";
             $vhost .= "        root /usr/local/nimbus/public;\n";
@@ -747,14 +780,21 @@ class ProjectControlService
     private static function addSuspendedSetting(string $domainLower): void
     {
         try {
-            $list = self::getSuspendedDomains();
+            $record = Setting::where('key', self::SETTING_KEY)->first();
+            $list = [];
+            if ($record && !empty($record->value)) {
+                $decoded = json_decode($record->value, true);
+                if (is_array($decoded)) {
+                    $list = array_values(array_unique(array_map('strtolower', $decoded)));
+                }
+            }
             if (!in_array($domainLower, $list, true)) {
                 $list[] = $domainLower;
-                Setting::updateOrCreate(
-                    ['key' => self::SETTING_KEY],
-                    ['value' => json_encode(array_values(array_unique($list)))]
-                );
             }
+            Setting::updateOrCreate(
+                ['key' => self::SETTING_KEY],
+                ['value' => json_encode(array_values(array_unique($list)))]
+            );
             Cache::forget('nimbus_suspended_projects_list');
         } catch (\Throwable $e) {
             Log::warning("Failed to add suspended domain to Setting: " . $e->getMessage());
@@ -764,7 +804,14 @@ class ProjectControlService
     private static function removeSuspendedSetting(string $domainLower): void
     {
         try {
-            $list = self::getSuspendedDomains();
+            $record = Setting::where('key', self::SETTING_KEY)->first();
+            $list = [];
+            if ($record && !empty($record->value)) {
+                $decoded = json_decode($record->value, true);
+                if (is_array($decoded)) {
+                    $list = array_values(array_unique(array_map('strtolower', $decoded)));
+                }
+            }
             $list = array_values(array_diff($list, [$domainLower]));
             Setting::updateOrCreate(
                 ['key' => self::SETTING_KEY],
