@@ -233,11 +233,19 @@ ESSENTIAL_PACKAGES=(
     ca-certificates
     gnupg lsb-release
     acl sudo fail2ban
+    redis-server
+    certbot python3-certbot-nginx
 )
 if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${ESSENTIAL_PACKAGES[@]}"; then
     echo -e "${YELLOW}Essential packages already installed. Skipping.${NC}"
 else
     apt-get install -y "${ESSENTIAL_PACKAGES[@]}"
+fi
+
+# Enable and start Redis server
+if command -v redis-server >/dev/null 2>&1; then
+    systemctl enable redis-server 2>/dev/null || true
+    systemctl start redis-server 2>/dev/null || true
 fi
 
 echo -e "${GREEN}[3/12]${NC} Installing Nginx..."
@@ -703,6 +711,11 @@ setfacl -d -m u:${NIMBUS_USER}:rx /var/www
 setfacl -m g:${NIMBUS_USER}:rwx /var/www
 setfacl -d -m g:${NIMBUS_USER}:rx /var/www
 
+# Setup /etc/nimbus directory for runtime state, isolation markers, and suspended flags
+mkdir -p /etc/nimbus/suspended
+chown -R ${NIMBUS_USER}:${NIMBUS_USER} /etc/nimbus
+chmod 755 /etc/nimbus
+
 if id -u "${PANEL_SYSTEM_USER}" >/dev/null 2>&1 && [ "${PANEL_SYSTEM_USER}" != "${NIMBUS_USER}" ] && [ "${PANEL_SYSTEM_USER}" != "root" ]; then
     usermod -aG ${NIMBUS_USER} "${PANEL_SYSTEM_USER}"
 fi
@@ -755,7 +768,7 @@ for PHP_DIR in /etc/php/*; do
         mkdir -p "/etc/systemd/system/php${V}-fpm.service.d"
         cat << EOF > "/etc/systemd/system/php${V}-fpm.service.d/nimbus.conf"
 [Service]
-ReadWritePaths=-${NIMBUS_DIR} -/var/www -/usr/share/adminer -/etc/nginx -/etc/php -/etc/supervisor -/etc/letsencrypt -/etc/postfix -/etc/dovecot -/etc/roundcube -/etc/opendkim
+ReadWritePaths=-${NIMBUS_DIR} -/var/www -/usr/share/adminer -/etc/nginx -/etc/php -/etc/supervisor -/etc/letsencrypt -/etc/postfix -/etc/dovecot -/etc/roundcube -/etc/opendkim -/etc/nimbus
 EOF
         echo -e "Applied PHP-FPM write override for PHP version ${V}"
     fi
@@ -856,7 +869,9 @@ echo ""
 echo -e "${BLUE}Services & Security Stack installed:${NC}"
 echo -e "  ✓ Nginx (Reverse Proxy & Virtual Hosts)"
 echo -e "  ✓ PHP ${PHP_VERSION}-FPM (Multi-Version & Isolated Pools)"
-echo -e "  ✓ MariaDB"
+echo -e "  ✓ MariaDB Database Engine"
+echo -e "  ✓ Redis In-Memory Cache & Key-Value Store"
+echo -e "  ✓ Certbot & Automated Let's Encrypt SSL"
 echo -e "  ✓ Composer & Node.js ${NODE_VERSION}"
 echo -e "  ✓ Supervisor (Queue Workers & Background Daemons)"
 echo -e "  ✓ UFW Firewall & Fail2Ban (Nimbus Shield)"

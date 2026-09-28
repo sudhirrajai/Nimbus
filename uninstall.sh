@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 # Configuration (must match install.sh)
 NIMBUS_DIR="/usr/local/nimbus"
-PHP_VERSION="8.2"
+PHP_VERSION="8.3"
 VMCORE_URL="{{VMCORE_URL}}"
 
 # ─────────────────────────────────────────────────────────────────
@@ -69,22 +69,53 @@ stop_service() {
 
 remove_nimbus_portal() {
     echo ""
-    echo -e "${RED}▸ Removing Nimbus portal files...${NC}"
+    echo -e "${RED}▸ Stopping and removing Nimbus portal services & files...${NC}"
+
+    # Stop and disable dedicated Nimbus isolated services
+    stop_service nimbus-nginx
+    stop_service nimbus-php-fpm
+
+    # Remove isolated systemd service units and drop-in overrides
+    rm -f /etc/systemd/system/nimbus-nginx.service
+    rm -f /etc/systemd/system/nimbus-php-fpm.service
+    rm -f /etc/systemd/system/php*-fpm.service.d/nimbus.conf
+    systemctl daemon-reload 2>/dev/null || true
+
+    # Stop and remove Nimbus Supervisor queue worker
+    if [ -f /etc/supervisor/conf.d/nimbus-worker.conf ]; then
+        if command -v supervisorctl >/dev/null 2>&1; then
+            supervisorctl stop nimbus-worker:* 2>/dev/null || true
+        fi
+        rm -f /etc/supervisor/conf.d/nimbus-worker.conf
+        if command -v supervisorctl >/dev/null 2>&1; then
+            supervisorctl reread 2>/dev/null || true
+            supervisorctl update 2>/dev/null || true
+        fi
+    fi
+
+    # Remove system cron job
+    rm -f /etc/cron.d/nimbus
+    systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true
+
+    # Remove portal files, state directories, and sockets
     rm -rf "${NIMBUS_DIR}"
+    rm -rf /etc/nimbus
+    rm -f /run/nimbus-nginx.pid /run/php/nimbus-php-fpm.pid /run/php/nimbus-php-fpm.sock 2>/dev/null || true
     rm -f /etc/nginx/sites-available/nimbus
     rm -f /etc/nginx/sites-enabled/nimbus
     rm -f /etc/sudoers.d/nimbus
     rm -f /usr/local/nimbus/storage/logs/nimbus_install.lock 2>/dev/null || true
 
-    # Remove temp/lock files
+    # Remove temp and updater scripts
     rm -f /tmp/adminer_install.sh \
           /tmp/adminer_reinstall.sh \
-          /tmp/nodesource_setup.sh
+          /tmp/nodesource_setup.sh \
+          /tmp/nimbus_update.sh
 
     # Remove Adminer
     rm -rf /usr/share/adminer
 
-    echo -e "${GREEN}  ✓ Nimbus portal removed${NC}"
+    echo -e "${GREEN}  ✓ Nimbus portal and services removed${NC}"
 }
 
 remove_nginx() {
@@ -115,6 +146,27 @@ remove_database() {
         mysql-server mysql-client mysql-common 2>/dev/null || true
     rm -rf /var/lib/mysql /var/log/mysql /etc/mysql
     echo -e "${GREEN}  ✓ Database server removed${NC}"
+}
+
+remove_redis() {
+    echo -e "${RED}▸ Stopping and removing Redis...${NC}"
+    stop_service redis-server
+    stop_service redis
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y redis-server redis-tools 2>/dev/null || true
+    rm -rf /etc/redis /var/lib/redis /var/log/redis
+    echo -e "${GREEN}  ✓ Redis removed${NC}"
+}
+
+remove_mail_stack() {
+    echo -e "${RED}▸ Stopping and removing Mail stack (Postfix, Dovecot, OpenDKIM, Roundcube)...${NC}"
+    stop_service postfix
+    stop_service dovecot
+    stop_service opendkim
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y \
+        postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d \
+        opendkim opendkim-tools roundcube* 2>/dev/null || true
+    rm -rf /etc/postfix /etc/dovecot /etc/opendkim /etc/roundcube /var/mail /var/vmail
+    echo -e "${GREEN}  ✓ Mail stack removed${NC}"
 }
 
 remove_supervisor() {
@@ -176,7 +228,7 @@ mode_full_uninstall() {
     echo -e "${RED}${BOLD}⚠  FULL UNINSTALL${NC}"
     echo -e "${RED}   This will remove:${NC}"
     echo -e "   • Nimbus control panel"
-    echo -e "   • All services (Nginx, PHP, MariaDB/MySQL, Node.js, Supervisor, Composer)"
+    echo -e "   • All services (Nginx, PHP, MariaDB/MySQL, Redis, Mail stack, Node.js, Supervisor, Composer)"
     echo -e "   • ${RED}ALL databases and data${NC}"
     echo -e "   • ${RED}ALL hosted projects in /var/www${NC}"
     echo ""
@@ -194,6 +246,8 @@ mode_full_uninstall() {
     remove_nginx
     remove_php
     remove_database
+    remove_redis
+    remove_mail_stack
     remove_supervisor
     remove_nodejs
     remove_composer
@@ -207,7 +261,7 @@ mode_keep_projects_remove_all() {
     echo -e "${YELLOW}${BOLD}⚠  REMOVE SERVICES + PORTAL (Keep Projects)${NC}"
     echo -e "   This will remove:"
     echo -e "   • Nimbus control panel"
-    echo -e "   • All services (Nginx, PHP, MariaDB/MySQL, Node.js, Supervisor, Composer)"
+    echo -e "   • All services (Nginx, PHP, MariaDB/MySQL, Redis, Mail stack, Node.js, Supervisor, Composer)"
     echo -e "   • ${RED}ALL databases and data${NC}"
     echo ""
     echo -e "   ${GREEN}✓ Projects in /var/www will be preserved${NC}"
@@ -224,6 +278,8 @@ mode_keep_projects_remove_all() {
     remove_nginx
     remove_php
     remove_database
+    remove_redis
+    remove_mail_stack
     remove_supervisor
     remove_nodejs
     remove_composer
