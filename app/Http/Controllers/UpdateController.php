@@ -103,8 +103,11 @@ class UpdateController extends Controller
             ];
         }
         
-        // Fallback: Try to read from VERSION file in repo
+        // Fallback: Try to read from VERSION file in repo (main or dev)
         $versionResponse = Http::timeout(10)->get('https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/main/VERSION');
+        if (!$versionResponse->successful()) {
+            $versionResponse = Http::timeout(10)->get('https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/dev/VERSION');
+        }
         
         if ($versionResponse->successful()) {
             return [
@@ -195,8 +198,12 @@ wait_for_apt() {
 }
 
 echo ""
-echo "Backing up current version..."
-sudo cp -r /usr/local/nimbus /tmp/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+echo "Creating pre-update backup snapshot..."
+sudo mkdir -p /tmp/nimbus_backups
+sudo cp -r /usr/local/nimbus /tmp/nimbus_backups/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+if [ -f /usr/local/nimbus/database/database.sqlite ]; then
+    sudo cp /usr/local/nimbus/database/database.sqlite /usr/local/nimbus/database/database.sqlite.pre_update 2>/dev/null || true
+fi
 
 echo ""
 echo "Ensuring required PHP extensions are installed..."
@@ -205,19 +212,23 @@ sudo apt-get update -qq 2>&1
 
 # Try to install PHP extensions for detected version only (avoid installing new PHP)
 wait_for_apt
-sudo apt-get install -y php${PHP_VERSION}-xml php${PHP_VERSION}-mysql php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl 2>&1 || true
+sudo apt-get install -y php${PHP_VERSION}-xml php${PHP_VERSION}-mysql php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl php${PHP_VERSION}-sqlite3 2>&1 || true
 
-# Restart PHP-FPM after extension install
-sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
+# Detect active git branch
+CURRENT_BRANCH=$(sudo git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+if [ -z "$CURRENT_BRANCH" ] || [ "$CURRENT_BRANCH" = "HEAD" ]; then
+    CURRENT_BRANCH="main"
+fi
+echo "Active git branch: $CURRENT_BRANCH"
 
 echo ""
 echo "Stashing local changes..."
 sudo git stash 2>&1 || true
 
 echo ""
-echo "Pulling latest changes from main branch..."
-sudo git fetch origin main 2>&1
-sudo git reset --hard origin/main 2>&1
+echo "Pulling latest changes from origin/$CURRENT_BRANCH..."
+sudo git fetch origin "$CURRENT_BRANCH" 2>&1
+sudo git reset --hard "origin/$CURRENT_BRANCH" 2>&1
 
 echo ""
 echo "Installing composer dependencies..."
@@ -229,16 +240,14 @@ echo "Running database migrations..."
 sudo php artisan migrate --force 2>&1 || true
 
 echo ""
-echo "Clearing caches..."
+echo "Clearing and optimizing application caches..."
 sudo php artisan config:clear 2>&1 || true
 sudo php artisan cache:clear 2>&1 || true
 sudo php artisan view:clear 2>&1 || true
 sudo php artisan route:clear 2>&1 || true
-
-echo ""
-echo "Fixing node_modules permissions..."
-sudo rm -rf node_modules 2>&1 || true
-sudo rm -f package-lock.json 2>&1 || true
+sudo php artisan config:cache 2>&1 || true
+sudo php artisan route:cache 2>&1 || true
+sudo php artisan view:cache 2>&1 || true
 
 echo ""
 echo "Installing npm dependencies..."
@@ -258,14 +267,16 @@ sudo mkdir -p /usr/local/nimbus/storage/logs
 sudo touch /usr/local/nimbus/storage/logs/laravel.log
 sudo chown www-data:www-data /usr/local/nimbus/storage/logs/laravel.log
 sudo chmod 664 /usr/local/nimbus/storage/logs/laravel.log
+sudo chmod +x /usr/local/nimbus/artisan 2>/dev/null || true
 
 echo ""
-echo "Restarting PHP-FPM..."
-sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
-
-echo ""
-echo "Reloading nginx..."
-sudo systemctl reload nginx 2>&1 || true
+echo "Restarting Nimbus services and queue workers..."
+sudo systemctl restart nimbus-php-fpm 2>&1 || sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
+sudo systemctl reload nimbus-nginx 2>&1 || sudo systemctl reload nginx 2>&1 || true
+if command -v supervisorctl >/dev/null 2>&1; then
+    sudo supervisorctl restart nimbus-worker:* 2>&1 || true
+fi
+sudo php artisan queue:restart 2>&1 || true
 
 echo ""
 echo "Update completed successfully!"
