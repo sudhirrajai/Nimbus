@@ -154,9 +154,21 @@ class ProjectControlService
             self::executeSudo("mv " . escapeshellarg($tempPath) . " " . escapeshellarg(self::SUSPENDED_DIR . "/{$domainLower}.json"));
             self::executeSudo("chmod 644 " . escapeshellarg(self::SUSPENDED_DIR . "/{$domainLower}.json"));
 
-            // Reload PHP-FPM so idle pool workers for this site terminate
-            self::executeSudo("systemctl reload php8.3-fpm 2>/dev/null || true");
-            self::executeSudo("systemctl reload php8.2-fpm 2>/dev/null || true");
+            // Suspend PHP-FPM pool so site PHP workers stop completely
+            $slug = SiteIsolationService::slug($domain);
+            $reloadedPhp = [];
+            foreach (['8.4', '8.3', '8.2', '8.1', '8.0', '7.4'] as $v) {
+                $poolFile = "/etc/php/{$v}/fpm/pool.d/{$slug}.conf";
+                $suspPool = "/etc/php/{$v}/fpm/pool.d/{$slug}.conf.suspended";
+                $test = self::executeSudo("test -f " . escapeshellarg($poolFile));
+                if (($test['code'] ?? 1) === 0) {
+                    self::executeSudo("mv " . escapeshellarg($poolFile) . " " . escapeshellarg($suspPool));
+                    if (!in_array($v, $reloadedPhp, true)) {
+                        self::executeSudo("systemctl reload php{$v}-fpm 2>/dev/null || true");
+                        $reloadedPhp[] = $v;
+                    }
+                }
+            }
 
             // 7. Update database setting and clear cache
             self::addSuspendedSetting($domainLower);
@@ -212,10 +224,21 @@ class ProjectControlService
             // 5. Update database setting and clear cache
             self::removeSuspendedSetting($domainLower);
 
-            // 6. Reload PHP-FPM pool if applicable
+            // 6. Restore PHP-FPM pool for the site
             $slug = SiteIsolationService::slug($domain);
-            self::executeSudo("systemctl reload php8.3-fpm 2>/dev/null || true");
-            self::executeSudo("systemctl reload php8.2-fpm 2>/dev/null || true");
+            $reloadedPhp = [];
+            foreach (['8.4', '8.3', '8.2', '8.1', '8.0', '7.4'] as $v) {
+                $poolFile = "/etc/php/{$v}/fpm/pool.d/{$slug}.conf";
+                $suspPool = "/etc/php/{$v}/fpm/pool.d/{$slug}.conf.suspended";
+                $test = self::executeSudo("test -f " . escapeshellarg($suspPool));
+                if (($test['code'] ?? 1) === 0) {
+                    self::executeSudo("mv " . escapeshellarg($suspPool) . " " . escapeshellarg($poolFile));
+                    if (!in_array($v, $reloadedPhp, true)) {
+                        self::executeSudo("systemctl reload php{$v}-fpm 2>/dev/null || true");
+                        $reloadedPhp[] = $v;
+                    }
+                }
+            }
 
             Log::info("Successfully resumed project {$domain}: " . json_encode($results));
         } catch (\Throwable $e) {
@@ -658,33 +681,94 @@ class ProjectControlService
         return true;
     }
 
+    private static function ensureSuspendedHtmlFile(): void
+    {
+        try {
+            self::executeSudo("mkdir -p /etc/nimbus /var/www/nimbus/public /usr/local/nimbus/public 2>/dev/null");
+            $src = base_path('public/suspended.html');
+
+            if (file_exists($src)) {
+                $escapedSrc = escapeshellarg($src);
+                self::executeSudo("cp {$escapedSrc} /etc/nimbus/suspended.html");
+                self::executeSudo("cp {$escapedSrc} /usr/local/nimbus/public/suspended.html 2>/dev/null || true");
+            } else {
+                $html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Website Suspended</title><style>body{font-family:sans-serif;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.c{background:#1e293b;padding:2.5rem;border-radius:1rem;max-width:550px;text-align:center}h1{color:#f59e0b}p{color:#94a3b8;line-height:1.6}</style></head><body><div class="c"><h1>Website Suspended</h1><p>This website has been disabled by the hosting administrator.</p></div></body></html>';
+                $temp = tempnam('/tmp', 'nimbus_susp_html_');
+                file_put_contents($temp, $html);
+                self::executeSudo("mv " . escapeshellarg($temp) . " /etc/nimbus/suspended.html");
+            }
+            self::executeSudo("chmod 644 /etc/nimbus/suspended.html /usr/local/nimbus/public/suspended.html 2>/dev/null || true");
+        } catch (\Throwable $e) {
+            Log::warning("Failed to ensure suspended.html: " . $e->getMessage());
+        }
+    }
+
     private static function disableNginx(string $domain): bool
     {
         $domainLower = strtolower($domain);
-        $enabledPath = "/etc/nginx/sites-enabled/{$domain}";
         $suspendedAvailable = "/etc/nginx/sites-available/{$domainLower}.nimbus_suspended";
         $suspendedEnabled = "/etc/nginx/sites-enabled/{$domainLower}.nimbus_suspended";
 
-        // Remove regular site symlink if active
-        self::executeSudo("rm -f " . escapeshellarg($enabledPath));
+        // 1. Remove all enabled symlinks matching domain (e.g. domain, domain.conf, www.domain, etc.)
+        $possibleNames = [
+            $domain,
+            "{$domain}.conf",
+            $domainLower,
+            "{$domainLower}.conf",
+            "www.{$domainLower}",
+            "www.{$domainLower}.conf"
+        ];
+        foreach (array_unique($possibleNames) as $name) {
+            self::executeSudo("rm -f /etc/nginx/sites-enabled/" . escapeshellarg($name));
+        }
 
-        // Check if SSL certificate exists for this domain
+        // 2. Ensure suspended HTML maintenance page exists in /etc/nimbus/
+        self::ensureSuspendedHtmlFile();
+
+        // 3. Detect SSL certificate (Let's Encrypt standard, www, or custom in available config)
         $certPath = "/etc/letsencrypt/live/{$domainLower}/fullchain.pem";
         $keyPath = "/etc/letsencrypt/live/{$domainLower}/privkey.pem";
         $testCert = self::executeSudo("test -f " . escapeshellarg($certPath) . " && test -f " . escapeshellarg($keyPath));
         $hasSsl = ($testCert['code'] === 0);
 
-        // Build a dedicated suspended virtual host that catches all HTTP/HTTPS traffic
-        // and returns a clean 503 Service Unavailable with the Nimbus suspended maintenance page.
-        // This prevents requests from falling through to the default virtual host.
+        if (!$hasSsl) {
+            $testWww = self::executeSudo("test -f /etc/letsencrypt/live/www.{$domainLower}/fullchain.pem && test -f /etc/letsencrypt/live/www.{$domainLower}/privkey.pem");
+            if (($testWww['code'] ?? 1) === 0) {
+                $certPath = "/etc/letsencrypt/live/www.{$domainLower}/fullchain.pem";
+                $keyPath = "/etc/letsencrypt/live/www.{$domainLower}/privkey.pem";
+                $hasSsl = true;
+            }
+        }
+
+        if (!$hasSsl) {
+            // Inspect available config for custom or alternate ssl_certificate
+            foreach (["/etc/nginx/sites-available/{$domain}", "/etc/nginx/sites-available/{$domain}.conf", "/etc/nginx/sites-available/{$domainLower}", "/etc/nginx/sites-available/{$domainLower}.conf"] as $cand) {
+                $res = self::executeSudo("cat " . escapeshellarg($cand) . " 2>/dev/null");
+                $cfgStr = implode("\n", $res['output'] ?? []);
+                if (preg_match('/ssl_certificate\s+([^;]+);/', $cfgStr, $mC) && preg_match('/ssl_certificate_key\s+([^;]+);/', $cfgStr, $mK)) {
+                    $foundC = trim($mC[1]);
+                    $foundK = trim($mK[1]);
+                    $t = self::executeSudo("test -f " . escapeshellarg($foundC) . " && test -f " . escapeshellarg($foundK));
+                    if (($t['code'] ?? 1) === 0) {
+                        $certPath = $foundC;
+                        $keyPath = $foundK;
+                        $hasSsl = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 4. Build dedicated suspended virtual host returning 503
         $vhost = "# Nimbus Suspended Virtual Host for {$domainLower}\n";
         $vhost .= "server {\n";
         $vhost .= "    listen 80;\n";
         $vhost .= "    listen [::]:80;\n";
         $vhost .= "    server_name {$domainLower} www.{$domainLower} *.{$domainLower};\n\n";
-        $vhost .= "    error_page 503 /suspended.html;\n";
+        $vhost .= "    root /etc/nimbus;\n";
+        $vhost .= "    error_page 503 /suspended.html;\n\n";
         $vhost .= "    location = /suspended.html {\n";
-        $vhost .= "        root /usr/local/nimbus/public;\n";
+        $vhost .= "        root /etc/nimbus;\n";
         $vhost .= "        internal;\n";
         $vhost .= "    }\n\n";
         $vhost .= "    location / {\n";
@@ -702,7 +786,6 @@ class ProjectControlService
             $vhost .= "    ssl_protocols TLSv1.2 TLSv1.3;\n";
             $vhost .= "    ssl_ciphers HIGH:!aNULL:!MD5;\n";
 
-            // Only include if files exist to avoid nginx -t failures
             $testOptions = self::executeSudo("test -f /etc/letsencrypt/options-ssl-nginx.conf");
             if (($testOptions['code'] ?? 1) === 0) {
                 $vhost .= "    include /etc/letsencrypt/options-ssl-nginx.conf;\n";
@@ -712,9 +795,10 @@ class ProjectControlService
                 $vhost .= "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n";
             }
             $vhost .= "\n";
-            $vhost .= "    error_page 503 /suspended.html;\n";
+            $vhost .= "    root /etc/nimbus;\n";
+            $vhost .= "    error_page 503 /suspended.html;\n\n";
             $vhost .= "    location = /suspended.html {\n";
-            $vhost .= "        root /usr/local/nimbus/public;\n";
+            $vhost .= "        root /etc/nimbus;\n";
             $vhost .= "        internal;\n";
             $vhost .= "    }\n\n";
             $vhost .= "    location / {\n";
@@ -736,8 +820,6 @@ class ProjectControlService
     private static function enableNginx(string $domain): bool
     {
         $domainLower = strtolower($domain);
-        $availablePath = "/etc/nginx/sites-available/{$domain}";
-        $enabledPath = "/etc/nginx/sites-enabled/{$domain}";
         $suspendedAvailable = "/etc/nginx/sites-available/{$domainLower}.nimbus_suspended";
         $suspendedEnabled = "/etc/nginx/sites-enabled/{$domainLower}.nimbus_suspended";
 
@@ -746,7 +828,20 @@ class ProjectControlService
         self::executeSudo("rm -f " . escapeshellarg($suspendedAvailable));
 
         // Restore original site symlink
-        self::executeSudo("test -f " . escapeshellarg($availablePath) . " && ln -sf " . escapeshellarg($availablePath) . " " . escapeshellarg($enabledPath));
+        $possibleAvailable = [
+            "/etc/nginx/sites-available/{$domain}",
+            "/etc/nginx/sites-available/{$domain}.conf",
+            "/etc/nginx/sites-available/{$domainLower}",
+            "/etc/nginx/sites-available/{$domainLower}.conf"
+        ];
+        foreach (array_unique($possibleAvailable) as $avail) {
+            $test = self::executeSudo("test -f " . escapeshellarg($avail));
+            if (($test['code'] ?? 1) === 0) {
+                $enabledName = basename($avail);
+                self::executeSudo("ln -sf " . escapeshellarg($avail) . " /etc/nginx/sites-enabled/" . escapeshellarg($enabledName));
+                break;
+            }
+        }
 
         return self::reloadNginx();
     }
@@ -754,12 +849,18 @@ class ProjectControlService
     private static function deleteNginx(string $domain): bool
     {
         $domainLower = strtolower($domain);
-        $availablePath = "/etc/nginx/sites-available/{$domain}";
-        $enabledPath = "/etc/nginx/sites-enabled/{$domain}";
-
-        self::executeSudo("rm -f " . escapeshellarg($enabledPath));
-        self::executeSudo("rm -f " . escapeshellarg($availablePath));
-        self::executeSudo("rm -f " . escapeshellarg("{$availablePath}.*"));
+        $possibleNames = [
+            $domain,
+            "{$domain}.conf",
+            $domainLower,
+            "{$domainLower}.conf",
+            "www.{$domainLower}",
+            "www.{$domainLower}.conf"
+        ];
+        foreach (array_unique($possibleNames) as $name) {
+            self::executeSudo("rm -f /etc/nginx/sites-enabled/" . escapeshellarg($name));
+            self::executeSudo("rm -f /etc/nginx/sites-available/" . escapeshellarg($name));
+        }
         self::executeSudo("rm -f /etc/nginx/sites-enabled/{$domainLower}.nimbus_suspended");
         self::executeSudo("rm -f /etc/nginx/sites-available/{$domainLower}.nimbus_suspended");
 
