@@ -1078,7 +1078,7 @@
     </div>
 
     <!-- Web Terminal -->
-    <WebTerminal ref="webTerminalRef" :domain="domain" :currentPath="currentPath" @refresh-files="loadFiles" />
+    <WebTerminal ref="webTerminalRef" :domain="domain" :currentPath="currentPath" @refresh-files="() => loadFiles(true)" />
   </MainLayout>
 </template>
 
@@ -1520,7 +1520,7 @@ const pasteFromClipboard = async () => {
       clipboard.value = { items: [], action: '', sourcePath: '' }
     }
     selectedItems.value = []
-    loadFiles()
+    loadFiles(true)
   } catch (err) {
     showAlert('danger', `Paste failed: ${err.response?.data?.error || 'Unknown error'}`)
   }
@@ -1589,7 +1589,7 @@ const changePermissions = async () => {
     })
     showAlert('success', 'Permissions updated')
     showPermissionsModal.value = false
-    loadFiles()
+    loadFiles(true)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to update permissions')
   }
@@ -1696,7 +1696,7 @@ const performGitAction = async (action, payload = {}) => {
     if (action === 'commit') gitCommitMessage.value = ''
     if (action === 'switch_branch' && payload.branch) gitSelectedBranch.value = payload.branch
     
-    await loadFiles()
+    await loadFiles(true)
   } catch (error) {
     gitLastOutput.value = error.response?.data?.error || 'Action failed'
     showAlert('danger', gitLastOutput.value)
@@ -1781,7 +1781,7 @@ const createFile = async () => {
     showAlert('success', 'File created')
     showCreateFileModal.value = false
     newFileName.value = ''
-    loadFiles()
+    loadFiles(true)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to create file')
   }
@@ -1796,7 +1796,7 @@ const createDirectory = async () => {
     showAlert('success', 'Folder created')
     showCreateDirModal.value = false
     newDirName.value = ''
-    loadFiles()
+    loadFiles(true)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to create folder')
   }
@@ -1817,7 +1817,7 @@ const renameItem = async () => {
     })
     showAlert('success', 'Renamed successfully')
     showRenameModal.value = false
-    loadFiles()
+    loadFiles(true)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to rename')
   }
@@ -1847,7 +1847,7 @@ const executeDelete = async () => {
       showAlert('success', 'Item deleted')
     }
     showDeleteModal.value = false
-    loadFiles()
+    loadFiles(true)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to delete')
   } finally {
@@ -1941,7 +1941,7 @@ const saveFile = async () => {
     showAlert('success', 'File saved')
     originalFileContent.value = fileContent.value
     // We don't closeEditor here anymore, just keep editing
-    loadFiles()
+    loadFiles(true)
   } catch (error) {
     showAlert('danger', error.response?.data?.error || error.response?.data?.message || 'Failed to save file')
   } finally {
@@ -2041,6 +2041,8 @@ const processFilesUpload = async (files) => {
   uploading.value = true
   
   const CHUNK_SIZE = 10 * 1024 * 1024 // 10MB chunks
+  let hasUploadError = false
+  let successfulUploads = 0
   
   for (let i = 0; i < files.length; i++) {
     if (!uploading.value) break
@@ -2062,7 +2064,9 @@ const processFilesUpload = async (files) => {
           signal: uploadController.value.signal,
           onUploadProgress: (p) => uploadProgress.value = Math.round((p.loaded * 100) / p.total)
         })
+        successfulUploads++
       } catch (err) {
+        hasUploadError = true
         if (axios.isCancel(err) || err.name === 'CanceledError') {
           showAlert('warning', 'Upload cancelled')
           break
@@ -2104,6 +2108,7 @@ const processFilesUpload = async (files) => {
           })
         } catch (err) {
           uploadError = true
+          hasUploadError = true
           if (axios.isCancel(err) || err.name === 'CanceledError') {
             showAlert('warning', 'Upload cancelled')
           } else {
@@ -2113,6 +2118,10 @@ const processFilesUpload = async (files) => {
         }
       }
       
+      if (!uploadError && uploading.value) {
+        successfulUploads++
+      }
+      
       if (uploadError || !uploading.value) {
         break
       }
@@ -2120,7 +2129,11 @@ const processFilesUpload = async (files) => {
   }
   uploading.value = false
   uploadController.value = null
-  loadFiles()
+  if (fileInput.value) fileInput.value.value = ''
+  if (!hasUploadError && successfulUploads > 0) {
+    showAlert('success', `${successfulUploads} file${successfulUploads > 1 ? 's' : ''} uploaded successfully`)
+  }
+  loadFiles(true)
 }
 
 const downloadFile = (name) => {
@@ -2197,7 +2210,7 @@ const bulkZip = async () => {
     })
     showAlert('success', 'Zip created')
     selectedItems.value = []
-    loadFiles()
+    loadFiles(true)
   } catch (err) { showAlert('danger', 'Zip failed') }
 }
 
@@ -2233,7 +2246,7 @@ const executeCopyMove = async () => {
     }
     showAlert('success', 'Action completed')
     closeCopyMoveModal()
-    loadFiles()
+    loadFiles(true)
   } catch (err) { showAlert('danger', 'Action failed') }
   finally { copyMoveProcessing.value = false }
 }
@@ -2258,7 +2271,7 @@ const executeExtract = async () => {
     })
     showAlert('success', 'Extracted')
     showExtractModal.value = false
-    loadFiles()
+    loadFiles(true)
   } catch (err) { showAlert('danger', 'Extraction failed') }
   finally { extractProcessing.value = false }
 }
