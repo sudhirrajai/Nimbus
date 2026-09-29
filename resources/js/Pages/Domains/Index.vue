@@ -19,13 +19,27 @@
         </div>
       </div>
 
-      <!-- Alert Messages -->
+      <!-- Floating Toast Alert Notification -->
+      <div v-if="alert.show" class="position-fixed top-3 end-3 border-radius-xl p-3 d-flex align-items-center gap-3 text-white shadow-2xl" 
+        :class="alert.type === 'success' ? 'bg-gradient-success' : (alert.type === 'warning' ? 'bg-gradient-warning text-dark' : 'bg-gradient-danger')"
+        style="z-index: 10099; min-width: 320px; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.25) !important;">
+        <i class="material-symbols-rounded fs-4">{{ alert.type === 'success' ? 'check_circle' : (alert.type === 'warning' ? 'warning' : 'error') }}</i>
+        <div class="flex-grow-1">
+          <h6 class="text-white font-weight-bolder text-xs mb-0">{{ alert.type === 'success' ? 'Success' : (alert.type === 'warning' ? 'Notice' : 'Error') }}</h6>
+          <p class="text-white text-xs mb-0 opacity-9">{{ alert.message }}</p>
+        </div>
+        <button class="btn btn-link text-white p-0 m-0 text-xs" @click="alert.show = false">
+          <i class="material-symbols-rounded text-sm">close</i>
+        </button>
+      </div>
+
+      <!-- Inline Alert Messages -->
       <div class="row" v-if="alert.show">
         <div class="col-12">
-          <div :class="`alert alert-${alert.type} alert-dismissible fade show`" role="alert">
+          <div :class="`alert alert-${alert.type} alert-dismissible fade show text-white shadow-sm border-0`" role="alert">
             <span class="alert-icon"><i class="material-symbols-rounded">{{ alert.type === 'success' ? 'check_circle' : 'error' }}</i></span>
             <span class="alert-text"><strong>{{ alert.type === 'success' ? 'Success!' : 'Error!' }}</strong> {{ alert.message }}</span>
-            <button type="button" class="btn-close" @click="alert.show = false"></button>
+            <button type="button" class="btn-close text-white" @click="alert.show = false"></button>
           </div>
         </div>
       </div>
@@ -1240,14 +1254,16 @@ const saveDomain = async () => {
     return
   }
 
+  const newDomainName = domainInput.value.trim().toLowerCase()
+
   try {
     submitting.value = true
-    await axios.post('/domains', { 
-      domain: domainInput.value.trim().toLowerCase(),
+    const response = await axios.post('/domains', { 
+      domain: newDomainName,
       php_version: createPhpVersion.value
     })
-    showAlert('success', `Domain "${domainInput.value}" has been added successfully`)
     closeModal()
+    showAlert('success', response.data?.message || `Domain "${newDomainName}" has been created successfully!`)
     loadDomains()
   } catch (error) {
     if (error.response?.status === 409) {
