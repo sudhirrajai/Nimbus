@@ -196,6 +196,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/renew-all', [SslController::class, 'renewAll'])->name('renew-all');
         Route::post('/remove', [SslController::class, 'removeCertificate'])->name('remove');
         Route::post('/toggle-auto-renew', [SslController::class, 'toggleAutoRenew'])->name('toggle-auto-renew');
+        Route::post('/cancel', [SslController::class, 'cancelProvisioning'])->name('cancel');
     });
 
     // Database Management — accessible to users with 'database' permission (controller filters)

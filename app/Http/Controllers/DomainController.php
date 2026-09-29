@@ -1330,11 +1330,14 @@ NGINX;
             }
         }
 
-        // 3. Repair all unique domains safely without crashing on individual failures
+        // 3. Fast repair: only ensure missing directories exist and migrate old log paths
         $domainsToRepair = array_unique($domainsToRepair);
         foreach ($domainsToRepair as $domain) {
             try {
-                $this->ensureDomainStructure($this->basePath . $domain);
+                $domainDir = $this->basePath . $domain;
+                if (!File::exists($domainDir)) {
+                    $this->ensureDomainStructure($domainDir);
+                }
                 $this->migrateNginxLogsToSystemPath($domain);
             } catch (\Throwable $e) {
                 \Log::warning("Skipping domain repair for {$domain}: " . $e->getMessage());
@@ -1388,27 +1391,20 @@ NGINX;
      */
     private function ensureDomainStructure($domainPath)
     {
-        // We no longer create logs/ inside the domain to prevent Nginx crashes if users delete them.
-        // Nginx logs are now redirected to /var/log/nginx/
+        // Only initialize missing directories. Do not recurse existing directories with thousands of files.
         if (!File::exists($domainPath)) {
             $this->executeSudoCommand('mkdir -p ' . escapeshellarg($domainPath));
-        }
-
-        $domain = basename($domainPath);
-        $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
-        $this->executeSudoCommand("chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath));
-        $this->executeSudoCommand('chmod 750 ' . escapeshellarg($domainPath));
-        
-        // Ensure index.html exists if empty
-        $indexFile = $domainPath . '/index.html';
-        if (!File::exists($indexFile) && count(File::files($domainPath)) === 0) {
+            $domain = basename($domainPath);
+            $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
+            $this->executeSudoCommand("chown {$siteUser}:{$siteUser} " . escapeshellarg($domainPath));
+            $this->executeSudoCommand('chmod 750 ' . escapeshellarg($domainPath));
+            
+            $indexFile = $domainPath . '/index.html';
             $indexContent = $this->getDefaultIndexContent($domain);
-            file_put_contents($indexFile, $indexContent);
+            @file_put_contents($indexFile, $indexContent);
             $this->executeSudoCommand("chown {$siteUser}:{$siteUser} " . escapeshellarg($indexFile));
             $this->executeSudoCommand('chmod 640 ' . escapeshellarg($indexFile));
         }
-
-        \App\Services\SiteIsolationService::securePath($domainPath, $domain);
     }
 
     /**

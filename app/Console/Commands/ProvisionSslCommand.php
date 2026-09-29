@@ -44,15 +44,21 @@ class ProvisionSslCommand extends Command
                 }
             }
 
-            $this->updateStatus('running', 'Repairing Nginx domain configurations and cleaning checkpoints...');
-            $this->appendLog("Ensuring managed domain directories exist...\n");
-            try {
-                app(DomainController::class)->repairManagedDomainStructures();
-            } catch (\Throwable $e) {
-                $this->appendLog("Notice: repairManagedDomainStructures: " . $e->getMessage() . "\n");
+            $this->updateStatus('running', 'Preparing Nginx and cleaning checkpoints...');
+            $this->appendLog("Ensuring webroot directory exists for {$this->domain}...\n");
+
+            // 1. Ensure target domain webroot exists
+            $targetDir = "/var/www/{$this->domain}";
+            if (!is_dir($targetDir)) {
+                exec('sudo mkdir -p ' . escapeshellarg($targetDir) . ' 2>/dev/null');
             }
 
-            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint 2>/dev/null');
+            // 2. Clean up any stale Let's Encrypt checkpoints, locks, and challenge directives
+            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint /var/run/lock/certbot.lock /var/lib/letsencrypt/.certbot.lock 2>/dev/null');
+            exec("sudo sed -i '/le_http_01_cert_challenge.conf/d' /etc/nginx/nginx.conf 2>/dev/null");
+
+            // 3. Fast validation of enabled Nginx sites webroot directories so nginx -t passes without full chown sweeps
+            $this->ensureEnabledNginxDirectories();
 
             $output = [];
             $returnCode = 0;
@@ -202,5 +208,34 @@ class ProvisionSslCommand extends Command
     private function appendLog(string $message): void
     {
         File::append($this->logFile, $message);
+    }
+
+    private function ensureEnabledNginxDirectories(): void
+    {
+        try {
+            $sitesPath = '/etc/nginx/sites-enabled/';
+            if (!is_dir($sitesPath)) {
+                return;
+            }
+
+            $entries = @scandir($sitesPath) ?: [];
+            foreach ($entries as $file) {
+                if ($file === '.' || $file === '..') continue;
+                $configPath = $sitesPath . $file;
+                $content = @file_get_contents($configPath);
+                if (!$content) continue;
+
+                if (preg_match_all('/^\s*root\s+([^;]+);/m', $content, $matches)) {
+                    foreach ($matches[1] as $rootPath) {
+                        $rootPath = trim($rootPath);
+                        if (!is_dir($rootPath) && str_starts_with($rootPath, '/var/www/')) {
+                            exec('sudo mkdir -p ' . escapeshellarg($rootPath) . ' 2>/dev/null');
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Non-critical, ignore
+        }
     }
 }
