@@ -403,7 +403,7 @@ class FileManagerController extends Controller
             $escapedSource = escapeshellarg($sourceFull);
             $escapedDest = escapeshellarg($destFull);
             $this->executeSudoCommand("cp -r {$escapedSource} {$escapedDest}");
-            $this->executeSudoCommand("chown -R www-data:www-data {$escapedDest}");
+            $this->applyProperOwnership($domain, dirname($destFull), $destFull, true);
 
             $this->clearFileManagerCache();
             return response()->json(['message' => 'Copied successfully']);
@@ -495,8 +495,7 @@ class FileManagerController extends Controller
 
             // Create zip using system command
             $this->executeSudoCommand("cd {$escapedDirPath} && zip -r {$escapedZipPath} {$filesString}");
-            $this->executeSudoCommand("chown www-data:www-data {$escapedZipPath}");
-            $this->executeSudoCommand("chmod 644 {$escapedZipPath}");
+            $this->applyProperOwnership($domain, $dirPath, $zipPath);
 
             $this->clearFileManagerCache();
             return response()->json(['message' => 'ZIP archive created successfully']);
@@ -543,6 +542,7 @@ class FileManagerController extends Controller
             // Create destination directory if it doesn't exist
             if (!File::exists($destPath)) {
                 $this->executeSudoCommand("mkdir -p " . escapeshellarg($destPath));
+                $this->applyProperOwnership($domain, dirname($destPath), $destPath);
             }
 
             $escapedArchive = escapeshellarg($archivePath);
@@ -551,19 +551,7 @@ class FileManagerController extends Controller
 
             // Determine extraction command based on file type
             if ($extension === 'zip') {
-                if (class_exists('ZipArchive')) {
-                    $zip = new \ZipArchive;
-                    $res = $zip->open($archivePath);
-                    if ($res === TRUE) {
-                        $zip->extractTo($destPath);
-                        $zip->close();
-                    } else {
-                        throw new \Exception("Could not open ZIP archive. Error code: " . $res);
-                    }
-                } else {
-                    // Fallback to system unzip if extension is missing
-                    $this->executeSudoCommand("unzip -o {$escapedArchive} -d {$escapedDest}");
-                }
+                $this->executeSudoCommand("unzip -o {$escapedArchive} -d {$escapedDest}");
             } elseif ($extension === 'gz' || str_ends_with(strtolower($name), '.tar.gz')) {
                 $this->executeSudoCommand("tar -xzf {$escapedArchive} -C {$escapedDest}");
             } elseif ($extension === 'tar') {
@@ -572,8 +560,8 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'Unsupported archive format. Supported: zip, tar, tar.gz'], 400);
             }
 
-            // Set proper ownership
-            $this->executeSudoCommand("chown -R www-data:www-data {$escapedDest}");
+            // Set proper ownership recursively
+            $this->applyProperOwnership($domain, $destPath, $destPath, true);
 
             $this->clearFileManagerCache();
             return response()->json([
@@ -694,8 +682,7 @@ class FileManagerController extends Controller
                 $escapedFull = escapeshellarg($fullPath);
                 
                 $this->executeSudoCommand("mv {$escapedTemp} {$escapedFull}");
-                $this->executeSudoCommand("chown www-data:www-data {$escapedFull}");
-                $this->executeSudoCommand("chmod 644 {$escapedFull}");
+                $this->applyProperOwnership($domain, dirname($fullPath), $fullPath);
             }
 
             $this->clearFileManagerCache();
@@ -735,14 +722,12 @@ class FileManagerController extends Controller
 
             if (!File::exists($dirPath)) {
                 $this->executeSudoCommand("mkdir -p " . escapeshellarg($dirPath));
-                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
+                $this->applyProperOwnership($domain, dirname($dirPath), $dirPath);
             }
 
-            File::put($filePath, '');
-
             $escapedFilePath = escapeshellarg($filePath);
-            $this->executeSudoCommand("chown www-data:www-data {$escapedFilePath}");
-            $this->executeSudoCommand("chmod 644 {$escapedFilePath}");
+            $this->executeSudoCommand("touch {$escapedFilePath}");
+            $this->applyProperOwnership($domain, $dirPath, $filePath);
 
             $this->clearFileManagerCache();
             return response()->json(['message' => 'File created successfully']);
@@ -778,11 +763,11 @@ class FileManagerController extends Controller
 
             if (!File::exists($dirPath)) {
                 $this->executeSudoCommand("mkdir -p " . escapeshellarg($dirPath));
-                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
+                $this->applyProperOwnership($domain, dirname($dirPath), $dirPath);
             }
 
             $this->executeSudoCommand("mkdir -p " . escapeshellarg($newDirPath));
-            $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($newDirPath));
+            $this->applyProperOwnership($domain, $dirPath, $newDirPath);
 
             $this->clearFileManagerCache();
             return response()->json(['message' => 'Directory created successfully']);
@@ -812,44 +797,49 @@ class FileManagerController extends Controller
 
             if (!File::exists($dirPath)) {
                 $this->executeSudoCommand("mkdir -p " . escapeshellarg($dirPath));
-                $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($dirPath));
+                $this->applyProperOwnership($domain, dirname($dirPath), $dirPath);
+            }
+
+            // Dedicated staging folder in /tmp guaranteed to be writable by PHP process
+            $stagingDir = sys_get_temp_dir() . '/nimbus_uploads';
+            if (!is_dir($stagingDir)) {
+                @mkdir($stagingDir, 0777, true);
+                @chmod($stagingDir, 0777);
             }
 
             if ($isChunk) {
                 $originalName = $request->input('originalName');
-                $chunkIndex = $request->input('chunkIndex');
-                $totalChunks = $request->input('totalChunks');
+                $chunkIndex = (int)$request->input('chunkIndex', 0);
+                $totalChunks = (int)$request->input('totalChunks', 1);
                 $targetPath = $dirPath . '/' . $originalName;
-                $tempFilePath = $dirPath . '/' . $originalName . '.part';
 
                 if (!$this->isValidPath($domain, $targetPath)) {
                     return response()->json(['error' => 'Access denied'], 403);
                 }
 
+                $safeKey = md5($domain . '_' . $dirPath . '_' . $originalName);
+                $tempFilePath = $stagingDir . '/' . $safeKey . '.part';
+
                 // Delete any orphaned part file if this is the start of a new upload
-                if ($chunkIndex == 0 && File::exists($tempFilePath)) {
-                    File::delete($tempFilePath);
+                if ($chunkIndex === 0 && file_exists($tempFilePath)) {
+                    @unlink($tempFilePath);
                 }
 
-                // Append chunk to temp file
+                // Append chunk to staging file
                 $chunkData = file_get_contents($file->getRealPath());
+                if ($chunkData === false) {
+                    return response()->json(['error' => 'Failed to read upload chunk payload'], 500);
+                }
                 file_put_contents($tempFilePath, $chunkData, FILE_APPEND);
 
-                // Ensure ownership of temp file on first chunk
-                if ($chunkIndex == 0) {
-                    $escapedTemp = escapeshellarg($tempFilePath);
-                    $this->executeSudoCommand("chown www-data:www-data {$escapedTemp}");
-                }
-
-                // If last chunk, rename to original file
-                if ($chunkIndex == $totalChunks - 1) {
+                // If last chunk, atomically move assembled file into targetPath with sudo
+                if ($chunkIndex === $totalChunks - 1) {
                     $escapedTemp = escapeshellarg($tempFilePath);
                     $escapedTarget = escapeshellarg($targetPath);
                     $this->executeSudoCommand("mv {$escapedTemp} {$escapedTarget}");
-                    $this->executeSudoCommand("chmod 644 {$escapedTarget}");
+                    $this->applyProperOwnership($domain, $dirPath, $targetPath);
 
-                    // Nimbus Shield: Scan on upload (Asynchronous background scan for raw performance)
-                    $escapedTarget = escapeshellarg($targetPath);
+                    // Nimbus Shield: Scan on upload (Asynchronous background scan)
                     $cmd = "php artisan shield:scan-file {$escapedTarget}";
                     exec("nohup {$cmd} > /dev/null 2>&1 &");
 
@@ -866,14 +856,18 @@ class FileManagerController extends Controller
                     return response()->json(['error' => 'Access denied'], 403);
                 }
 
-                $file->move($dirPath, $file->getClientOriginalName());
+                // Move file into staging dir first (guaranteed writable by PHP)
+                $tempName = uniqid('up_', true) . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+                $tempFile = $file->move($stagingDir, $tempName);
+                $tempPath = $tempFile->getRealPath();
 
-                $escapedTargetPath = escapeshellarg($targetPath);
-                $this->executeSudoCommand("chown www-data:www-data {$escapedTargetPath}");
-                $this->executeSudoCommand("chmod 644 {$escapedTargetPath}");
-
-                // Nimbus Shield: Scan on upload (Asynchronous background scan for raw performance)
+                // Move atomically to target destination via sudo to bypass directory permission issues
+                $escapedTemp = escapeshellarg($tempPath);
                 $escapedTarget = escapeshellarg($targetPath);
+                $this->executeSudoCommand("mv {$escapedTemp} {$escapedTarget}");
+                $this->applyProperOwnership($domain, $dirPath, $targetPath);
+
+                // Nimbus Shield: Scan on upload (Asynchronous background scan)
                 $cmd = "php artisan shield:scan-file {$escapedTarget}";
                 exec("nohup {$cmd} > /dev/null 2>&1 &");
 
@@ -1674,5 +1668,45 @@ class FileManagerController extends Controller
         }
 
         return $output;
+    }
+
+    /**
+     * Apply proper Linux user:group ownership and permissions to a path
+     */
+    private function applyProperOwnership(string $domain, string $dirPath, string $targetPath, bool $recursive = false): void
+    {
+        $escapedTarget = escapeshellarg($targetPath);
+        $recFlag = $recursive ? "-R " : "";
+
+        $owner = null;
+        if ($domain !== 'root' && $domain !== 'projects') {
+            try {
+                $candidateUser = \App\Services\SiteIsolationService::siteUser($domain);
+                exec("id -u " . escapeshellarg($candidateUser) . " 2>&1", $out, $code);
+                if ($code === 0) {
+                    $owner = "{$candidateUser}:{$candidateUser}";
+                }
+            } catch (\Throwable $e) {
+                // Ignore site user resolution error
+            }
+        }
+
+        if (!$owner && File::exists($dirPath)) {
+            $stat = trim(shell_exec("stat -c '%U:%G' " . escapeshellarg($dirPath) . " 2>/dev/null") ?? '');
+            if (!empty($stat) && !str_contains($stat, '%')) {
+                $owner = $stat;
+            }
+        }
+
+        if (!$owner) {
+            $owner = "www-data:www-data";
+        }
+
+        $this->executeSudoCommand("chown {$recFlag}{$owner} {$escapedTarget}");
+        if (is_dir($targetPath)) {
+            $this->executeSudoCommand("chmod {$recFlag}755 {$escapedTarget}");
+        } else {
+            $this->executeSudoCommand("chmod {$recFlag}644 {$escapedTarget}");
+        }
     }
 }
