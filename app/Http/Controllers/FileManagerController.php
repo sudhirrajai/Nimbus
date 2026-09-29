@@ -82,9 +82,9 @@ class FileManagerController extends Controller
     private function clearFileManagerCache()
     {
         try {
-            Cache::increment('fm_cache_ver');
+            Cache::forever('fm_cache_ver', (string)(microtime(true) . '_' . mt_rand(1000, 9999)));
         } catch (\Exception $e) {
-            // Ignore cache increment errors
+            // Ignore cache errors
         }
     }
 
@@ -111,7 +111,7 @@ class FileManagerController extends Controller
                 $this->clearFileManagerCache();
             }
 
-            $cacheVersion = Cache::get('fm_cache_ver', 1);
+            $cacheVersion = (string) Cache::get('fm_cache_ver', '1');
             $cacheKey = "fm_list_{$cacheVersion}_" . md5($fullPath) . ($showHidden ? '_h' : '');
 
             if (!$forceRefresh && Cache::has($cacheKey)) {
@@ -1137,6 +1137,8 @@ class FileManagerController extends Controller
                         : $this->executeGitCommand($repoPath, ['stash', 'pop']);
                     break;
             }
+
+            $this->clearFileManagerCache();
 
             return response()->json([
                 'message' => 'Git action completed successfully.',
