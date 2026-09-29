@@ -464,7 +464,7 @@
       </div>
 
       <!-- Output Modal -->
-      <div class="modal-backdrop fade show" v-if="showOutputModal" @click="isPollingSsl ? null : closeOutputModal()"></div>
+      <div class="modal-backdrop fade show" v-if="showOutputModal" @click="closeOutputModal"></div>
       <div class="modal fade show d-block" v-if="showOutputModal">
         <div class="modal-dialog modal-lg modal-dialog-centered">
           <div class="modal-content">
@@ -476,7 +476,7 @@
                 </i>
                 {{ outputTitle }}
               </h5>
-              <button type="button" class="btn-close" @click="closeOutputModal" :disabled="isPollingSsl"></button>
+              <button type="button" class="btn-close" @click="closeOutputModal"></button>
             </div>
             <div class="modal-body">
               <div v-if="isPollingSsl" class="mb-3 d-flex align-items-center justify-content-between p-2 rounded bg-gray-100">
@@ -492,8 +492,12 @@
               <button v-if="canForceDomain && !isPollingSsl" class="btn bg-gradient-warning me-auto" @click="installSsl(canForceDomain, true)">
                 <i class="material-symbols-rounded text-sm me-1">warning</i> Force Issue Anyway
               </button>
-              <button class="btn btn-outline-secondary" @click="closeOutputModal" :disabled="isPollingSsl">
-                {{ isPollingSsl ? 'Installing in background...' : 'Close' }}
+              <button v-if="isPollingSsl" class="btn btn-outline-danger me-auto" @click="cancelSsl(activePollingDomain)" :disabled="isCancellingSsl">
+                <span v-if="isCancellingSsl" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">cancel</i> Cancel Installation
+              </button>
+              <button class="btn btn-outline-secondary" @click="closeOutputModal">
+                {{ isPollingSsl ? 'Dismiss (Runs in Background)' : 'Close' }}
               </button>
             </div>
           </div>
@@ -647,6 +651,8 @@ const outputSuccess = ref(true)
 const canForceDomain = ref(null)
 
 const isPollingSsl = ref(false)
+const activePollingDomain = ref('')
+const isCancellingSsl = ref(false)
 const currentProgressMessage = ref('')
 let pollingTimer = null
 
@@ -849,9 +855,33 @@ const getDaysRemainingText = (daysRemaining) => {
 
 
 const closeOutputModal = () => {
-  if (isPollingSsl.value) return
   showOutputModal.value = false
   canForceDomain.value = null
+}
+
+const cancelSsl = async (domainName) => {
+  const target = domainName || activePollingDomain.value
+  if (!target) return
+  try {
+    isCancellingSsl.value = true
+    const res = await axios.post('/ssl/cancel', { domain: target })
+    showAlert('warning', res.data.message || 'SSL provisioning cancelled')
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
+    isPollingSsl.value = false
+    installing.value = null
+    renewing.value = null
+    outputTitle.value = 'SSL Operation Cancelled'
+    outputSuccess.value = false
+    outputContent.value = 'The background SSL provisioning task was cancelled by user.\nYou can click "Force Issue Anyway" or reinstall to try again.'
+    canForceDomain.value = target
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to cancel SSL provisioning')
+  } finally {
+    isCancellingSsl.value = false
+  }
 }
 
 onUnmounted(() => {
@@ -864,8 +894,26 @@ onUnmounted(() => {
 const pollSslStatus = (domainName, isRenewal = false) => {
   if (pollingTimer) clearInterval(pollingTimer)
   isPollingSsl.value = true
+  activePollingDomain.value = domainName
+  let pollAttempts = 0
+  const maxAttempts = 120 // 4 minutes
 
   pollingTimer = setInterval(async () => {
+    pollAttempts++
+    if (pollAttempts > maxAttempts) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+      isPollingSsl.value = false
+      installing.value = null
+      renewing.value = null
+      outputSuccess.value = false
+      outputTitle.value = 'SSL Operation Timed Out'
+      outputContent.value = 'The SSL provisioning process took too long. You can click "Cancel Installation" or "Force Issue Anyway" to restart fresh.'
+      canForceDomain.value = domainName
+      showAlert('danger', 'SSL provisioning timed out')
+      return
+    }
+
     try {
       const res = await axios.get('/ssl/install-status', {
         params: { domain: domainName }
@@ -900,6 +948,7 @@ const pollSslStatus = (domainName, isRenewal = false) => {
         outputSuccess.value = false
         outputTitle.value = isRenewal ? 'SSL Renewal Failed' : 'SSL Installation Failed'
         outputContent.value = (error ? `${error}\n\n` : '') + (details || log || 'An error occurred during certbot execution.')
+        canForceDomain.value = domainName
         showAlert('danger', error || `Failed to ${isRenewal ? 'renew' : 'install'} SSL certificate`)
       }
     } catch (err) {
@@ -912,6 +961,7 @@ const installSsl = async (domain, force = false) => {
   const domainName = typeof domain === 'string' ? domain : (domain.domain || '')
   try {
     installing.value = domainName
+    activePollingDomain.value = domainName
     canForceDomain.value = null
     outputTitle.value = `Installing SSL: ${domainName}`
     currentProgressMessage.value = 'Contacting server and launching background installation...'
@@ -966,6 +1016,7 @@ const renewSsl = async (domain) => {
   const domainName = typeof domain === 'string' ? domain : (domain.domain || '')
   try {
     renewing.value = domainName
+    activePollingDomain.value = domainName
     outputTitle.value = `Renewing SSL: ${domainName}`
     currentProgressMessage.value = 'Contacting server and launching background renewal...'
     outputContent.value = 'Connecting to Let\'s Encrypt for renewal...'

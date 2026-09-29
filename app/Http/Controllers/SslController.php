@@ -771,7 +771,8 @@ class SslController extends Controller
                 $existing = json_decode(@file_get_contents($statusFile), true);
                 if (is_array($existing) && ($existing['status'] ?? '') === 'running') {
                     $startedAt = isset($existing['started_at']) ? strtotime($existing['started_at']) : 0;
-                    if (time() - $startedAt < 600) {
+                    $isStale = (time() - $startedAt >= 180);
+                    if (!$request->boolean('force') && !$isStale) {
                         return response()->json([
                             'status' => 'running',
                             'message' => "SSL installation is already in progress for {$domain}",
@@ -779,6 +780,10 @@ class SslController extends Controller
                             'polling' => true
                         ]);
                     }
+
+                    // Forced or stale: terminate zombie process and clean locks
+                    exec("sudo pkill -f 'ssl:provision .*" . escapeshellarg($domain) . "' 2>/dev/null");
+                    exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint /var/run/lock/certbot.lock /var/lib/letsencrypt/.certbot.lock 2>/dev/null');
                 }
             }
 
@@ -887,7 +892,8 @@ class SslController extends Controller
                 $existing = json_decode(@file_get_contents($statusFile), true);
                 if (is_array($existing) && ($existing['status'] ?? '') === 'running') {
                     $startedAt = isset($existing['started_at']) ? strtotime($existing['started_at']) : 0;
-                    if (time() - $startedAt < 600) {
+                    $isStale = (time() - $startedAt >= 180);
+                    if (!$request->boolean('force') && !$isStale) {
                         return response()->json([
                             'status' => 'running',
                             'message' => "SSL renewal is already in progress for {$domain}",
@@ -895,6 +901,10 @@ class SslController extends Controller
                             'polling' => true
                         ]);
                     }
+
+                    // Forced or stale: terminate zombie process and clean locks
+                    exec("sudo pkill -f 'ssl:provision .*" . escapeshellarg($domain) . "' 2>/dev/null");
+                    exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint /var/run/lock/certbot.lock /var/lib/letsencrypt/.certbot.lock 2>/dev/null');
                 }
             }
 
@@ -983,6 +993,51 @@ class SslController extends Controller
                 'details' => $statusData['details'] ?? null
             ]);
         } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Cancel an in-progress or stuck SSL installation for a domain.
+     */
+    public function cancelProvisioning(Request $request)
+    {
+        try {
+            $domain = strtolower(trim($request->input('domain')));
+            if (!$domain) {
+                return response()->json(['error' => 'Domain is required'], 400);
+            }
+
+            if (!auth()->user()->hasDomainPermission($domain, 'ssl')) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $domainSafe = preg_replace('/[^a-z0-9_.-]/i', '_', $domain);
+            $statusFile = storage_path("logs/ssl_{$domainSafe}_status.json");
+
+            // Kill any running ssl:provision artisan process for this domain
+            exec("sudo pkill -f 'ssl:provision .*" . escapeshellarg($domain) . "' 2>/dev/null");
+            exec('sudo rm -rf /var/lib/letsencrypt/temp_checkpoint /var/run/lock/certbot.lock /var/lib/letsencrypt/.certbot.lock 2>/dev/null');
+
+            $data = [
+                'status' => 'failed',
+                'action' => 'install',
+                'domain' => $domain,
+                'progress' => 'Installation cancelled by user',
+                'started_at' => now()->toDateTimeString(),
+                'finished_at' => now()->toDateTimeString(),
+                'error' => 'Installation cancelled by user',
+                'details' => 'The background SSL provisioning process was terminated.'
+            ];
+            File::put($statusFile, json_encode($data, JSON_PRETTY_PRINT));
+            File::append(storage_path("logs/ssl_{$domainSafe}.log"), "\n[CANCELLED] Installation cancelled by user at " . now()->toDateTimeString() . "\n");
+
+            return response()->json([
+                'status' => 'cancelled',
+                'message' => "SSL provisioning for {$domain} was cancelled."
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to cancel SSL provisioning for {$domain}: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
