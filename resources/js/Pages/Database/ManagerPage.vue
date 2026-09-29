@@ -37,6 +37,12 @@
               <button class="btn btn-xs mb-0 border-radius-md" :class="activeTab === 'sql' ? 'btn-primary' : 'btn-outline-white text-dark'" @click="activeTab = 'sql'">
                 <i class="material-symbols-rounded text-xs me-1">terminal</i> SQL Console
               </button>
+              <button class="btn btn-xs mb-0 border-radius-md" :class="activeTab === 'search_replace' ? 'btn-primary' : 'btn-outline-white text-dark'" @click="activeTab = 'search_replace'">
+                <i class="material-symbols-rounded text-xs me-1">find_replace</i> Search & Replace
+              </button>
+              <button class="btn btn-xs mb-0 border-radius-md" :class="activeTab === 'processlist' ? 'btn-primary' : 'btn-outline-white text-dark'" @click="activeTab = 'processlist'; loadProcesslist()">
+                <i class="material-symbols-rounded text-xs me-1">query_stats</i> Processlist
+              </button>
               <button class="btn btn-xs mb-0 border-radius-md" :class="activeTab === 'create_table' ? 'btn-primary' : 'btn-outline-white text-dark'" @click="activeTab = 'create_table'">
                 <i class="material-symbols-rounded text-xs me-1">add_box</i> New Table
               </button>
@@ -138,13 +144,16 @@
                   <h5 class="mb-0 font-weight-bolder text-dark">{{ selectedTable }}</h5>
                   <span v-if="tableSchema" class="badge bg-light text-secondary border text-xxs">{{ tableSchema.columns.length }} cols</span>
                   
-                  <!-- Sub-mode toggle: Data vs Schema -->
+                  <!-- Sub-mode toggle: Data vs Schema vs Operations -->
                   <div class="btn-group btn-group-sm shadow-none ms-3">
                     <button class="btn btn-xs border-radius-lg" :class="subView === 'data' ? 'btn-primary' : 'btn-outline-secondary'" @click="subView = 'data'">
                       <i class="material-symbols-rounded text-xs me-1">dataset</i> Data Grid
                     </button>
                     <button class="btn btn-xs border-radius-lg ms-1" :class="subView === 'schema' ? 'btn-primary' : 'btn-outline-secondary'" @click="subView = 'schema'">
                       <i class="material-symbols-rounded text-xs me-1">schema</i> Structure
+                    </button>
+                    <button class="btn btn-xs border-radius-lg ms-1" :class="subView === 'operations' ? 'btn-primary' : 'btn-outline-secondary'" @click="subView = 'operations'">
+                      <i class="material-symbols-rounded text-xs me-1">build</i> Operations
                     </button>
                   </div>
                 </div>
@@ -478,6 +487,150 @@
                   </div>
                 </template>
               </div>
+
+              <!-- SubView 3: Table Operations (phpMyAdmin style) -->
+              <div v-else-if="subView === 'operations'" class="flex-grow-1 overflow-y-auto pe-2" style="max-height: 520px;" @wheel.stop>
+                <!-- Operation Result Alert -->
+                <div v-if="operationResult" class="alert alert-info alert-dismissible fade show p-3 text-white border-radius-lg mb-3 shadow-sm">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="font-weight-bold text-xs">
+                      <i class="material-symbols-rounded text-sm align-middle me-1">check_circle</i>
+                      Operation {{ operationResult.operation }} on `{{ operationResult.table }}`
+                    </span>
+                    <button type="button" class="btn-close p-2" @click="operationResult = null"></button>
+                  </div>
+                  <div v-if="operationResult.results && operationResult.results.length" class="table-responsive bg-white border-radius-md p-1">
+                    <table class="table table-sm table-borderless text-dark text-xxs mb-0">
+                      <thead>
+                        <tr class="border-bottom">
+                          <th v-for="(v, k) in operationResult.results[0]" :key="k" class="font-weight-bold">{{ k }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(r, idx) in operationResult.results" :key="idx">
+                          <td v-for="(v, k) in r" :key="k">{{ v }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <!-- Storage Footprint -->
+                  <div class="col-12" v-if="currentTableObject">
+                    <div class="card bg-gray-50 border shadow-none p-3 border-radius-xl">
+                      <h6 class="font-weight-bolder text-xs text-uppercase text-secondary mb-3">Storage Footprint & Diagnostics</h6>
+                      <div class="row g-2 text-center">
+                        <div class="col-md-3 col-6">
+                          <div class="p-2 bg-white border-radius-lg border">
+                            <span class="text-xxs text-secondary text-uppercase d-block">Data Size</span>
+                            <span class="text-sm font-weight-bold text-dark">{{ currentTableObject.data_size || currentTableObject.total_size }}</span>
+                          </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                          <div class="p-2 bg-white border-radius-lg border">
+                            <span class="text-xxs text-secondary text-uppercase d-block">Index Size</span>
+                            <span class="text-sm font-weight-bold text-dark">{{ currentTableObject.index_size || '0 B' }}</span>
+                          </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                          <div class="p-2 bg-white border-radius-lg border">
+                            <span class="text-xxs text-secondary text-uppercase d-block">Overhead (Free)</span>
+                            <span class="text-sm font-weight-bold" :class="currentTableObject.data_free > 0 ? 'text-warning' : 'text-success'">
+                              {{ currentTableObject.overhead || '0 B' }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                          <div class="p-2 bg-white border-radius-lg border">
+                            <span class="text-xxs text-secondary text-uppercase d-block">Engine / Collation</span>
+                            <span class="text-xs font-weight-bold text-info">{{ currentTableObject.engine }} ({{ currentTableObject.collation }})</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Quick Maintenance Operations -->
+                  <div class="col-md-6">
+                    <div class="card border shadow-sm p-3 border-radius-xl h-100">
+                      <h6 class="font-weight-bolder text-dark mb-1">
+                        <i class="material-symbols-rounded text-info text-sm align-middle me-1">build_circle</i>
+                        Table Maintenance
+                      </h6>
+                      <p class="text-xxs text-secondary mb-3">Execute administrative database commands directly on `{{ selectedTable }}`.</p>
+                      
+                      <div class="d-grid gap-2">
+                        <button class="btn btn-sm btn-outline-primary text-start d-flex justify-content-between align-items-center mb-0" 
+                          @click="runTableOperation('optimize')" :disabled="operatingTable">
+                          <span><i class="material-symbols-rounded text-xs me-1 align-middle">speed</i> Optimize Table</span>
+                          <span class="text-xxs text-secondary">Defragments space & indexes</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary text-start d-flex justify-content-between align-items-center mb-0" 
+                          @click="runTableOperation('check')" :disabled="operatingTable">
+                          <span><i class="material-symbols-rounded text-xs me-1 align-middle">verified</i> Check Table</span>
+                          <span class="text-xxs text-secondary">Scans for corrupted records</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary text-start d-flex justify-content-between align-items-center mb-0" 
+                          @click="runTableOperation('analyze')" :disabled="operatingTable">
+                          <span><i class="material-symbols-rounded text-xs me-1 align-middle">insights</i> Analyze Table</span>
+                          <span class="text-xxs text-secondary">Updates optimizer key statistics</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-warning text-start d-flex justify-content-between align-items-center mb-0" 
+                          @click="runTableOperation('repair')" :disabled="operatingTable">
+                          <span><i class="material-symbols-rounded text-xs me-1 align-middle">healing</i> Repair Table</span>
+                          <span class="text-xxs text-secondary">Repairs damaged table files</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Table Duplication & Auto Increment -->
+                  <div class="col-md-6">
+                    <div class="card border shadow-sm p-3 border-radius-xl mb-3">
+                      <h6 class="font-weight-bolder text-dark mb-1">
+                        <i class="material-symbols-rounded text-success text-sm align-middle me-1">content_copy</i>
+                        Duplicate / Copy Table
+                      </h6>
+                      <p class="text-xxs text-secondary mb-2">Clone `{{ selectedTable }}` with structure or data.</p>
+                      
+                      <div class="mb-2">
+                        <label class="form-label text-xxs font-weight-bold text-uppercase mb-1">New Table Name</label>
+                        <input v-model="copyTableForm.new_name" type="text" class="form-control form-control-sm text-xs" :placeholder="`${selectedTable}_copy`" />
+                      </div>
+                      <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="form-check">
+                          <input class="form-check-input" type="radio" value="structure_and_data" id="copyModeBoth" v-model="copyTableForm.mode">
+                          <label class="form-check-label text-xs" for="copyModeBoth">Structure & Data</label>
+                        </div>
+                        <div class="form-check">
+                          <input class="form-check-input" type="radio" value="structure" id="copyModeStruct" v-model="copyTableForm.mode">
+                          <label class="form-check-label text-xs" for="copyModeStruct">Structure Only</label>
+                        </div>
+                      </div>
+                      <button class="btn btn-xs bg-gradient-success mb-0" @click="copyTableAction" :disabled="copyingTable || !copyTableForm.new_name.trim()">
+                        <span v-if="copyingTable" class="spinner-border spinner-border-sm me-1"></span>
+                        <i class="material-symbols-rounded text-xs me-1 align-middle">content_copy</i> Copy Table
+                      </button>
+                    </div>
+
+                    <!-- Auto Increment -->
+                    <div class="card border shadow-sm p-3 border-radius-xl">
+                      <h6 class="font-weight-bolder text-dark mb-1">
+                        <i class="material-symbols-rounded text-primary text-sm align-middle me-1">tag</i>
+                        AUTO_INCREMENT Seed
+                      </h6>
+                      <div class="d-flex align-items-center gap-2 mt-2">
+                        <input v-model.number="autoIncForm.value" type="number" min="1" class="form-control form-control-sm text-xs" style="width: 140px;" />
+                        <button class="btn btn-xs bg-gradient-primary mb-0" @click="saveAutoIncrement" :disabled="savingAutoInc">
+                          <span v-if="savingAutoInc" class="spinner-border spinner-border-sm me-1"></span>
+                          Save AUTO_INCREMENT
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </template>
 
             <!-- No Table Selected Prompt -->
@@ -616,6 +769,11 @@
               </button>
               <button class="btn btn-xs btn-outline-secondary mb-0" @click="sqlQuery = `SELECT * FROM \`${selectedTable || 'tables'}\` LIMIT 25`">SELECT Template</button>
               <button class="btn btn-xs btn-outline-secondary mb-0" @click="sqlQuery = `SHOW TABLES`">SHOW TABLES</button>
+              <button class="btn btn-outline-info mb-0 border-radius-lg px-3" @click="explainQuery" :disabled="explainingSql || !sqlQuery.trim()">
+                <span v-if="explainingSql" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">visibility</i>
+                Explain Plan
+              </button>
               <button class="btn bg-gradient-primary mb-0 border-radius-lg px-4" @click="runQuery" :disabled="executingSql || !sqlQuery.trim()">
                 <span v-if="executingSql" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="material-symbols-rounded text-sm me-1">play_arrow</i>
@@ -630,6 +788,37 @@
               <div class="sql-editor-container mb-3 shadow-inner border border-radius-lg bg-gradient-dark p-3">
                 <textarea ref="sqlTextarea" v-model="sqlQuery" class="form-control bg-transparent border-0 text-white font-monospace text-sm" 
                   rows="6" placeholder="SELECT * FROM users WHERE active = 1;" @keydown.ctrl.enter.prevent="runQuery" @keydown.meta.enter.prevent="runQuery"></textarea>
+              </div>
+
+              <!-- EXPLAIN Execution Plan Result -->
+              <div v-if="explainResult" class="sql-explain-container border border-radius-lg p-3 bg-gray-50 overflow-y-auto mb-3" @wheel.stop>
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-info">EXPLAIN Query Plan</span>
+                    <span class="text-xs text-secondary font-monospace text-truncate" style="max-width: 450px;">{{ explainResult.query }}</span>
+                  </div>
+                  <button class="btn btn-link text-secondary p-0 m-0 text-xs" @click="explainResult = null">Close</button>
+                </div>
+                <div class="table-responsive border border-radius-lg bg-white overflow-y-auto" style="max-height: 250px;">
+                  <table class="table table-sm table-hover align-items-center mb-0">
+                    <thead class="bg-gray-100">
+                      <tr>
+                        <th v-for="c in explainResult.columns" :key="c" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8 ps-2">{{ c }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, ri) in explainResult.rows" :key="ri">
+                        <td v-for="c in explainResult.columns" :key="c" class="text-xs text-dark ps-2">
+                          <span v-if="c === 'type' && r[c] === 'ALL'" class="badge bg-danger text-xxs">ALL (Full Scan)</span>
+                          <span v-else-if="c === 'type' && r[c] === 'index'" class="badge bg-warning text-dark text-xxs">index</span>
+                          <span v-else-if="c === 'type' && ['ref', 'range'].includes(r[c])" class="badge bg-info text-xxs">{{ r[c] }}</span>
+                          <span v-else-if="c === 'type' && ['const', 'eq_ref'].includes(r[c])" class="badge bg-success text-xxs">{{ r[c] }}</span>
+                          <span v-else>{{ r[c] === null ? 'NULL' : r[c] }}</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <!-- Query Results Section -->
@@ -836,8 +1025,57 @@
                 </div>
 
                 <button class="btn bg-gradient-info w-100 mb-0 border-radius-lg" @click="downloadExport">
-                  <i class="material-symbols-rounded text-sm me-1">download</i> Download Export
+                  <i class="material-symbols-rounded text-sm me-1">download</i> Download Quick Export
                 </button>
+
+                <!-- Custom Multi-Table Export (phpMyAdmin Style) -->
+                <div class="mt-4 pt-3 border-top">
+                  <h6 class="font-weight-bold text-xs text-uppercase text-secondary mb-2">Custom Multi-Table Export</h6>
+                  <div class="d-flex gap-3 mb-2">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" value="sql" id="fmtSql" v-model="customExport.format">
+                      <label class="form-check-label text-xs" for="fmtSql">SQL</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" value="csv" id="fmtCsv" v-model="customExport.format">
+                      <label class="form-check-label text-xs" for="fmtCsv">CSV</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" value="json" id="fmtJson" v-model="customExport.format">
+                      <label class="form-check-label text-xs" for="fmtJson">JSON</label>
+                    </div>
+                  </div>
+                  <div class="d-flex gap-3 mb-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" value="both" id="modeBoth" v-model="customExport.mode">
+                      <label class="form-check-label text-xs" for="modeBoth">Structure & Data</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" value="structure" id="modeStruct" v-model="customExport.mode">
+                      <label class="form-check-label text-xs" for="modeStruct">Structure Only</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" value="data" id="modeData" v-model="customExport.mode">
+                      <label class="form-check-label text-xs" for="modeData">Data Only</label>
+                    </div>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label text-xxs font-weight-bold text-uppercase mb-0">Select Tables ({{ customExport.tables.length }} of {{ tables.length }})</label>
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-link text-xxs p-0 text-primary me-2" @click="customExport.tables = tables.map(t => t.name)">All</button>
+                      <button class="btn btn-link text-xxs p-0 text-secondary" @click="customExport.tables = []">None</button>
+                    </div>
+                  </div>
+                  <div class="overflow-y-auto border border-radius-lg p-2 bg-white mb-3" style="max-height: 120px;">
+                    <div v-for="t in tables" :key="t.name" class="form-check py-0">
+                      <input class="form-check-input" type="checkbox" :value="t.name" :id="`exp_tbl_${t.name}`" v-model="customExport.tables">
+                      <label class="form-check-label text-xxs font-weight-bold" :for="`exp_tbl_${t.name}`">{{ t.name }}</label>
+                    </div>
+                  </div>
+                  <button class="btn btn-sm btn-outline-info w-100 mb-0 border-radius-lg" @click="downloadCustomExport">
+                    <i class="material-symbols-rounded text-xs me-1">download</i> Download Custom Export
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -864,6 +1102,235 @@
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Tab 6: Global Search & Replace -->
+        <div v-else-if="activeTab === 'search_replace'" class="flex-grow-1 p-4 bg-white overflow-y-auto h-100" @wheel.stop>
+          <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div>
+              <h5 class="font-weight-bolder text-dark mb-0">Global Search & Replace</h5>
+              <p class="text-xs text-secondary mb-0">Search strings across all tables or perform batch find-and-replace in `{{ database }}`.</p>
+            </div>
+            
+            <div class="btn-group btn-group-sm bg-gray-100 p-1 border-radius-lg">
+              <button class="btn btn-xs mb-0 border-radius-md" :class="searchReplaceTab === 'search' ? 'btn-primary' : 'btn-outline-white text-dark'" @click="searchReplaceTab = 'search'">
+                <i class="material-symbols-rounded text-xs me-1">search</i> Search Across Tables
+              </button>
+              <button class="btn btn-xs mb-0 border-radius-md" :class="searchReplaceTab === 'replace' ? 'btn-primary' : 'btn-outline-white text-dark'" @click="searchReplaceTab = 'replace'">
+                <i class="material-symbols-rounded text-xs me-1">find_replace</i> Find & Replace
+              </button>
+            </div>
+          </div>
+
+          <!-- Sub-Tab 1: Search -->
+          <div v-if="searchReplaceTab === 'search'">
+            <div class="card bg-gray-50 border p-3 border-radius-xl mb-4 shadow-sm">
+              <div class="row g-3 align-items-end">
+                <div class="col-md-8">
+                  <label class="form-label text-xs font-weight-bold text-uppercase">Search Term</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="material-symbols-rounded text-sm">search</i></span>
+                    <input v-model="globalSearchTerm" type="text" class="form-control" placeholder="Enter word, phrase, email, URL, or ID..." @keyup.enter="runGlobalSearch" />
+                    <button v-if="globalSearchTerm" class="btn btn-outline-secondary mb-0" @click="globalSearchTerm = ''">
+                      <i class="material-symbols-rounded text-xs">close</i>
+                    </button>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <button class="btn bg-gradient-primary w-100 mb-0" @click="runGlobalSearch" :disabled="searchingGlobal || !globalSearchTerm.trim()">
+                    <span v-if="searchingGlobal" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="material-symbols-rounded text-sm me-1">search</i>
+                    {{ searchingGlobal ? 'Searching All Tables...' : 'Search All Tables' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Search Results Summary -->
+            <div v-if="globalSearchResults">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="font-weight-bold text-dark text-xs text-uppercase mb-0">
+                  Search Results for "<span class="text-primary">{{ globalSearchResults.term }}</span>"
+                  <span class="badge bg-success ms-2">{{ globalSearchResults.total_matches }} total matches</span>
+                </h6>
+              </div>
+
+              <div v-if="globalSearchResults.results.length === 0" class="alert alert-secondary text-xs text-white p-3 border-radius-lg">
+                No matches found across any tables in this database.
+              </div>
+
+              <div v-else class="table-responsive border border-radius-xl bg-white shadow-sm">
+                <table class="table table-hover align-items-center mb-0">
+                  <thead class="bg-gray-100">
+                    <tr>
+                      <th class="ps-3 text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Table</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Matches</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Scanned Columns</th>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-8" style="width: 140px;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="res in globalSearchResults.results" :key="res.table">
+                      <td class="ps-3 text-xs font-weight-bold text-dark">
+                        <i class="material-symbols-rounded text-xs text-info align-middle me-1">table_rows</i>
+                        {{ res.table }}
+                      </td>
+                      <td>
+                        <span class="badge bg-gradient-success text-xxs">{{ res.matches }} matches</span>
+                      </td>
+                      <td class="text-xxs text-secondary">
+                        <span class="text-truncate d-inline-block" style="max-width: 400px;" :title="res.columns.join(', ')">
+                          {{ res.columns.slice(0, 5).join(', ') }}{{ res.columns.length > 5 ? ` +${res.columns.length - 5} more` : '' }}
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <button class="btn btn-xs btn-outline-primary mb-0 border-radius-lg" 
+                          @click="activeTab = 'browse'; selectedTable = res.table; subView = 'data'; dataSearchQuery = globalSearchResults.term; loadTableData()">
+                          <i class="material-symbols-rounded text-xxs me-1">visibility</i> Browse
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-Tab 2: Find & Replace -->
+          <div v-else-if="searchReplaceTab === 'replace'">
+            <div class="alert alert-warning text-xs text-dark p-3 border-radius-lg mb-4">
+              <i class="material-symbols-rounded text-sm align-middle me-1 text-warning">warning</i>
+              <strong>Caution:</strong> Batch find-and-replace executes irreversible string replacements in your database text columns.
+            </div>
+
+            <div class="row g-4">
+              <div class="col-md-6">
+                <div class="card border shadow-sm p-4 border-radius-xl h-100">
+                  <h6 class="font-weight-bolder text-dark mb-3">1. Replacement Values</h6>
+                  
+                  <div class="mb-3">
+                    <label class="form-label text-xs font-weight-bold text-uppercase">Find String (Search)</label>
+                    <input v-model="globalReplaceSearchTerm" type="text" class="form-control" placeholder="e.g. http://old-domain.com" />
+                  </div>
+
+                  <div class="mb-4">
+                    <label class="form-label text-xs font-weight-bold text-uppercase">Replace With</label>
+                    <input v-model="globalReplaceTerm" type="text" class="form-control" placeholder="e.g. https://new-domain.com" />
+                  </div>
+
+                  <button class="btn bg-gradient-danger w-100 mb-0 border-radius-lg" 
+                    @click="runGlobalReplace" 
+                    :disabled="replacingGlobal || !globalReplaceSearchTerm || selectedReplaceTables.length === 0">
+                    <span v-if="replacingGlobal" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="material-symbols-rounded text-sm me-1">find_replace</i>
+                    {{ replacingGlobal ? 'Replacing in Database...' : `Replace in ${selectedReplaceTables.length} Selected Tables` }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="card border shadow-sm p-4 border-radius-xl h-100">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="font-weight-bolder text-dark mb-0">2. Select Tables</h6>
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-link text-xxs p-0 text-primary me-2" @click="selectedReplaceTables = tables.map(t => t.name)">Select All</button>
+                      <button class="btn btn-link text-xxs p-0 text-secondary" @click="selectedReplaceTables = []">Clear</button>
+                    </div>
+                  </div>
+                  <p class="text-xxs text-secondary mb-3">Check the tables you want to run replacements across.</p>
+
+                  <div class="table-checklist overflow-y-auto border border-radius-lg p-2 bg-gray-50" style="max-height: 250px;">
+                    <div v-for="t in tables" :key="t.name" class="form-check py-1">
+                      <input class="form-check-input" type="checkbox" :value="t.name" :id="`repl_tbl_${t.name}`" v-model="selectedReplaceTables">
+                      <label class="form-check-label text-xs font-weight-bold" :for="`repl_tbl_${t.name}`">
+                        {{ t.name }} <span class="text-xxs text-secondary font-weight-normal">({{ t.rows }} rows)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Replace Output Summary -->
+            <div v-if="globalReplaceResult" class="mt-4">
+              <div class="alert alert-success text-xs text-white p-3 border-radius-lg mb-3">
+                <i class="material-symbols-rounded text-sm align-middle me-1">check_circle</i>
+                {{ globalReplaceResult.message }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 7: Processlist & Active Queries -->
+        <div v-else-if="activeTab === 'processlist'" class="flex-grow-1 p-4 bg-white overflow-y-auto d-flex flex-column h-100" @wheel.stop>
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <h5 class="font-weight-bolder text-dark mb-0">MySQL Processlist & Active Queries</h5>
+              <p class="text-xs text-secondary mb-0">Monitor currently running queries and kill runaway or locked database processes.</p>
+            </div>
+            
+            <div class="d-flex align-items-center gap-3">
+              <span class="badge bg-gradient-info text-xxs">{{ processlist.length }} Queries</span>
+              <button class="btn btn-sm btn-outline-secondary mb-0 border-radius-lg" @click="loadProcesslist" :disabled="loadingProcesslist">
+                <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loadingProcesslist }">refresh</i> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="table-responsive flex-grow-1 border border-radius-xl bg-white shadow-sm overflow-y-auto">
+            <div v-if="loadingProcesslist" class="text-center py-5">
+              <div class="spinner-border text-primary" role="status"></div>
+              <p class="text-xs text-secondary mt-2">Fetching live database processlist...</p>
+            </div>
+
+            <div v-else-if="processlist.length === 0" class="text-center py-5 text-muted">
+              <i class="material-symbols-rounded text-secondary opacity-5 fs-1 mb-2">done_all</i>
+              <h6 class="text-dark font-weight-bold">No Active Queries Running</h6>
+              <p class="text-xs text-secondary mb-0">Server is currently idle with no hanging or active queries.</p>
+            </div>
+
+            <table v-else class="table table-hover align-items-center mb-0">
+              <thead class="bg-gray-100 sticky-top">
+                <tr>
+                  <th class="ps-3 text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">ID</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">User / Host</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">DB</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Command</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Duration</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">State</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-8">Query Info</th>
+                  <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-8" style="width: 100px;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in processlist" :key="p.id">
+                  <td class="ps-3 font-monospace text-xs text-dark font-weight-bold">#{{ p.id }}</td>
+                  <td class="text-xs text-secondary">
+                    <span class="font-weight-bold text-dark">{{ p.user }}</span>@{{ p.host }}
+                  </td>
+                  <td class="text-xs text-info font-weight-bold">{{ p.db || '—' }}</td>
+                  <td class="text-xs text-secondary font-mono">{{ p.command }}</td>
+                  <td>
+                    <span :class="p.time > 10 ? 'badge bg-danger' : (p.time > 2 ? 'badge bg-warning text-dark' : 'badge bg-success')" class="text-xxs">
+                      {{ p.time }}s
+                    </span>
+                  </td>
+                  <td class="text-xxs text-secondary text-truncate" style="max-width: 150px;" :title="p.state">{{ p.state || 'None' }}</td>
+                  <td class="text-xs text-dark font-monospace text-truncate" style="max-width: 350px;" :title="p.info || ''">
+                    {{ p.info || 'Sleep / Idle' }}
+                  </td>
+                  <td class="text-center">
+                    <button class="btn btn-xs btn-danger mb-0 border-radius-lg" 
+                      @click="killQueryProcess(p.id)" 
+                      :disabled="killingProcessId === p.id">
+                      <span v-if="killingProcessId === p.id" class="spinner-border spinner-border-sm me-1"></span>
+                      <i v-else class="material-symbols-rounded text-xxs me-1">close</i> Kill
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -1412,6 +1879,42 @@ const sqlResult = ref(null)
 const executingSql = ref(false)
 const showSqlHistoryDrawer = ref(false)
 const sqlHistory = ref([])
+const explainingSql = ref(false)
+const explainResult = ref(null)
+
+// Table Operations (phpMyAdmin style)
+const operationResult = ref(null)
+const operatingTable = ref(false)
+const copyTableForm = ref({ new_name: '', mode: 'structure_and_data', target_name: '' })
+const copyingTable = ref(false)
+const autoIncForm = ref({ value: null })
+const savingAutoInc = ref(false)
+
+// Custom Multi-Table Exporter
+const customExport = ref({
+  tables: [],
+  format: 'sql',
+  mode: 'both',
+  drop_tables: true
+})
+
+// Global Search & Replace Across Database
+const searchReplaceTab = ref('search')
+const globalSearchTerm = ref('')
+const searchingGlobal = ref(false)
+const globalSearchResults = ref(null)
+const selectedSearchTables = ref([])
+
+const globalReplaceSearchTerm = ref('')
+const globalReplaceTerm = ref('')
+const replacingGlobal = ref(false)
+const globalReplaceResult = ref(null)
+const selectedReplaceTables = ref([])
+
+// Processlist & Active Queries Monitor
+const processlist = ref([])
+const loadingProcesslist = ref(false)
+const killingProcessId = ref(null)
 
 // Create Table
 const newTable = ref({
@@ -1447,6 +1950,10 @@ const filteredTables = computed(() => {
   return tables.value.filter(t => t.name.toLowerCase().includes(q))
 })
 
+const currentTableObject = computed(() => {
+  return tables.value.find(t => t.name === selectedTable.value) || null
+})
+
 onMounted(() => {
   if (props.database) {
     loadTables()
@@ -1458,6 +1965,13 @@ watch(selectedTable, (val) => {
   if (val) {
     currentPage.value = 1
     selectedRows.value = []
+    operationResult.value = null
+    copyTableForm.value.new_name = `${val}_copy`
+    copyTableForm.value.target_name = `${val}_copy`
+    const tbl = tables.value.find(t => t.name === val)
+    if (tbl) {
+      autoIncForm.value.value = tbl.auto_increment || null
+    }
     loadTableData()
     loadTableSchema()
   }
@@ -1476,6 +1990,18 @@ const loadTables = async () => {
     tables.value = response.data.tables || []
     if (tables.value.length > 0 && !selectedTable.value) {
       selectedTable.value = tables.value[0].name
+    }
+    if (selectedTable.value) {
+      const cur = tables.value.find(t => t.name === selectedTable.value)
+      if (cur) {
+        autoIncForm.value.value = cur.auto_increment || null
+      }
+    }
+    if (customExport.value.tables.length === 0) {
+      customExport.value.tables = tables.value.map(t => t.name)
+    }
+    if (selectedReplaceTables.value.length === 0) {
+      selectedReplaceTables.value = tables.value.map(t => t.name)
     }
   } catch (err) {
     showAlert('danger', err.response?.data?.error || 'Failed to load database tables')
@@ -1557,11 +2083,10 @@ const saveInlineEdit = async (row, colName) => {
       whereDict = row
     }
 
-    const updatedData = { ...row, [colName]: newVal }
-
-    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/row/update`, {
+    await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/cell/update`, {
       where: whereDict,
-      data: updatedData
+      column: colName,
+      value: newVal
     })
     row[colName] = newVal
     showAlert('success', `Cell updated (${colName})`)
@@ -2191,6 +2716,205 @@ const uploadImport = async () => {
     showAlert('danger', err.response?.data?.error || 'Import failed')
   } finally {
     importing.value = false
+  }
+}
+
+// EXPLAIN Query Plan
+const explainQuery = async () => {
+  if (!sqlQuery.value.trim()) return
+  const targetSql = extractTargetQuery(sqlTextarea.value, sqlQuery.value)
+  if (!targetSql || !targetSql.trim()) return
+
+  try {
+    explainingSql.value = true
+    explainResult.value = null
+    const response = await axios.post(`/database/manager/${props.database}/query/explain`, {
+      sql: targetSql
+    })
+    explainResult.value = response.data
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to explain query plan')
+  } finally {
+    explainingSql.value = false
+  }
+}
+
+// Table Operations (Optimize, Repair, Check, Analyze, Copy, Auto-Increment)
+const runTableOperation = async (op) => {
+  if (!selectedTable.value) return
+  try {
+    operatingTable.value = true
+    const response = await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/${op}`)
+    operationResult.value = response.data
+    showAlert('success', `Operation '${op.toUpperCase()}' completed on ${selectedTable.value}`)
+    await loadTables()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || `Failed to run ${op} on table`)
+  } finally {
+    operatingTable.value = false
+  }
+}
+
+const copyTableAction = async () => {
+  const target = (copyTableForm.value.new_name || copyTableForm.value.target_name || '').trim()
+  if (!selectedTable.value || !target) return
+  try {
+    copyingTable.value = true
+    const response = await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/copy`, {
+      new_name: target,
+      new_table_name: target,
+      target_name: target,
+      mode: copyTableForm.value.mode || 'structure_and_data'
+    })
+    showAlert('success', response.data.message || 'Table copied successfully')
+    await loadTables()
+    selectedTable.value = target
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to copy table')
+  } finally {
+    copyingTable.value = false
+  }
+}
+
+const saveAutoIncrement = async () => {
+  if (!selectedTable.value || !autoIncForm.value.value) return
+  try {
+    savingAutoInc.value = true
+    const response = await axios.post(`/database/manager/${props.database}/tables/${selectedTable.value}/auto-increment`, {
+      value: autoIncForm.value.value,
+      auto_increment: autoIncForm.value.value
+    })
+    showAlert('success', response.data.message || 'AUTO_INCREMENT value updated')
+    await loadTables()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to update AUTO_INCREMENT')
+  } finally {
+    savingAutoInc.value = false
+  }
+}
+
+// Custom Multi-Table Exporter
+const downloadCustomExport = () => {
+  if (!customExport.value.tables.length) {
+    showAlert('warning', 'Please select at least one table to export')
+    return
+  }
+
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = `/database/manager/${props.database}/export/custom`
+  form.style.display = 'none'
+
+  const csrfMeta = document.querySelector('meta[name="csrf-token"]')
+  if (csrfMeta) {
+    const csrfInput = document.createElement('input')
+    csrfInput.type = 'hidden'
+    csrfInput.name = '_token'
+    csrfInput.value = csrfMeta.getAttribute('content')
+    form.appendChild(csrfInput)
+  }
+
+  customExport.value.tables.forEach(tbl => {
+    const tblInput = document.createElement('input')
+    tblInput.type = 'hidden'
+    tblInput.name = 'tables[]'
+    tblInput.value = tbl
+    form.appendChild(tblInput)
+  })
+
+  const fmtInput = document.createElement('input')
+  fmtInput.type = 'hidden'
+  fmtInput.name = 'format'
+  fmtInput.value = customExport.value.format
+  form.appendChild(fmtInput)
+
+  const modeInput = document.createElement('input')
+  modeInput.type = 'hidden'
+  modeInput.name = 'mode'
+  modeInput.value = customExport.value.mode
+  form.appendChild(modeInput)
+
+  if (customExport.value.drop_tables) {
+    const dropInput = document.createElement('input')
+    dropInput.type = 'hidden'
+    dropInput.name = 'drop_tables'
+    dropInput.value = '1'
+    form.appendChild(dropInput)
+  }
+
+  document.body.appendChild(form)
+  form.submit()
+  document.body.removeChild(form)
+}
+
+// Global Search & Replace Across Database
+const runGlobalSearch = async () => {
+  if (!globalSearchTerm.value.trim()) return
+  try {
+    searchingGlobal.value = true
+    globalSearchResults.value = null
+    const response = await axios.post(`/database/manager/${props.database}/search`, {
+      term: globalSearchTerm.value.trim(),
+      tables: selectedSearchTables.value
+    })
+    globalSearchResults.value = response.data
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Global search failed')
+  } finally {
+    searchingGlobal.value = false
+  }
+}
+
+const runGlobalReplace = async () => {
+  if (!globalReplaceSearchTerm.value.trim() || selectedReplaceTables.value.length === 0) return
+  if (!confirm(`Are you sure you want to replace "${globalReplaceSearchTerm.value}" with "${globalReplaceTerm.value}" across ${selectedReplaceTables.value.length} selected tables? This will update data directly.`)) {
+    return
+  }
+
+  try {
+    replacingGlobal.value = true
+    globalReplaceResult.value = null
+    const response = await axios.post(`/database/manager/${props.database}/replace`, {
+      search: globalReplaceSearchTerm.value,
+      replace: globalReplaceTerm.value,
+      tables: selectedReplaceTables.value
+    })
+    globalReplaceResult.value = response.data
+    showAlert('success', response.data.message || 'Global replace completed')
+    loadTableData()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Global replace failed')
+  } finally {
+    replacingGlobal.value = false
+  }
+}
+
+// Processlist & Active Queries
+const loadProcesslist = async () => {
+  try {
+    loadingProcesslist.value = true
+    const response = await axios.get(`/database/manager/${props.database}/processlist`)
+    processlist.value = response.data.processes || response.data.processlist || []
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to load processlist')
+  } finally {
+    loadingProcesslist.value = false
+  }
+}
+
+const killQueryProcess = async (processId) => {
+  if (!confirm(`Terminate MySQL process #${processId}?`)) return
+  try {
+    killingProcessId.value = processId
+    const response = await axios.post(`/database/manager/${props.database}/processlist/kill`, {
+      process_id: processId
+    })
+    showAlert('success', response.data.message || `Process #${processId} killed`)
+    loadProcesslist()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to kill process')
+  } finally {
+    killingProcessId.value = null
   }
 }
 </script>

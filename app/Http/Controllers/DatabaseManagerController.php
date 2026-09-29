@@ -282,6 +282,7 @@ class DatabaseManagerController extends Controller
 
                 $dataLength = (int)($row['Data_length'] ?? 0);
                 $indexLength = (int)($row['Index_length'] ?? 0);
+                $dataFree = (int)($row['Data_free'] ?? 0);
                 $totalBytes = $dataLength + $indexLength;
 
                 $result[] = [
@@ -290,6 +291,10 @@ class DatabaseManagerController extends Controller
                     'rows' => (int)($row['Rows'] ?? 0),
                     'data_length' => $dataLength,
                     'index_length' => $indexLength,
+                    'data_free' => $dataFree,
+                    'data_size' => $this->formatBytes($dataLength),
+                    'index_size' => $this->formatBytes($indexLength),
+                    'overhead' => $this->formatBytes($dataFree),
                     'total_size' => $this->formatBytes($totalBytes),
                     'total_bytes' => $totalBytes,
                     'collation' => $row['Collation'] ?? 'utf8mb4_unicode_ci',
@@ -1546,6 +1551,733 @@ class DatabaseManagerController extends Controller
             return response()->json([
                 'success' => true,
                 'row' => $row ?: null
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 18. Inline single cell update
+     */
+    public function updateCell(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $column = $request->input('column');
+            $value = $request->input('value');
+            $where = $request->input('where', []);
+
+            if (empty($column) || empty($where) || !is_array($where)) {
+                return response()->json(['error' => 'Column and primary key where criteria required'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+            $safeCol = $this->sanitizeIdentifier($column);
+
+            $pdo = $this->getPdoConnection($db);
+            $colsStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTable}`");
+            $validCols = array_column($colsStmt->fetchAll(), 'Field');
+
+            if (!in_array($column, $validCols)) {
+                return response()->json(['error' => "Column '{$column}' not found in table."], 400);
+            }
+
+            $whereClauses = [];
+            $bindings = [':new_val' => $value];
+
+            foreach ($where as $k => $v) {
+                if (in_array($k, $validCols)) {
+                    $safeK = $this->sanitizeIdentifier($k);
+                    $param = ":pk_{$safeK}";
+                    if ($v === null) {
+                        $whereClauses[] = "`{$safeK}` IS NULL";
+                    } else {
+                        $whereClauses[] = "`{$safeK}` = {$param}";
+                        $bindings[$param] = $v;
+                    }
+                }
+            }
+
+            if (empty($whereClauses)) {
+                return response()->json(['error' => 'Valid row identification criteria required'], 400);
+            }
+
+            $sql = "UPDATE `{$safeDb}`.`{$safeTable}` SET `{$safeCol}` = :new_val WHERE " . implode(' AND ', $whereClauses) . " LIMIT 1";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($bindings);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cell updated successfully',
+                'column' => $column,
+                'value' => $value
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 19. Optimize Table (OPTIMIZE TABLE)
+     */
+    public function optimizeTable(string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->query("OPTIMIZE TABLE `{$safeDb}`.`{$safeTable}`");
+            $results = $stmt->fetchAll();
+
+            return response()->json([
+                'success' => true,
+                'operation' => 'optimize',
+                'table' => $table,
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 20. Repair Table (REPAIR TABLE)
+     */
+    public function repairTable(string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->query("REPAIR TABLE `{$safeDb}`.`{$safeTable}`");
+            $results = $stmt->fetchAll();
+
+            return response()->json([
+                'success' => true,
+                'operation' => 'repair',
+                'table' => $table,
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 21. Check Table (CHECK TABLE)
+     */
+    public function checkTable(string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->query("CHECK TABLE `{$safeDb}`.`{$safeTable}`");
+            $results = $stmt->fetchAll();
+
+            return response()->json([
+                'success' => true,
+                'operation' => 'check',
+                'table' => $table,
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 22. Analyze Table (ANALYZE TABLE)
+     */
+    public function analyzeTable(string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->query("ANALYZE TABLE `{$safeDb}`.`{$safeTable}`");
+            $results = $stmt->fetchAll();
+
+            return response()->json([
+                'success' => true,
+                'operation' => 'analyze',
+                'table' => $table,
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 23. Copy / Duplicate Table
+     */
+    public function copyTable(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $newTableName = trim($request->input('new_table_name', $request->input('new_name', $request->input('target_name', ''))));
+            $mode = $request->input('mode', $request->boolean('copy_data', true) ? 'structure_and_data' : 'structure'); // 'structure' or 'structure_and_data'
+
+            if (empty($newTableName)) {
+                return response()->json(['error' => 'New table name is required'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeSourceTable = $this->sanitizeIdentifier($table);
+            $safeNewTable = $this->sanitizeIdentifier($newTableName);
+
+            $pdo = $this->getPdoConnection($db);
+
+            // Verify new table does not already exist
+            $existsStmt = $pdo->query("SHOW TABLES LIKE '{$safeNewTable}'");
+            if (!empty($existsStmt->fetchAll())) {
+                return response()->json(['error' => "Table '{$newTableName}' already exists."], 400);
+            }
+
+            // Create table structure
+            $pdo->exec("CREATE TABLE `{$safeDb}`.`{$safeNewTable}` LIKE `{$safeDb}`.`{$safeSourceTable}`");
+
+            // Copy data if requested
+            $copiedRows = 0;
+            if ($mode === 'structure_and_data') {
+                $copiedRows = $pdo->exec("INSERT INTO `{$safeDb}`.`{$safeNewTable}` SELECT * FROM `{$safeDb}`.`{$safeSourceTable}`");
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Table duplicated successfully as '{$newTableName}'" . ($mode === 'structure_and_data' ? " with {$copiedRows} rows." : " (structure only)."),
+                'new_table' => $newTableName,
+                'copied_rows' => $copiedRows
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 24. Adjust / Reset Auto Increment
+     */
+    public function updateAutoIncrement(Request $request, string $db, string $table)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $val = (int)$request->input('value', $request->input('auto_increment', 1));
+            if ($val < 1) {
+                return response()->json(['error' => 'Auto increment value must be at least 1'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = $this->sanitizeIdentifier($table);
+
+            $pdo = $this->getPdoConnection($db);
+            $pdo->exec("ALTER TABLE `{$safeDb}`.`{$safeTable}` AUTO_INCREMENT = {$val}");
+
+            return response()->json([
+                'success' => true,
+                'message' => "AUTO_INCREMENT updated to {$val} for table '{$table}'",
+                'value' => $val
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 25. Explain SQL Query Plan
+     */
+    public function explainQuery(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $sql = trim($request->input('sql', ''));
+            if (empty($sql)) {
+                return response()->json(['error' => 'SQL query cannot be empty'], 400);
+            }
+
+            // Ensure query is an explainable query
+            $firstWord = strtoupper(strtok($sql, " \n\t;"));
+            if (!in_array($firstWord, ['SELECT', 'TABLE', 'UPDATE', 'DELETE', 'INSERT', 'REPLACE'])) {
+                return response()->json(['error' => 'EXPLAIN is only supported for DML queries (SELECT, UPDATE, DELETE, INSERT).'], 400);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->query("EXPLAIN " . $sql);
+            $rows = $stmt->fetchAll();
+
+            $columns = [];
+            if (!empty($rows)) {
+                $columns = array_keys($rows[0]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'columns' => $columns,
+                'rows' => $rows,
+                'query' => $sql
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 26. Global Search across tables
+     */
+    public function globalSearch(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $term = trim($request->input('term', ''));
+            if (strlen($term) < 1) {
+                return response()->json(['error' => 'Search term cannot be empty'], 400);
+            }
+
+            $targetTables = $request->input('tables', []);
+            $safeDb = $this->sanitizeIdentifier($db);
+            $pdo = $this->getPdoConnection($db);
+
+            // Get all tables if none specified
+            $allTablesStmt = $pdo->query("SHOW TABLES FROM `{$safeDb}`");
+            $allTables = array_column($allTablesStmt->fetchAll(), "Tables_in_{$db}");
+
+            if (empty($targetTables) || !is_array($targetTables)) {
+                $tablesToSearch = $allTables;
+            } else {
+                $tablesToSearch = array_intersect($targetTables, $allTables);
+            }
+
+            $results = [];
+            $totalMatches = 0;
+
+            foreach ($tablesToSearch as $tbl) {
+                $safeTbl = $this->sanitizeIdentifier($tbl);
+                $colsStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTbl}`");
+                $cols = $colsStmt->fetchAll();
+
+                $searchableCols = [];
+                foreach ($cols as $col) {
+                    $type = strtolower($col['Type']);
+                    if (
+                        str_contains($type, 'char') ||
+                        str_contains($type, 'text') ||
+                        str_contains($type, 'int') ||
+                        str_contains($type, 'binary') ||
+                        str_contains($type, 'blob')
+                    ) {
+                        $searchableCols[] = $this->sanitizeIdentifier($col['Field']);
+                    }
+                }
+
+                if (empty($searchableCols)) continue;
+
+                $whereClauses = [];
+                $bindings = [];
+                $paramVal = "%{$term}%";
+
+                foreach ($searchableCols as $idx => $sc) {
+                    $param = ":p_{$idx}";
+                    $whereClauses[] = "`{$sc}` LIKE {$param}";
+                    $bindings[$param] = $paramVal;
+                }
+
+                $countSql = "SELECT COUNT(*) as cnt FROM `{$safeDb}`.`{$safeTbl}` WHERE " . implode(' OR ', $whereClauses);
+                $stmt = $pdo->prepare($countSql);
+                $stmt->execute($bindings);
+                $count = (int)($stmt->fetch()['cnt'] ?? 0);
+
+                if ($count > 0) {
+                    $results[] = [
+                        'table' => $tbl,
+                        'matches' => $count,
+                        'columns' => $searchableCols
+                    ];
+                    $totalMatches += $count;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'term' => $term,
+                'total_matches' => $totalMatches,
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 27. Global Search and Replace across tables
+     */
+    public function globalReplace(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $searchTerm = (string)$request->input('search_term', '');
+            $replaceTerm = (string)$request->input('replace_term', '');
+            $tables = $request->input('tables', []);
+
+            if (empty($searchTerm)) {
+                return response()->json(['error' => 'Search term is required'], 400);
+            }
+
+            if (empty($tables) || !is_array($tables)) {
+                return response()->json(['error' => 'At least one table must be selected for replace'], 400);
+            }
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $pdo = $this->getPdoConnection($db);
+
+            $allTablesStmt = $pdo->query("SHOW TABLES FROM `{$safeDb}`");
+            $allTables = array_column($allTablesStmt->fetchAll(), "Tables_in_{$db}");
+            $validTables = array_intersect($tables, $allTables);
+
+            $summary = [];
+            $totalUpdatedRows = 0;
+
+            foreach ($validTables as $tbl) {
+                $safeTbl = $this->sanitizeIdentifier($tbl);
+                $colsStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTbl}`");
+                $cols = $colsStmt->fetchAll();
+
+                $tableUpdatedRows = 0;
+
+                foreach ($cols as $col) {
+                    $type = strtolower($col['Type']);
+                    if (
+                        str_contains($type, 'char') ||
+                        str_contains($type, 'text')
+                    ) {
+                        $safeCol = $this->sanitizeIdentifier($col['Field']);
+                        $updateSql = "UPDATE `{$safeDb}`.`{$safeTbl}` SET `{$safeCol}` = REPLACE(`{$safeCol}`, :search_val, :replace_val) WHERE `{$safeCol}` LIKE :like_val";
+                        $stmt = $pdo->prepare($updateSql);
+                        $stmt->execute([
+                            ':search_val' => $searchTerm,
+                            ':replace_val' => $replaceTerm,
+                            ':like_val' => "%{$searchTerm}%"
+                        ]);
+                        $tableUpdatedRows += $stmt->rowCount();
+                    }
+                }
+
+                $summary[] = [
+                    'table' => $tbl,
+                    'updated_rows' => $tableUpdatedRows
+                ];
+                $totalUpdatedRows += $tableUpdatedRows;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Replace completed: {$totalUpdatedRows} row modifications across " . count($summary) . " tables.",
+                'total_updated' => $totalUpdatedRows,
+                'summary' => $summary
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 28. Get Processlist
+     */
+    public function getProcesslist(string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+            $stmt = $pdo->query("SHOW FULL PROCESSLIST");
+            $rawList = $stmt->fetchAll();
+
+            $user = auth()->user();
+            $isRoot = $user && $user->isRoot();
+
+            $processes = [];
+            foreach ($rawList as $proc) {
+                $procDb = $proc['db'] ?? $proc['Db'] ?? '';
+                // If not root, only show queries running against current database
+                if (!$isRoot && !empty($procDb) && strtolower($procDb) !== strtolower($db)) {
+                    continue;
+                }
+
+                $processes[] = [
+                    'id' => (int)($proc['Id'] ?? $proc['id'] ?? 0),
+                    'user' => $proc['User'] ?? $proc['user'] ?? '',
+                    'host' => $proc['Host'] ?? $proc['host'] ?? '',
+                    'db' => $procDb,
+                    'command' => $proc['Command'] ?? $proc['command'] ?? '',
+                    'time' => (int)($proc['Time'] ?? $proc['time'] ?? 0),
+                    'state' => $proc['State'] ?? $proc['state'] ?? '',
+                    'info' => $proc['Info'] ?? $proc['info'] ?? null,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'database' => $db,
+                'count' => count($processes),
+                'processes' => $processes,
+                'processlist' => $processes
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 29. Kill Process
+     */
+    public function killProcess(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $processId = (int)$request->input('process_id');
+            if ($processId <= 0) {
+                return response()->json(['error' => 'Valid process ID required'], 400);
+            }
+
+            $pdo = $this->getPdoConnection($db);
+
+            // Double check process exists
+            $stmt = $pdo->prepare("SHOW FULL PROCESSLIST");
+            $stmt->execute();
+            $rawList = $stmt->fetchAll();
+
+            $found = false;
+            $user = auth()->user();
+            $isRoot = $user && $user->isRoot();
+
+            foreach ($rawList as $p) {
+                $pid = (int)($p['Id'] ?? $p['id'] ?? 0);
+                if ($pid === $processId) {
+                    $procDb = $p['db'] ?? $p['Db'] ?? '';
+                    if (!$isRoot && !empty($procDb) && strtolower($procDb) !== strtolower($db)) {
+                        return response()->json(['error' => 'Permission denied: Cannot terminate processes outside your database.'], 403);
+                    }
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (!$found) {
+                return response()->json(['error' => "Process #{$processId} no longer active."], 404);
+            }
+
+            $pdo->exec("KILL {$processId}");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Process #{$processId} terminated successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 30. Custom Multi-Table Export (SQL, CSV, JSON)
+     */
+    public function exportCustom(Request $request, string $db)
+    {
+        try {
+            if (!$this->checkDatabaseAccess($db)) {
+                return response()->json(['error' => 'Permission denied'], 403);
+            }
+
+            $format = strtolower($request->input('format', 'sql')); // 'sql', 'json', 'csv'
+            $mode = $request->input('mode', 'both'); // 'both', 'structure', 'data'
+            $tables = $request->input('tables', []);
+            $dropTables = (bool)$request->input('drop_tables', true);
+
+            $safeDb = $this->sanitizeIdentifier($db);
+            $pdo = $this->getPdoConnection($db);
+
+            $allTablesStmt = $pdo->query("SHOW TABLES FROM `{$safeDb}`");
+            $allTables = array_column($allTablesStmt->fetchAll(), "Tables_in_{$db}");
+
+            if (empty($tables) || !is_array($tables)) {
+                $targetTables = $allTables;
+            } else {
+                $targetTables = array_intersect($tables, $allTables);
+            }
+
+            if (empty($targetTables)) {
+                return response()->json(['error' => 'No valid tables selected for export'], 400);
+            }
+
+            $timestamp = date('Y-m-d_His');
+
+            // Format 1: JSON Export
+            if ($format === 'json') {
+                $data = [
+                    'database' => $db,
+                    'exported_at' => date('Y-m-d H:i:s'),
+                    'tables' => []
+                ];
+
+                foreach ($targetTables as $tbl) {
+                    $safeTbl = $this->sanitizeIdentifier($tbl);
+                    $tblData = ['name' => $tbl];
+
+                    if ($mode === 'structure' || $mode === 'both') {
+                        $createStmt = $pdo->query("SHOW CREATE TABLE `{$safeDb}`.`{$safeTbl}`");
+                        $row = $createStmt->fetch();
+                        $tblData['create_statement'] = $row['Create Table'] ?? '';
+                    }
+
+                    if ($mode === 'data' || $mode === 'both') {
+                        $dataStmt = $pdo->query("SELECT * FROM `{$safeDb}`.`{$safeTbl}`");
+                        $tblData['rows'] = $dataStmt->fetchAll();
+                        $tblData['row_count'] = count($tblData['rows']);
+                    }
+
+                    $data['tables'][] = $tblData;
+                }
+
+                $jsonContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                return response($jsonContent, 200, [
+                    'Content-Type' => 'application/json',
+                    'Content-Disposition' => "attachment; filename=\"{$db}_export_{$timestamp}.json\""
+                ]);
+            }
+
+            // Format 2: CSV Export (for single or combined multi-table)
+            if ($format === 'csv') {
+                $output = fopen('php://temp', 'r+');
+                foreach ($targetTables as $tbl) {
+                    $safeTbl = $this->sanitizeIdentifier($tbl);
+                    fputcsv($output, ["=== TABLE: {$tbl} ==="]);
+
+                    $colsStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTbl}`");
+                    $cols = array_column($colsStmt->fetchAll(), 'Field');
+                    fputcsv($output, $cols);
+
+                    if ($mode !== 'structure') {
+                        $dataStmt = $pdo->query("SELECT * FROM `{$safeDb}`.`{$safeTbl}`");
+                        while ($row = $dataStmt->fetch(PDO::FETCH_NUM)) {
+                            fputcsv($output, $row);
+                        }
+                    }
+                    fputcsv($output, []); // Blank separator line
+                }
+                rewind($output);
+                $csvData = stream_get_contents($output);
+                fclose($output);
+
+                return response($csvData, 200, [
+                    'Content-Type' => 'text/csv',
+                    'Content-Disposition' => "attachment; filename=\"{$db}_export_{$timestamp}.csv\""
+                ]);
+            }
+
+            // Format 3: SQL Dump
+            $output = "-- ============================================================\n";
+            $output .= "-- Nimbus Native Database Manager Dump\n";
+            $output .= "-- Database: `{$db}`\n";
+            $output .= "-- Exported on: " . date('Y-m-d H:i:s') . "\n";
+            $output .= "-- Tables: " . implode(', ', $targetTables) . "\n";
+            $output .= "-- Mode: {$mode}\n";
+            $output .= "-- ============================================================\n\n";
+            $output .= "SET FOREIGN_KEY_CHECKS=0;\n";
+            $output .= "SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\n";
+            $output .= "SET time_zone = '+00:00';\n\n";
+
+            foreach ($targetTables as $tbl) {
+                $safeTbl = $this->sanitizeIdentifier($tbl);
+                $output .= "-- ------------------------------------------------------------\n";
+                $output .= "-- Table structure & data for `{$tbl}`\n";
+                $output .= "-- ------------------------------------------------------------\n";
+
+                if ($mode === 'structure' || $mode === 'both') {
+                    if ($dropTables) {
+                        $output .= "DROP TABLE IF EXISTS `{$safeTbl}`;\n";
+                    }
+                    $createStmt = $pdo->query("SHOW CREATE TABLE `{$safeDb}`.`{$safeTbl}`");
+                    $createRow = $createStmt->fetch();
+                    $output .= ($createRow['Create Table'] ?? '') . ";\n\n";
+                }
+
+                if ($mode === 'data' || $mode === 'both') {
+                    $rowsStmt = $pdo->query("SELECT * FROM `{$safeDb}`.`{$safeTbl}`");
+                    $rows = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    if (!empty($rows)) {
+                        $cols = array_keys($rows[0]);
+                        $escapedCols = array_map(fn($c) => "`" . $this->sanitizeIdentifier($c) . "`", $cols);
+                        $colList = implode(', ', $escapedCols);
+
+                        $output .= "INSERT INTO `{$safeTbl}` ({$colList}) VALUES\n";
+                        $valueRows = [];
+
+                        foreach ($rows as $r) {
+                            $vals = [];
+                            foreach ($r as $v) {
+                                if ($v === null) {
+                                    $vals[] = 'NULL';
+                                } else {
+                                    $vals[] = $pdo->quote($v);
+                                }
+                            }
+                            $valueRows[] = "(" . implode(', ', $vals) . ")";
+                        }
+
+                        $output .= implode(",\n", $valueRows) . ";\n\n";
+                    }
+                }
+            }
+
+            $output .= "SET FOREIGN_KEY_CHECKS=1;\n";
+
+            return response($output, 200, [
+                'Content-Type' => 'application/sql',
+                'Content-Disposition' => "attachment; filename=\"{$db}_export_{$timestamp}.sql\""
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);

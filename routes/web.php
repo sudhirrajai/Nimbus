@@ -250,6 +250,29 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/manager/{db}/tables/{table}/foreign-key/add', [DatabaseManagerController::class, 'addForeignKey'])->name('manager.fk.add');
         Route::post('/manager/{db}/tables/{table}/foreign-key/drop', [DatabaseManagerController::class, 'dropForeignKey'])->name('manager.fk.drop');
         Route::post('/manager/{db}/tables/{table}/fk-lookup', [DatabaseManagerController::class, 'lookupForeignKey'])->name('manager.fk.lookup');
+
+        // Advanced Table Operations & Inline Cell Editing
+        Route::post('/manager/{db}/tables/{table}/cell/update', [DatabaseManagerController::class, 'updateCell'])->name('manager.table.cell.update');
+        Route::post('/manager/{db}/tables/{table}/optimize', [DatabaseManagerController::class, 'optimizeTable'])->name('manager.table.optimize');
+        Route::post('/manager/{db}/tables/{table}/repair', [DatabaseManagerController::class, 'repairTable'])->name('manager.table.repair');
+        Route::post('/manager/{db}/tables/{table}/check', [DatabaseManagerController::class, 'checkTable'])->name('manager.table.check');
+        Route::post('/manager/{db}/tables/{table}/analyze', [DatabaseManagerController::class, 'analyzeTable'])->name('manager.table.analyze');
+        Route::post('/manager/{db}/tables/{table}/copy', [DatabaseManagerController::class, 'copyTable'])->name('manager.table.copy');
+        Route::post('/manager/{db}/tables/{table}/auto-increment', [DatabaseManagerController::class, 'updateAutoIncrement'])->name('manager.table.auto-increment');
+
+        // Query Explain
+        Route::post('/manager/{db}/query/explain', [DatabaseManagerController::class, 'explainQuery'])->name('manager.query.explain');
+
+        // Global Search & Replace
+        Route::post('/manager/{db}/search', [DatabaseManagerController::class, 'globalSearch'])->name('manager.search');
+        Route::post('/manager/{db}/replace', [DatabaseManagerController::class, 'globalReplace'])->name('manager.replace');
+
+        // Processlist & Kill Process
+        Route::get('/manager/{db}/processlist', [DatabaseManagerController::class, 'getProcesslist'])->name('manager.processlist');
+        Route::post('/manager/{db}/processlist/kill', [DatabaseManagerController::class, 'killProcess'])->name('manager.processlist.kill');
+
+        // Custom Multi-Table Export
+        Route::post('/manager/{db}/export/custom', [DatabaseManagerController::class, 'exportCustom'])->name('manager.export.custom');
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)
