@@ -702,7 +702,7 @@ chmod +x ${NIMBUS_DIR}/artisan
 # Setup /var/www/ directory for hosting websites with multi-tenant ACL support
 mkdir -p /var/www
 chown ${NIMBUS_USER}:${NIMBUS_USER} /var/www
-chmod 755 /var/www
+chmod 775 /var/www
 
 # Configure default ACLs so Nginx (www-data) always has read & execute traverse access
 setfacl -m u:${NIMBUS_USER}:rwx /var/www
