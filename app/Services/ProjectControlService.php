@@ -783,12 +783,14 @@ class ProjectControlService
             $vhost .= "    server_name {$domainLower} www.{$domainLower} *.{$domainLower};\n\n";
             $vhost .= "    ssl_certificate {$certPath};\n";
             $vhost .= "    ssl_certificate_key {$keyPath};\n";
-            $vhost .= "    ssl_protocols TLSv1.2 TLSv1.3;\n";
-            $vhost .= "    ssl_ciphers HIGH:!aNULL:!MD5;\n";
-
             $testOptions = self::executeSudo("test -f /etc/letsencrypt/options-ssl-nginx.conf");
             if (($testOptions['code'] ?? 1) === 0) {
+                // options-ssl-nginx.conf already defines ssl_protocols and ssl_ciphers.
+                // Do NOT declare them manually here to prevent duplicate directive errors in Nginx.
                 $vhost .= "    include /etc/letsencrypt/options-ssl-nginx.conf;\n";
+            } else {
+                $vhost .= "    ssl_protocols TLSv1.2 TLSv1.3;\n";
+                $vhost .= "    ssl_ciphers HIGH:!aNULL:!MD5;\n";
             }
             $testDh = self::executeSudo("test -f /etc/letsencrypt/ssl-dhparams.pem");
             if (($testDh['code'] ?? 1) === 0) {
@@ -814,6 +816,25 @@ class ProjectControlService
         self::executeSudo("chmod 644 " . escapeshellarg($suspendedAvailable));
         self::executeSudo("ln -sf " . escapeshellarg($suspendedAvailable) . " " . escapeshellarg($suspendedEnabled));
 
+        // Fail-Safe: Validate Nginx syntax immediately before reloading
+        $testRes = self::executeSudo("nginx -t");
+        if (($testRes['code'] ?? 1) !== 0) {
+            $errorOutput = implode("\n", $testRes['output'] ?? []);
+            Log::error("Suspended Nginx config test failed for {$domain}: {$errorOutput}. Rolling back immediately.");
+
+            // Roll back: remove the invalid suspended config and symlink
+            self::executeSudo("rm -f " . escapeshellarg($suspendedEnabled));
+            self::executeSudo("rm -f " . escapeshellarg($suspendedAvailable));
+
+            // Restore original site symlink
+            self::restoreOriginalSiteSymlink($domain);
+
+            // Reload Nginx to guarantee existing sites remain healthy
+            self::reloadNginx();
+
+            throw new \RuntimeException("Failed to suspend domain {$domain}: Nginx configuration test failed ({$errorOutput}). Changes were automatically rolled back.");
+        }
+
         return self::reloadNginx();
     }
 
@@ -828,6 +849,14 @@ class ProjectControlService
         self::executeSudo("rm -f " . escapeshellarg($suspendedAvailable));
 
         // Restore original site symlink
+        self::restoreOriginalSiteSymlink($domain);
+
+        return self::reloadNginx();
+    }
+
+    private static function restoreOriginalSiteSymlink(string $domain): bool
+    {
+        $domainLower = strtolower($domain);
         $possibleAvailable = [
             "/etc/nginx/sites-available/{$domain}",
             "/etc/nginx/sites-available/{$domain}.conf",
@@ -839,11 +868,10 @@ class ProjectControlService
             if (($test['code'] ?? 1) === 0) {
                 $enabledName = basename($avail);
                 self::executeSudo("ln -sf " . escapeshellarg($avail) . " /etc/nginx/sites-enabled/" . escapeshellarg($enabledName));
-                break;
+                return true;
             }
         }
-
-        return self::reloadNginx();
+        return false;
     }
 
     private static function deleteNginx(string $domain): bool
