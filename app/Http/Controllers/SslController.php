@@ -1221,9 +1221,11 @@ class SslController extends Controller
                 if (preg_match('/ssl_certificate\s+/i', $configContent)) {
                     $configContent = preg_replace('/ssl_certificate\s+[^;]+;/i', "ssl_certificate {$certFile};", $configContent);
                     $configContent = preg_replace('/ssl_certificate_key\s+[^;]+;/i', "ssl_certificate_key {$keyFile};", $configContent);
-                } else {
                     // Inject SSL directives into the server block
-                    $sslDirectives = "\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate {$certFile};\n    ssl_certificate_key {$keyFile};\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n";
+                    $sslDirectives = "\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate {$certFile};\n    ssl_certificate_key {$keyFile};\n";
+                    if (!preg_match('/options-ssl-nginx\.conf/i', $configContent) && !preg_match('/ssl_ciphers\s+/i', $configContent)) {
+                        $sslDirectives .= "    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n";
+                    }
                     if (preg_match('/(listen\s+\[::\]:80;)/i', $configContent)) {
                         $configContent = preg_replace('/(listen\s+\[::\]:80;)/i', "$1" . $sslDirectives, $configContent, 1);
                     } elseif (preg_match('/(listen\s+80;)/i', $configContent)) {
