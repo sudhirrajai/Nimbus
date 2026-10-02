@@ -110,19 +110,11 @@ const emit = defineEmits(['refresh-files'])
 // Terminal state
 const getInitialUser = () => {
   if (props.domain && props.domain !== 'projects' && props.domain !== 'root') {
-    const slug = props.domain
-      .replace(/\.ownsoftwaresolutions\.com|\.sudhirrajai\.com|\.vmcore\.in|\.socialspecta\.com|\.com|\.in/g, (m) => {
-        if (m === '.ownsoftwaresolutions.com') return '_own'
-        if (m === '.sudhirrajai.com') return '_sr'
-        if (m === '.vmcore.in') return '_vm'
-        if (m === '.socialspecta.com') return '_ss'
-        return ''
-      })
-      .replace(/[^a-zA-Z0-9_]/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .toLowerCase()
-      .substring(0, 18)
-    return slug ? 'site_' + slug : 'www-data'
+    let clean = props.domain.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+    if (clean.length > 20) {
+      clean = clean.substring(0, 18).replace(/_+$/, '')
+    }
+    return clean ? 'site_' + clean : 'www-data'
   }
   return 'www-data'
 }

@@ -8,21 +8,25 @@ use Illuminate\Support\Facades\File;
 class SiteIsolationService
 {
     /**
-     * Generate a short, safe slug for a domain.
+     * Generate a short, safe, deterministic slug for any domain.
+     * Guaranteed <= 20 characters and valid for Linux usernames and systemd services.
      */
     public static function slug(string $domain): string
     {
-        $slug = str_replace(
-            ['.ownsoftwaresolutions.com', '.sudhirrajai.com', '.vmcore.in', '.socialspecta.com', '.com', '.in'],
-            ['_own', '_sr', '_vm', '_ss', '', ''],
-            $domain
-        );
-        $slug = preg_replace('/[^a-zA-Z0-9_]/', '_', $slug);
-        $slug = strtolower(trim($slug, '_'));
-        if (strlen($slug) > 18) {
-            $slug = substr($slug, 0, 18);
+        $clean = strtolower(trim($domain));
+        // Replace all non-alphanumeric characters with underscore
+        $clean = preg_replace('/[^a-z0-9]+/', '_', $clean);
+        $clean = trim($clean, '_');
+
+        if (strlen($clean) <= 20) {
+            return $clean ?: 'site';
         }
-        return $slug ?: 'site';
+
+        // For long domains, keep first 14 chars + 5-char hash to guarantee uniqueness and length limit
+        $hash = substr(md5($domain), 0, 5);
+        $prefix = rtrim(substr($clean, 0, 14), '_');
+
+        return $prefix . '_' . $hash;
     }
 
     /**
@@ -30,7 +34,51 @@ class SiteIsolationService
      */
     public static function siteUser(string $domain): string
     {
+        // Backward-compatibility check: if a legacy user already exists for this domain on the server, reuse it
+        $legacySlug = self::legacySlug($domain);
+        if ($legacySlug !== null) {
+            $legacyUser = 'site_' . $legacySlug;
+            $check = @exec("id -u " . escapeshellarg($legacyUser) . " 2>/dev/null");
+            if (!empty($check) && is_numeric($check)) {
+                return $legacyUser;
+            }
+        }
+
         return 'site_' . self::slug($domain);
+    }
+
+    /**
+     * Legacy slug calculation for backward compatibility with existing server users.
+     */
+    private static function legacySlug(string $domain): ?string
+    {
+        $patterns = [
+            '.ownsoftwaresolutions.com' => '_own',
+            '.sudhirrajai.com' => '_sr',
+            '.vmcore.in' => '_vm',
+            '.socialspecta.com' => '_ss',
+            '.com' => '',
+            '.in' => ''
+        ];
+        
+        $hasPattern = false;
+        foreach (array_keys($patterns) as $p) {
+            if (str_contains(strtolower($domain), $p)) {
+                $hasPattern = true;
+                break;
+            }
+        }
+        if (!$hasPattern) {
+            return null;
+        }
+
+        $slug = str_replace(array_keys($patterns), array_values($patterns), strtolower($domain));
+        $slug = preg_replace('/[^a-zA-Z0-9_]/', '_', $slug);
+        $slug = strtolower(trim($slug, '_'));
+        if (strlen($slug) > 18) {
+            $slug = substr($slug, 0, 18);
+        }
+        return $slug ?: null;
     }
 
     /**
