@@ -141,7 +141,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import { formatDate } from '@/Utils/date'
+import { formatDate } from '@/utils/date'
 
 const props = defineProps({
     user: Object

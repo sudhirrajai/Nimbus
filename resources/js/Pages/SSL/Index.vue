@@ -610,7 +610,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
-import { formatDate } from '@/Utils/date'
+import { formatDate } from '@/utils/date'
 
 const loading = ref(false)
 const installing = ref(null)

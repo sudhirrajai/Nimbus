@@ -270,7 +270,7 @@ import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
-import { formatDateTime } from '@/Utils/date'
+import { formatDateTime } from '@/utils/date'
 
 const loading = ref(false)
 const activities = ref([])

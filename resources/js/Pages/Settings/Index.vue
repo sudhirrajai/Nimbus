@@ -466,7 +466,7 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head } from '@inertiajs/vue3'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { formatDateTime } from '@/Utils/date'
+import { formatDateTime } from '@/utils/date'
 
 const props = defineProps({
     panelVersion: { type: String, default: '1.0.0' },

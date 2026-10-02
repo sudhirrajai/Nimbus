@@ -428,7 +428,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
-import { formatTime } from '@/Utils/date'
+import { formatTime } from '@/utils/date'
 import Chart from 'chart.js/auto'
 
 const props = defineProps({

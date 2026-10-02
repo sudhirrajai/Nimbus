@@ -754,7 +754,7 @@
 import MainLayout from '@/Layouts/MainLayout.vue';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
-import { formatDate, formatTime } from '@/Utils/date';
+import { formatDate, formatTime } from '@/utils/date';
 
 const loading = ref(true)
 const scanning = ref(false)

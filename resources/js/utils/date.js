@@ -1,4 +1,4 @@
-// resources/js/Utils/date.js
+// resources/js/utils/date.js
 
 let cachedTimezone = 'Asia/Kolkata';
 

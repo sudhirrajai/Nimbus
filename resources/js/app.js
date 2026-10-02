@@ -6,7 +6,7 @@ import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
-import { formatDate, formatDateTime, formatTime, getPanelTimezone, setPanelTimezone } from './Utils/date';
+import { formatDate, formatDateTime, formatTime, getPanelTimezone, setPanelTimezone } from './utils/date';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Nimbus';
 

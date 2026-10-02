@@ -1365,7 +1365,7 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head, usePage } from '@inertiajs/vue3'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
-import { formatDate } from '@/Utils/date'
+import { formatDate } from '@/utils/date'
 
 const page = usePage()
 const userRole = computed(() => page.props.auth?.user?.role || 'user')
