@@ -2,9 +2,9 @@
 
 # Nimbus Control Panel - Installer Script
 # One-command installation for Ubuntu/Debian servers
-# Usage:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash
-# Smart:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash -s -- --skip-existing
-# Uninstall: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | sudo bash
+# Usage:   curl -sSL https://nimbus-host.vmcore.in/install | sudo bash
+# Smart:   curl -sSL https://nimbus-host.vmcore.in/install | sudo bash -s -- --skip-existing
+# Uninstall: curl -sSL https://nimbus-host.vmcore.in/uninstall | sudo bash
 
 set -e
 
@@ -23,7 +23,7 @@ PHP_VERSION="8.3"
 NODE_VERSION="20"
 GITHUB_REPO="https://github.com/sudhirrajai/Nimbus.git"
 INSTALL_MODE="git"
-VMCORE_URL="{{VMCORE_URL}}"
+VMCORE_URL="https://nimbus-host.vmcore.in"
 SKIP_EXISTING=false
 LICENSE_KEY=""
 PANEL_SYSTEM_USER=""
@@ -197,12 +197,11 @@ if [ "$IS_UNINSTALL" = true ]; then
     if [ -f "${NIMBUS_DIR}/uninstall.sh" ]; then
         bash "${NIMBUS_DIR}/uninstall.sh"
     else
-        if [ "$INSTALL_MODE" = "zip" ]; then
-            curl -sSL "${VMCORE_URL}/uninstall" | bash
-        else
-            # Download and run from GitHub
-            curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | bash
+        REINSTALL_UNINSTALL="https://nimbus-host.vmcore.in/uninstall"
+        if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
+            REINSTALL_UNINSTALL="${VMCORE_URL}/uninstall"
         fi
+        curl -sSL "${REINSTALL_UNINSTALL}" | bash
     fi
     exit $?
 fi
