@@ -409,11 +409,9 @@ class DomainController extends Controller
                 ], 500);
             }
 
-            // Check if we have write permissions
+            // Ensure basePath exists and is writable
             if (!is_writable($this->basePath)) {
-                return response()->json([
-                    'error' => "Permission denied. Please run: sudo chown -R www-data:www-data {$this->basePath} && sudo chmod -R 755 {$this->basePath}"
-                ], 500);
+                $this->executeSudoCommand("mkdir -p {$this->basePath} && chown www-data:www-data {$this->basePath} && chmod 775 {$this->basePath}");
             }
 
             $domain = trim($request->domain);
@@ -426,21 +424,21 @@ class DomainController extends Controller
                 ], 409);
             }
 
-            // Create folder structure with isolated system user
+            // Create folder structure
             $this->executeSudoCommand("mkdir -p {$path}");
+            $createdDirs = true;
+
+            // Create basic index file and placeholders safely via sudo
+            $indexContent = $this->getDefaultIndexContent($domain);
+            $this->writeSudoFile("$path/index.html", $indexContent);
+            $this->writeSudoFile("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n", '600');
+            $this->writeSudoFile("$path/.htaccess", "# Nimbus Control Panel - Default .htaccess\n# Powered by Nimbus\n\nOptions -Indexes\n");
+
+            // Ensure isolated system user exists and set ownership
             $siteUser = \App\Services\SiteIsolationService::ensureIsolatedUser($domain, $path);
             $this->executeSudoCommand("chown -R {$siteUser}:{$siteUser} {$path}");
             $this->executeSudoCommand("find {$path} -type d -exec chmod 2775 {} \\;");
             $this->executeSudoCommand("find {$path} -type f -exec chmod 664 {} \\;");
-            $createdDirs = true;
-
-            // Create basic index file
-            $indexContent = $this->getDefaultIndexContent($domain);
-            file_put_contents("$path/index.html", $indexContent);
-
-            // Create .env and .htaccess placeholders
-            file_put_contents("$path/.env", "APP_ENV=production\nAPP_DEBUG=false\n");
-            file_put_contents("$path/.htaccess", "# Nimbus Control Panel - Default .htaccess\n# Powered by Nimbus\n\nOptions -Indexes\n");
 
             // Resolve PHP version for the domain configuration
             $defaultPhp = '8.2';
@@ -552,11 +550,9 @@ class DomainController extends Controller
                 $this->executeSudoCommand("chown -R www-data:www-data " . escapeshellarg($newRoot));
                 $this->executeSudoCommand("chmod 2775 " . escapeshellarg($newRoot));
                 
-                // Add default .htaccess to new root
+                // Add default .htaccess to new root safely via sudo
                 $htaccess = $newRoot . '/.htaccess';
-                file_put_contents($htaccess, "# Nimbus Control Panel - Root .htaccess\nOptions -Indexes\n");
-                $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($htaccess));
-                $this->executeSudoCommand("chmod 664 " . escapeshellarg($htaccess));
+                $this->writeSudoFile($htaccess, "# Nimbus Control Panel - Root .htaccess\nOptions -Indexes\n", '664');
             }
 
             // Update Nginx config
@@ -1149,6 +1145,17 @@ HTML;
     }
 
     /**
+     * Safely write a file using sudo via tempnam and mv to avoid permission errors.
+     */
+    private function writeSudoFile(string $filePath, string $content, string $chmod = '644'): void
+    {
+        $temp = tempnam('/tmp', 'nimbus_write_');
+        file_put_contents($temp, $content);
+        $this->executeSudoCommand("mv " . escapeshellarg($temp) . " " . escapeshellarg($filePath));
+        $this->executeSudoCommand("chmod {$chmod} " . escapeshellarg($filePath));
+    }
+
+    /**
      * Get the effective max upload size based on php.ini settings for Nginx
      */
     private function getPhpUploadLimit()
@@ -1401,9 +1408,8 @@ NGINX;
             
             $indexFile = $domainPath . '/index.html';
             $indexContent = $this->getDefaultIndexContent($domain);
-            @file_put_contents($indexFile, $indexContent);
+            $this->writeSudoFile($indexFile, $indexContent, '640');
             $this->executeSudoCommand("chown {$siteUser}:{$siteUser} " . escapeshellarg($indexFile));
-            $this->executeSudoCommand('chmod 640 ' . escapeshellarg($indexFile));
         }
     }
 

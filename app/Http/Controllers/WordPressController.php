@@ -506,12 +506,10 @@ exit;
 PHP;
 
         try {
-            file_put_contents($loginFile, $script);
-            chmod($loginFile, 0644);
-            
-            // Ensure www-data owns it
+            $temp = tempnam('/tmp', 'nimbus_wplogin_');
+            file_put_contents($temp, $script);
             $dummy = '';
-            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
+            $this->execCmd("sudo mv " . escapeshellarg($temp) . " " . escapeshellarg($loginFile) . " && sudo chmod 644 " . escapeshellarg($loginFile) . " && sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
 
             // 🔥 GUARANTEED AUTO-DELETE: 
             // Spawn a background process that waits 60 seconds and forcefully deletes this exact file
