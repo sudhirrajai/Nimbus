@@ -9,22 +9,17 @@
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
               <h4 class="font-weight-bolder mb-0">Database Management</h4>
-              <p class="mb-0 text-sm">Manage MySQL databases, users, and Nimbus DB</p>
+              <p class="mb-0 text-sm">Manage MySQL databases, users, and tables</p>
             </div>
-            <div class="d-flex flex-wrap gap-2" v-if="status.viewerInstalled">
-              <button class="btn btn-outline-warning mb-0" @click="reinstallDatabaseViewer" :disabled="reinstalling">
-                <span v-if="reinstalling" class="spinner-border spinner-border-sm me-1"></span>
-                <i v-else class="material-symbols-rounded text-sm me-1">refresh</i>
-                {{ reinstalling ? 'Reinstalling...' : 'Reinstall' }}
-              </button>
+            <div class="d-flex flex-wrap gap-2">
               <button class="btn btn-outline-secondary mb-0" @click="loadData" :disabled="loading">
-                <i class="material-symbols-rounded text-sm me-1">refresh</i>
+                <i class="material-symbols-rounded text-sm me-1" :class="{ 'spin-animation': loading }">refresh</i>
                 Refresh
               </button>
-              <button class="btn bg-gradient-info mb-0" @click="openDatabaseViewerSSO" :disabled="openingPma">
-                <span v-if="openingPma" class="spinner-border spinner-border-sm me-1"></span>
-                <i v-else class="material-symbols-rounded text-sm me-1">open_in_new</i>
-                Nimbus DB
+              <button class="btn bg-gradient-info mb-0" @click="handleOpenWorkspace" :disabled="openingWorkspace">
+                <span v-if="openingWorkspace" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">table_chart</i>
+                Database Workspace
               </button>
             </div>
           </div>
@@ -43,7 +38,7 @@
       </div>
 
       <!-- Loading State -->
-      <div class="row" v-if="loading && !status.checked">
+      <div class="row" v-if="loading && databases.length === 0">
         <div class="col-12 text-center py-5">
           <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
@@ -51,94 +46,6 @@
           <p class="text-secondary mt-2">Loading database information...</p>
         </div>
       </div>
-
-      <!-- Database Viewer Not Installed -->
-      <div class="row" v-if="status.checked && !status.viewerInstalled">
-        <div class="col-12">
-          <div class="card">
-            <div class="card-body text-center py-5" v-if="!installing">
-              <i class="material-symbols-rounded text-warning" style="font-size: 4rem;">database</i>
-              <h4 class="mt-3">Nimbus DB Not Installed</h4>
-              <p class="text-secondary mb-4">Install Database Viewer to manage your MySQL databases</p>
-              <button class="btn bg-gradient-primary btn-lg" @click="installDatabaseViewer" :disabled="installing">
-                <i class="material-symbols-rounded text-sm me-1">download</i>
-                Install Nimbus DB
-              </button>
-
-              <!-- Force Unlock Button -->
-              <div v-if="lockError" class="mt-4">
-                <div class="alert alert-light border-0 py-3 px-4 rounded-3 d-inline-block text-start">
-                  <div class="d-flex align-items-center mb-2">
-                    <i class="material-symbols-rounded text-warning me-2">lock</i>
-                    <span class="text-sm font-weight-bold">Installation Locked</span>
-                  </div>
-                  <p class="text-xs text-secondary mb-3">Another process might be running. If it's stuck, you can force unlock it.</p>
-                  <button class="btn btn-outline-danger btn-sm mb-0" @click="forceUnlockInstallation" :disabled="unlocking">
-                    <span v-if="unlocking" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="material-symbols-rounded text-sm me-1">lock_open</i>
-                    {{ unlocking ? 'Unlocking...' : 'Force Unlock Installation' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <!-- Terminal view during installation -->
-            <div class="card-body" v-else>
-              <h5 class="mb-3">
-                <span class="spinner-border spinner-border-sm me-2"></span>
-                Installing Nimbus DB...
-              </h5>
-              <div class="terminal-output bg-dark text-white p-3 rounded"
-                style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
-                {{ installLog || 'Starting installation...' }}</div>
-              <div class="mt-3 text-secondary text-sm">
-                <i class="material-symbols-rounded text-sm align-middle">info</i>
-                This may take a few minutes. Please wait...
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Credentials Display (after fresh install) -->
-      <div class="row mb-4" v-if="showCredentials && credentials">
-        <div class="col-12">
-          <div class="card bg-gradient-success">
-            <div class="card-body text-white">
-              <h5 class="text-white mb-3">
-                <i class="material-symbols-rounded me-2">check_circle</i>
-                Nimbus DB Installed Successfully!
-              </h5>
-              <p class="mb-3">Save these credentials securely. They will only be shown once.</p>
-              <div class="bg-white text-dark p-3 rounded mb-3">
-                <div class="row">
-                  <div class="col-md-4">
-                    <label class="text-xs text-uppercase text-secondary">URL</label>
-                    <p class="mb-0 font-weight-bold">/adminer/</p>
-                  </div>
-                  <div class="col-md-4">
-                    <label class="text-xs text-uppercase text-secondary">Username</label>
-                    <p class="mb-0 font-weight-bold">{{ credentials.username }}</p>
-                  </div>
-                  <div class="col-md-4">
-                    <label class="text-xs text-uppercase text-secondary">Password</label>
-                    <p class="mb-0 font-weight-bold font-monospace">{{ credentials.password }}</p>
-                  </div>
-                </div>
-              </div>
-              <a :href="'/database/credentials/download'" class="btn btn-white" download>
-                <i class="material-symbols-rounded text-sm me-1">download</i>
-                Download Credentials
-              </a>
-              <button class="btn btn-outline-white ms-2" @click="showCredentials = false">
-                Got it, continue
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Database Management (when Database Viewer is installed) -->
-      <template v-if="status.viewerInstalled && !showCredentials">
         <!-- Create Forms Row -->
         <div class="row mb-4">
           <!-- Create Database -->
@@ -400,7 +307,48 @@
             </div>
           </div>
         </div>
-      </template>
+
+      <!-- Select Database Modal (for opening Workspace from header) -->
+      <div class="modal-backdrop fade show" v-if="showWorkspaceModal" @click="showWorkspaceModal = false"></div>
+      <div class="modal fade show d-block" v-if="showWorkspaceModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title d-flex align-items-center gap-2">
+                <i class="material-symbols-rounded text-info">table_chart</i>
+                Open Database Workspace
+              </h5>
+              <button type="button" class="btn-close" @click="showWorkspaceModal = false"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-sm text-secondary mb-3">
+                Select a database to launch the native Nimbus Database Workspace:
+              </p>
+              <div class="list-group">
+                <button
+                  v-for="db in databases"
+                  :key="db.name"
+                  type="button"
+                  class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-3 border-radius-lg mb-2"
+                  @click="openNativeManager(db.name); showWorkspaceModal = false"
+                >
+                  <div class="d-flex align-items-center">
+                    <i class="material-symbols-rounded text-info me-2">database</i>
+                    <span class="font-weight-bold">{{ db.name }}</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-light text-dark text-xxs border">{{ db.size }}</span>
+                    <i class="material-symbols-rounded text-secondary text-sm">chevron_right</i>
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-outline-secondary mb-0" @click="showWorkspaceModal = false">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Assign Permissions Modal -->
       <div class="modal-backdrop fade show" v-if="showAssignModal" @click="showAssignModal = false"></div>
@@ -752,21 +700,14 @@ const quickBackupDatabase = async (dbName) => {
 }
 
 const loading = ref(false)
-const installing = ref(false)
-const reinstalling = ref(false)
-const openingPma = ref(false)
+const openingWorkspace = ref(false)
+const showWorkspaceModal = ref(false)
 const creatingDb = ref(false)
 const creatingUser = ref(false)
 const assigning = ref(false)
 const deletingDb = ref(false)
 const updatingPassword = ref(false)
-const unlocking = ref(false)
-const lockError = ref(false)
 
-const status = ref({ checked: false, viewerInstalled: false })
-const credentials = ref(null)
-const showCredentials = ref(false)
-const installLog = ref('')
 const databases = ref([])
 const users = ref([])
 
@@ -839,7 +780,6 @@ const showManageModal = ref(false)
 const showPasswordModal = ref(false)
 const showHostModal = ref(false)
 const showDeleteModal = ref(false)
-const showPmaModal = ref(false)
 const showLinkModal = ref(false)
 
 const managingDb = ref(null)
@@ -849,7 +789,6 @@ const selectedHostType = ref('localhost')
 const customHostInput = ref('')
 const updatingHost = ref(false)
 const dbToDelete = ref(null)
-const pmaAccess = ref(null)
 const newPassword = ref('')
 const linkingDb = ref(null)
 const selectedProjectDomain = ref('')
@@ -866,7 +805,7 @@ const availablePrivileges = [
 const alert = ref({ show: false, type: 'success', message: '' })
 
 onMounted(() => {
-  checkStatus()
+  loadData()
 })
 
 const showAlert = (type, message) => {
@@ -879,21 +818,16 @@ const getAlertIcon = (type) => {
   return icons[type] || 'info'
 }
 
-const checkStatus = async () => {
-  try {
-    loading.value = true
-    const response = await axios.get('/database/status')
-    status.value = { ...response.data, checked: true }
-
-    if (status.value.viewerInstalled) {
-      await loadData()
-    }
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to check status')
-    status.value.checked = true
-  } finally {
-    loading.value = false
+const handleOpenWorkspace = () => {
+  if (databases.value.length === 0) {
+    showAlert('info', 'No databases found. Please create a database first.')
+    return
   }
+  if (databases.value.length === 1) {
+    openNativeManager(databases.value[0].name)
+    return
+  }
+  showWorkspaceModal.value = true
 }
 
 const filteredDatabases = computed(() => {
@@ -917,176 +851,12 @@ const loadData = async () => {
       axios.get('/database/list'),
       axios.get('/database/users')
     ])
-    databases.value = dbResponse.data.databases
-    users.value = userResponse.data.users
+    databases.value = dbResponse.data.databases || []
+    users.value = userResponse.data.users || []
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to load data')
   } finally {
     loading.value = false
-  }
-}
-
-const installDatabaseViewer = async () => {
-  try {
-    installing.value = true
-    installLog.value = '' // Reset log
-    showAlert('info', 'Installing Nimbus DB... This may take a few minutes.')
-
-    const response = await axios.post('/database/install-viewer')
-
-
-    // Start polling for status if polling mode
-    if (response.data.polling) {
-      // Save credentials for later display
-      credentials.value = response.data.credentials
-      pollInstallStatus()
-    } else {
-      // Synchronous mode - installation completed immediately
-      credentials.value = response.data.credentials
-      showCredentials.value = true
-      status.value.viewerInstalled = true
-      installing.value = false
-      showAlert('success', response.data.message)
-      lockError.value = false
-    }
-  } catch (error) {
-    const errMsg = error.response?.data?.error || 'Failed to install Nimbus DB'
-    const details = error.response?.data?.details || ''
-    showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
-    console.error('Database Viewer install error:', error.response?.data)
-    
-    if (error.response?.status === 409) {
-      lockError.value = true
-    }
-    
-    installing.value = false
-  }
-}
-
-const forceUnlockInstallation = async () => {
-  if (!confirm('Are you sure you want to force unlock? Only do this if you are certain no other installation is running, otherwise system corruption might occur.')) {
-    return
-  }
-
-  try {
-    unlocking.value = true
-    const response = await axios.post('/database/clear-lock')
-    showAlert('success', response.data.message)
-    lockError.value = false
-    await checkStatus()
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to clear lock')
-  } finally {
-    unlocking.value = false
-  }
-}
-
-// Poll for installation status
-let pollAttempts = 0;
-const maxPollAttempts = 180; // Max 6 minutes (2 second intervals)
-
-const pollInstallStatus = async () => {
-  try {
-    pollAttempts++;
-    const response = await axios.get('/database/install-status')
-    installLog.value = response.data.log
-
-    if (response.data.status === 'done' || (response.data.installed && response.data.status !== 'running')) {
-      installing.value = false
-      status.value.viewerInstalled = true
-      showCredentials.value = true
-      showAlert('success', 'Nimbus DB installed successfully!')
-      pollAttempts = 0;
-    } else if (response.data.status === 'error') {
-      installing.value = false
-      showAlert('danger', 'Installation failed. Check the log for details.')
-      pollAttempts = 0;
-    } else if (pollAttempts >= maxPollAttempts) {
-      // Timeout - check if actually installed anyway
-      if (response.data.installed) {
-        installing.value = false
-        status.value.viewerInstalled = true
-        showCredentials.value = true
-        showAlert('success', 'Nimbus DB installed successfully!')
-      } else {
-        installing.value = false
-        showAlert('warning', 'Installation timed out. Please refresh the page to check status.')
-      }
-      pollAttempts = 0;
-    } else {
-      // Still running, poll again in 2 seconds
-      setTimeout(pollInstallStatus, 2000)
-    }
-  } catch (error) {
-    console.error('Poll error:', error)
-    // On error, keep trying unless we've hit max attempts
-    if (pollAttempts < maxPollAttempts) {
-      setTimeout(pollInstallStatus, 2000)
-    } else {
-      installing.value = false
-      showAlert('danger', 'Lost connection while polling. Please refresh the page.')
-      pollAttempts = 0;
-    }
-  }
-}
-
-const reinstallDatabaseViewer = async () => {
-  if (!confirm('Are you sure you want to reinstall Database Viewer? This will remove and reinstall it with new credentials.')) {
-    return
-  }
-
-  try {
-    reinstalling.value = true
-    showAlert('info', 'Reinstalling Nimbus DB... This may take a few minutes.')
-
-    const response = await axios.post('/database/reinstall-viewer')
-
-
-    credentials.value = response.data.credentials
-    showCredentials.value = true
-
-    showAlert('success', response.data.message)
-  } catch (error) {
-    const errMsg = error.response?.data?.error || 'Failed to reinstall Nimbus DB'
-    const details = error.response?.data?.details || ''
-    showAlert('danger', errMsg + (details ? '\n\nDetails: ' + details : ''))
-    console.error('Database Viewer reinstall error:', error.response?.data)
-  } finally {
-    reinstalling.value = false
-  }
-}
-
-const openDatabaseViewer = async (db = null) => {
-  try {
-    openingPma.value = true
-    const response = await axios.post('/database/viewer/access', { database: db?.name || '' })
-
-    if (response.data.url) {
-      window.open(response.data.url, '_blank')
-    } else {
-      showAlert('danger', response.data.error || 'Failed to generate access link')
-    }
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
-  } finally {
-    openingPma.value = false
-  }
-}
-
-const openDatabaseViewerSSO = async () => {
-  try {
-    openingPma.value = true
-    const response = await axios.get('/database/viewer/sso')
-
-    if (response.data.success && response.data.url) {
-      window.open(response.data.url, '_blank')
-    } else {
-      showAlert('danger', response.data.error || 'Failed to generate SSO link')
-    }
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
-  } finally {
-    openingPma.value = false
   }
 }
 
@@ -1266,20 +1036,6 @@ const deleteDatabase = async () => {
     showAlert('danger', error.response?.data?.error || 'Failed to delete database')
   } finally {
     deletingDb.value = false
-  }
-}
-
-const openPhpMyAdmin = async (db) => {
-  try {
-    showAlert('info', `Opening Nimbus DB for '${db.name}'...`)
-    const response = await axios.post('/database/viewer/access', {
-      database: db.name,
-      username: db.users.length > 0 ? db.users[0].username : 'nimbus_admin'
-    })
-    // Open directly via SSO token — no password prompt
-    window.open(response.data.url, '_blank')
-  } catch (error) {
-    showAlert('danger', error.response?.data?.error || 'Failed to open Nimbus DB')
   }
 }
 

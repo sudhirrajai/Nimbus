@@ -34,13 +34,11 @@ class DatabaseController extends Controller
     public function getStatus()
     {
         try {
-            $isInstalled = file_exists($this->viewerPath . '/adminer.php') && file_exists($this->adminerPublicPath . '/index.php');
-            $hasCredentials = file_exists($this->credentialsPath);
-            
             return response()->json([
-                'viewerInstalled' => $isInstalled,
-                'credentialsSet' => $hasCredentials,
-                'firstTimeSetup' => $isInstalled && !$hasCredentials
+                'viewerInstalled' => true,
+                'credentialsSet' => true,
+                'firstTimeSetup' => false,
+                'nativeManager' => true
             ]);
         } catch (\Exception $e) {
             \Log::error("Failed to get database status: " . $e->getMessage());
