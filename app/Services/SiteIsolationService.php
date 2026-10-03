@@ -182,12 +182,12 @@ CONF;
         // Ensure all binaries, scripts, and artisan remain executable
         self::ensureExecutables($basePath);
 
-        // Strictly lock down .env if present (strip ACLs and lock to 600)
+        // Strictly lock down .env if present (strip ACLs and lock to 640 so group www-data can run crons/queues, others blocked)
         $envPath = rtrim($basePath, '/') . '/.env';
         if (file_exists($envPath)) {
             $safeEnv = escapeshellarg($envPath);
             self::executeSudo("setfacl -b {$safeEnv}");
-            self::executeSudo("chmod 600 {$safeEnv}");
+            self::executeSudo("chmod 640 {$safeEnv}");
         }
 
         // Keep storage writable if Laravel
