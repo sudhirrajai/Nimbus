@@ -273,11 +273,7 @@ class GitDeploymentService
             SiteIsolationService::executeSudo("setfacl -R -m u:www-data:rwx " . escapeshellarg($domainPath));
             SiteIsolationService::executeSudo("setfacl -R -d -m u:www-data:rwx " . escapeshellarg($domainPath));
 
-            // Add domain path to safe directories to avoid "dubious ownership" fatal errors when queuing as different user
-            // We'll also use -c safe.directory='*' in commands below for extra safety
-            $this->executeCommand("git config --global --add safe.directory " . escapeshellarg($domainPath));
-
-            // Get current commit hash
+            // Get current commit hash (bypassing ownership with -c safe.directory='*')
             $commitHash = trim($this->executeCommand("cd {$domainPath} && git -c safe.directory='*' rev-parse HEAD")[0] ?? '');
             $deployment->update(['commit_hash' => $commitHash]);
 
@@ -659,9 +655,8 @@ class GitDeploymentService
             return (bool) preg_match('/(PASS|SECRET|KEY|TOKEN|CREDENTIAL|AUTH|HASH|PRIVATE|SALT)/i', $key);
         };
 
-        // 1. Common default keys that web applications use
+        // 1. Common default keys that web applications use (APP_KEY is omitted as it is generated via artisan key:generate)
         $defaultKeys = [
-            'APP_KEY' => ['label' => 'Application Secret Key', 'sensitive' => true, 'placeholder' => 'base64:... or 32-character key'],
             'APP_URL' => ['label' => 'Application URL', 'sensitive' => false, 'placeholder' => 'https://' . $deployment->domain],
             'DB_CONNECTION' => ['label' => 'Database Connection', 'sensitive' => false, 'placeholder' => 'mysql, pgsql, sqlite'],
             'DB_HOST' => ['label' => 'Database Host', 'sensitive' => false, 'placeholder' => '127.0.0.1 or localhost'],
@@ -684,13 +679,16 @@ class GitDeploymentService
                         if (preg_match('/^#?\s*([A-Za-z0-9_]+)=(.*)$/', $line, $matches)) {
                             $k = $matches[1];
                             $v = trim($matches[2], " \t\n\r\0\x0B\"'");
+                            // Skip APP_KEY since Laravel's key:generate sets it automatically
+                            if ($k === 'APP_KEY') continue;
                             if (!isset($vars[$k])) {
                                 $vars[$k] = [
                                     'key' => $k,
                                     'value' => $v,
                                     'sensitive' => $isSensitive($k),
                                     'source' => basename($file),
-                                    'required' => empty($v) || (bool) preg_match('/^(prompt\(\)|<prompt>|\$\{.*\}|CHANGE_ME|TODO)$/i', $v),
+                                    'required' => false,
+                                    'prompted' => (bool) preg_match('/^(prompt\(\)|<prompt>|\$\{.*\}|CHANGE_ME|TODO)$/i', $v),
                                 ];
                             }
                         }
@@ -721,7 +719,8 @@ class GitDeploymentService
                     'value' => $isPrompt ? '' : $vStr,
                     'sensitive' => $isSensitive($k),
                     'source' => 'nimbus.yaml',
-                    'required' => $isPrompt || empty($vStr),
+                    'required' => false,
+                    'prompted' => $isPrompt,
                 ];
             }
         }
@@ -739,6 +738,7 @@ class GitDeploymentService
                         'sensitive' => $isSensitive($k),
                         'source' => 'saved',
                         'required' => false,
+                        'prompted' => false,
                         'saved' => true,
                     ];
                 }
@@ -753,16 +753,17 @@ class GitDeploymentService
                     'value' => $k === 'APP_URL' ? ('https://' . $deployment->domain) : ($k === 'DB_CONNECTION' ? 'mysql' : ($k === 'DB_HOST' ? '127.0.0.1' : ($k === 'DB_PORT' ? '3306' : ''))),
                     'sensitive' => $info['sensitive'],
                     'source' => 'default',
-                    'required' => $info['sensitive'],
+                    'required' => false,
+                    'prompted' => false,
                 ];
             }
         }
 
-        // Sort: required/sensitive first, then alphabetical
+        // Sort: prompted first, then sensitive, then alphabetical
         $result = array_values($vars);
         usort($result, function ($a, $b) {
-            $scoreA = ($a['required'] ? 2 : 0) + ($a['sensitive'] ? 1 : 0);
-            $scoreB = ($b['required'] ? 2 : 0) + ($b['sensitive'] ? 1 : 0);
+            $scoreA = (!empty($a['prompted']) ? 3 : 0) + ($a['sensitive'] ? 1 : 0);
+            $scoreB = (!empty($b['prompted']) ? 3 : 0) + ($b['sensitive'] ? 1 : 0);
             if ($scoreA !== $scoreB) {
                 return $scoreB <=> $scoreA;
             }
