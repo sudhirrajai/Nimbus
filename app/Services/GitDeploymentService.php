@@ -37,9 +37,20 @@ class GitDeploymentService
     /**
      * Run the full deployment pipeline.
      */
-    public function deploy(GitDeployment $deployment): bool
+    public function deploy(GitDeployment $deployment, array $envOverrides = []): bool
     {
+        $domainPath = $deployment->getDomainPath();
+        $siteUser = SiteIsolationService::siteUser($deployment->domain);
+
         try {
+            // Step 0: Ensure site user exists and grant deployment write access to $domainPath
+            SiteIsolationService::ensureIsolatedUser($deployment->domain, $domainPath);
+            SiteIsolationService::executeSudo("mkdir -p " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("chmod 775 " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -R -m u:www-data:rwx " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -R -d -m u:www-data:rwx " . escapeshellarg($domainPath));
+
             // Clear previous logs for this deployment
             $deployment->logs()->delete();
 
@@ -58,10 +69,8 @@ class GitDeploymentService
                 }
             }
 
-            // Step 4: Setup environment variables
-            if ($yamlConfig && isset($yamlConfig['env'])) {
-                $this->setupEnvVariables($deployment, $yamlConfig['env']);
-            }
+            // Step 4: Setup environment variables (YAML env + saved runtime_env + interactive overrides)
+            $this->setupEnvVariables($deployment, $yamlConfig['env'] ?? [], $envOverrides);
 
             // Step 5: Run install commands
             if ($yamlConfig && isset($yamlConfig['install'])) {
@@ -105,6 +114,13 @@ class GitDeploymentService
                 'last_error' => $e->getMessage(),
             ]);
             return false;
+        } finally {
+            // ALWAYS re-apply strict tenant isolation permissions so the site is never left exposed
+            try {
+                SiteIsolationService::securePath($domainPath, $deployment->domain);
+            } catch (\Exception $permEx) {
+                Log::warning("Failed to secure path after deployment for {$deployment->domain}: " . $permEx->getMessage());
+            }
         }
     }
 
@@ -219,11 +235,22 @@ class GitDeploymentService
             // Build clone URL based on repo type
             $cloneUrl = $this->buildCloneUrl($deployment);
 
+            // Ensure domainPath exists and www-data has write access via ACL before cleaning and cloning
+            $siteUser = SiteIsolationService::siteUser($deployment->domain);
+            SiteIsolationService::executeSudo("mkdir -p " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("chmod 775 " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -m u:www-data:rwx " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -d -m u:www-data:rwx " . escapeshellarg($domainPath));
+
             // Clean existing content in the domain directory
             $cleanOutput = $this->executeCommand(
                 "sudo find {$domainPath} -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
                 $domainPath
             );
+
+            // Re-apply write ACL after find/rm clean
+            SiteIsolationService::executeSudo("setfacl -m u:www-data:rwx " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -d -m u:www-data:rwx " . escapeshellarg($domainPath));
 
             // Clone the repository - use -c safe.directory='*' to bypass ownership checks
             $cloneCommand = "git -c safe.directory='*' clone {$cloneUrl} --branch {$deployment->branch} --single-branch --depth 1 {$domainPath}/repo_temp";
@@ -239,6 +266,12 @@ class GitDeploymentService
                 . escapeshellarg($domainPath . "/repo_temp")
                 . "'"
             );
+
+            // Ensure site ownership and group write permissions for build steps
+            SiteIsolationService::executeSudo("chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("chmod -R 775 " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -R -m u:www-data:rwx " . escapeshellarg($domainPath));
+            SiteIsolationService::executeSudo("setfacl -R -d -m u:www-data:rwx " . escapeshellarg($domainPath));
 
             // Add domain path to safe directories to avoid "dubious ownership" fatal errors when queuing as different user
             // We'll also use -c safe.directory='*' in commands below for extra safety
@@ -516,7 +549,9 @@ class GitDeploymentService
         if (str_contains($command, '&&')) {
             return "Shell chaining operator '&&' detected. Use separate lines in nimbus.yaml instead.";
         }
-        if (str_contains($command, '||')) {
+        // Allow harmless error-ignoring suffixes like '|| true', '|| false', '|| exit 0', '|| :'
+        $sanitizedForPipe = preg_replace('/\s*\|\|\s*(true|false|:|exit\s+[0-9]+)\s*$/i', '', trim($command));
+        if (str_contains($sanitizedForPipe, '||')) {
             return "Shell chaining operator '||' detected. Use separate lines in nimbus.yaml instead.";
         }
 
@@ -533,9 +568,9 @@ class GitDeploymentService
     }
 
     /**
-     * Setup environment variables from YAML config.
+     * Setup environment variables from YAML config, saved runtime env, and interactive overrides.
      */
-    private function setupEnvVariables(GitDeployment $deployment, array $envVars): void
+    private function setupEnvVariables(GitDeployment $deployment, array $yamlEnv = [], array $runtimeOverrides = []): void
     {
         $startTime = microtime(true);
         $domainPath = $deployment->getDomainPath();
@@ -550,35 +585,55 @@ class GitDeploymentService
                 $envContent = SiteIsolationService::readFile($domainPath . '/.env.example') ?? '';
             }
 
-            foreach ($envVars as $key => $value) {
+            // Combine all sources in priority order:
+            // 1. YAML env
+            // 2. Saved runtime_env on deployment
+            // 3. runtimeOverrides passed interactively
+            $savedRuntimeEnv = is_array($deployment->runtime_env) ? $deployment->runtime_env : [];
+            $mergedEnv = array_merge($yamlEnv, $savedRuntimeEnv, $runtimeOverrides);
+
+            $configuredKeys = [];
+            foreach ($mergedEnv as $key => $value) {
                 // Sanitize key
-                $key = preg_replace('/[^A-Za-z0-9_]/', '', $key);
+                $key = preg_replace('/[^A-Za-z0-9_]/', '', (string)$key);
                 if (empty($key)) continue;
 
-                $value = (string) $value;
+                $valueStr = (string) $value;
+                // If it's an unfulfilled prompt marker, don't overwrite
+                if (preg_match('/^(prompt\(\)|<prompt>|\$\{.*\}|CHANGE_ME)$/i', trim($valueStr))) {
+                    continue;
+                }
 
-                // Check if key already exists in .env
-                if (preg_match("/^{$key}=.*/m", $envContent)) {
-                    // Update existing value
-                    $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$value}", $envContent);
+                // Properly format value: if it has spaces, quotes, or special chars, quote it
+                if (preg_match('/[\s#\'"$]/', $valueStr) && !preg_match('/^".*"$/', $valueStr)) {
+                    $formattedValue = '"' . addcslashes($valueStr, '"$\\') . '"';
+                } else {
+                    $formattedValue = $valueStr;
+                }
+
+                // Check if key already exists in .env (either uncommented or commented)
+                if (preg_match("/^#?\s*{$key}=.*/m", $envContent)) {
+                    // Update existing value (and uncomment if was commented)
+                    $envContent = preg_replace("/^#?\s*{$key}=.*/m", "{$key}={$formattedValue}", $envContent);
                 } else {
                     // Append new value
-                    $envContent .= "\n{$key}={$value}";
+                    $envContent .= "\n{$key}={$formattedValue}";
                 }
+                $configuredKeys[] = $key;
             }
 
             // Write back using sudo to handle permissions
             $tempFile = "/tmp/nimbus_env_" . $deployment->id . "_" . time();
             file_put_contents($tempFile, trim($envContent) . "\n");
-            $this->executeCommand("sudo mv {$tempFile} {$envFile}");
-            $siteUser = \App\Services\SiteIsolationService::siteUser($deployment->domain);
-            $this->executeCommand("sudo chown {$siteUser}:{$siteUser} {$envFile}");
-            $this->executeCommand("sudo chmod 600 {$envFile}");
+            $this->executeCommand("sudo mv " . escapeshellarg($tempFile) . " " . escapeshellarg($envFile));
+            $siteUser = SiteIsolationService::siteUser($deployment->domain);
+            $this->executeCommand("sudo chown {$siteUser}:{$siteUser} " . escapeshellarg($envFile));
+            $this->executeCommand("sudo chmod 600 " . escapeshellarg($envFile));
 
             $duration = (int)(microtime(true) - $startTime);
             $log->update([
                 'status' => 'success',
-                'output' => "Environment variables set: " . implode(', ', array_keys($envVars)),
+                'output' => "Environment variables configured successfully.\nVariables set: " . (empty($configuredKeys) ? 'none' : implode(', ', $configuredKeys)),
                 'duration_seconds' => $duration,
             ]);
         } catch (\Exception $e) {
@@ -589,6 +644,132 @@ class GitDeploymentService
                 'duration_seconds' => $duration,
             ]);
         }
+    }
+
+    /**
+     * Get detectable environment variables and sensitive credentials for interactive seeking.
+     */
+    public function getDetectableEnvVars(GitDeployment $deployment): array
+    {
+        $domainPath = $deployment->getDomainPath();
+        $vars = [];
+
+        // Helper to check sensitivity
+        $isSensitive = function (string $key): bool {
+            return (bool) preg_match('/(PASS|SECRET|KEY|TOKEN|CREDENTIAL|AUTH|HASH|PRIVATE|SALT)/i', $key);
+        };
+
+        // 1. Common default keys that web applications use
+        $defaultKeys = [
+            'APP_KEY' => ['label' => 'Application Secret Key', 'sensitive' => true, 'placeholder' => 'base64:... or 32-character key'],
+            'APP_URL' => ['label' => 'Application URL', 'sensitive' => false, 'placeholder' => 'https://' . $deployment->domain],
+            'DB_CONNECTION' => ['label' => 'Database Connection', 'sensitive' => false, 'placeholder' => 'mysql, pgsql, sqlite'],
+            'DB_HOST' => ['label' => 'Database Host', 'sensitive' => false, 'placeholder' => '127.0.0.1 or localhost'],
+            'DB_PORT' => ['label' => 'Database Port', 'sensitive' => false, 'placeholder' => '3306 or 5432'],
+            'DB_DATABASE' => ['label' => 'Database Name', 'sensitive' => false, 'placeholder' => 'database_name'],
+            'DB_USERNAME' => ['label' => 'Database User', 'sensitive' => false, 'placeholder' => 'database_user'],
+            'DB_PASSWORD' => ['label' => 'Database Password', 'sensitive' => true, 'placeholder' => 'Enter database password'],
+        ];
+
+        // 2. Parse from .env or .env.example in domain directory if available
+        $envFiles = [$domainPath . '/.env', $domainPath . '/.env.example'];
+        foreach ($envFiles as $file) {
+            if (file_exists($file)) {
+                $content = @file_get_contents($file);
+                if ($content) {
+                    $lines = explode("\n", $content);
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        // Matches KEY=VALUE or # KEY=VALUE
+                        if (preg_match('/^#?\s*([A-Za-z0-9_]+)=(.*)$/', $line, $matches)) {
+                            $k = $matches[1];
+                            $v = trim($matches[2], " \t\n\r\0\x0B\"'");
+                            if (!isset($vars[$k])) {
+                                $vars[$k] = [
+                                    'key' => $k,
+                                    'value' => $v,
+                                    'sensitive' => $isSensitive($k),
+                                    'source' => basename($file),
+                                    'required' => empty($v) || (bool) preg_match('/^(prompt\(\)|<prompt>|\$\{.*\}|CHANGE_ME|TODO)$/i', $v),
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Parse from nimbus.yaml / nimbus.yml
+        $yamlConfig = $deployment->yaml_config;
+        if (!$yamlConfig) {
+            $yamlPath = file_exists($domainPath . '/nimbus.yaml') ? $domainPath . '/nimbus.yaml' : (file_exists($domainPath . '/nimbus.yml') ? $domainPath . '/nimbus.yml' : null);
+            if ($yamlPath) {
+                try {
+                    $yamlConfig = Yaml::parse(file_get_contents($yamlPath));
+                } catch (\Exception $e) {}
+            }
+        }
+
+        if (isset($yamlConfig['env']) && is_array($yamlConfig['env'])) {
+            foreach ($yamlConfig['env'] as $k => $v) {
+                $k = preg_replace('/[^A-Za-z0-9_]/', '', (string)$k);
+                if (empty($k)) continue;
+                $vStr = (string)$v;
+                $isPrompt = (bool) preg_match('/^(prompt\(\)|<prompt>|\$\{.*\}|CHANGE_ME)$/i', trim($vStr));
+                $vars[$k] = [
+                    'key' => $k,
+                    'value' => $isPrompt ? '' : $vStr,
+                    'sensitive' => $isSensitive($k),
+                    'source' => 'nimbus.yaml',
+                    'required' => $isPrompt || empty($vStr),
+                ];
+            }
+        }
+
+        // 4. Merge saved runtime_env
+        if (is_array($deployment->runtime_env)) {
+            foreach ($deployment->runtime_env as $k => $v) {
+                if (isset($vars[$k])) {
+                    $vars[$k]['value'] = (string)$v;
+                    $vars[$k]['saved'] = true;
+                } else {
+                    $vars[$k] = [
+                        'key' => $k,
+                        'value' => (string)$v,
+                        'sensitive' => $isSensitive($k),
+                        'source' => 'saved',
+                        'required' => false,
+                        'saved' => true,
+                    ];
+                }
+            }
+        }
+
+        // 5. If nothing detected from files/yaml (e.g. repo not cloned yet), supply default set
+        if (empty($vars)) {
+            foreach ($defaultKeys as $k => $info) {
+                $vars[$k] = [
+                    'key' => $k,
+                    'value' => $k === 'APP_URL' ? ('https://' . $deployment->domain) : ($k === 'DB_CONNECTION' ? 'mysql' : ($k === 'DB_HOST' ? '127.0.0.1' : ($k === 'DB_PORT' ? '3306' : ''))),
+                    'sensitive' => $info['sensitive'],
+                    'source' => 'default',
+                    'required' => $info['sensitive'],
+                ];
+            }
+        }
+
+        // Sort: required/sensitive first, then alphabetical
+        $result = array_values($vars);
+        usort($result, function ($a, $b) {
+            $scoreA = ($a['required'] ? 2 : 0) + ($a['sensitive'] ? 1 : 0);
+            $scoreB = ($b['required'] ? 2 : 0) + ($b['sensitive'] ? 1 : 0);
+            if ($scoreA !== $scoreB) {
+                return $scoreB <=> $scoreA;
+            }
+            return strcmp($a['key'], $b['key']);
+        });
+
+        return $result;
     }
 
     /**

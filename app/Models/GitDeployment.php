@@ -16,6 +16,7 @@ class GitDeployment extends Model
         'branch',
         'yaml_path',
         'yaml_config',
+        'runtime_env',
         'status',
         'last_error',
         'commit_hash',
@@ -27,6 +28,7 @@ class GitDeployment extends Model
     {
         return [
             'yaml_config' => 'array',
+            'runtime_env' => 'array',
             'access_token' => 'encrypted',
             'last_deployed_at' => 'datetime',
         ];

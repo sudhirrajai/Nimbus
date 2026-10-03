@@ -229,66 +229,194 @@
         </div>
       </div>
 
-      <!-- Deploy Confirmation Modal -->
+      <!-- Interactive Credentials & Deploy Modal -->
       <div class="modal fade show" tabindex="-1" style="display:block" v-if="showDeployModal">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title font-weight-bolder">
-                <i class="material-symbols-rounded me-1">rocket_launch</i>
-                Deploy Project
-              </h5>
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-bottom">
+              <div>
+                <h5 class="modal-title font-weight-bolder mb-0 d-flex align-items-center">
+                  <i class="material-symbols-rounded text-dark me-2">rocket_launch</i>
+                  Deploy Project &amp; Credentials Setup
+                </h5>
+                <small class="text-secondary" v-if="deploymentToDeploy">
+                  Domain: <strong>{{ deploymentToDeploy.domain }}</strong> &bull; Branch: <code>{{ deploymentToDeploy.branch }}</code>
+                </small>
+              </div>
               <button type="button" class="btn-close" @click="showDeployModal = false" :disabled="deploying"></button>
             </div>
-            <div class="modal-body">
-              <div v-if="!deploying && !deployResult">
-                <p class="mb-2">Deploy <strong>{{ deploymentToDeploy?.domain }}</strong>?</p>
-                <div class="d-flex flex-column gap-1">
-                  <small class="text-secondary">
-                    <i class="material-symbols-rounded text-xs me-1">link</i>
-                    {{ deploymentToDeploy?.repo_url }}
-                  </small>
-                  <small class="text-secondary">
-                    <i class="material-symbols-rounded text-xs me-1">fork_right</i>
-                    Branch: {{ deploymentToDeploy?.branch }}
-                  </small>
+
+            <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+              <!-- Loading credentials & env variables -->
+              <div v-if="envLoading" class="text-center py-4">
+                <div class="spinner-border text-dark mb-2" role="status" style="width: 2.5rem; height: 2.5rem;">
+                  <span class="visually-hidden">Loading...</span>
                 </div>
-                <div class="alert alert-warning mt-3 mb-0 py-2" role="alert">
-                  <small>
-                    <i class="material-symbols-rounded text-sm me-1">info</i>
-                    This will clone/pull the repository and run all install &amp; build commands defined in <code>nimbus.yaml</code>.
-                    Existing files in the domain directory may be overwritten.
-                  </small>
+                <p class="text-sm text-secondary mb-0">Inspecting repository configuration &amp; sensitive environment variables...</p>
+              </div>
+
+              <!-- Main credential seeker form -->
+              <div v-else-if="!deploying && !deployResult">
+                <div class="alert alert-light border d-flex align-items-center gap-2 mb-3 py-2 px-3">
+                  <i class="material-symbols-rounded text-primary fs-4">vpn_key</i>
+                  <div class="text-xs">
+                    <strong>Interactive Credentials Seeker:</strong>
+                    Set sensitive database passwords, API keys, and environment variables at runtime.
+                    Values are securely written to <code>.env</code> with strict isolated permissions and are never committed to Git.
+                  </div>
+                </div>
+
+                <!-- Environment Variables List -->
+                <div class="card border mb-3">
+                  <div class="card-header bg-light py-2 px-3 d-flex justify-content-between align-items-center">
+                    <span class="text-xs font-weight-bold text-uppercase text-secondary">
+                      Environment &amp; Credentials ({{ envVars.length }})
+                    </span>
+                    <span class="text-xxs text-muted">Passwords are masked for safety</span>
+                  </div>
+                  <div class="card-body p-2">
+                    <div v-if="envVars.length === 0" class="text-center py-3 text-secondary text-sm">
+                      No environment variables detected yet. You can add custom variables below.
+                    </div>
+
+                    <div v-for="(item, idx) in envVars" :key="item.key" class="border-bottom py-2 px-2">
+                      <div class="row align-items-center g-2">
+                        <!-- Key & Badges -->
+                        <div class="col-md-5">
+                          <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <code class="font-weight-bold text-dark text-xs">{{ item.key }}</code>
+                            <span v-if="item.sensitive" class="badge bg-gradient-warning text-dark text-xxs py-0 px-1">
+                              <i class="material-symbols-rounded text-xxs me-1">lock</i>Secret
+                            </span>
+                            <span v-if="item.required" class="badge bg-danger text-white text-xxs py-0 px-1">Required</span>
+                            <span class="badge bg-light text-muted border text-xxs py-0 px-1">{{ item.source || 'env' }}</span>
+                          </div>
+                        </div>
+
+                        <!-- Value input with show/hide and generator -->
+                        <div class="col-md-6">
+                          <div class="input-group input-group-sm">
+                            <input
+                              :type="item.sensitive && !item.showPassword ? 'password' : 'text'"
+                              v-model="item.value"
+                              class="form-control form-control-sm font-monospace"
+                              :placeholder="item.sensitive ? 'Enter secret / password...' : 'Value...'"
+                            />
+                            <button
+                              v-if="item.sensitive"
+                              class="btn btn-outline-secondary btn-sm mb-0 px-2"
+                              type="button"
+                              @click="togglePasswordVisibility(item)"
+                              :title="item.showPassword ? 'Hide value' : 'Show value'"
+                            >
+                              <i class="material-symbols-rounded text-xs">{{ item.showPassword ? 'visibility_off' : 'visibility' }}</i>
+                            </button>
+                            <button
+                              v-if="item.sensitive"
+                              class="btn btn-outline-secondary btn-sm mb-0 px-2"
+                              type="button"
+                              @click="generatePassword(item)"
+                              title="Generate secure random key/password"
+                            >
+                              <i class="material-symbols-rounded text-xs">auto_fix_high</i>
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Remove button -->
+                        <div class="col-md-1 text-end">
+                          <button
+                            class="btn btn-link text-danger p-0 mb-0"
+                            @click="removeEnvVar(idx)"
+                            title="Remove variable"
+                          >
+                            <i class="material-symbols-rounded text-sm">delete</i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Add New Variable Section -->
+                <div class="card border mb-3">
+                  <div class="card-header bg-light py-2 px-3">
+                    <span class="text-xs font-weight-bold text-uppercase text-secondary">+ Add Variable or Secret</span>
+                  </div>
+                  <div class="card-body p-2">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-md-4">
+                        <input
+                          type="text"
+                          v-model="newVarKey"
+                          class="form-control form-control-sm font-monospace text-uppercase"
+                          placeholder="KEY_NAME (e.g. DB_PASSWORD)"
+                        />
+                      </div>
+                      <div class="col-md-5">
+                        <input
+                          type="text"
+                          v-model="newVarValue"
+                          class="form-control form-control-sm font-monospace"
+                          placeholder="Value..."
+                        />
+                      </div>
+                      <div class="col-md-2">
+                        <div class="form-check form-check-sm mb-0">
+                          <input class="form-check-input" type="checkbox" v-model="newVarSensitive" id="sensitiveCheck">
+                          <label class="form-check-label text-xxs text-secondary" for="sensitiveCheck">Sensitive</label>
+                        </div>
+                      </div>
+                      <div class="col-md-1 text-end">
+                        <button
+                          class="btn btn-sm bg-gradient-dark mb-0 px-2"
+                          @click="addCustomEnvVar"
+                          :disabled="!newVarKey.trim()"
+                        >
+                          <i class="material-symbols-rounded text-xs">add</i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Remember credentials option -->
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" id="rememberCreds" v-model="rememberCredentials">
+                  <label class="form-check-label text-xs text-secondary font-weight-bold" for="rememberCreds">
+                    Save these credentials for future deployments of this domain
+                  </label>
                 </div>
               </div>
 
               <!-- Deploying state -->
-              <div v-if="deploying" class="text-center py-3">
+              <div v-if="deploying" class="text-center py-4">
                 <div class="spinner-border text-dark mb-3" role="status" style="width: 3rem; height: 3rem;">
                   <span class="visually-hidden">Deploying...</span>
                 </div>
-                <p class="font-weight-bold mb-1">Deploying...</p>
-                <p class="text-sm text-secondary mb-0">This may take a few minutes. Please don't close this dialog.</p>
+                <h6 class="font-weight-bold mb-1">Deploying {{ deploymentToDeploy?.domain }}...</h6>
+                <p class="text-sm text-secondary mb-0">Cloning repository, injecting credentials, and building project.</p>
               </div>
 
               <!-- Deploy result -->
-              <div v-if="deployResult" class="text-center py-3">
-                <i class="material-symbols-rounded mb-2" :class="deployResult.success ? 'text-success' : 'text-danger'" style="font-size: 48px;">
+              <div v-if="deployResult" class="text-center py-4">
+                <i class="material-symbols-rounded mb-2" :class="deployResult.success ? 'text-success' : 'text-danger'" style="font-size: 52px;">
                   {{ deployResult.success ? 'check_circle' : 'error' }}
                 </i>
-                <p class="font-weight-bold mb-1">{{ deployResult.message }}</p>
+                <h6 class="font-weight-bold mb-1">{{ deployResult.message }}</h6>
                 <p class="text-sm text-danger mb-0" v-if="deployResult.error">{{ deployResult.error }}</p>
               </div>
             </div>
-            <div class="modal-footer">
+
+            <div class="modal-footer border-top">
               <button v-if="!deploying && !deployResult" class="btn btn-outline-secondary mb-0" @click="showDeployModal = false">Cancel</button>
-              <button v-if="!deploying && !deployResult" class="btn bg-gradient-dark mb-0" @click="executeDeploy">
+              <button v-if="!deploying && !deployResult" class="btn bg-gradient-dark mb-0" @click="executeDeploy" :disabled="envLoading">
                 <i class="material-symbols-rounded text-sm me-1">rocket_launch</i>
                 Deploy Now
               </button>
               <button v-if="deployResult" class="btn btn-outline-secondary mb-0" @click="viewLogsAfterDeploy">
                 <i class="material-symbols-rounded text-sm me-1">terminal</i>
-                View Logs
+                View Deployment Logs
               </button>
               <button v-if="deployResult" class="btn bg-gradient-dark mb-0" @click="closeDeployModal">
                 Close
@@ -409,6 +537,14 @@ const showBlacklistModal = ref(false)
 const deploymentToDelete = ref(null)
 const deploymentToDeploy = ref(null)
 
+// Interactive Credentials Seeker
+const envLoading = ref(false)
+const envVars = ref([])
+const newVarKey = ref('')
+const newVarValue = ref('')
+const newVarSensitive = ref(false)
+const rememberCredentials = ref(true)
+
 // Blacklist
 const blacklistEntries = ref([])
 const newBlacklistPattern = ref('')
@@ -474,19 +610,94 @@ const shortenRepoUrl = (url) => {
   return url.length > 40 ? '...' + url.slice(-37) : url
 }
 
-// Deploy
-const triggerDeploy = (dep) => {
+// Deploy & Credentials Seeker
+const triggerDeploy = async (dep) => {
   deploymentToDeploy.value = dep
   deployResult.value = null
   deploying.value = false
   showDeployModal.value = true
+  envLoading.value = true
+  envVars.value = []
+  newVarKey.value = ''
+  newVarValue.value = ''
+  newVarSensitive.value = false
+
+  try {
+    const res = await axios.get(`/deployments/${dep.id}/env-seeker`)
+    if (res.data && res.data.variables) {
+      envVars.value = res.data.variables.map(v => ({
+        ...v,
+        showPassword: false,
+      }))
+    }
+  } catch (err) {
+    console.error('Failed to load credentials seeker:', err)
+  } finally {
+    envLoading.value = false
+  }
+}
+
+const togglePasswordVisibility = (item) => {
+  item.showPassword = !item.showPassword
+}
+
+const generatePassword = (item) => {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*_-+'
+  let pass = ''
+  const array = new Uint32Array(24)
+  window.crypto.getRandomValues(array)
+  for (let i = 0; i < 24; i++) {
+    pass += chars[array[i] % chars.length]
+  }
+  item.value = pass
+  item.showPassword = true
+}
+
+const addCustomEnvVar = () => {
+  const k = newVarKey.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '')
+  if (!k) return
+  const existing = envVars.value.find(v => v.key === k)
+  if (existing) {
+    existing.value = newVarValue.value
+    existing.sensitive = newVarSensitive.value || existing.sensitive
+  } else {
+    envVars.value.push({
+      key: k,
+      value: newVarValue.value,
+      sensitive: newVarSensitive.value,
+      source: 'custom',
+      required: false,
+      showPassword: false,
+    })
+  }
+  newVarKey.value = ''
+  newVarValue.value = ''
+  newVarSensitive.value = false
+}
+
+const removeEnvVar = (index) => {
+  envVars.value.splice(index, 1)
 }
 
 const executeDeploy = async () => {
   try {
     deploying.value = true
     deployResult.value = null
-    const res = await axios.post(`/deployments/${deploymentToDeploy.value.id}/deploy`)
+
+    // Extract key-value overrides
+    const overrides = {}
+    for (const v of envVars.value) {
+      if (v.key && v.value !== undefined && v.value !== null && v.value !== '') {
+        overrides[v.key] = v.value
+      }
+    }
+
+    const payload = {
+      env_overrides: overrides,
+      remember: rememberCredentials.value,
+    }
+
+    const res = await axios.post(`/deployments/${deploymentToDeploy.value.id}/deploy`, payload)
     deployResult.value = res.data
     loadDeployments()
   } catch (error) {

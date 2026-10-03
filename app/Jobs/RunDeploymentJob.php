@@ -30,7 +30,8 @@ class RunDeploymentJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        public GitDeployment $deployment
+        public GitDeployment $deployment,
+        public array $envOverrides = []
     ) {}
 
     /**
@@ -41,7 +42,7 @@ class RunDeploymentJob implements ShouldQueue
         Log::info("RunDeploymentJob started for {$this->deployment->domain} (ID: {$this->deployment->id})");
 
         try {
-            $success = $deploymentService->deploy($this->deployment);
+            $success = $deploymentService->deploy($this->deployment, $this->envOverrides);
 
             if ($success) {
                 Log::info("RunDeploymentJob completed successfully for {$this->deployment->domain}");

@@ -202,9 +202,56 @@ class GitDeploymentController extends Controller
     }
 
     /**
-     * Trigger a deployment.
+     * Get detectable environment variables for interactive credentials seeker.
      */
-    public function deploy($id)
+    public function getEnvSeeker($id)
+    {
+        try {
+            $deployment = GitDeployment::findOrFail($id);
+            $vars = $this->deploymentService->getDetectableEnvVars($deployment);
+
+            return response()->json([
+                'deployment' => [
+                    'id' => $deployment->id,
+                    'domain' => $deployment->domain,
+                    'branch' => $deployment->branch,
+                    'repo_url' => $deployment->repo_url,
+                ],
+                'variables' => $vars,
+                'saved_env' => $deployment->runtime_env ?? [],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to detect variables: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Save runtime environment variables without running deploy.
+     */
+    public function saveEnvSeeker(Request $request, $id)
+    {
+        try {
+            $deployment = GitDeployment::findOrFail($id);
+            $envOverrides = $request->input('env', []);
+
+            $current = is_array($deployment->runtime_env) ? $deployment->runtime_env : [];
+            $deployment->runtime_env = array_merge($current, $envOverrides);
+            $deployment->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Credentials and environment variables saved successfully.',
+                'runtime_env' => $deployment->runtime_env,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to save credentials: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Trigger a deployment with optional interactive environment overrides.
+     */
+    public function deploy(Request $request, $id)
     {
         try {
             $deployment = GitDeployment::findOrFail($id);
@@ -215,11 +262,19 @@ class GitDeploymentController extends Controller
                 ], 409);
             }
 
-            // Reset status
-            $deployment->update(['status' => 'pending', 'last_error' => null]);
+            $envOverrides = $request->input('env_overrides', []);
+            if (!empty($envOverrides) && is_array($envOverrides)) {
+                $current = is_array($deployment->runtime_env) ? $deployment->runtime_env : [];
+                $deployment->runtime_env = array_merge($current, $envOverrides);
+            }
 
-            // Dispatch deployment as a background job
-            RunDeploymentJob::dispatch($deployment);
+            // Reset status
+            $deployment->status = 'pending';
+            $deployment->last_error = null;
+            $deployment->save();
+
+            // Dispatch deployment as a background job with environment overrides
+            RunDeploymentJob::dispatch($deployment, $envOverrides);
 
             \Log::info("Deployment job dispatched for {$deployment->domain} by user " . auth()->id());
 
@@ -237,9 +292,9 @@ class GitDeploymentController extends Controller
     /**
      * Redeploy an existing deployment (pull latest and rebuild).
      */
-    public function redeploy($id)
+    public function redeploy(Request $request, $id)
     {
-        return $this->deploy($id);
+        return $this->deploy($request, $id);
     }
 
     /**

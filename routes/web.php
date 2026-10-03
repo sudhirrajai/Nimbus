@@ -175,6 +175,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::get('/saved-tokens', [GitDeploymentController::class, 'getSavedTokens'])->name('saved-tokens');
             Route::get('/{id}/status', [GitDeploymentController::class, 'status'])->name('status');
             Route::get('/{id}/logs', [GitDeploymentController::class, 'logs'])->name('logs');
+            Route::get('/{id}/env-seeker', [GitDeploymentController::class, 'getEnvSeeker'])->name('env-seeker');
+            Route::post('/{id}/env-seeker', [GitDeploymentController::class, 'saveEnvSeeker'])->name('env-seeker.save');
             Route::post('/{id}/deploy', [GitDeploymentController::class, 'deploy'])->name('deploy');
             Route::post('/{id}/redeploy', [GitDeploymentController::class, 'redeploy'])->name('redeploy');
             Route::delete('/{id}', [GitDeploymentController::class, 'destroy'])->name('destroy');
