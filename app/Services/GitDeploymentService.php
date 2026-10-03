@@ -624,7 +624,8 @@ class GitDeploymentService
             $this->executeCommand("sudo mv " . escapeshellarg($tempFile) . " " . escapeshellarg($envFile));
             $siteUser = SiteIsolationService::siteUser($deployment->domain);
             $this->executeCommand("sudo chown {$siteUser}:{$siteUser} " . escapeshellarg($envFile));
-            $this->executeCommand("sudo chmod 600 " . escapeshellarg($envFile));
+            $this->executeCommand("sudo chmod 660 " . escapeshellarg($envFile));
+            $this->executeCommand("sudo setfacl -m u:www-data:rw " . escapeshellarg($envFile));
 
             $duration = (int)(microtime(true) - $startTime);
             $log->update([
