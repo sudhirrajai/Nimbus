@@ -281,7 +281,7 @@ CONF;
     /**
      * Helper to execute sudo command safely with compound command support.
      */
-    private static function executeSudo(string $command): void
+    public static function executeSudo(string $command): void
     {
         $escaped = escapeshellarg($command);
         exec("sudo bash -c {$escaped} 2>&1", $output, $code);
