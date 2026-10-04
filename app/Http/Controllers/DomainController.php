@@ -1225,6 +1225,9 @@ server {
         fastcgi_read_timeout 600;
         fastcgi_send_timeout 600;
         fastcgi_connect_timeout 600;
+        fastcgi_buffer_size 128k;
+        fastcgi_buffers 4 256k;
+        fastcgi_busy_buffers_size 256k;
     }
     
     # Deny access to hidden files
