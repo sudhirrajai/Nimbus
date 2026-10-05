@@ -15,7 +15,7 @@
         </div>
       </div>
 
-      <div class="container-fluid py-2 flex-grow-1">
+      <div class="container-fluid px-2 px-sm-3 py-2 flex-grow-1">
         <slot />
       </div>
 

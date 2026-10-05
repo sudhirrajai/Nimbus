@@ -48,6 +48,25 @@
             </div>
           </div>
 
+          <!-- Mobile Workspace Tabs Bar -->
+          <div class="db-mobile-tabs d-flex d-md-none px-3 py-2 bg-gradient-dark border-top border-white-soft align-items-center gap-1 overflow-x-auto" style="-webkit-overflow-scrolling: touch; scrollbar-width: none;">
+            <button class="nav-tab-btn text-nowrap" :class="{ active: activeTab === 'browse' }" @click="activeTab = 'browse'">
+              <i class="material-symbols-rounded text-sm me-1">table_chart</i> Browse
+            </button>
+            <button class="nav-tab-btn text-nowrap" :class="{ active: activeTab === 'designer' }" @click="activeTab = 'designer'; loadDesignerSchema()">
+              <i class="material-symbols-rounded text-sm me-1">hub</i> ERD
+            </button>
+            <button class="nav-tab-btn text-nowrap" :class="{ active: activeTab === 'sql' }" @click="activeTab = 'sql'">
+              <i class="material-symbols-rounded text-sm me-1">terminal</i> SQL
+            </button>
+            <button class="nav-tab-btn text-nowrap" :class="{ active: activeTab === 'create_table' }" @click="activeTab = 'create_table'">
+              <i class="material-symbols-rounded text-sm me-1">add_box</i> New
+            </button>
+            <button class="nav-tab-btn text-nowrap" :class="{ active: activeTab === 'export_import' }" @click="activeTab = 'export_import'">
+              <i class="material-symbols-rounded text-sm me-1">import_export</i> Export
+            </button>
+          </div>
+
           <!-- Alert Toast -->
           <transition name="fade">
             <div v-if="alert.show" :class="`alert alert-${alert.type} alert-dismissible fade show m-3 border-radius-lg shadow-sm`">

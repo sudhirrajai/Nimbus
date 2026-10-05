@@ -1,27 +1,32 @@
 <template>
   <nav
-    class="navbar navbar-main navbar-expand-lg px-0 mx-3 shadow-none border-radius-xl"
+    class="navbar navbar-main navbar-expand-lg px-0 mx-2 mx-md-3 shadow-none border-radius-xl"
     id="navbarBlur"
   >
-    <div class="container-fluid py-1 px-3">
-      <!-- Mobile menu toggle button -->
-      <div class="d-xl-none">
-        <a href="#" class="nav-link text-body p-0" @click.prevent="toggleSidebar">
-          <i class="material-symbols-rounded text-dark" style="font-size: 28px;">menu</i>
-        </a>
+    <div class="container-fluid py-1 px-2 px-md-3 d-flex align-items-center justify-content-between flex-nowrap">
+      <!-- Left Section: Mobile Menu Toggle & Brand -->
+      <div class="d-flex align-items-center gap-2">
+        <div class="d-xl-none">
+          <a href="#" class="nav-link text-body p-1 d-flex align-items-center" @click.prevent="toggleSidebar" aria-label="Toggle navigation">
+            <i class="material-symbols-rounded text-dark" style="font-size: 26px;">menu</i>
+          </a>
+        </div>
+        <!-- Mobile/Tablet brand logo (when sidebar is hidden) -->
+        <Link href="/dashboard" class="d-flex d-xl-none align-items-center text-decoration-none gap-2">
+          <img :src="'/assets/img/nimbus_logo.png?v=2'" alt="nimbus" style="width: 28px; height: 28px; border-radius: 6px;">
+          <span class="text-sm font-weight-bold text-dark d-none d-sm-inline" style="letter-spacing: -0.03em;">nimbus</span>
+        </Link>
       </div>
 
-      <div
-        class="collapse navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4 show"
-        id="navbar"
-      >
-        <div class="ms-md-auto pe-md-3 d-flex align-items-center">
+      <!-- Right Section: Search & Actions -->
+      <div class="d-flex align-items-center justify-content-end gap-1 gap-sm-2 flex-grow-1 ms-2">
+        <div class="search-container flex-grow-1 d-flex justify-content-end">
           <GlobalSearch />
         </div>
 
-        <ul class="navbar-nav d-flex align-items-center justify-content-end">
+        <ul class="navbar-nav d-flex flex-row align-items-center gap-1 mb-0">
           <!-- Live Server Clock Capsule -->
-          <li class="nav-item pe-3 d-none d-sm-flex align-items-center position-relative" ref="clockDropdownRef">
+          <li class="nav-item pe-1 pe-sm-2 d-none d-sm-flex align-items-center position-relative" ref="clockDropdownRef">
             <div class="server-time-capsule d-flex align-items-center cursor-pointer"
                  :class="{ 'capsule-active': isClockOpen }"
                  @click="isClockOpen = !isClockOpen"
@@ -31,7 +36,7 @@
                 <i class="material-symbols-rounded clock-icon">schedule</i>
                 <span class="time-text">{{ serverTimeDisplay }}</span>
               </div>
-              <span class="tz-badge">{{ serverTimezoneShort }}</span>
+              <span class="tz-badge d-none d-md-inline-block">{{ serverTimezoneShort }}</span>
             </div>
 
             <!-- Floating Clock Details Popover -->
@@ -81,7 +86,7 @@
           </li>
 
           <!-- Report Bug Button -->
-          <li class="nav-item pe-3">
+          <li class="nav-item pe-1 pe-sm-2">
             <button 
               type="button" 
               class="btn-report-header" 
@@ -89,23 +94,23 @@
               title="Report an issue or bug"
             >
               <i class="material-symbols-rounded">bug_report</i>
-              <span class="d-md-inline d-none ms-1">Report</span>
+              <span class="d-none d-md-inline ms-1">Report</span>
             </button>
           </li>
           
           <!-- User dropdown - Vue controlled -->
-          <li class="nav-item dropdown pe-3" ref="dropdownRef">
+          <li class="nav-item dropdown" ref="dropdownRef">
             <a
               href="#"
-              class="nav-link text-body p-0 d-flex align-items-center"
+              class="nav-link text-body p-1 d-flex align-items-center"
               @click.prevent="toggleDropdown"
             >
-              <i class="material-symbols-rounded">account_circle</i>
-              <span class="d-sm-inline d-none ms-1 text-dark text-sm">{{ userName }}</span>
-              <i class="material-symbols-rounded ms-1 text-sm">expand_more</i>
+              <i class="material-symbols-rounded text-dark" style="font-size: 24px;">account_circle</i>
+              <span class="d-none d-sm-inline ms-1 text-dark text-sm font-weight-medium">{{ userName }}</span>
+              <i class="material-symbols-rounded ms-1 text-sm d-none d-sm-inline">expand_more</i>
             </a>
             <ul 
-              class="dropdown-menu dropdown-menu-end px-2 py-3" 
+              class="dropdown-menu dropdown-menu-end px-2 py-3 shadow-lg" 
               :class="{ 'show': dropdownOpen }"
               :style="dropdownOpen ? 'display: block;' : ''"
             >
@@ -151,7 +156,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { usePage, router } from '@inertiajs/vue3'
+import { usePage, router, Link } from '@inertiajs/vue3'
 import GlobalSearch from '@/Components/GlobalSearch.vue'
 import ReportBugModal from '@/Components/ReportBugModal.vue'
 

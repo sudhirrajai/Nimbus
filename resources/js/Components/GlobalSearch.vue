@@ -5,7 +5,7 @@
       <input
         type="text"
         class="search-control"
-        placeholder="Search everything... (Ctrl+K)"
+        :placeholder="placeholderText"
         v-model="searchQuery"
         @focus="isFocused = true"
         @input="handleInput"
@@ -15,7 +15,7 @@
         @keydown.esc="closeSearch"
         ref="searchInput"
       />
-      <div class="search-shortcut" v-if="!isFocused && !searchQuery">
+      <div class="search-shortcut d-none d-md-flex" v-if="!isFocused && !searchQuery">
         <span>Ctrl</span><span>K</span>
       </div>
       <div v-if="loading" class="search-loader">
@@ -74,6 +74,13 @@ const searchRef = ref(null)
 const searchInput = ref(null)
 
 const isOpen = computed(() => isFocused.value && searchQuery.value.length >= 2)
+
+const placeholderText = computed(() => {
+  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+    return 'Search...'
+  }
+  return 'Search everything... (Ctrl+K)'
+})
 
 const groupedResults = computed(() => {
   const groups = {}
@@ -336,5 +343,47 @@ onUnmounted(() => {
 .spinner-border-sm {
   width: 1rem;
   height: 1rem;
+}
+
+@media (max-width: 767.98px) {
+  .global-search-wrapper {
+    max-width: 170px;
+  }
+  .global-search-wrapper.is-expanded {
+    max-width: 250px;
+  }
+  .search-input-group {
+    padding: 0 8px;
+    height: 36px;
+  }
+  .search-control {
+    font-size: 0.8125rem;
+    height: 36px;
+  }
+  .search-icon {
+    font-size: 18px;
+    margin-right: 4px;
+  }
+  .search-suggestions-dropdown {
+    position: fixed !important;
+    top: 56px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(80vh - 60px) !important;
+    z-index: 1200 !important;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25) !important;
+    border-radius: 14px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .global-search-wrapper {
+    max-width: 130px;
+  }
+  .global-search-wrapper.is-expanded {
+    max-width: 190px;
+  }
 }
 </style>

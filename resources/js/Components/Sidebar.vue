@@ -1,6 +1,6 @@
 <template>
-  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2"
-    id="sidenav-main" style="display: block !important; overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; height: calc(100vh - 1rem) !important; max-height: calc(100vh - 1rem) !important; width: 14rem !important; max-width: 14rem !important;">
+  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-xl-2 bg-white my-xl-2"
+    id="sidenav-main">
     <div class="sidenav-header" style="height: 72px; width: 100%;">
       <button 
         type="button"
@@ -405,10 +405,27 @@ onUnmounted(() => {
 <style>
 #sidenav-main {
   z-index: 999;
+  display: block !important;
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  height: calc(100vh - 1rem);
+  max-height: calc(100vh - 1rem);
+  width: 14rem;
+  max-width: 14rem;
 }
 
 @media (max-width: 1199.98px) {
   #sidenav-main {
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    width: 16rem !important;
+    max-width: 84vw !important;
+    border-radius: 0 1.25rem 1.25rem 0 !important;
     transform: translateX(-110%);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -416,7 +433,7 @@ onUnmounted(() => {
   #sidenav-main.show-mobile {
     transform: translateX(0) !important;
     z-index: 1050 !important;
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
   }
 }
 </style>

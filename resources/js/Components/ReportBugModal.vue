@@ -559,4 +559,28 @@ const submitReport = async () => {
     transform: scale(0.95);
     opacity: 0;
 }
+
+@media (max-width: 575.98px) {
+    .custom-modal-overlay {
+        padding: 0.5rem;
+    }
+    .custom-modal-container {
+        max-width: calc(100vw - 1rem);
+        max-height: calc(100dvh - 1rem);
+    }
+    .custom-modal-header {
+        padding: 12px 16px;
+    }
+    .custom-modal-body {
+        padding: 16px;
+    }
+    .custom-modal-footer {
+        padding: 12px 16px;
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+    .custom-modal-footer .btn-custom {
+        width: 100%;
+    }
+}
 </style>

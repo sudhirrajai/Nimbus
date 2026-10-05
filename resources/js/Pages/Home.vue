@@ -2,9 +2,9 @@
   <MainLayout>
     <Head title="Dashboard" />
     <div class="row">
-      <div class="ms-3">
+      <div class="col-12 ps-2 ps-sm-3 mb-2">
         <h3 class="mb-0 h4 font-weight-bolder">Server Dashboard</h3>
-        <p class="mb-4">Real-time server monitoring and statistics</p>
+        <p class="mb-3 text-sm text-secondary">Real-time server monitoring and statistics</p>
       </div>
 
       <!-- Mail Server Banner -->
@@ -23,7 +23,7 @@
                 </p>
               </div>
               <div class="col-lg-4 col-md-5 text-md-end text-start mt-3 mt-md-0">
-                <Link href="/email" class="btn btn-white btn-lg mb-0 text-dark font-weight-bold shadow-md">
+                <Link href="/email" class="btn btn-white btn-lg mb-0 text-dark font-weight-bold shadow-md w-100 w-md-auto d-inline-flex align-items-center justify-content-center">
                   <i class="material-symbols-rounded text-sm me-1">settings</i> Install & Configure
                 </Link>
               </div>
