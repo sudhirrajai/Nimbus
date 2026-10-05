@@ -93,6 +93,12 @@ class HandleInertiaRequests extends Middleware
                 ? \App\Support\LicenseGuard::warningMessage()
                 : null,
             'license_modules' => \App\Support\LicenseGuard::allowedModules(),
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'info' => fn () => $request->session()->get('info'),
+            ],
         ];
     }
 }

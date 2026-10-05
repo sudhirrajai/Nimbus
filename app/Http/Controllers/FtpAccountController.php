@@ -63,10 +63,10 @@ class FtpAccountController extends Controller
 
             return back()->with('success', "FTP account '{$account->username}' created successfully.");
         } catch (\InvalidArgumentException $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', $e->getMessage())->withErrors(['error' => $e->getMessage()]);
         } catch (\Exception $e) {
             Log::error('FTP account creation failed: ' . $e->getMessage());
-            return back()->with('error', 'Failed to create FTP account: ' . $e->getMessage());
+            return back()->with('error', 'Failed to create FTP account: ' . $e->getMessage())->withErrors(['error' => 'Failed to create FTP account: ' . $e->getMessage()]);
         }
     }
 
@@ -82,7 +82,7 @@ class FtpAccountController extends Controller
         $user = $request->user();
 
         if (!$user->canAccessDomain($account->domain)) {
-            return back()->with('error', 'Unauthorized action.');
+            return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
         try {
@@ -91,7 +91,7 @@ class FtpAccountController extends Controller
             return back()->with('success', "Password for '{$account->username}' updated successfully.");
         } catch (\Exception $e) {
             Log::error('FTP password update failed: ' . $e->getMessage());
-            return back()->with('error', 'Failed to update password: ' . $e->getMessage());
+            return back()->with('error', 'Failed to update password: ' . $e->getMessage())->withErrors(['error' => 'Failed to update password: ' . $e->getMessage()]);
         }
     }
 
@@ -107,7 +107,7 @@ class FtpAccountController extends Controller
         $user = $request->user();
 
         if (!$user->canAccessDomain($account->domain)) {
-            return back()->with('error', 'Unauthorized action.');
+            return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
         try {
@@ -116,7 +116,7 @@ class FtpAccountController extends Controller
             return back()->with('success', "Quota for '{$account->username}' updated successfully.");
         } catch (\Exception $e) {
             Log::error('FTP quota update failed: ' . $e->getMessage());
-            return back()->with('error', 'Failed to update quota: ' . $e->getMessage());
+            return back()->with('error', 'Failed to update quota: ' . $e->getMessage())->withErrors(['error' => 'Failed to update quota: ' . $e->getMessage()]);
         }
     }
 
@@ -128,7 +128,7 @@ class FtpAccountController extends Controller
         $user = $request->user();
 
         if (!$user->canAccessDomain($account->domain)) {
-            return back()->with('error', 'Unauthorized action.');
+            return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
         try {
@@ -138,7 +138,7 @@ class FtpAccountController extends Controller
             return back()->with('success', "FTP account '{$account->username}' {$statusText}.");
         } catch (\Exception $e) {
             Log::error('FTP toggle status failed: ' . $e->getMessage());
-            return back()->with('error', 'Failed to toggle account status: ' . $e->getMessage());
+            return back()->with('error', 'Failed to toggle account status: ' . $e->getMessage())->withErrors(['error' => 'Failed to toggle account status: ' . $e->getMessage()]);
         }
     }
 
@@ -150,7 +150,7 @@ class FtpAccountController extends Controller
         $user = $request->user();
 
         if (!$user->canAccessDomain($account->domain)) {
-            return back()->with('error', 'Unauthorized action.');
+            return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
         try {
@@ -160,7 +160,7 @@ class FtpAccountController extends Controller
             return back()->with('success', "FTP account '{$username}' deleted successfully.");
         } catch (\Exception $e) {
             Log::error('FTP account deletion failed: ' . $e->getMessage());
-            return back()->with('error', 'Failed to delete FTP account: ' . $e->getMessage());
+            return back()->with('error', 'Failed to delete FTP account: ' . $e->getMessage())->withErrors(['error' => 'Failed to delete FTP account: ' . $e->getMessage()]);
         }
     }
 }

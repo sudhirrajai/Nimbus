@@ -868,9 +868,13 @@ const applyDirPreset = () => {
 const submitCreate = () => {
   formSubmitting.value = true
   router.post('/ftp', createForm.value, {
-    onSuccess: () => {
-      showCreateModal.value = false
+    onSuccess: (page) => {
       formSubmitting.value = false
+      if (page.props.flash?.error) {
+        showToast(page.props.flash.error, 'error')
+        return
+      }
+      showCreateModal.value = false
       showToast('FTP account created successfully!')
     },
     onError: (errors) => {
@@ -898,9 +902,13 @@ const submitPasswordUpdate = () => {
   if (!activeAccount.value) return
   formSubmitting.value = true
   router.put(`/ftp/${activeAccount.value.id}/password`, passwordForm.value, {
-    onSuccess: () => {
-      showPasswordModal.value = false
+    onSuccess: (page) => {
       formSubmitting.value = false
+      if (page.props.flash?.error) {
+        showToast(page.props.flash.error, 'error')
+        return
+      }
+      showPasswordModal.value = false
       showToast(`Password updated for ${activeAccount.value.username}`)
     },
     onError: (errors) => {
@@ -925,9 +933,13 @@ const submitQuotaUpdate = () => {
   if (!activeAccount.value) return
   formSubmitting.value = true
   router.put(`/ftp/${activeAccount.value.id}/quota`, quotaForm.value, {
-    onSuccess: () => {
-      showQuotaModal.value = false
+    onSuccess: (page) => {
       formSubmitting.value = false
+      if (page.props.flash?.error) {
+        showToast(page.props.flash.error, 'error')
+        return
+      }
+      showQuotaModal.value = false
       showToast('Quota updated successfully')
     },
     onError: (errors) => {
@@ -941,8 +953,12 @@ const submitQuotaUpdate = () => {
 const toggleStatus = (account) => {
   actionLoading.value = account.id
   router.post(`/ftp/${account.id}/toggle-status`, {}, {
-    onSuccess: () => {
+    onSuccess: (page) => {
       actionLoading.value = null
+      if (page.props.flash?.error) {
+        showToast(page.props.flash.error, 'error')
+        return
+      }
       showToast(`Account ${account.is_active ? 'suspended' : 'activated'}`)
     },
     onError: () => {
@@ -958,11 +974,18 @@ const confirmDelete = (account) => {
     return
   }
 
+  actionLoading.value = account.id
   router.delete(`/ftp/${account.id}`, {
-    onSuccess: () => {
-      showToast(`FTP account "${account.username}" deleted`)
+    onSuccess: (page) => {
+      actionLoading.value = null
+      if (page.props.flash?.error) {
+        showToast(page.props.flash.error, 'error')
+        return
+      }
+      showToast(`FTP account "${account.username}" deleted successfully`)
     },
     onError: () => {
+      actionLoading.value = null
       showToast('Failed to delete account', 'error')
     }
   })

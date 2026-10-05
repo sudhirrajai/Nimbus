@@ -122,7 +122,9 @@ class FtpService
 
             // Create directory if not exists
             if (!is_dir($homedir)) {
-                @mkdir($homedir, 0755, true);
+                @exec("sudo mkdir -p " . escapeshellarg($homedir));
+                @exec("sudo chown -R 33:33 " . escapeshellarg($homedir));
+                @exec("sudo chmod 755 " . escapeshellarg($homedir));
             }
         }
 
@@ -141,10 +143,10 @@ class FtpService
             }
         }
 
-        // 3. Execute pure-pw command on server
+        // 3. Execute pure-pw command on server with sudo
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             $cmd = sprintf(
-                "printf '%%s\\n%%s\\n' %s %s | pure-pw useradd %s -u %d -g %d -d %s %s -m",
+                "printf '%%s\\n%%s\\n' %s %s | sudo pure-pw useradd %s -u %d -g %d -d %s %s -m",
                 escapeshellarg($password),
                 escapeshellarg($password),
                 escapeshellarg($username),
@@ -194,7 +196,7 @@ class FtpService
 
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             $cmd = sprintf(
-                "printf '%%s\\n%%s\\n' %s %s | pure-pw passwd %s -m",
+                "printf '%%s\\n%%s\\n' %s %s | sudo pure-pw passwd %s -m",
                 escapeshellarg($newPassword),
                 escapeshellarg($newPassword),
                 escapeshellarg($account->username)
@@ -226,7 +228,7 @@ class FtpService
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             $quotaFlag = $quotaMb && $quotaMb > 0 ? "-N {$quotaMb}" : "-N ''";
             $cmd = sprintf(
-                "pure-pw usermod %s %s -m",
+                "sudo pure-pw usermod %s %s -m",
                 escapeshellarg($account->username),
                 $quotaFlag
             );
@@ -248,7 +250,7 @@ class FtpService
             // When inactive, deny all IPs (-R 0.0.0.0/0). When active, remove denial (-R '')
             $flag = $newStatus ? "-R ''" : "-R 0.0.0.0/0";
             $cmd = sprintf(
-                "pure-pw usermod %s %s -m",
+                "sudo pure-pw usermod %s %s -m",
                 escapeshellarg($account->username),
                 $flag
             );
@@ -272,7 +274,7 @@ class FtpService
     public function deleteAccount(FtpAccount $account): void
     {
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
-            $cmd = sprintf("pure-pw userdel %s -m", escapeshellarg($account->username));
+            $cmd = sprintf("sudo pure-pw userdel %s -m", escapeshellarg($account->username));
             @exec($cmd);
         }
 
