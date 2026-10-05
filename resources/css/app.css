@@ -1362,16 +1362,36 @@ html, body {
 /* Base Main Content */
 .main-content {
   min-width: 0;
-  width: 100%;
   transition: all 0.25s ease-in-out;
 }
 
-/* Tablet & Mobile Layout (< 1200px) */
+/* Desktop Screens (>= 1200px):
+   When sidebar is docked on left (margin-left: 15rem), main-content MUST have width: auto
+   so it naturally takes (100% - 15rem) and never overflows the right viewport edge. */
+@media (min-width: 1200px) {
+  .g-sidenav-show:not(.rtl) .sidenav.fixed-start + .main-content,
+  .main-content {
+    margin-left: 15rem !important;
+    width: auto !important;
+    max-width: calc(100% - 15rem) !important;
+  }
+}
+
+/* Tablet & Mobile Layout (< 1200px):
+   Sidebar is an off-canvas drawer, so main-content takes full width without margin. */
 @media (max-width: 1199.98px) {
-  .g-sidenav-show .sidenav.fixed-start + .main-content {
+  .g-sidenav-show .sidenav.fixed-start + .main-content,
+  .main-content {
     margin-left: 0 !important;
     width: 100% !important;
+    max-width: 100% !important;
   }
+}
+
+/* Eliminate nested container double-padding across all viewport widths */
+.container-fluid .container-fluid {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 /* Mobile Screens (< 768px) */

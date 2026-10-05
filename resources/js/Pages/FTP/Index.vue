@@ -1,14 +1,14 @@
 <template>
   <MainLayout>
     <Head title="FTP Accounts" />
-    <div class="container-fluid py-4">
+    <div class="py-2">
 
       <!-- Page Header -->
       <div class="row mb-4">
         <div class="col-12">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
             <div>
-              <div class="d-flex align-items-center gap-2 mb-1">
+              <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
                 <h4 class="font-weight-bolder mb-0">FTP Accounts</h4>
                 <span class="badge bg-gradient-info text-xxs d-inline-flex align-items-center">
                   <i class="material-symbols-rounded text-xxs me-1">lock</i> Pure-FTPd (Isolated)
@@ -17,10 +17,10 @@
               <p class="mb-0 text-sm text-secondary">Create and manage isolated virtual FTP accounts for your websites</p>
             </div>
 
-            <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
               <button 
                 type="button" 
-                class="btn btn-outline-dark mb-0 d-flex align-items-center gap-1"
+                class="btn btn-outline-dark mb-0 d-flex align-items-center justify-content-center gap-1 flex-grow-1 flex-md-grow-0"
                 @click="showGuideModal = true"
               >
                 <i class="material-symbols-rounded text-sm">settings_ethernet</i>
@@ -28,7 +28,7 @@
               </button>
               <button 
                 type="button" 
-                class="btn bg-gradient-dark mb-0 d-flex align-items-center gap-1 shadow-sm"
+                class="btn bg-gradient-dark mb-0 d-flex align-items-center justify-content-center gap-1 shadow-sm flex-grow-1 flex-md-grow-0"
                 @click="openCreateModal"
               >
                 <i class="material-symbols-rounded text-sm">person_add</i>
@@ -44,61 +44,73 @@
         <div class="col-12">
           <div class="card shadow-sm border bg-white overflow-hidden">
             <div class="card-body p-3">
-              <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+              <div class="row g-3 align-items-center">
                 
-                <div class="d-flex align-items-center gap-3">
-                  <div class="icon icon-shape bg-gradient-primary shadow-primary text-center border-radius-lg d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                    <i class="material-symbols-rounded text-white" style="font-size: 22px;">dns</i>
-                  </div>
-                  <div>
-                    <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Server Host / IP</span>
-                    <div class="d-flex align-items-center gap-2">
-                      <span class="font-monospace text-sm font-weight-bolder text-dark">{{ connectionInfo.host }}</span>
-                      <button 
-                        type="button" 
-                        class="btn-copy-icon" 
-                        @click="copyText(connectionInfo.host, 'Host copied to clipboard')"
-                        title="Copy Host"
-                      >
-                        <i class="material-symbols-rounded text-xs">content_copy</i>
-                      </button>
+                <!-- Host -->
+                <div class="col-12 col-sm-6 col-xl-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon icon-shape bg-gradient-primary shadow-primary text-center border-radius-lg d-flex align-items-center justify-content-center flex-shrink-0" style="width: 44px; height: 44px;">
+                      <i class="material-symbols-rounded text-white" style="font-size: 22px;">dns</i>
+                    </div>
+                    <div class="overflow-hidden">
+                      <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Server Host / IP</span>
+                      <div class="d-flex align-items-center gap-2">
+                        <span class="font-monospace text-sm font-weight-bolder text-dark text-truncate">{{ connectionInfo.host }}</span>
+                        <button 
+                          type="button" 
+                          class="btn-copy-icon flex-shrink-0" 
+                          @click="copyText(connectionInfo.host, 'Host copied to clipboard')"
+                          title="Copy Host"
+                        >
+                          <i class="material-symbols-rounded text-xs">content_copy</i>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="d-flex align-items-center gap-3">
-                  <div class="icon icon-shape bg-gradient-success shadow-success text-center border-radius-lg d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                    <i class="material-symbols-rounded text-white" style="font-size: 22px;">cable</i>
-                  </div>
-                  <div>
-                    <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Default Port</span>
-                    <span class="font-monospace text-sm font-weight-bolder text-dark">21</span>
-                    <span class="text-xxs text-muted ms-1">(Passive: {{ connectionInfo.passive_ports }})</span>
-                  </div>
-                </div>
-
-                <div class="d-flex align-items-center gap-3">
-                  <div class="icon icon-shape bg-gradient-info shadow-info text-center border-radius-lg d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                    <i class="material-symbols-rounded text-white" style="font-size: 22px;">security</i>
-                  </div>
-                  <div>
-                    <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Encryption</span>
-                    <span class="badge bg-success-subtle text-success text-xxs font-weight-bold">
-                      <i class="material-symbols-rounded text-xxs me-1">verified</i> FTPS (Explicit TLS)
-                    </span>
+                <!-- Default Port -->
+                <div class="col-12 col-sm-6 col-xl-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon icon-shape bg-gradient-success shadow-success text-center border-radius-lg d-flex align-items-center justify-content-center flex-shrink-0" style="width: 44px; height: 44px;">
+                      <i class="material-symbols-rounded text-white" style="font-size: 22px;">cable</i>
+                    </div>
+                    <div>
+                      <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Default Port</span>
+                      <span class="font-monospace text-sm font-weight-bolder text-dark">21</span>
+                      <span class="text-xxs text-muted ms-1">(Passive: {{ connectionInfo.passive_ports }})</span>
+                    </div>
                   </div>
                 </div>
 
-                <div class="d-flex align-items-center gap-3">
-                  <div class="icon icon-shape bg-gradient-dark text-center border-radius-lg d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                    <i class="material-symbols-rounded text-white" style="font-size: 22px;">power_settings_new</i>
+                <!-- Encryption -->
+                <div class="col-12 col-sm-6 col-xl-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon icon-shape bg-gradient-info shadow-info text-center border-radius-lg d-flex align-items-center justify-content-center flex-shrink-0" style="width: 44px; height: 44px;">
+                      <i class="material-symbols-rounded text-white" style="font-size: 22px;">security</i>
+                    </div>
+                    <div>
+                      <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Encryption</span>
+                      <span class="badge bg-success-subtle text-success text-xxs font-weight-bold">
+                        <i class="material-symbols-rounded text-xxs me-1">verified</i> FTPS (Explicit TLS)
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Service Status</span>
-                    <span class="badge text-xxs font-weight-bold" :class="connectionInfo.is_running ? 'bg-success text-white' : 'bg-danger text-white'">
-                      <span class="pill-dot me-1"></span>
-                      {{ connectionInfo.is_running ? 'Online & Listening' : 'Service Stopped' }}
-                    </span>
+                </div>
+
+                <!-- Service Status -->
+                <div class="col-12 col-sm-6 col-xl-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon icon-shape bg-gradient-dark text-center border-radius-lg d-flex align-items-center justify-content-center flex-shrink-0" style="width: 44px; height: 44px;">
+                      <i class="material-symbols-rounded text-white" style="font-size: 22px;">power_settings_new</i>
+                    </div>
+                    <div>
+                      <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Service Status</span>
+                      <span class="badge text-xxs font-weight-bold" :class="connectionInfo.is_running ? 'bg-success text-white' : 'bg-danger text-white'">
+                        <span class="pill-dot me-1"></span>
+                        {{ connectionInfo.is_running ? 'Online & Listening' : 'Service Stopped' }}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -130,14 +142,14 @@
           <div class="card shadow-sm border">
             <!-- Header Controls: Title & Search -->
             <div class="card-header pb-3 pt-3 border-bottom">
-              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+              <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
                 <div class="d-flex align-items-center gap-2">
                   <h6 class="mb-0 font-weight-bolder text-dark">Active FTP Accounts</h6>
                   <span class="badge bg-secondary text-white text-xxs">{{ filteredAccounts.length }}</span>
                 </div>
 
-                <div class="d-flex align-items-center gap-2 ms-auto">
-                  <div class="input-group input-group-sm" style="min-width: 200px; max-width: 260px;">
+                <div class="d-flex align-items-center gap-2 w-100 w-sm-auto ms-sm-auto">
+                  <div class="input-group input-group-sm w-100" style="min-width: 180px; max-width: 260px;">
                     <span class="input-group-text text-body"><i class="material-symbols-rounded text-sm">search</i></span>
                     <input 
                       v-model="searchQuery" 
