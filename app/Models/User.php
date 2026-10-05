@@ -60,6 +60,11 @@ class User extends Authenticatable
         return $this->hasMany(UserWebsite::class);
     }
 
+    public function ftpAccounts()
+    {
+        return $this->hasMany(FtpAccount::class);
+    }
+
     // ─── Role Helpers ────────────────────────────────────────────
 
     public function isRoot(): bool

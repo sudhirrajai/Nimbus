@@ -18,6 +18,7 @@ use App\Http\Controllers\GitDeploymentController;
 use App\Http\Controllers\ActivationController;
 use App\Http\Controllers\WebmailController;
 use App\Http\Controllers\SsoController;
+use App\Http\Controllers\FtpAccountController;
 
 // 1-Click Single Sign-On (SSO) from VmCoreCentral
 Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
@@ -113,10 +114,13 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         return Inertia::render('Domains/Index');
     })->name('domains.list');
 
-    // FTP Accounts (Coming Soon — accessible to all users)
-    Route::get('/ftp', function () {
-        return Inertia::render('FTP/Index');
-    })->name('ftp.index');
+    // FTP Accounts Management
+    Route::get('/ftp', [FtpAccountController::class, 'index'])->name('ftp.index');
+    Route::post('/ftp', [FtpAccountController::class, 'store'])->name('ftp.store');
+    Route::put('/ftp/{account}/password', [FtpAccountController::class, 'updatePassword'])->name('ftp.password');
+    Route::put('/ftp/{account}/quota', [FtpAccountController::class, 'updateQuota'])->name('ftp.quota');
+    Route::post('/ftp/{account}/toggle-status', [FtpAccountController::class, 'toggleStatus'])->name('ftp.toggle-status');
+    Route::delete('/ftp/{account}', [FtpAccountController::class, 'destroy'])->name('ftp.destroy');
 
     Route::prefix('domains')->group(function () {
         Route::get('/api', [DomainController::class, 'index'])->name('domain.index');

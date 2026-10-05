@@ -126,10 +126,9 @@
         </li>
 
         <li v-if="isRootOrAdmin" class="nav-item">
-          <Link href="/ftp" class="nav-link d-flex align-items-center" :class="isActive('/ftp')">
+          <Link href="/ftp" class="nav-link" :class="isActive('/ftp')">
             <i class="material-symbols-rounded opacity-5">cloud_upload</i>
             <span class="nav-link-text ms-1">FTP Accounts</span>
-            <span class="badge bg-light text-muted ms-auto text-xxs font-weight-bold" style="border: 1px solid #e2e8f0; padding: 2px 6px;">Soon</span>
           </Link>
         </li>
 
