@@ -998,7 +998,6 @@ NGINX;
             if ($useBrotli && $brotliAvailable) {
                 $conf .= "# 2. Brotli Compression (Modern Browsers)\n";
                 $conf .= "brotli on;\n";
-                $conf .= "brotli_vary on;\n";
                 $conf .= "brotli_comp_level {$compLevel};\n";
                 $conf .= "brotli_min_length {$minLength};\n";
                 $conf .= "brotli_types\n    {$commonTypes};\n\n";
