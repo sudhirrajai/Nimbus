@@ -18,10 +18,10 @@ class NotificationService
      * @param string $htmlContent
      * @return bool
      */
-    public static function send(string $subject, string $htmlContent): bool
+    public static function send(string $subject, string $htmlContent, ?array $customRecipients = null): bool
     {
-        // 1. Resolve recipients: explicit global settings -> shield settings -> Super Admin / Root users
-        $emails = self::resolveRecipientEmails();
+        // 1. Resolve recipients: explicit passed in -> global settings -> shield settings -> Super Admin / Root users
+        $emails = !empty($customRecipients) ? array_values(array_unique(array_filter($customRecipients))) : self::resolveRecipientEmails();
 
         if (empty($emails)) {
             Log::warning("NotificationService: No recipient emails found for alert '{$subject}'");

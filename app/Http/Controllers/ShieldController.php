@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\SecurityThreat;
 use App\Models\Setting;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -145,14 +146,20 @@ class ShieldController extends Controller
             // Set status to running
             try {
                 Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'running']);
+                Setting::updateOrCreate(['key' => 'shield_last_scan_at'], ['value' => now()->toDateTimeString()]);
             } catch (\Exception $e) {
                 \Log::warning("Could not update scan status: " . $e->getMessage());
             }
 
-            // Trigger background scan via Artisan command
+            // Trigger background scan via Artisan command using full paths
             // Use nice and ionice to keep the system responsive
-            $cmd = "nice -n 19 ionice -c 3 php artisan shield:scan " . escapeshellarg($path);
-            exec("nohup $cmd > /dev/null 2>&1 &");
+            $artisan = base_path('artisan');
+            $phpBinary = (defined('PHP_BINARY') && PHP_BINARY && @is_executable(PHP_BINARY)) ? PHP_BINARY : '/usr/bin/php';
+            $logFile = storage_path('logs/shield_scan.log');
+
+            $cmd = "nohup nice -n 19 ionice -c 3 {$phpBinary} " . escapeshellarg($artisan) . " shield:scan " . escapeshellarg($path) . " >> " . escapeshellarg($logFile) . " 2>&1 &";
+            exec($cmd);
+            \Log::info("Nimbus Shield scan started for path: {$path}. Command: {$cmd}");
 
             return response()->json([
                 'success' => true,
@@ -178,29 +185,41 @@ class ShieldController extends Controller
         }
 
         try {
+            Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'running']);
+            Setting::updateOrCreate(['key' => 'shield_last_scan_at'], ['value' => now()->toDateTimeString()]);
+
             $autoQuarantine = Setting::where('key', 'shield_auto_quarantine')->value('value') === '1';
-            $emailAlerts = Setting::where('key', 'shield_email_alerts')->value('value') === '1';
+            $emailAlerts = Setting::where('key', 'shield_email_alerts')->value('value') !== '0';
             $alertEmails = Setting::where('key', 'shield_alert_emails')->value('value');
 
-            if ($emailAlerts && !empty($alertEmails)) {
+            // Resolve target emails
+            $emails = [];
+            if (!empty($alertEmails)) {
                 $emails = array_map('trim', explode(',', $alertEmails));
-                foreach ($emails as $email) {
-                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                        $this->sendEncryptedEmail(
-                            $email,
-                            "Nimbus Shield: Scan Started",
-                            "<p>A security scan has been initiated on path: <strong>$path</strong></p><p>You will receive another email once the scan completes with a detailed report.</p>"
-                        );
-                    }
-                }
+            }
+            if (empty($emails)) {
+                $emails = NotificationService::resolveRecipientEmails();
+            }
+
+            if ($emailAlerts && !empty($emails)) {
+                $htmlStart = "<div style='font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;'>";
+                $htmlStart .= "<h2 style='color: #0f172a; margin-top: 0;'>🛡️ Nimbus Shield: Scan Initiated</h2>";
+                $htmlStart .= "<p style='color: #475569;'>A security scan has been started on path:</p>";
+                $htmlStart .= "<p style='background: #f1f5f9; padding: 10px 14px; border-radius: 6px; font-family: monospace; font-size: 14px; color: #0f172a;'><strong>" . htmlspecialchars($path) . "</strong></p>";
+                $htmlStart .= "<p style='color: #475569;'>The scanner is actively checking for web shells, malicious PHP scripts, SEO spam files, and virus signatures via ClamAV.</p>";
+                $htmlStart .= "<p style='color: #64748b; font-size: 13px;'>You will receive a detailed email report once the scan completes.</p>";
+                $htmlStart .= "</div>";
+
+                NotificationService::send("Nimbus Shield: Security Scan Started on " . htmlspecialchars($path), $htmlStart, $emails);
             }
 
             $findings = [];
             
             // 1. Scan for long hex-named HTML files (SEO injections)
-            $hexFiles = $this->executeSudoCommand("find " . escapeshellarg($path) . " -type f -regex '.*/[0-9a-f]\{10,20\}\.html'");
+            $hexFiles = [];
+            exec("sudo find " . escapeshellarg($path) . " -type f -regex '.*/[0-9a-f]\{10,20\}\.html' 2>/dev/null", $hexFiles);
             foreach ($hexFiles as $file) {
-                if (empty($file)) continue;
+                if (empty(trim($file))) continue;
                 $findings[] = [
                     'file_path' => trim($file),
                     'type' => 'Suspicious HTML (Hex-named)',
@@ -211,19 +230,23 @@ class ShieldController extends Controller
             // 2. Scan for common PHP shell patterns
             $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
             foreach ($shellPatterns as $pattern) {
-                $cmd = "grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage --exclude-dir=nimbus 2>/dev/null";
-                $files = $this->executeSudoCommand($cmd);
-                foreach ($files as $file) {
-                    if (empty($file) || !is_string($file)) continue;
-                    $filePath = trim($file);
-                    
-                    if (str_contains($filePath, '/usr/local/nimbus')) continue;
+                $grepFiles = [];
+                $grepReturn = 0;
+                $cmd = "sudo grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage --exclude-dir=.git --exclude-dir=nimbus 2>/dev/null";
+                exec($cmd, $grepFiles, $grepReturn);
+                if ($grepReturn === 0) {
+                    foreach ($grepFiles as $file) {
+                        if (empty($file) || !is_string($file)) continue;
+                        $filePath = trim($file);
+                        
+                        if (str_contains($filePath, '/usr/local/nimbus')) continue;
 
-                    $findings[] = [
-                        'file_path' => $filePath,
-                        'type' => 'Potential Web Shell',
-                        'details' => "Contains suspicious function: $pattern"
-                    ];
+                        $findings[] = [
+                            'file_path' => $filePath,
+                            'type' => 'Potential Web Shell',
+                            'details' => "Contains suspicious function: $pattern"
+                        ];
+                    }
                 }
             }
 
@@ -232,14 +255,17 @@ class ShieldController extends Controller
                 $clamOutput = [];
                 $clamReturn = 0;
                 
-                exec("which clamdscan 2>/dev/null", $whichOutput, $whichReturn);
-                if ($whichReturn === 0) {
-                    exec("sudo clamdscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
-                    if ($clamReturn === 2) {
-                        exec("sudo clamscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                exec("which clamdscan 2>/dev/null", $whichClamdOutput, $whichClamdReturn);
+                exec("which clamscan 2>/dev/null", $whichClamOutput, $whichClamReturn);
+
+                if ($whichClamdReturn === 0) {
+                    exec("sudo clamdscan --fdpass -m -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    if ($clamReturn === 2 && $whichClamReturn === 0) {
+                        $clamOutput = [];
+                        exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                     }
-                } else {
-                    exec("sudo clamscan -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                } elseif ($whichClamReturn === 0) {
+                    exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                 }
                 
                 if ($clamReturn === 1) {
@@ -317,29 +343,43 @@ class ShieldController extends Controller
 
             \Log::info("Shield scan completed for $path. Findings: " . count($findings));
 
-            if ($emailAlerts && !empty($alertEmails)) {
-                $emails = array_map('trim', explode(',', $alertEmails));
-                $htmlReport = "<h3>Nimbus Shield: Scan Completed</h3>";
-                $htmlReport .= "<p>Scan path: <strong>$path</strong></p>";
-                $htmlReport .= "<p>Total threats found: <strong>" . count($findings) . "</strong></p>";
-                
-                if (count($findings) > 0) {
-                    $htmlReport .= "<table border='1' cellpadding='5' cellspacing='0' style='border-collapse: collapse; width: 100%;'>";
-                    $htmlReport .= "<thead><tr><th>File Path</th><th>Type</th><th>Status</th></tr></thead><tbody>";
-                    foreach ($findings as $finding) {
-                        $fileStatus = $autoQuarantine ? "Quarantined" : "Detected";
-                        $htmlReport .= "<tr><td>{$finding['file_path']}</td><td>{$finding['type']}</td><td>{$fileStatus}</td></tr>";
+            if ($emailAlerts && !empty($emails)) {
+                $threatCount = count($findings);
+                $statusBadgeColor = $threatCount > 0 ? '#ef4444' : '#10b981';
+                $statusBadgeText = $threatCount > 0 ? "{$threatCount} Threats Detected" : "Clean (0 Threats Detected)";
+
+                $htmlReport = "<div style='font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;'>";
+                $htmlReport .= "<div style='border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px;'>";
+                $htmlReport .= "<h2 style='color: #0f172a; margin: 0;'>🛡️ Nimbus Shield: Scan Report</h2>";
+                $htmlReport .= "</div>";
+
+                $htmlReport .= "<div style='background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;'>";
+                $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Scanned Path:</strong> <span style='font-family: monospace; color: #0f172a;'>" . htmlspecialchars($path) . "</span></p>";
+                $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Scan Completed:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>";
+                $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Status:</strong> <span style='display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #ffffff; background-color: {$statusBadgeColor};'>" . $statusBadgeText . "</span></p>";
+                $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Auto-Quarantine:</strong> " . ($autoQuarantine ? "<span style='color: #10b981; font-weight: 600;'>Enabled</span>" : "<span style='color: #64748b;'>Disabled</span>") . "</p>";
+                $htmlReport .= "</div>";
+
+                if ($threatCount > 0) {
+                    $htmlReport .= "<h4 style='color: #dc2626; margin-top: 20px; margin-bottom: 10px;'>⚠️ Detected Threats:</h4>";
+                    $htmlReport .= "<table style='width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; border: 1px solid #cbd5e1;'>";
+                    $htmlReport .= "<thead style='background: #f1f5f9;'><tr><th style='padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1;'>File</th><th style='padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1;'>Threat</th><th style='padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1;'>Status</th></tr></thead><tbody>";
+                    foreach ($findings as $f) {
+                        $fStatus = $autoQuarantine ? "<span style='color: #d97706; font-weight: 600;'>Quarantined</span>" : "<span style='color: #ef4444; font-weight: 600;'>Detected</span>";
+                        $htmlReport .= "<tr><td style='padding: 8px 10px; border: 1px solid #cbd5e1; word-break: break-all; font-family: monospace;'>" . htmlspecialchars($f['file_path']) . "</td><td style='padding: 8px 10px; border: 1px solid #cbd5e1;'>" . htmlspecialchars($f['type']) . "</td><td style='padding: 8px 10px; border: 1px solid #cbd5e1;'>{$fStatus}</td></tr>";
                     }
                     $htmlReport .= "</tbody></table>";
                 } else {
-                    $htmlReport .= "<p>No threats were detected. Your system is clean.</p>";
+                    $htmlReport .= "<div style='background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 14px 16px; color: #065f46;'>";
+                    $htmlReport .= "<strong>✅ All clear!</strong> No malware, web shells, or compromised files were detected during this scan.";
+                    $htmlReport .= "</div>";
                 }
 
-                foreach ($emails as $email) {
-                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                        $this->sendEncryptedEmail($email, "Nimbus Shield: Scan Completed - " . count($findings) . " Threats Found", $htmlReport);
-                    }
-                }
+                $htmlReport .= "<p style='color: #94a3b8; font-size: 12px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px;'>This is an automated security alert from Nimbus Panel Shield.</p>";
+                $htmlReport .= "</div>";
+
+                $subject = "Nimbus Shield: Scan Completed (" . ($threatCount > 0 ? "{$threatCount} Threats Detected" : "Clean") . ") - " . basename($path);
+                NotificationService::send($subject, $htmlReport, $emails);
             }
         } catch (\Exception $e) {
             \Log::error("Shield internal scan logic failed: " . $e->getMessage());
@@ -352,13 +392,13 @@ class ShieldController extends Controller
         }
     }
 
-    /**
-     * Force stop/reset scan status
-     */
     public function stopScan()
     {
+        exec("sudo pkill -f 'shield:scan' 2>/dev/null");
+        exec("sudo pkill -f 'clamdscan' 2>/dev/null");
+        exec("sudo pkill -f 'clamscan' 2>/dev/null");
         Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
-        return response()->json(['success' => true, 'message' => 'Scan status reset']);
+        return response()->json(['success' => true, 'message' => 'Scan stopped and status reset']);
     }
 
     /**
@@ -534,47 +574,7 @@ class ShieldController extends Controller
 
     private function sendEncryptedEmail($to, $subject, $htmlContent)
     {
-        $apiUrl = 'https://vmcore.in/api/send-encrypted-email';
-        $apiKey = 'vmk_ZZALOAMF78GByDGlGe3buSlly2Z32s9r7ey8KJf3w7VojizG';
-        $encKey = 'UOFE3D52L3fjfCvew0rd2ed/GgwCzN521vlgJ7hmlm0=';
-
-        $rawKey = base64_decode($encKey);
-        
-        $encryptValue = function($value) use ($rawKey) {
-            $iv = random_bytes(16);
-            $encrypted = openssl_encrypt($value, 'AES-256-CBC', $rawKey, 0, $iv);
-            $mac = hash_hmac('sha256', base64_encode($iv) . $encrypted, $rawKey);
-
-            return base64_encode(json_encode([
-                'iv'    => base64_encode($iv),
-                'value' => $encrypted,
-                'mac'   => $mac,
-                'tag'   => '',
-            ]));
-        };
-
-        $payload = [
-            'to_email'          => $to,
-            'encrypted_subject' => $encryptValue($subject),
-            'encrypted_content' => $encryptValue($htmlContent),
-        ];
-
-        $ch = curl_init($apiUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER     => [
-                "X-Api-Key: $apiKey",
-                "Accept: application/json",
-                "Content-Type: application/json"
-            ],
-            CURLOPT_POSTFIELDS     => json_encode($payload),
-            CURLOPT_TIMEOUT        => 10
-        ]);
-
-        $response = curl_exec($ch);
-        curl_close($ch);
-        return $response;
+        return NotificationService::send($subject, $htmlContent, [$to]);
     }
 
     private function getFirewallStatus()
@@ -738,7 +738,7 @@ class ShieldController extends Controller
             // Try clamdscan (daemon - ultra-fast) first, fallback to clamscan if daemon is not running or missing
             exec("which clamdscan 2>/dev/null", $whichOutput, $whichReturn);
             if ($whichReturn === 0) {
-                exec("sudo clamdscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
+                exec("sudo clamdscan --fdpass --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
                 if ($return === 2) {
                     exec("sudo clamscan --no-summary " . escapeshellarg($filePath) . " 2>/dev/null", $output, $return);
                 }
