@@ -1100,7 +1100,7 @@ NGINX;
                 ->first(fn($d) => !in_array(strtolower($d), ['html', 'default', 'public', 'cgi-bin', 'nimbus']));
 
             $hostArg = $firstDomain ? "-H " . escapeshellarg("Host: {$firstDomain}") : "";
-            $testUrl = 'http://127.0.0.1/';
+            $testUrl = $firstDomain ? "https://127.0.0.1/" : "http://127.0.0.1/";
 
             $tests = [
                 'zstd' => ['name' => 'Zstandard', 'header' => 'Accept-Encoding: zstd, gzip'],
@@ -1112,7 +1112,7 @@ NGINX;
             $results = [];
             foreach ($tests as $key => $config) {
                 $hdr = escapeshellarg($config['header']);
-                $cmd = "curl -s -I {$hostArg} -H {$hdr} " . escapeshellarg($testUrl) . " 2>&1";
+                $cmd = "curl -s -k -I {$hostArg} -H {$hdr} " . escapeshellarg($testUrl) . " 2>&1";
                 $out = [];
                 exec($cmd, $out);
                 $resp = implode("\n", $out);
