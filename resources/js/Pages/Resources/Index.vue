@@ -245,6 +245,124 @@
                     </div>
                 </div>
 
+                <!-- Live Running Processes (Real-Time Resource Breakdown) -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm border">
+                            <div class="card-header pb-2 p-3 bg-white border-bottom">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div>
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span class="badge bg-gradient-primary text-white px-2 py-0.5 text-xxs">LIVE PROCESSES</span>
+                                            <span class="badge bg-light text-dark border px-2 py-0.5 text-xxs font-weight-bold">
+                                                {{ (data.processes || []).length }} Top Consumers
+                                            </span>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5 text-xxs">
+                                                Live 5s Polling
+                                            </span>
+                                        </div>
+                                        <h6 class="mb-0 text-sm font-weight-bold text-dark d-flex align-items-center">
+                                            <i class="material-symbols-rounded text-primary me-2">reorder</i>
+                                            Active System Processes &amp; Resource Attribution
+                                        </h6>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <!-- Sort Selector -->
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-xs mb-0"
+                                                :class="processSortBy === 'memory' ? 'btn-primary' : 'btn-outline-primary'"
+                                                @click="changeProcessSort('memory')">
+                                                <i class="material-symbols-rounded text-xxs align-middle me-1">storage</i>
+                                                Top by RAM (Memory)
+                                            </button>
+                                            <button type="button" class="btn btn-xs mb-0"
+                                                :class="processSortBy === 'cpu' ? 'btn-primary' : 'btn-outline-primary'"
+                                                @click="changeProcessSort('cpu')">
+                                                <i class="material-symbols-rounded text-xxs align-middle me-1">memory</i>
+                                                Top by CPU
+                                            </button>
+                                        </div>
+                                        <!-- Filter -->
+                                        <div class="input-group input-group-sm" style="width: 220px;">
+                                            <span class="input-group-text bg-light border-end-0 py-1">
+                                                <i class="material-symbols-rounded text-xs text-secondary">search</i>
+                                            </span>
+                                            <input type="text" class="form-control form-control-sm bg-light border-start-0 ps-0"
+                                                placeholder="Filter process or user..."
+                                                v-model="processFilter">
+                                            <button v-if="processFilter" class="btn btn-outline-secondary btn-sm mb-0 px-2" @click="processFilter = ''">&times;</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 480px;">
+                                    <table class="table align-items-center mb-0 text-sm">
+                                        <thead class="bg-light sticky-top">
+                                            <tr>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder ps-3" style="width: 80px;">PID</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder" style="width: 130px;">User</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Command / Process Name</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder" style="width: 140px;">CPU %</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder text-end pe-3" style="width: 160px;">Memory (RAM)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-if="filteredProcesses.length === 0">
+                                                <td colspan="5" class="text-center py-4 text-secondary text-xs">
+                                                    No processes found matching "{{ processFilter }}"
+                                                </td>
+                                            </tr>
+                                            <tr v-for="proc in filteredProcesses" :key="proc.pid">
+                                                <td class="ps-3 font-weight-bold text-xs text-secondary">
+                                                    <span class="badge bg-light text-dark border">{{ proc.pid }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge text-xxs font-weight-bold"
+                                                        :class="proc.user === 'root' ? 'bg-secondary text-white' : (proc.user === 'clamav' ? 'bg-danger text-white' : (proc.user === 'mysql' ? 'bg-warning text-dark' : 'bg-info-subtle text-info border'))">
+                                                        {{ proc.user }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-xs text-break">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="font-monospace text-dark font-weight-bold text-xs" :title="proc.command">
+                                                            {{ formatProcessCommand(proc.command) }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="text-xxs text-muted font-monospace text-truncate" style="max-width: 600px;" :title="proc.command">
+                                                        {{ proc.command }}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div class="progress flex-grow-1" style="height: 5px; width: 60px;">
+                                                            <div class="progress-bar"
+                                                                :class="proc.cpu > 50 ? 'bg-danger' : (proc.cpu > 15 ? 'bg-warning' : 'bg-success')"
+                                                                :style="{ width: Math.min(100, Math.max(proc.cpu * 2, 2)) + '%' }"></div>
+                                                        </div>
+                                                        <span class="text-xs font-weight-bold"
+                                                            :class="proc.cpu > 50 ? 'text-danger' : (proc.cpu > 15 ? 'text-warning' : 'text-dark')">
+                                                            {{ proc.cpu }}%
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td class="text-end pe-3">
+                                                    <span class="text-xs font-weight-bolder text-dark">
+                                                        {{ proc.memory_mb ? proc.memory_mb + ' MB' : (proc.rss || '-') }}
+                                                    </span>
+                                                    <span class="text-xxs text-secondary ms-1">
+                                                        ({{ proc.memory }}%)
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- AWS-Style Resource Utilization Report Section -->
                 <div class="row mt-4" id="aws-report-container">
                     <div class="col-12">
@@ -1071,6 +1189,42 @@ const data = ref({
     processes: []
 })
 
+// Live process list states
+const processSortBy = ref('memory')
+const processFilter = ref('')
+
+const changeProcessSort = (sort) => {
+    processSortBy.value = sort
+    loadUsage()
+}
+
+const formatProcessCommand = (cmd) => {
+    if (!cmd) return 'Unknown'
+    const parts = cmd.split(' ')
+    const binary = parts[0].split('/').pop()
+    if (binary === 'php' && parts.length > 1) {
+        return 'php ' + parts.slice(1, 4).join(' ').replace(/.*\/([^\/]+)$/, '$1')
+    }
+    if (binary === 'node' && parts.length > 1) {
+        return 'node ' + parts.slice(1, 3).join(' ')
+    }
+    return binary
+}
+
+const filteredProcesses = computed(() => {
+    if (!data.value.processes || !Array.isArray(data.value.processes)) return []
+    let list = [...data.value.processes]
+    if (processFilter.value.trim()) {
+        const q = processFilter.value.toLowerCase().trim()
+        list = list.filter(p => 
+            (p.command && p.command.toLowerCase().includes(q)) ||
+            (p.user && p.user.toLowerCase().includes(q)) ||
+            (String(p.pid).includes(q))
+        )
+    }
+    return list
+})
+
 // Historical report states
 const selectedRange = ref('24h')
 const selectedDate = ref(new Date().toISOString().split('T')[0])
@@ -1168,7 +1322,9 @@ const loadUsage = async () => {
     if (typeof document !== 'undefined' && document.hidden) return
 
     try {
-        const response = await axios.get('/resources/usage')
+        const response = await axios.get('/resources/usage', {
+            params: { process_sort: processSortBy.value }
+        })
         if (response.data.success) {
             data.value = response.data.data
         }

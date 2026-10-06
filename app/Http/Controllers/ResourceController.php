@@ -24,9 +24,10 @@ class ResourceController extends Controller
      * Get current system resource usage
      * Uses ServerMetricsService for unified accuracy across the panel.
      */
-    public function getUsage()
+    public function getUsage(Request $request)
     {
         try {
+            $sortBy = $request->query('process_sort', 'memory');
             $data = [
                 'cpu' => ServerMetricsService::getCpuUsage(),
                 'memory' => ServerMetricsService::getMemoryUsage(),
@@ -34,7 +35,7 @@ class ResourceController extends Controller
                 'load' => ServerMetricsService::getLoadAverage(),
                 'uptime' => ServerMetricsService::getUptime(),
                 'network' => ServerMetricsService::getNetworkStats(),
-                'processes' => ServerMetricsService::getTopProcesses(10),
+                'processes' => ServerMetricsService::getTopProcesses(20, $sortBy),
             ];
 
             return response()->json([

@@ -370,25 +370,31 @@ class ServerMetricsService
     }
 
     /**
-     * Get top running processes by CPU
+     * Get top running processes by Memory or CPU
      */
-    public static function getTopProcesses(int $limit = 10): array
+    public static function getTopProcesses(int $limit = 15, string $sortBy = 'memory'): array
     {
         $processes = [];
 
         if (PHP_OS_FAMILY === 'Linux') {
+            $sortFlag = $sortBy === 'cpu' ? '-%cpu' : '-%mem';
             $output = [];
-            @exec("ps -eo pid,user,%cpu,%mem,comm --sort=-%cpu | head -" . ($limit + 1) . " 2>/dev/null", $output);
+            @exec("ps -eo pid,user,%cpu,%mem,rss,args --sort={$sortFlag} | head -" . ($limit + 1) . " 2>/dev/null", $output);
 
             foreach (array_slice($output, 1) as $line) {
-                $parts = preg_split('/\s+/', trim($line), 5);
-                if (count($parts) >= 5) {
+                $line = trim($line);
+                if (empty($line)) continue;
+                $parts = preg_split('/\s+/', $line, 6);
+                if (count($parts) >= 6) {
+                    $rssKb = (float) $parts[4];
                     $processes[] = [
                         'pid' => $parts[0],
                         'user' => $parts[1],
                         'cpu' => (float) $parts[2],
                         'memory' => (float) $parts[3],
-                        'command' => $parts[4],
+                        'memory_mb' => round($rssKb / 1024, 1),
+                        'rss' => self::formatBytes($rssKb * 1024),
+                        'command' => $parts[5],
                     ];
                 }
             }
