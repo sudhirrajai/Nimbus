@@ -454,11 +454,32 @@
                               {{ ext.description }}
                             </p>
                           </div>
-                          <div>
-                            <span v-if="ext.installed" class="badge bg-gradient-success text-xxs font-weight-bold d-flex align-items-center" style="padding: 4px 8px; border-radius: 100px;">
-                              <i class="material-symbols-rounded text-xxs me-1">check_circle</i>
-                              Active
-                            </span>
+                          <div class="d-flex align-items-center gap-2">
+                            <!-- If installed: show toggle switch (Enabled / Disabled) -->
+                            <template v-if="ext.installed">
+                              <div class="form-check form-switch ps-0 mb-0 d-flex align-items-center">
+                                <input 
+                                  class="form-check-input ms-auto" 
+                                  type="checkbox" 
+                                  :id="'ext-switch-' + ext.name"
+                                  :checked="ext.enabled"
+                                  :disabled="togglingExt === ext.name || extInstalling"
+                                  @change="toggleExtension(ext)"
+                                  style="cursor: pointer; width: 36px; height: 18px;"
+                                  :title="ext.enabled ? 'Click to disable extension' : 'Click to enable extension'"
+                                />
+                              </div>
+                              <span 
+                                class="badge text-xxs font-weight-bold"
+                                :class="ext.enabled ? 'bg-gradient-success' : 'bg-gradient-secondary'"
+                                style="padding: 4px 8px; border-radius: 100px; min-width: 62px; text-align: center;"
+                              >
+                                <span v-if="togglingExt === ext.name" class="spinner-border spinner-border-sm me-1" style="width: 8px; height: 8px;"></span>
+                                {{ ext.enabled ? 'Active' : 'Disabled' }}
+                              </span>
+                            </template>
+
+                            <!-- If not installed: show Install button -->
                             <button 
                               v-else 
                               class="btn btn-xs bg-gradient-primary mb-0 d-flex align-items-center" 
@@ -1051,6 +1072,27 @@ const loadExtensions = async () => {
     extensionsList.value = []
   } finally {
     loadingExtensions.value = false
+  }
+}
+
+const togglingExt = ref(null)
+
+const toggleExtension = async (ext) => {
+  const newStatus = !ext.enabled
+  togglingExt.value = ext.name
+  try {
+    const res = await axios.post(`/php/versions/${selectedExtensionVersion.value}/extensions/toggle`, {
+      extension: ext.name,
+      enabled: newStatus
+    })
+    ext.enabled = newStatus
+    showAlert('success', res.data.message || `Extension ${ext.name} ${newStatus ? 'enabled' : 'disabled'} successfully.`)
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || `Failed to ${newStatus ? 'enable' : 'disable'} extension.`)
+    // Revert switch on failure
+    ext.enabled = !newStatus
+  } finally {
+    togglingExt.value = null
   }
 }
 

@@ -403,6 +403,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/versions/global', [PhpController::class, 'updateGlobalPhpVersion'])->name('versions.global');
             Route::get('/versions/{version}/extensions', [PhpController::class, 'getExtensions'])->name('versions.extensions');
             Route::post('/versions/{version}/extensions/install', [PhpController::class, 'installExtension'])->name('versions.extensions.install');
+            Route::post('/versions/{version}/extensions/toggle', [PhpController::class, 'toggleExtension'])->name('versions.extensions.toggle');
             Route::get('/versions/{version}/extensions/install-status', [PhpController::class, 'getExtensionInstallStatus'])->name('versions.extensions.install-status');
         });
 

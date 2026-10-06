@@ -840,31 +840,46 @@ BASH;
                     $modules = array_map('strtolower', $output);
                 }
             }
+
+            $modsAvailableDir = "/etc/php/{$version}/mods-available";
             
             $commonExtensions = [
-                ['name' => 'mysql', 'package' => 'mysql', 'modules' => ['mysqli', 'pdo_mysql'], 'description' => 'MySQL database support (mysqli, pdo_mysql)'],
-                ['name' => 'curl', 'package' => 'curl', 'modules' => ['curl'], 'description' => 'Client URL Library support'],
-                ['name' => 'gd', 'package' => 'gd', 'modules' => ['gd'], 'description' => 'Image processing and generation library'],
-                ['name' => 'zip', 'package' => 'zip', 'modules' => ['zip'], 'description' => 'Zip archive compression and reading'],
-                ['name' => 'mbstring', 'package' => 'mbstring', 'modules' => ['mbstring'], 'description' => 'Multibyte string support (UTF-8, etc.)'],
-                ['name' => 'xml', 'package' => 'xml', 'modules' => ['xml', 'simplexml', 'dom'], 'description' => 'XML Parsing and DOM support'],
-                ['name' => 'intl', 'package' => 'intl', 'modules' => ['intl'], 'description' => 'Internationalization functions support'],
-                ['name' => 'imagick', 'package' => 'imagick', 'modules' => ['imagick'], 'description' => 'ImageMagick image processing support'],
-                ['name' => 'redis', 'package' => 'redis', 'modules' => ['redis'], 'description' => 'Redis key-value caching support'],
-                ['name' => 'bcmath', 'package' => 'bcmath', 'modules' => ['bcmath'], 'description' => 'Arbitrary precision mathematics support'],
-                ['name' => 'soap', 'package' => 'soap', 'modules' => ['soap'], 'description' => 'Simple Object Access Protocol (SOAP) support'],
-                ['name' => 'gmp', 'package' => 'gmp', 'modules' => ['gmp'], 'description' => 'GNU Multiple Precision arithmetic support'],
-                ['name' => 'sqlite3', 'package' => 'sqlite3', 'modules' => ['sqlite3', 'pdo_sqlite'], 'description' => 'SQLite3 database engine support'],
-                ['name' => 'opcache', 'package' => 'opcache', 'modules' => ['zend opcache'], 'description' => 'Zend OPcache bytecode caching support']
+                ['name' => 'mysql', 'package' => 'mysql', 'inis' => ['pdo_mysql', 'mysqli', 'mysqlnd'], 'modules' => ['mysqli', 'pdo_mysql'], 'description' => 'MySQL database support (mysqli, pdo_mysql)'],
+                ['name' => 'curl', 'package' => 'curl', 'inis' => ['curl'], 'modules' => ['curl'], 'description' => 'Client URL Library support'],
+                ['name' => 'gd', 'package' => 'gd', 'inis' => ['gd'], 'modules' => ['gd'], 'description' => 'Image processing and generation library'],
+                ['name' => 'zip', 'package' => 'zip', 'inis' => ['zip'], 'modules' => ['zip'], 'description' => 'Zip archive compression and reading'],
+                ['name' => 'mbstring', 'package' => 'mbstring', 'inis' => ['mbstring'], 'modules' => ['mbstring'], 'description' => 'Multibyte string support (UTF-8, etc.)'],
+                ['name' => 'xml', 'package' => 'xml', 'inis' => ['xml', 'dom', 'simplexml'], 'modules' => ['xml', 'simplexml', 'dom'], 'description' => 'XML Parsing and DOM support'],
+                ['name' => 'intl', 'package' => 'intl', 'inis' => ['intl'], 'modules' => ['intl'], 'description' => 'Internationalization functions support'],
+                ['name' => 'imagick', 'package' => 'imagick', 'inis' => ['imagick'], 'modules' => ['imagick'], 'description' => 'ImageMagick image processing support'],
+                ['name' => 'redis', 'package' => 'redis', 'inis' => ['redis'], 'modules' => ['redis'], 'description' => 'Redis key-value caching support'],
+                ['name' => 'bcmath', 'package' => 'bcmath', 'inis' => ['bcmath'], 'modules' => ['bcmath'], 'description' => 'Arbitrary precision mathematics support'],
+                ['name' => 'soap', 'package' => 'soap', 'inis' => ['soap'], 'modules' => ['soap'], 'description' => 'Simple Object Access Protocol (SOAP) support'],
+                ['name' => 'gmp', 'package' => 'gmp', 'inis' => ['gmp'], 'modules' => ['gmp'], 'description' => 'GNU Multiple Precision arithmetic support'],
+                ['name' => 'sqlite3', 'package' => 'sqlite3', 'inis' => ['sqlite3', 'pdo_sqlite'], 'modules' => ['sqlite3', 'pdo_sqlite'], 'description' => 'SQLite3 database engine support'],
+                ['name' => 'pgsql', 'package' => 'pgsql', 'inis' => ['pgsql', 'pdo_pgsql'], 'modules' => ['pgsql', 'pdo_pgsql'], 'description' => 'PostgreSQL database engine support'],
+                ['name' => 'opcache', 'package' => 'opcache', 'inis' => ['opcache'], 'modules' => ['zend opcache'], 'description' => 'Zend OPcache bytecode caching support']
             ];
             
             $extensions = [];
             foreach ($commonExtensions as $ext) {
-                $installed = false;
+                // Check if active in php -m
+                $enabled = false;
                 foreach ($ext['modules'] as $m) {
                     if (in_array(strtolower($m), $modules)) {
-                        $installed = true;
+                        $enabled = true;
                         break;
+                    }
+                }
+
+                // Check if installed on disk in mods-available
+                $installed = $enabled;
+                if (!$installed && File::exists($modsAvailableDir)) {
+                    foreach ($ext['inis'] as $ini) {
+                        if (File::exists("{$modsAvailableDir}/{$ini}.ini")) {
+                            $installed = true;
+                            break;
+                        }
                     }
                 }
                 
@@ -872,12 +887,66 @@ BASH;
                     'name' => $ext['name'],
                     'package' => "php{$version}-" . $ext['package'],
                     'description' => $ext['description'],
-                    'installed' => $installed
+                    'installed' => $installed,
+                    'enabled' => $enabled
                 ];
             }
             
             return response()->json(['extensions' => $extensions]);
         } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Enable or disable a PHP extension for a specific PHP version
+     */
+    public function toggleExtension($version, Request $request)
+    {
+        try {
+            if (!preg_match('/^[0-9]+\.[0-9]+$/', $version)) {
+                return response()->json(['error' => 'Invalid PHP version format'], 400);
+            }
+
+            $request->validate([
+                'extension' => 'required|string|regex:/^[a-zA-Z0-9_-]+$/',
+                'enabled' => 'required|boolean'
+            ]);
+
+            $ext = $request->input('extension');
+            $enable = $request->boolean('enabled');
+            $action = $enable ? 'phpenmod' : 'phpdismod';
+
+            // Resolve target module names for phpenmod / phpdismod
+            $moduleMap = [
+                'mysql' => ['pdo_mysql', 'mysqli', 'mysqlnd'],
+                'xml' => ['xml', 'dom', 'simplexml', 'xmlreader', 'xmlwriter', 'xsl'],
+                'sqlite3' => ['sqlite3', 'pdo_sqlite'],
+                'pgsql' => ['pgsql', 'pdo_pgsql'],
+                'opcache' => ['opcache'],
+            ];
+
+            $targets = $moduleMap[$ext] ?? [$ext];
+
+            $output = [];
+            $returnCode = 0;
+            foreach ($targets as $target) {
+                exec("sudo {$action} -v {$version} -s ALL " . escapeshellarg($target) . " 2>&1", $output, $returnCode);
+            }
+
+            // Reload / restart PHP-FPM for the target version
+            if (File::exists("/lib/systemd/system/php{$version}-fpm.service") || File::exists("/etc/init.d/php{$version}-fpm")) {
+                exec("sudo systemctl restart php{$version}-fpm 2>&1");
+            }
+
+            \Log::info("PHP {$version} extension {$ext} " . ($enable ? 'enabled' : 'disabled') . " by user " . (auth()->id() ?? 'system'));
+
+            return response()->json([
+                'success' => true,
+                'message' => "PHP {$version} extension '{$ext}' " . ($enable ? 'enabled' : 'disabled') . " successfully."
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to toggle PHP extension: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
