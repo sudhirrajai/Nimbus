@@ -50,6 +50,147 @@
         </div>
       </div>
 
+      <!-- HTTP Compression Management Card -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <div class="card overflow-hidden shadow-sm border-0 compression-card">
+            <div class="card-body p-4">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <!-- Left Details -->
+                <div class="d-flex align-items-center gap-3">
+                  <div class="compression-icon-box" :class="compression.enabled ? 'active-pulse' : 'inactive-box'">
+                    <i class="material-symbols-rounded text-white">{{ compression.enabled ? 'offline_bolt' : 'compress' }}</i>
+                  </div>
+                  <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <h5 class="font-weight-bolder mb-0 text-dark">Adaptive HTTP Compression</h5>
+                      <span v-if="compressionLoading" class="spinner-border spinner-border-sm text-secondary"></span>
+                      <span v-else-if="compression.enabled" class="badge bg-gradient-success d-inline-flex align-items-center text-xxs">
+                        <i class="material-symbols-rounded text-xxs me-1">check_circle</i> Active (All Domains)
+                      </span>
+                      <span v-else class="badge bg-secondary d-inline-flex align-items-center text-xxs">
+                        <i class="material-symbols-rounded text-xxs me-1">pause_circle</i> Inactive
+                      </span>
+                    </div>
+                    <p class="text-xs text-secondary mb-0">
+                      Auto-negotiates highest performance format: <strong>Zstandard</strong> (ultra-fast) &rarr; <strong>Brotli</strong> (modern web) &rarr; <strong>Gzip</strong> (universal fallback) &rarr; <strong>Normal Uncompressed</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Right Action Buttons -->
+                <div class="d-flex align-items-center gap-2">
+                  <button 
+                    v-if="compression.enabled"
+                    class="btn btn-outline-info btn-sm mb-0 d-inline-flex align-items-center"
+                    @click="runLiveTest"
+                    :disabled="testingCompression"
+                    title="Test client negotiation with live curl requests"
+                  >
+                    <span v-if="testingCompression" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="material-symbols-rounded text-sm me-1">network_check</i>
+                    Verify Live Test
+                  </button>
+
+                  <button 
+                    class="btn btn-outline-secondary btn-sm mb-0 d-inline-flex align-items-center"
+                    @click="showCompressionSettings = true"
+                    :disabled="compressionToggling"
+                  >
+                    <i class="material-symbols-rounded text-sm me-1">tune</i>
+                    Configure
+                  </button>
+
+                  <!-- 1-Click Enable / Remove Button -->
+                  <button 
+                    v-if="!compression.enabled"
+                    class="btn bg-gradient-primary btn-sm mb-0 d-inline-flex align-items-center text-white shadow-primary"
+                    @click="toggleCompressionState(true)"
+                    :disabled="compressionToggling || compressionLoading"
+                  >
+                    <span v-if="compressionToggling" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="material-symbols-rounded text-sm me-1">bolt</i>
+                    Enable Compression
+                  </button>
+
+                  <button 
+                    v-else
+                    class="btn bg-gradient-danger btn-sm mb-0 d-inline-flex align-items-center text-white shadow-danger"
+                    @click="showRemoveConfirmModal = true"
+                    :disabled="compressionToggling || compressionLoading"
+                  >
+                    <span v-if="compressionToggling" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="material-symbols-rounded text-sm me-1">delete_sweep</i>
+                    Disable & Remove
+                  </button>
+                </div>
+              </div>
+
+              <!-- Supported Algorithms Status Row -->
+              <div class="row mt-3 pt-3 border-top g-2">
+                <div class="col-md-3 col-6">
+                  <div class="algo-pill" :class="{ 'algo-active': compression.enabled && compression.zstd.enabled }">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="material-symbols-rounded text-sm" :class="compression.enabled && compression.zstd.enabled ? 'text-success' : 'text-secondary'">speed</i>
+                      <div>
+                        <div class="text-xs font-weight-bold">Zstandard (zstd)</div>
+                        <div class="text-xxs text-secondary">3x faster &middot; Next-Gen</div>
+                      </div>
+                    </div>
+                    <span class="badge" :class="compression.enabled && compression.zstd.enabled ? 'badge-algo-on' : 'badge-algo-off'">
+                      {{ compression.enabled && compression.zstd.enabled ? 'ACTIVE' : (compression.zstd.supported ? 'READY' : 'N/A') }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="col-md-3 col-6">
+                  <div class="algo-pill" :class="{ 'algo-active': compression.enabled && compression.brotli.enabled }">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="material-symbols-rounded text-sm" :class="compression.enabled && compression.brotli.enabled ? 'text-success' : 'text-secondary'">auto_awesome</i>
+                      <div>
+                        <div class="text-xs font-weight-bold">Brotli (br)</div>
+                        <div class="text-xxs text-secondary">Optimal size &middot; Modern browsers</div>
+                      </div>
+                    </div>
+                    <span class="badge" :class="compression.enabled && compression.brotli.enabled ? 'badge-algo-on' : 'badge-algo-off'">
+                      {{ compression.enabled && compression.brotli.enabled ? 'ACTIVE' : (compression.brotli.supported ? 'READY' : 'N/A') }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="col-md-3 col-6">
+                  <div class="algo-pill" :class="{ 'algo-active': compression.enabled && compression.gzip.enabled }">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="material-symbols-rounded text-sm" :class="compression.enabled && compression.gzip.enabled ? 'text-success' : 'text-secondary'">inventory_2</i>
+                      <div>
+                        <div class="text-xs font-weight-bold">Gzip (gzip)</div>
+                        <div class="text-xxs text-secondary">Universal &middot; Legacy fallback</div>
+                      </div>
+                    </div>
+                    <span class="badge" :class="compression.enabled && compression.gzip.enabled ? 'badge-algo-on' : 'badge-algo-off'">
+                      {{ compression.enabled && compression.gzip.enabled ? 'ACTIVE' : 'READY' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="col-md-3 col-6">
+                  <div class="algo-pill algo-fallback">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="material-symbols-rounded text-sm text-info">public_off</i>
+                      <div>
+                        <div class="text-xs font-weight-bold">Raw Plaintext</div>
+                        <div class="text-xxs text-secondary">Automatic when client has no encoding</div>
+                      </div>
+                    </div>
+                    <span class="badge badge-algo-auto">AUTO</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Domains List -->
       <div class="row" v-if="domains.length > 0">
         <div class="col-12">
@@ -538,6 +679,222 @@
         </div>
       </div>
 
+      <!-- Compression Settings Modal -->
+      <div class="modal-backdrop fade show" v-if="showCompressionSettings" @click="showCompressionSettings = false"></div>
+      <div class="modal fade show d-block" v-if="showCompressionSettings">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content border-0 shadow-2xl">
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder d-flex align-items-center">
+                <i class="material-symbols-rounded text-primary me-2">tune</i>
+                Configure Adaptive Compression
+              </h5>
+              <button type="button" class="btn-close" @click="showCompressionSettings = false"></button>
+            </div>
+            <div class="modal-body py-3">
+              <p class="text-xs text-secondary mb-3">
+                Configure content negotiation parameters. Compression applies server-wide to all domains via <code>/etc/nginx/conf.d/compression.conf</code>.
+              </p>
+
+              <!-- Algorithm Selection -->
+              <h6 class="text-xs font-weight-bolder text-uppercase text-secondary mb-2">Compression Algorithms</h6>
+              <div class="list-group mb-3">
+                <!-- Zstandard -->
+                <div class="list-group-item d-flex justify-content-between align-items-center px-3 py-2 border rounded mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon-shape icon-sm bg-gradient-success text-white rounded-circle shadow text-center d-flex align-items-center justify-content-center" style="width:34px;height:34px;">
+                      <i class="material-symbols-rounded text-sm">speed</i>
+                    </div>
+                    <div>
+                      <div class="font-weight-bold text-sm text-dark">Zstandard (zstd)</div>
+                      <div class="text-xxs text-secondary">Ultra-fast decompression &bull; Supported by modern Chromium & Edge</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" v-model="compressionForm.zstd" :disabled="!compression.zstd.supported">
+                  </div>
+                </div>
+
+                <!-- Brotli -->
+                <div class="list-group-item d-flex justify-content-between align-items-center px-3 py-2 border rounded mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon-shape icon-sm bg-gradient-info text-white rounded-circle shadow text-center d-flex align-items-center justify-content-center" style="width:34px;height:34px;">
+                      <i class="material-symbols-rounded text-sm">auto_awesome</i>
+                    </div>
+                    <div>
+                      <div class="font-weight-bold text-sm text-dark">Brotli (br)</div>
+                      <div class="text-xxs text-secondary">Highest compression ratio &bull; Supported by Chrome, Firefox & Safari</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" v-model="compressionForm.brotli" :disabled="!compression.brotli.supported">
+                  </div>
+                </div>
+
+                <!-- Gzip -->
+                <div class="list-group-item d-flex justify-content-between align-items-center px-3 py-2 border rounded mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="icon-shape icon-sm bg-gradient-warning text-white rounded-circle shadow text-center d-flex align-items-center justify-content-center" style="width:34px;height:34px;">
+                      <i class="material-symbols-rounded text-sm">inventory_2</i>
+                    </div>
+                    <div>
+                      <div class="font-weight-bold text-sm text-dark">Gzip (gzip)</div>
+                      <div class="text-xxs text-secondary">Universal compatibility &bull; Rock-solid fallback for older clients & bots</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" v-model="compressionForm.gzip">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tuning Parameters -->
+              <h6 class="text-xs font-weight-bolder text-uppercase text-secondary mb-2">Tuning Parameters</h6>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label text-xs font-weight-bold text-dark mb-1">
+                    Compression Level ({{ compressionForm.comp_level }})
+                  </label>
+                  <input type="range" class="form-range" min="1" max="9" v-model.number="compressionForm.comp_level">
+                  <div class="d-flex justify-content-between text-xxs text-secondary">
+                    <span>1 (Fastest / Low CPU)</span>
+                    <span class="font-weight-bold text-primary">5 (Optimal)</span>
+                    <span>9 (Maximum / High CPU)</span>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label text-xs font-weight-bold text-dark mb-1">
+                    Minimum Response Length (Bytes)
+                  </label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" class="form-control" v-model.number="compressionForm.min_length" min="0" step="64">
+                    <span class="input-group-text text-xxs">bytes</span>
+                  </div>
+                  <div class="text-xxs text-secondary mt-1">Responses smaller than this threshold remain uncompressed.</div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary btn-sm mb-0" @click="showCompressionSettings = false">
+                Cancel
+              </button>
+              <button 
+                class="btn bg-gradient-primary btn-sm mb-0 text-white shadow-primary"
+                @click="toggleCompressionState(true)"
+                :disabled="compressionToggling"
+              >
+                <span v-if="compressionToggling" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">save</i>
+                Save & Apply Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Test Results Modal -->
+      <div class="modal-backdrop fade show" v-if="showLiveTestModal" @click="showLiveTestModal = false"></div>
+      <div class="modal fade show d-block" v-if="showLiveTestModal">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content border-0 shadow-2xl">
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder d-flex align-items-center">
+                <i class="material-symbols-rounded text-info me-2">network_check</i>
+                Live Content Negotiation Verification
+              </h5>
+              <button type="button" class="btn-close" @click="showLiveTestModal = false"></button>
+            </div>
+            <div class="modal-body py-3">
+              <p class="text-xs text-secondary mb-3">
+                Live verification executed against local Nginx. Demonstrates how Nginx inspects each client's <code>Accept-Encoding</code> header and selectively returns the optimal compression format or raw uncompressed data.
+              </p>
+
+              <div class="table-responsive" v-if="liveTestResults">
+                <table class="table align-items-center mb-0 border rounded">
+                  <thead class="bg-light">
+                    <tr>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Test Case</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Client Request Header</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Nginx Returned Encoding</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder text-center">Vary Header</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(test, key) in liveTestResults" :key="key">
+                      <td class="text-xs font-weight-bold text-dark px-3">{{ test.name }}</td>
+                      <td><code class="text-xxs bg-light px-2 py-1 rounded text-dark font-monospace">{{ test.requested }}</code></td>
+                      <td>
+                        <span class="badge" :class="test.is_compressed ? 'bg-gradient-success' : 'bg-gradient-info'">
+                          {{ test.negotiated }}
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <i v-if="test.vary" class="material-symbols-rounded text-success text-sm" title="Vary: Accept-Encoding present">check_circle</i>
+                        <span v-else class="text-secondary text-xxs">&mdash;</span>
+                      </td>
+                      <td class="text-center">
+                        <span v-if="test.is_compressed" class="badge bg-success text-xxs">Compressed</span>
+                        <span v-else class="badge bg-secondary text-xxs">Normal Plaintext</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="alert alert-info mt-3 mb-0 py-2 text-xs text-white d-flex align-items-center">
+                <i class="material-symbols-rounded text-sm me-2">verified</i>
+                <span>Conditional content negotiation is functioning properly. Clients receive Zstd, Brotli, Gzip, or raw plaintext depending on support.</span>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn bg-gradient-primary btn-sm mb-0 text-white" @click="showLiveTestModal = false">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Remove Compression Confirm Modal -->
+      <div class="modal-backdrop fade show" v-if="showRemoveConfirmModal" @click="showRemoveConfirmModal = false"></div>
+      <div class="modal fade show d-block" v-if="showRemoveConfirmModal">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow-2xl">
+            <div class="modal-header">
+              <h5 class="modal-title font-weight-bolder d-flex align-items-center">
+                <i class="material-symbols-rounded text-danger me-2">warning</i>
+                Disable & Remove HTTP Compression?
+              </h5>
+              <button type="button" class="btn-close" @click="showRemoveConfirmModal = false"></button>
+            </div>
+            <div class="modal-body py-3">
+              <p class="text-sm text-dark mb-2">
+                Are you sure you want to disable adaptive HTTP compression?
+              </p>
+              <p class="text-xs text-secondary mb-0">
+                This will remove <code>/etc/nginx/conf.d/compression.conf</code> and reload Nginx. Websites will serve standard uncompressed responses unless individual sites have their own custom compression rules.
+              </p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary btn-sm mb-0" @click="showRemoveConfirmModal = false">
+                Cancel
+              </button>
+              <button 
+                class="btn bg-gradient-danger btn-sm mb-0 text-white shadow-danger"
+                @click="toggleCompressionState(false)"
+                :disabled="compressionToggling"
+              >
+                <span v-if="compressionToggling" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">delete_sweep</i>
+                Disable & Remove Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </MainLayout>
 </template>
@@ -582,6 +939,88 @@ const alert = ref({
   type: 'success',
   message: ''
 })
+
+// Adaptive HTTP Compression State
+const compression = ref({
+  enabled: false,
+  gzip: { enabled: true, supported: true },
+  brotli: { enabled: true, supported: false },
+  zstd: { enabled: true, supported: false },
+  comp_level: 5,
+  min_length: 256,
+  conf_path: '/etc/nginx/conf.d/compression.conf',
+  raw_config: '',
+})
+const compressionLoading = ref(false)
+const compressionToggling = ref(false)
+const testingCompression = ref(false)
+const showCompressionSettings = ref(false)
+const showLiveTestModal = ref(false)
+const showRemoveConfirmModal = ref(false)
+const liveTestResults = ref(null)
+
+const compressionForm = ref({
+  gzip: true,
+  brotli: true,
+  zstd: true,
+  comp_level: 5,
+  min_length: 256,
+})
+
+const loadCompression = async () => {
+  try {
+    compressionLoading.value = true
+    const response = await axios.get('/nginx/compression')
+    compression.value = response.data
+    compressionForm.value = {
+      gzip: response.data.gzip?.enabled ?? true,
+      brotli: response.data.brotli?.enabled ?? true,
+      zstd: response.data.zstd?.enabled ?? true,
+      comp_level: response.data.comp_level || 5,
+      min_length: response.data.min_length || 256,
+    }
+  } catch (error) {
+    console.error('Failed to load compression status:', error)
+  } finally {
+    compressionLoading.value = false
+  }
+}
+
+const toggleCompressionState = async (enabled) => {
+  try {
+    compressionToggling.value = true
+    const payload = {
+      enabled,
+      gzip: compressionForm.value.gzip,
+      brotli: compressionForm.value.brotli,
+      zstd: compressionForm.value.zstd,
+      comp_level: compressionForm.value.comp_level,
+      min_length: compressionForm.value.min_length,
+    }
+    const response = await axios.post('/nginx/compression/toggle', payload)
+    showAlert('success', response.data.message)
+    await loadCompression()
+    showCompressionSettings.value = false
+    showRemoveConfirmModal.value = false
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || error.response?.data?.details || 'Failed to update compression settings')
+  } finally {
+    compressionToggling.value = false
+  }
+}
+
+const runLiveTest = async () => {
+  try {
+    testingCompression.value = true
+    const response = await axios.post('/nginx/compression/test')
+    liveTestResults.value = response.data.results
+    showLiveTestModal.value = true
+  } catch (error) {
+    showAlert('danger', error.response?.data?.error || 'Failed to run live compression test')
+  } finally {
+    testingCompression.value = false
+  }
+}
 
 const handleKeyboardShortcuts = (e) => {
   // Global Ctrl + S / Cmd + S inside Nginx Editor
@@ -630,6 +1069,7 @@ const handleKeyboardShortcuts = (e) => {
 
 onMounted(() => {
   loadDomains()
+  loadCompression()
   window.addEventListener('keydown', handleKeyboardShortcuts)
 })
 
@@ -1143,6 +1583,81 @@ const removeProxy = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Adaptive HTTP Compression Card Styling */
+.compression-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.compression-icon-box {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.compression-icon-box.active-pulse {
+  background: linear-gradient(135deg, #2dce89 0%, #28b479 100%);
+  box-shadow: 0 4px 15px rgba(45, 206, 137, 0.4);
+}
+
+.compression-icon-box.inactive-box {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+  box-shadow: 0 4px 10px rgba(100, 116, 139, 0.2);
+}
+
+.algo-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.algo-pill.algo-active {
+  border-color: #2dce89;
+  background: #f0fdf4;
+}
+
+.algo-pill.algo-fallback {
+  background: #f8fafc;
+}
+
+.badge-algo-on {
+  background: #2dce89;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.badge-algo-off {
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.badge-algo-auto {
+  background: #0ea5e9;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 </style>
 

@@ -780,5 +780,329 @@ NGINX;
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Get global compression status
+     */
+    public function getCompression()
+    {
+        try {
+            $confPath = '/etc/nginx/conf.d/compression.conf';
+            $exists = file_exists($confPath);
+            $content = '';
+            if ($exists) {
+                try {
+                    $content = $this->readFileWithSudo($confPath);
+                } catch (\Throwable $e) {
+                    $content = @file_get_contents($confPath) ?: '';
+                }
+            }
+
+            // Check system modules availability
+            $brotliAvailable = file_exists('/usr/lib/nginx/modules/ngx_http_brotli_filter_module.so');
+            $zstdAvailable = file_exists('/usr/lib/nginx/modules/ngx_http_zstd_filter_module.so');
+
+            // Parse enabled algorithms from conf
+            $gzipEnabled = false;
+            $brotliEnabled = false;
+            $zstdEnabled = false;
+            $compLevel = 5;
+            $minLength = 256;
+
+            if ($exists && !empty($content)) {
+                if (preg_match('/^\s*gzip\s+on\s*;/m', $content)) {
+                    $gzipEnabled = true;
+                }
+                if (preg_match('/^\s*brotli\s+on\s*;/m', $content)) {
+                    $brotliEnabled = true;
+                }
+                if (preg_match('/^\s*zstd\s+on\s*;/m', $content)) {
+                    $zstdEnabled = true;
+                }
+                if (preg_match('/gzip_comp_level\s+(\d+);/', $content, $m)) {
+                    $compLevel = (int)$m[1];
+                }
+                if (preg_match('/gzip_min_length\s+(\d+);/', $content, $m)) {
+                    $minLength = (int)$m[1];
+                }
+            }
+
+            return response()->json([
+                'enabled' => $exists && ($gzipEnabled || $brotliEnabled || $zstdEnabled),
+                'gzip' => [
+                    'enabled' => $gzipEnabled,
+                    'supported' => true,
+                ],
+                'brotli' => [
+                    'enabled' => $brotliEnabled,
+                    'supported' => $brotliAvailable,
+                ],
+                'zstd' => [
+                    'enabled' => $zstdEnabled,
+                    'supported' => $zstdAvailable,
+                ],
+                'comp_level' => $compLevel,
+                'min_length' => $minLength,
+                'conf_path' => $confPath,
+                'raw_config' => $content,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to get compression status: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Enable or disable global HTTP compression
+     */
+    public function toggleCompression(Request $request)
+    {
+        if (\App\Support\LicenseGuard::isBlocked('critical')) {
+            return response()->json(['error' => \App\Support\LicenseGuard::degradedMessage('nginx')], 503);
+        }
+
+        try {
+            $user = auth()->user();
+            if (!$user->isRootOrAdmin()) {
+                return response()->json(['error' => 'Only administrators can modify server-wide compression settings'], 403);
+            }
+
+            $request->validate([
+                'enabled' => 'required|boolean',
+                'gzip' => 'nullable|boolean',
+                'brotli' => 'nullable|boolean',
+                'zstd' => 'nullable|boolean',
+                'comp_level' => 'nullable|integer|between:1,9',
+                'min_length' => 'nullable|integer|min:0',
+            ]);
+
+            $enabled = $request->boolean('enabled');
+            $confPath = '/etc/nginx/conf.d/compression.conf';
+            $backupPath = $confPath . '.bak';
+
+            if (!$enabled) {
+                // Disable & Remove
+                if (file_exists($confPath)) {
+                    $this->executeSudoCommand("cp -f " . escapeshellarg($confPath) . " " . escapeshellarg($backupPath));
+                    $this->executeSudoCommand("rm -f " . escapeshellarg($confPath));
+                }
+
+                $testResult = $this->testNginxConfig();
+                if (!$testResult['success']) {
+                    // Restore
+                    if (file_exists($backupPath)) {
+                        $this->executeSudoCommand("cp -f " . escapeshellarg($backupPath) . " " . escapeshellarg($confPath));
+                    }
+                    return response()->json([
+                        'error' => 'Nginx config test failed upon removing compression.',
+                        'details' => $testResult['output']
+                    ], 400);
+                }
+
+                $this->executeSudoCommand("systemctl reload nginx");
+
+                \App\Models\ActivityLog::log(
+                    'DISABLE_COMPRESSION',
+                    'Nginx',
+                    'Disabled and removed global HTTP compression config'
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'enabled' => false,
+                    'message' => 'HTTP Compression disabled and removed successfully.'
+                ]);
+            }
+
+            // Enable
+            $useGzip = $request->boolean('gzip', true);
+            $useBrotli = $request->boolean('brotli', true);
+            $useZstd = $request->boolean('zstd', true);
+            $compLevel = (int)$request->input('comp_level', 5);
+            $minLength = (int)$request->input('min_length', 256);
+
+            $brotliAvailable = file_exists('/usr/lib/nginx/modules/ngx_http_brotli_filter_module.so');
+            $zstdAvailable = file_exists('/usr/lib/nginx/modules/ngx_http_zstd_filter_module.so');
+
+            // Ensure module load files are present in /etc/nginx/modules-enabled/
+            if ($useBrotli && $brotliAvailable) {
+                $brotliModConf = '/etc/nginx/modules-enabled/50-mod-brotli.conf';
+                if (!file_exists($brotliModConf)) {
+                    $brotliLoad = "load_module modules/ngx_http_brotli_filter_module.so;\nload_module modules/ngx_http_brotli_static_module.so;\n";
+                    $tmpMod = tempnam(sys_get_temp_dir(), 'brotli_mod_');
+                    \Illuminate\Support\Facades\File::put($tmpMod, $brotliLoad);
+                    $this->executeSudoCommand("cp -f " . escapeshellarg($tmpMod) . " " . escapeshellarg($brotliModConf));
+                    $this->executeSudoCommand("chmod 644 " . escapeshellarg($brotliModConf));
+                    @unlink($tmpMod);
+                }
+            }
+
+            if ($useZstd && $zstdAvailable) {
+                $zstdModConf = '/etc/nginx/modules-enabled/50-mod-zstd.conf';
+                if (!file_exists($zstdModConf)) {
+                    $zstdLoad = "load_module modules/ngx_http_zstd_filter_module.so;\nload_module modules/ngx_http_zstd_static_module.so;\n";
+                    $tmpMod = tempnam(sys_get_temp_dir(), 'zstd_mod_');
+                    \Illuminate\Support\Facades\File::put($tmpMod, $zstdLoad);
+                    $this->executeSudoCommand("cp -f " . escapeshellarg($tmpMod) . " " . escapeshellarg($zstdModConf));
+                    $this->executeSudoCommand("chmod 644 " . escapeshellarg($zstdModConf));
+                    @unlink($tmpMod);
+                }
+            }
+
+            // Generate compression.conf
+            $commonTypes = implode("\n    ", [
+                'application/atom+xml',
+                'application/geo+json',
+                'application/javascript',
+                'application/x-javascript',
+                'application/json',
+                'application/ld+json',
+                'application/manifest+json',
+                'application/rdf+xml',
+                'application/rss+xml',
+                'application/vnd.ms-fontobject',
+                'application/wasm',
+                'application/x-web-app-manifest+json',
+                'application/xhtml+xml',
+                'application/xml',
+                'font/eot',
+                'font/otf',
+                'font/ttf',
+                'image/bmp',
+                'image/svg+xml',
+                'text/cache-manifest',
+                'text/calendar',
+                'text/css',
+                'text/javascript',
+                'text/markdown',
+                'text/plain',
+                'text/xml',
+                'text/vcard',
+                'text/vtt',
+            ]);
+
+            $conf = "# ==============================================================================\n";
+            $conf .= "# Nimbus Adaptive HTTP Compression (Auto Content Negotiation)\n";
+            $conf .= "# Priority: Zstandard (zstd) -> Brotli (br) -> Gzip -> Raw Uncompressed\n";
+            $conf .= "# ==============================================================================\n\n";
+
+            if ($useZstd && $zstdAvailable) {
+                $zstdLevel = min($compLevel, 6);
+                $conf .= "# 1. Zstandard Compression (Next-Gen)\n";
+                $conf .= "zstd on;\n";
+                $conf .= "zstd_comp_level {$zstdLevel};\n";
+                $conf .= "zstd_min_length {$minLength};\n";
+                $conf .= "zstd_types\n    {$commonTypes};\n\n";
+            }
+
+            if ($useBrotli && $brotliAvailable) {
+                $conf .= "# 2. Brotli Compression (Modern Browsers)\n";
+                $conf .= "brotli on;\n";
+                $conf .= "brotli_vary on;\n";
+                $conf .= "brotli_comp_level {$compLevel};\n";
+                $conf .= "brotli_min_length {$minLength};\n";
+                $conf .= "brotli_types\n    {$commonTypes};\n\n";
+            }
+
+            if ($useGzip) {
+                $conf .= "# 3. Gzip Compression (Universal Fallback)\n";
+                $conf .= "gzip on;\n";
+                $conf .= "gzip_vary on;\n";
+                $conf .= "gzip_proxied any;\n";
+                $conf .= "gzip_comp_level {$compLevel};\n";
+                $conf .= "gzip_min_length {$minLength};\n";
+                $conf .= "gzip_types\n    {$commonTypes};\n";
+            }
+
+            // Write config
+            if (file_exists($confPath)) {
+                $this->executeSudoCommand("cp -f " . escapeshellarg($confPath) . " " . escapeshellarg($backupPath));
+            }
+
+            $tmpFile = tempnam(sys_get_temp_dir(), 'nimbus_comp_');
+            \Illuminate\Support\Facades\File::put($tmpFile, $conf);
+            $this->executeSudoCommand("cp -f " . escapeshellarg($tmpFile) . " " . escapeshellarg($confPath));
+            $this->executeSudoCommand("chmod 644 " . escapeshellarg($confPath));
+            @unlink($tmpFile);
+
+            $testResult = $this->testNginxConfig();
+            if (!$testResult['success']) {
+                // Revert
+                if (file_exists($backupPath)) {
+                    $this->executeSudoCommand("cp -f " . escapeshellarg($backupPath) . " " . escapeshellarg($confPath));
+                } else {
+                    $this->executeSudoCommand("rm -f " . escapeshellarg($confPath));
+                }
+                return response()->json([
+                    'error' => 'Nginx configuration test failed. Reverted changes.',
+                    'details' => $testResult['output']
+                ], 400);
+            }
+
+            $this->executeSudoCommand("systemctl reload nginx");
+
+            \App\Models\ActivityLog::log(
+                'ENABLE_COMPRESSION',
+                'Nginx',
+                "Enabled adaptive HTTP compression (Level: {$compLevel}, MinLen: {$minLength})"
+            );
+
+            return response()->json([
+                'success' => true,
+                'enabled' => true,
+                'message' => 'Adaptive HTTP Compression enabled and applied to all domains!',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to toggle compression: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Live test HTTP compression negotiation
+     */
+    public function testCompression(Request $request)
+    {
+        try {
+            $testUrl = 'http://127.0.0.1/';
+            $tests = [
+                'zstd' => ['name' => 'Zstandard', 'header' => 'Accept-Encoding: zstd, gzip'],
+                'brotli' => ['name' => 'Brotli', 'header' => 'Accept-Encoding: br, gzip'],
+                'gzip' => ['name' => 'Gzip', 'header' => 'Accept-Encoding: gzip, deflate'],
+                'none' => ['name' => 'No Compression', 'header' => 'Accept-Encoding: identity'],
+            ];
+
+            $results = [];
+            foreach ($tests as $key => $config) {
+                $hdr = escapeshellarg($config['header']);
+                $cmd = "curl -s -I -H {$hdr} " . escapeshellarg($testUrl) . " 2>&1";
+                $out = [];
+                exec($cmd, $out);
+                $resp = implode("\n", $out);
+
+                $encoding = 'none (uncompressed)';
+                if (preg_match('/content-encoding:\s*([a-z0-9_-]+)/i', $resp, $m)) {
+                    $encoding = strtolower(trim($m[1]));
+                }
+                $vary = (bool)preg_match('/vary:.*accept-encoding/i', $resp);
+
+                $results[$key] = [
+                    'name' => $config['name'],
+                    'requested' => $config['header'],
+                    'negotiated' => $encoding,
+                    'vary' => $vary,
+                    'is_compressed' => $encoding !== 'none (uncompressed)',
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'results' => $results,
+                'timestamp' => now()->toIso8601String(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
 

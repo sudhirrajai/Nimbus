@@ -322,6 +322,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/proxy/status', [NginxController::class, 'getProxyStatus'])->name('proxy.status');
         Route::post('/proxy/apply', [NginxController::class, 'applyReverseProxy'])->name('proxy.apply');
         Route::post('/proxy/remove', [NginxController::class, 'removeReverseProxy'])->name('proxy.remove');
+        Route::get('/compression', [NginxController::class, 'getCompression'])->name('compression.get');
+        Route::post('/compression/toggle', [NginxController::class, 'toggleCompression'])->name('compression.toggle');
+        Route::post('/compression/test', [NginxController::class, 'testCompression'])->name('compression.test');
     });
 
     // Supervisor Management — accessible to root, admin, or users with 'supervisor' permission
