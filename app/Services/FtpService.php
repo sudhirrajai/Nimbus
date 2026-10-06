@@ -143,27 +143,35 @@ class FtpService
             }
         }
 
-        // 3. Execute pure-pw command on server with sudo
+        // 3. Execute pure-pw command on server with sudo using direct stdin pipes
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
-            $cmd = sprintf(
-                "printf '%%s\\n%%s\\n' %s %s | sudo pure-pw useradd %s -u %d -g %d -d %s %s -m",
-                escapeshellarg($password),
-                escapeshellarg($password),
-                escapeshellarg($username),
-                $uid,
-                $gid,
-                escapeshellarg($homedir),
-                $quotaMb ? "-N {$quotaMb}" : ""
-            );
+            $quotaFlag = $quotaMb ? "-N {$quotaMb}" : "";
+            $cmd = "sudo pure-pw useradd " . escapeshellarg($username) . " -u {$uid} -g {$gid} -d " . escapeshellarg($homedir) . " {$quotaFlag} -m";
 
-            $output = [];
-            $returnCode = 0;
-            @exec($cmd, $output, $returnCode);
+            $descriptors = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
 
-            if ($returnCode !== 0) {
-                $errorMsg = implode("\n", $output);
-                Log::error("pure-pw useradd failed for {$username}: {$errorMsg}");
-                throw new \RuntimeException("Failed to create system FTP user: {$errorMsg}");
+            $process = proc_open($cmd, $descriptors, $pipes);
+            if (is_resource($process)) {
+                fwrite($pipes[0], "{$password}\n{$password}\n");
+                fclose($pipes[0]);
+
+                $stdout = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+
+                $returnCode = proc_close($process);
+                if ($returnCode !== 0) {
+                    $errorMsg = trim($stderr . "\n" . $stdout);
+                    Log::error("pure-pw useradd failed for {$username}: {$errorMsg}");
+                    throw new \RuntimeException("Failed to create system FTP user: {$errorMsg}");
+                }
+            } else {
+                throw new \RuntimeException("Failed to launch pure-pw useradd process.");
             }
         }
 
@@ -195,21 +203,32 @@ class FtpService
         }
 
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
-            $cmd = sprintf(
-                "printf '%%s\\n%%s\\n' %s %s | sudo pure-pw passwd %s -m",
-                escapeshellarg($newPassword),
-                escapeshellarg($newPassword),
-                escapeshellarg($account->username)
-            );
+            $cmd = "sudo pure-pw passwd " . escapeshellarg($account->username) . " -m";
 
-            $output = [];
-            $returnCode = 0;
-            @exec($cmd, $output, $returnCode);
+            $descriptors = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
 
-            if ($returnCode !== 0) {
-                $errorMsg = implode("\n", $output);
-                Log::error("pure-pw passwd failed for {$account->username}: {$errorMsg}");
-                throw new \RuntimeException("Failed to update FTP password: {$errorMsg}");
+            $process = proc_open($cmd, $descriptors, $pipes);
+            if (is_resource($process)) {
+                fwrite($pipes[0], "{$newPassword}\n{$newPassword}\n");
+                fclose($pipes[0]);
+
+                $stdout = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+
+                $returnCode = proc_close($process);
+                if ($returnCode !== 0) {
+                    $errorMsg = trim($stderr . "\n" . $stdout);
+                    Log::error("pure-pw passwd failed for {$account->username}: {$errorMsg}");
+                    throw new \RuntimeException("Failed to update FTP password: {$errorMsg}");
+                }
+            } else {
+                throw new \RuntimeException("Failed to launch pure-pw passwd process.");
             }
         }
 
