@@ -19,6 +19,7 @@ use App\Http\Controllers\ActivationController;
 use App\Http\Controllers\WebmailController;
 use App\Http\Controllers\SsoController;
 use App\Http\Controllers\FtpAccountController;
+use App\Http\Controllers\Pm2Controller;
 
 // 1-Click Single Sign-On (SSO) from VmCoreCentral
 Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
@@ -348,6 +349,21 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/stop-all', [SupervisorController::class, 'stopAll'])->name('stop-all');
         Route::post('/restart-all', [SupervisorController::class, 'restartAll'])->name('restart-all');
         Route::get('/projects', [SupervisorController::class, 'getProjects'])->name('projects');
+    });
+
+    // PM2 Node.js Process Management — accessible to root, admin, or users with 'pm2' permission
+    Route::middleware(['permission:pm2'])->prefix('pm2')->name('pm2.')->group(function () {
+        Route::get('/', [Pm2Controller::class, 'index'])->name('index');
+        Route::get('/status', [Pm2Controller::class, 'getStatus'])->name('status');
+        Route::post('/install', [Pm2Controller::class, 'installPm2'])->name('install');
+        Route::get('/processes', [Pm2Controller::class, 'getProcesses'])->name('processes');
+        Route::post('/start', [Pm2Controller::class, 'startProcess'])->name('start');
+        Route::post('/stop', [Pm2Controller::class, 'stopProcess'])->name('stop');
+        Route::post('/restart', [Pm2Controller::class, 'restartProcess'])->name('restart');
+        Route::post('/delete', [Pm2Controller::class, 'deleteProcess'])->name('delete');
+        Route::post('/create', [Pm2Controller::class, 'createProcess'])->name('create');
+        Route::get('/logs', [Pm2Controller::class, 'getLogs'])->name('logs');
+        Route::post('/reload-all', [Pm2Controller::class, 'reloadAll'])->name('reload-all');
     });
 
     // Cron Jobs — accessible to root, admin, or users with 'cron' permission

@@ -155,10 +155,17 @@
         </li>
 
         <!-- ═══ AUTOMATION ═══ -->
-        <li v-if="(isRootOrAdmin || hasPerm('supervisor') || hasPerm('cron')) && (hasModule('supervisor') || hasModule('cron'))" class="nav-item mt-3">
+        <li v-if="(isRootOrAdmin || hasPerm('pm2') || hasPerm('supervisor') || hasPerm('cron'))" class="nav-item mt-3">
           <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">
             Automation
           </h6>
+        </li>
+
+        <li v-if="isRootOrAdmin || hasPerm('pm2')" class="nav-item">
+          <Link href="/pm2" class="nav-link" :class="isActive('/pm2')">
+            <i class="material-symbols-rounded opacity-5">rocket_launch</i>
+            <span class="nav-link-text ms-1">PM2 Manager</span>
+          </Link>
         </li>
 
         <li v-if="(isRootOrAdmin || hasPerm('supervisor')) && hasModule('supervisor')" class="nav-item">
@@ -285,7 +292,7 @@ const isRootOrAdmin = computed(() => isRoot.value || userRole.value === 'admin')
 const userPermissions = computed(() => page.props.auth?.user?.permissions || [])
 const assignedDomains = computed(() => page.props.auth?.user?.assigned_domains || [])
 
-const allowedModules = computed(() => page.props.license_modules || ['wordpress', 'security', 'databases', 'cron', 'supervisor', 'file_manager', 'terminal', 'backups', 'git_deploy', 'ssl', 'emails', 'monitoring'])
+const allowedModules = computed(() => page.props.license_modules || ['wordpress', 'security', 'databases', 'cron', 'supervisor', 'pm2', 'file_manager', 'terminal', 'backups', 'git_deploy', 'ssl', 'emails', 'monitoring'])
 const hasModule = (mod) => allowedModules.value.includes(mod)
 
 const hasPerm = (perm) => isRoot.value || userPermissions.value.includes(perm)

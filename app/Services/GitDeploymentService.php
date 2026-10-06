@@ -92,6 +92,9 @@ class GitDeploymentService
             // Step 8: Setup Supervisor (if needed)
             $this->setupSupervisor($deployment, $yamlConfig);
 
+            // Step 8b: Setup PM2 (if needed for Node.js apps)
+            $this->setupPm2($deployment, $yamlConfig);
+
             // Step 9: Update Nginx if yaml has nginx config
             if ($yamlConfig && isset($yamlConfig['nginx'])) {
                 $this->updateNginxConfig($deployment, $yamlConfig['nginx']);
@@ -852,6 +855,82 @@ class GitDeploymentService
     }
 
     /**
+     * Setup PM2 for Node.js applications if defined in nimbus.yaml.
+     */
+    private function setupPm2(GitDeployment $deployment, ?array $yamlConfig): void
+    {
+        if (!$yamlConfig || !isset($yamlConfig['pm2']) || !is_array($yamlConfig['pm2'])) {
+            return;
+        }
+
+        $pm2Config = $yamlConfig['pm2'];
+        $domainPath = $deployment->getDomainPath();
+        $domain = $deployment->domain;
+
+        $appName = $pm2Config['name'] ?? preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $domain);
+        $script = $pm2Config['script'] ?? 'server.js';
+        $cwd = isset($pm2Config['cwd']) ? ($domainPath . '/' . ltrim($pm2Config['cwd'], '/')) : $domainPath;
+        $instances = $pm2Config['instances'] ?? 1;
+        $args = $pm2Config['args'] ?? '';
+
+        $startTime = microtime(true);
+        $log = $this->createLog($deployment, 'pm2_setup', 'running');
+
+        try {
+            // Verify PM2 is installed
+            $whichOut = [];
+            $whichCode = 0;
+            exec("which pm2 2>&1", $whichOut, $whichCode);
+            if ($whichCode !== 0) {
+                $this->executeCommand("sudo npm install -g pm2");
+            }
+
+            // Build environment variables
+            $envFlags = "NODE_ENV=production ";
+            if (isset($pm2Config['env']) && is_array($pm2Config['env'])) {
+                foreach ($pm2Config['env'] as $k => $v) {
+                    $envFlags .= escapeshellarg($k) . "=" . escapeshellarg($v) . " ";
+                }
+            }
+
+            // Check if app already exists in PM2
+            $jlistOut = [];
+            exec("sudo env PM2_HOME=/root/.pm2 pm2 jlist 2>&1", $jlistOut);
+            $apps = json_decode(implode("\n", $jlistOut), true) ?: [];
+            $existing = collect($apps)->firstWhere('name', $appName);
+
+            if ($existing) {
+                $cmd = "sudo env PM2_HOME=/root/.pm2 {$envFlags} pm2 restart " . escapeshellarg($appName) . " --update-env";
+            } else {
+                $cmd = "cd " . escapeshellarg($cwd) . " && sudo env PM2_HOME=/root/.pm2 {$envFlags} pm2 start " . escapeshellarg($script) . " --name " . escapeshellarg($appName);
+                if ($instances === 'max' || (int)$instances > 1) {
+                    $cmd .= " -i " . escapeshellarg($instances);
+                }
+                if ($args) {
+                    $cmd .= " -- " . $args;
+                }
+            }
+
+            $output = $this->executeCommand($cmd);
+            $this->executeCommand("sudo env PM2_HOME=/root/.pm2 pm2 save");
+
+            $duration = (int)(microtime(true) - $startTime);
+            $log->update([
+                'status' => 'success',
+                'output' => "PM2 process '{$appName}' started and registered successfully.\n" . implode("\n", $output),
+                'duration_seconds' => $duration,
+            ]);
+        } catch (\Exception $e) {
+            $duration = (int)(microtime(true) - $startTime);
+            $log->update([
+                'status' => 'failed',
+                'output' => "Failed to setup PM2 process: " . $e->getMessage(),
+                'duration_seconds' => $duration,
+            ]);
+        }
+    }
+
+    /**
      * Set proper file permissions on the deployed project.
      */
     private function setPermissions(GitDeployment $deployment): void
@@ -900,9 +979,10 @@ class GitDeploymentService
             $domainPath = $deployment->getDomainPath();
             $root = $nginxConfig['root'] ?? 'public';
             $phpVersion = $nginxConfig['php_version'] ?? '8.2';
+            $proxyPass = $nginxConfig['proxy_pass'] ?? ($nginxConfig['reverse_proxy'] ?? null);
             $fullRoot = "{$domainPath}/{$root}";
 
-            $configContent = $this->generateNginxConfig($domain, $fullRoot, $domainPath, $phpVersion);
+            $configContent = $this->generateNginxConfig($domain, $fullRoot, $domainPath, $phpVersion, $proxyPass);
 
             $tempFile = "/tmp/nginx_{$domain}_" . time() . ".conf";
             file_put_contents($tempFile, $configContent);
@@ -922,9 +1002,15 @@ class GitDeploymentService
             $this->executeCommand("sudo systemctl reload nginx");
 
             $duration = (int)(microtime(true) - $startTime);
+            $outputMsg = "Nginx config updated.\nDocument root: {$fullRoot}";
+            if ($proxyPass) {
+                $outputMsg .= "\nReverse Proxy: {$proxyPass}";
+            } else {
+                $outputMsg .= "\nPHP version: {$phpVersion}";
+            }
             $log->update([
                 'status' => 'success',
-                'output' => "Nginx config updated.\nDocument root: {$fullRoot}\nPHP version: {$phpVersion}",
+                'output' => $outputMsg,
                 'duration_seconds' => $duration,
             ]);
         } catch (\Exception $e) {
@@ -940,9 +1026,52 @@ class GitDeploymentService
     /**
      * Generate Nginx config content for a domain.
      */
-    private function generateNginxConfig(string $domain, string $root, string $domainPath, string $phpVersion): string
+    private function generateNginxConfig(string $domain, string $root, string $domainPath, string $phpVersion, ?string $proxyPass = null): string
     {
         $sockPath = \App\Services\SiteIsolationService::socketPath($domain, $phpVersion);
+
+        $mainHandler = "";
+        if (!empty($proxyPass)) {
+            $mainHandler = <<<PROXY
+    # Reverse Proxy
+    location / {
+        proxy_pass {$proxyPass};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+    }
+PROXY;
+        } else {
+            $mainHandler = <<<PHP
+    # PHP handling
+    location ~ \.php\$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)\$;
+        fastcgi_pass unix:{$sockPath};
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param PATH_INFO \$fastcgi_path_info;
+        fastcgi_read_timeout 600;
+        fastcgi_send_timeout 600;
+        fastcgi_connect_timeout 600;
+        fastcgi_buffer_size 128k;
+        fastcgi_buffers 4 256k;
+        fastcgi_busy_buffers_size 256k;
+    }
+
+    # Try files
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+PHP;
+        }
 
         return <<<NGINX
 server {
@@ -965,23 +1094,7 @@ server {
 
     # Upload limit
     client_max_body_size 2048M;
-    
-    # PHP handling
-    location ~ \.php\$ {
-        fastcgi_split_path_info ^(.+\.php)(/.+)\$;
-        fastcgi_pass unix:{$sockPath};
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        fastcgi_param PATH_INFO \$fastcgi_path_info;
-        fastcgi_read_timeout 600;
-        fastcgi_send_timeout 600;
-        fastcgi_connect_timeout 600;
-        fastcgi_buffer_size 128k;
-        fastcgi_buffers 4 256k;
-        fastcgi_busy_buffers_size 256k;
-    }
-    
+
     # Deny access to hidden files
     location ~ /\. {
         deny all;
@@ -992,11 +1105,8 @@ server {
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
-    
-    # Try files
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
+
+{$mainHandler}
 }
 NGINX;
     }

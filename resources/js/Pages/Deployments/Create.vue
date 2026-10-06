@@ -497,11 +497,17 @@
 
               <div class="bg-gray-100 border-radius-lg p-3 mt-4">
                 <h6 class="text-sm mb-2 text-dark font-weight-bold">Need a template?</h6>
-                <p class="text-xs text-secondary">Download our recommended <code>nimbus.yaml</code> template to get started with zero configuration.</p>
-                <button @click="downloadExampleYaml" class="btn btn-sm bg-gradient-dark mb-0 w-100 mt-2">
-                  <i class="material-symbols-rounded text-sm me-1">download</i>
-                  Download Example YAML
-                </button>
+                <p class="text-xs text-secondary">Download our recommended <code>nimbus.yaml</code> specification supporting PHP, Node.js, PM2, Python, and reverse proxies.</p>
+                <div class="d-flex gap-2 mt-2">
+                  <button @click="downloadExampleYaml('universal')" class="btn btn-sm bg-gradient-dark mb-0 flex-grow-1">
+                    <i class="material-symbols-rounded text-sm me-1">download</i>
+                    Download nimbus.yaml
+                  </button>
+                  <button @click="openYamlModal" class="btn btn-sm btn-outline-dark mb-0">
+                    <i class="material-symbols-rounded text-sm me-1">preview</i>
+                    Stack Presets
+                  </button>
+                </div>
               </div>
 
               <div class="mt-4">
@@ -510,6 +516,75 @@
                   Commands are scanned against a security blacklist. Avoid using chained commands (<code>&&</code>, <code>||</code>) on a single line; use separate list items instead.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- nimbus.yaml Presets Modal -->
+      <div class="modal-backdrop fade show" v-if="showYamlModal" @click="showYamlModal = false"></div>
+      <div class="modal fade show d-block" v-if="showYamlModal">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content border-0 shadow-2xl">
+            <div class="modal-header border-0 pb-0">
+              <div class="d-flex align-items-center gap-2">
+                <div class="icon-shape icon-sm bg-gradient-dark text-white rounded-circle shadow text-center d-flex align-items-center justify-content-center" style="width:34px;height:34px;">
+                  <i class="material-symbols-rounded text-sm">integration_instructions</i>
+                </div>
+                <div>
+                  <h5 class="modal-title font-weight-bolder text-dark mb-0">nimbus.yaml Specification & Presets</h5>
+                  <p class="text-xs text-secondary mb-0">Commit <code>nimbus.yaml</code> to your repository root for automated deployment</p>
+                </div>
+              </div>
+              <button type="button" class="btn-close" @click="showYamlModal = false"></button>
+            </div>
+            <div class="modal-body py-3">
+              <!-- Stack Presets Tabs -->
+              <div class="nav-wrapper position-relative end-0 mb-3">
+                <ul class="nav nav-pills nav-fill p-1 bg-light rounded" role="tablist">
+                  <li class="nav-item">
+                    <a class="nav-link mb-0 px-3 py-1 text-xs font-weight-bold" :class="{ 'active bg-white text-dark shadow-sm': selectedPreset === 'universal' }" @click="selectedPreset = 'universal'" href="javascript:;">
+                      Universal Reference
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link mb-0 px-3 py-1 text-xs font-weight-bold" :class="{ 'active bg-white text-dark shadow-sm': selectedPreset === 'nodejs' }" @click="selectedPreset = 'nodejs'" href="javascript:;">
+                      Node.js / PM2 / Next.js
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link mb-0 px-3 py-1 text-xs font-weight-bold" :class="{ 'active bg-white text-dark shadow-sm': selectedPreset === 'laravel' }" @click="selectedPreset = 'laravel'" href="javascript:;">
+                      Laravel / PHP
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link mb-0 px-3 py-1 text-xs font-weight-bold" :class="{ 'active bg-white text-dark shadow-sm': selectedPreset === 'python' }" @click="selectedPreset = 'python'" href="javascript:;">
+                      Python
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- YAML Code Viewer -->
+              <div class="position-relative">
+                <pre class="bg-dark text-light p-3 rounded font-monospace text-xs mb-0" style="max-height: 420px; overflow-y: auto; line-height: 1.5;"><code>{{ yamlPresets[selectedPreset] }}</code></pre>
+                <button 
+                  class="btn btn-sm btn-white position-absolute top-0 end-0 m-2 shadow-sm text-xs" 
+                  @click="copyYamlContent"
+                >
+                  <i class="material-symbols-rounded text-xs me-1">{{ copiedYaml ? 'check' : 'content_copy' }}</i>
+                  {{ copiedYaml ? 'Copied!' : 'Copy' }}
+                </button>
+              </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+              <button class="btn btn-outline-secondary btn-sm mb-0" @click="showYamlModal = false">
+                Close
+              </button>
+              <button class="btn bg-gradient-dark btn-sm mb-0 text-white" @click="downloadExampleYaml(selectedPreset)">
+                <i class="material-symbols-rounded text-sm me-1">download</i>
+                Download This nimbus.yaml
+              </button>
             </div>
           </div>
         </div>
@@ -783,52 +858,193 @@ watch(searchQuery, () => {
   currentPage.value = 1
 })
 
-const downloadExampleYaml = () => {
-  const content = `version: 1
+const showYamlModal = ref(false)
+const selectedPreset = ref('universal')
+const copiedYaml = ref(false)
 
-# Required runtimes (optional)
-# Nimbus will verify these are installed before proceeding
+const openYamlModal = () => {
+  showYamlModal.value = true
+}
+
+const copyYamlContent = () => {
+  const text = yamlPresets[selectedPreset.value] || ''
+  navigator.clipboard.writeText(text)
+  copiedYaml.value = true
+  setTimeout(() => copiedYaml.value = false, 2000)
+}
+
+const yamlPresets = {
+  universal: `# ==============================================================================
+# Nimbus Deployment Specification (nimbus.yaml)
+# Place this file in the root of your repository.
+# ==============================================================================
+version: 1
+
+# 1. Runtimes: Nimbus verifies or auto-activates required versions
 runtime:
-  php: 8.2
-  node: 20
+  node: 20            # e.g., 18, 20, 22
+  php: 8.2            # e.g., 8.1, 8.2, 8.3, 8.4
+  python: 3.10        # e.g., 3.10, 3.11, 3.12 (optional)
 
-# Commands to run during the installation phase (optional)
-# These run in the root of your repository
+# 2. Dependency Installation (runs from repository root)
 install:
-  - composer install --no-dev --optimize-autoloader
-  - npm install
+  - npm ci --prefer-offline
+  # - composer install --no-dev --optimize-autoloader
 
-# Commands to run during the build phase (optional)
+# 3. Build & Preparation
 build:
   - npm run build
-  - php artisan migrate --force
 
-# Environment variables to be added/updated in .env (optional)
+# 4. Environment Variables (.env)
 env:
-  APP_ENV: production
-  APP_DEBUG: "false"
+  NODE_ENV: production
+  PORT: "3000"
 
-# Nginx configuration overrides (optional)
+# 5. Nginx Web Server / Reverse Proxy Configuration
 nginx:
-  root: public
-  php_version: 8.2
+  # Option A: Reverse Proxy to Node.js / Python / Go app running on a local port
+  proxy_pass: "http://127.0.0.1:3000"
+  
+  # Option B: Traditional PHP / Static document root (mutually exclusive with proxy_pass)
+  # root: public
+  # php_version: 8.2
 
-# Supervisor custom process configuration (optional)
-# Recommended for Node/React/Next.js/Svelte/etc. long-running background processes.
-# This prevents automated fallback crashes and gives you total process control.
+# 6. PM2 Process Manager (Recommended for Node.js / Next.js / Express / Nuxt / NestJS)
+pm2:
+  name: my-app
+  script: dist/index.js       # or server.js, npm -- start, etc.
+  instances: max              # or 1, 2, 'max'
+  exec_mode: cluster          # cluster or fork
+  env:
+    PORT: 3000
+    NODE_ENV: production
+
+# 7. Supervisor (Optional alternative for Python, Go, or PHP queue workers)
 # supervisor:
-#   program: my_custom_app
+#   program: queue-worker
 #   config: |
-#     [program:my_custom_app]
-#     command=node server.js
+#     [program:queue-worker]
+#     command=php artisan queue:work --sleep=3 --tries=3
 #     directory={domainPath}
 #     autostart=true
 #     autorestart=true
 #     user=www-data
-#     numprocs=1
-#     redirect_stderr=true
-#     stdout_logfile={domainPath}/logs/supervisor.log
+`,
+
+  nodejs: `# ==============================================================================
+# Nimbus - Node.js / Next.js / Express / PM2 Stack (nimbus.yaml)
+# ==============================================================================
+version: 1
+
+runtime:
+  node: 20
+
+install:
+  - npm ci
+
+build:
+  - npm run build
+
+env:
+  NODE_ENV: production
+  PORT: "3000"
+
+# Nginx automatically proxies incoming domain traffic to your PM2 app
+nginx:
+  proxy_pass: "http://127.0.0.1:3000"
+
+# PM2 starts or reloads your application with zero downtime
+pm2:
+  name: node-service
+  script: npm
+  args: "run start"
+  instances: max
+  exec_mode: cluster
+  watch: false
+  env:
+    PORT: 3000
+    NODE_ENV: production
+`,
+
+  laravel: `# ==============================================================================
+# Nimbus - Laravel / PHP Stack (nimbus.yaml)
+# ==============================================================================
+version: 1
+
+runtime:
+  php: 8.2
+  node: 20
+
+install:
+  - composer install --no-dev --optimize-autoloader
+  - npm ci
+
+build:
+  - npm run build
+  - php artisan config:cache
+  - php artisan route:cache
+  - php artisan view:cache
+  - php artisan migrate --force
+
+env:
+  APP_ENV: production
+  APP_DEBUG: "false"
+
+nginx:
+  root: public
+  php_version: 8.2
+
+# Background queue worker managed by Supervisor
+supervisor:
+  program: laravel-worker
+  config: |
+    [program:laravel-worker]
+    command=php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    directory={domainPath}
+    autostart=true
+    autorestart=true
+    user=www-data
+    numprocs=2
+    redirect_stderr=true
+    stdout_logfile={domainPath}/logs/worker.log
+`,
+
+  python: `# ==============================================================================
+# Nimbus - Python FastAPI / Flask / Django Stack (nimbus.yaml)
+# ==============================================================================
+version: 1
+
+runtime:
+  python: 3.10
+
+install:
+  - python3 -m venv venv
+  - venv/bin/pip install --upgrade pip
+  - venv/bin/pip install -r requirements.txt
+
+build:
+  # - venv/bin/python manage.py migrate --noinput
+  # - venv/bin/python manage.py collectstatic --noinput
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PORT: "8000"
+
+nginx:
+  proxy_pass: "http://127.0.0.1:8000"
+
+pm2:
+  name: python-app
+  script: venv/bin/uvicorn
+  args: "main:app --host 127.0.0.1 --port 8000 --workers 4"
+  interpreter: none
+  env:
+    PORT: 8000
 `
+}
+
+const downloadExampleYaml = (presetKey = 'universal') => {
+  const content = yamlPresets[presetKey] || yamlPresets.universal
   const blob = new Blob([content], { type: 'text/yaml' })
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')

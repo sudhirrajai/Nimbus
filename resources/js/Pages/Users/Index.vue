@@ -375,6 +375,7 @@ const allPermissions = [
   { key: 'dns', label: 'DNS', icon: 'dns' },
   { key: 'nginx', label: 'Nginx', icon: 'settings_input_component' },
   { key: 'supervisor', label: 'Supervisor', icon: 'bolt' },
+  { key: 'pm2', label: 'PM2 Manager', icon: 'rocket_launch' },
   { key: 'cron', label: 'Cron', icon: 'schedule' },
   { key: 'backups', label: 'Backups', icon: 'backup' },
 ]
