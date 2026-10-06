@@ -776,6 +776,66 @@
       </div>
     </div>
 
+    <!-- ========================================== -->
+    <!-- MODAL 5: DELETE CONFIRMATION               -->
+    <!-- ========================================== -->
+    <div v-if="showDeleteModal" class="modal-backdrop fade show"></div>
+    <div v-if="showDeleteModal" class="modal fade show d-block" tabindex="-1" role="dialog" @click.self="showDeleteModal = false">
+      <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content shadow-2xl border-0 border-radius-xl overflow-hidden">
+          
+          <div class="modal-header bg-gradient-danger text-white p-3">
+            <div class="d-flex align-items-center gap-2">
+              <i class="material-symbols-rounded text-white">delete_forever</i>
+              <h6 class="modal-title font-weight-bold text-white mb-0">Delete FTP Account</h6>
+            </div>
+            <button type="button" class="btn-close text-white" @click="showDeleteModal = false" :disabled="formSubmitting"></button>
+          </div>
+
+          <div class="modal-body p-3 p-sm-4">
+            <div class="d-flex align-items-center gap-3 mb-3 p-3 rounded-3 bg-gray-50 border">
+              <div class="icon-avatar bg-danger-subtle text-danger border d-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style="width: 46px; height: 46px;">
+                <i class="material-symbols-rounded fs-3">person_remove</i>
+              </div>
+              <div class="overflow-hidden">
+                <span class="text-xxs text-uppercase text-secondary font-weight-bold d-block">Account to delete</span>
+                <h6 class="text-sm font-weight-bold text-dark font-monospace mb-0 text-truncate">{{ accountToDelete?.username }}</h6>
+                <span class="text-xxs text-muted d-block text-truncate">{{ accountToDelete?.domain }}</span>
+              </div>
+            </div>
+
+            <p class="text-sm text-dark mb-3">
+              Are you sure you want to permanently delete FTP user <strong class="font-monospace text-danger">{{ accountToDelete?.username }}</strong>?
+            </p>
+
+            <div class="alert alert-warning text-white p-2.5 rounded-3 d-flex align-items-start gap-2 mb-0" role="alert">
+              <i class="material-symbols-rounded text-sm flex-shrink-0 mt-0.5">shield</i>
+              <span class="text-xs">
+                <strong>Safe deletion:</strong> Only the FTP login access and credentials will be removed. Your website files inside <code class="text-white font-monospace">{{ accountToDelete?.homedir }}</code> will remain completely intact.
+              </span>
+            </div>
+          </div>
+
+          <div class="modal-footer p-3 bg-gray-50 border-top d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-outline-secondary mb-0" @click="showDeleteModal = false" :disabled="formSubmitting">
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              class="btn bg-gradient-danger mb-0 d-flex align-items-center gap-1 shadow-sm"
+              @click="executeDelete" 
+              :disabled="formSubmitting"
+            >
+              <span v-if="formSubmitting" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="material-symbols-rounded text-sm">delete</i>
+              Delete Account
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
   </MainLayout>
 </template>
 
@@ -968,24 +1028,33 @@ const toggleStatus = (account) => {
   })
 }
 
-// Delete
-const confirmDelete = (account) => {
-  if (!confirm(`Are you sure you want to delete FTP account "${account.username}"? (Files on disk will NOT be deleted).`)) {
-    return
-  }
+// Delete Modal State & Handlers
+const showDeleteModal = ref(false)
+const accountToDelete = ref(null)
 
-  actionLoading.value = account.id
-  router.delete(`/ftp/${account.id}`, {
+const confirmDelete = (account) => {
+  accountToDelete.value = account
+  showDeleteModal.value = true
+}
+
+const executeDelete = () => {
+  if (!accountToDelete.value) return
+  formSubmitting.value = true
+  const username = accountToDelete.value.username
+
+  router.delete(`/ftp/${accountToDelete.value.id}`, {
     onSuccess: (page) => {
-      actionLoading.value = null
+      formSubmitting.value = false
+      showDeleteModal.value = false
+      accountToDelete.value = null
       if (page.props.flash?.error) {
         showToast(page.props.flash.error, 'error')
         return
       }
-      showToast(`FTP account "${account.username}" deleted successfully`)
+      showToast(`FTP account "${username}" deleted successfully`)
     },
     onError: () => {
-      actionLoading.value = null
+      formSubmitting.value = false
       showToast('Failed to delete account', 'error')
     }
   })
