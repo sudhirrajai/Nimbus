@@ -887,6 +887,22 @@ NGINX;
                     $this->executeSudoCommand("rm -f " . escapeshellarg($confPath));
                 }
 
+                // Restore default gzip in nginx.conf if needed
+                $nginxMainConf = '/etc/nginx/nginx.conf';
+                if (file_exists($nginxMainConf)) {
+                    try {
+                        $mainContent = $this->readFileWithSudo($nginxMainConf);
+                        if (str_contains($mainContent, '# gzip on; # Commented by Nimbus')) {
+                            $restoredMain = str_replace('# gzip on; # Commented by Nimbus for adaptive compression.conf', 'gzip on;', $mainContent);
+                            $tmpMain = tempnam(sys_get_temp_dir(), 'nginx_conf_');
+                            \Illuminate\Support\Facades\File::put($tmpMain, $restoredMain);
+                            $this->executeSudoCommand("cp -f " . escapeshellarg($tmpMain) . " " . escapeshellarg($nginxMainConf));
+                            $this->executeSudoCommand("chmod 644 " . escapeshellarg($nginxMainConf));
+                            @unlink($tmpMain);
+                        }
+                    } catch (\Throwable $e) {}
+                }
+
                 $testResult = $this->testNginxConfig();
                 if (!$testResult['success']) {
                     // Restore
@@ -912,6 +928,22 @@ NGINX;
                     'enabled' => false,
                     'message' => 'HTTP Compression disabled and removed successfully.'
                 ]);
+            }
+
+            // Ensure core /etc/nginx/nginx.conf doesn't have duplicate "gzip on;" directive
+            $nginxMainConf = '/etc/nginx/nginx.conf';
+            if (file_exists($nginxMainConf)) {
+                try {
+                    $mainContent = $this->readFileWithSudo($nginxMainConf);
+                    if (preg_match('/^\s*gzip\s+on\s*;/m', $mainContent)) {
+                        $cleanedMain = preg_replace('/^(\s*)gzip\s+on\s*;/m', '$1# gzip on; # Commented by Nimbus for adaptive compression.conf', $mainContent);
+                        $tmpMain = tempnam(sys_get_temp_dir(), 'nginx_conf_');
+                        \Illuminate\Support\Facades\File::put($tmpMain, $cleanedMain);
+                        $this->executeSudoCommand("cp -f " . escapeshellarg($tmpMain) . " " . escapeshellarg($nginxMainConf));
+                        $this->executeSudoCommand("chmod 644 " . escapeshellarg($nginxMainConf));
+                        @unlink($tmpMain);
+                    }
+                } catch (\Throwable $e) {}
             }
 
             // Enable
