@@ -28,7 +28,9 @@ class ShieldController extends Controller
             'auto_scan_time' => 'required|string|regex:/^[0-2][0-9]:[0-5][0-9]$/',
             'auto_quarantine' => 'required|boolean',
             'email_alerts' => 'required|boolean',
-            'alert_emails' => 'nullable|string'
+            'alert_emails' => 'nullable|string',
+            'ignored_policy' => 'nullable|string|in:flag_only,skip,quarantine',
+            'excluded_paths' => 'nullable|string'
         ]);
 
         try {
@@ -52,6 +54,16 @@ class ShieldController extends Controller
                 ['key' => 'shield_alert_emails'],
                 ['value' => $request->alert_emails ?: '']
             );
+            Setting::updateOrCreate(
+                ['key' => 'shield_ignored_policy'],
+                ['value' => $request->input('ignored_policy', 'flag_only')]
+            );
+            if ($request->has('excluded_paths')) {
+                Setting::updateOrCreate(
+                    ['key' => 'shield_excluded_paths'],
+                    ['value' => $request->input('excluded_paths', '')]
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -70,13 +82,13 @@ class ShieldController extends Controller
         try {
             $threats = SecurityThreat::where('status', '!=', 'deleted')
                 ->orderBy('detected_at', 'desc')
-                ->limit(50)
                 ->get();
 
             $lastScan = SecurityThreat::max('detected_at');
             $stats = [
                 'active_threats' => SecurityThreat::where('status', 'detected')->count(),
                 'quarantined' => SecurityThreat::where('status', 'quarantined')->count(),
+                'ignored' => SecurityThreat::where('status', 'ignored')->count(),
                 'last_scan' => $lastScan ? \Illuminate\Support\Carbon::parse($lastScan)->diffForHumans() : 'Never',
                 'firewall_status' => $this->getFirewallStatus(),
                 'scan_status' => 'idle',
@@ -86,7 +98,9 @@ class ShieldController extends Controller
                 'auto_scan_time' => Setting::where('key', 'shield_auto_scan_time')->value('value') ?: '03:00',
                 'auto_quarantine' => Setting::where('key', 'shield_auto_quarantine')->value('value') === '1',
                 'email_alerts' => Setting::where('key', 'shield_email_alerts')->value('value') === '1',
-                'alert_emails' => Setting::where('key', 'shield_alert_emails')->value('value') ?: ''
+                'alert_emails' => Setting::where('key', 'shield_alert_emails')->value('value') ?: '',
+                'ignored_policy' => Setting::where('key', 'shield_ignored_policy')->value('value') ?: 'flag_only',
+                'excluded_paths' => Setting::where('key', 'shield_excluded_paths')->value('value') ?? "graphify-out\n.npm\n.cache\ncache\ncomposer.phar"
             ];
 
             try {
@@ -227,12 +241,32 @@ class ShieldController extends Controller
                 ];
             }
 
-            // 2. Scan for common PHP shell patterns
+            $ignoredPolicy = Setting::where('key', 'shield_ignored_policy')->value('value') ?: 'flag_only';
+            $customExcludedPaths = Setting::where('key', 'shield_excluded_paths')->value('value') ?: '';
+
+            $excludeDirs = ['vendor', 'node_modules', 'storage', '.git', 'nimbus', 'graphify-out', '.npm', '.cache', 'cache', '.composer'];
+            if (!empty($customExcludedPaths)) {
+                foreach (preg_split('/[\r\n,]+/', $customExcludedPaths) as $cPath) {
+                    $cPath = trim($cPath);
+                    if (!empty($cPath)) {
+                        $excludeDirs[] = basename($cPath);
+                    }
+                }
+            }
+            $excludeDirs = array_unique(array_filter($excludeDirs));
+            $excludeArgs = '';
+            foreach ($excludeDirs as $ed) {
+                $excludeArgs .= ' --exclude-dir=' . escapeshellarg($ed);
+            }
+            $excludeArgs .= ' --exclude="composer.phar" --exclude="*.lock" --exclude="*.json" --exclude="*.md" --exclude="*.txt"';
+            $includeArgs = ' --include="*.php" --include="*.phtml" --include="*.php5" --include="*.php7" --include="*.phps" --include="*.inc"';
+
+            // 2. Scan for common PHP shell patterns (Only check executable PHP scripts, exclude JSON/AST/caches)
             $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
             foreach ($shellPatterns as $pattern) {
                 $grepFiles = [];
                 $grepReturn = 0;
-                $cmd = "sudo grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage --exclude-dir=.git --exclude-dir=nimbus 2>/dev/null";
+                $cmd = "sudo grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " {$includeArgs} {$excludeArgs} 2>/dev/null";
                 exec($cmd, $grepFiles, $grepReturn);
                 if ($grepReturn === 0) {
                     foreach ($grepFiles as $file) {
@@ -262,10 +296,10 @@ class ShieldController extends Controller
                     exec("sudo clamdscan --fdpass -m -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                     if ($clamReturn === 2 && $whichClamReturn === 0) {
                         $clamOutput = [];
-                        exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                        exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' --exclude-dir='graphify-out' --exclude-dir='.npm' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                     }
                 } elseif ($whichClamReturn === 0) {
-                    exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' --exclude-dir='graphify-out' --exclude-dir='.npm' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                 }
                 
                 if ($clamReturn === 1) {
@@ -307,6 +341,26 @@ class ShieldController extends Controller
                 $status = 'detected';
                 $details = $finding['details'];
                 $filePath = $finding['file_path'];
+
+                // Check if this file has been marked as ignored/restored in the past
+                $existingThreat = SecurityThreat::where('file_path', $filePath)->first();
+                if ($existingThreat && $existingThreat->status === 'ignored') {
+                    if ($ignoredPolicy === 'skip') {
+                        // Completely skip this file from report and quarantine
+                        continue;
+                    }
+
+                    if ($ignoredPolicy === 'flag_only') {
+                        // Keep as ignored or flag, but NEVER move to quarantine
+                        $cleanDetails = explode(' | Quarantined to:', $details)[0];
+                        $existingThreat->update([
+                            'type' => $finding['type'],
+                            'details' => $cleanDetails . ' (Quarantine skipped: File restored/ignored by administrator)',
+                            'detected_at' => now()
+                        ]);
+                        continue;
+                    }
+                }
 
                 if ($autoQuarantine) {
                     if (isset($quarantinedFiles[$filePath])) {
@@ -546,7 +600,10 @@ class ShieldController extends Controller
                      return response()->json(['error' => 'Quarantined file missing'], 404);
                 }
 
+                $dir = dirname($originalPath);
+                $this->executeSudoCommand("mkdir -p " . escapeshellarg($dir));
                 $this->executeSudoCommand("mv " . escapeshellarg($quarantinedPath) . " " . escapeshellarg($originalPath));
+                $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($originalPath));
                 $this->executeSudoCommand("chmod 644 " . escapeshellarg($originalPath));
 
                 // Find all threats pointing to the same quarantined file and restore them in DB
@@ -558,7 +615,7 @@ class ShieldController extends Controller
                     $cleanDetails = explode(' | Quarantined to:', $rThreat->details)[0];
                     $rThreat->update([
                         'status' => 'ignored',
-                        'details' => $cleanDetails,
+                        'details' => $cleanDetails . ' (Restored & Ignored)',
                         'resolved_at' => now()
                     ]);
                 }
@@ -570,6 +627,213 @@ class ShieldController extends Controller
         }
 
         return response()->json(['error' => 'Could not determine quarantine path'], 400);
+    }
+
+    /**
+     * Safely preview a threat file content (live or quarantined)
+     */
+    public function previewFile(Request $request)
+    {
+        $id = $request->input('id');
+        $threat = SecurityThreat::find($id);
+        
+        if (!$threat) return response()->json(['error' => 'Threat not found'], 404);
+
+        $isQuarantined = ($threat->status === 'quarantined');
+        $quarantinedPath = null;
+        if (preg_match('/Quarantined to: (.+)$/', $threat->details, $matches)) {
+            $quarantinedPath = trim($matches[1]);
+        }
+
+        $readPath = ($isQuarantined && $quarantinedPath) ? $quarantinedPath : $threat->file_path;
+
+        $output = [];
+        $returnCode = 0;
+        exec("sudo test -f " . escapeshellarg($readPath), $output, $returnCode);
+        if ($returnCode !== 0) {
+            return response()->json(['error' => 'File does not exist on disk (' . basename($readPath) . ')'], 404);
+        }
+
+        $escaped = escapeshellarg($readPath);
+        $sizeOutput = [];
+        exec("sudo stat -c %s {$escaped} 2>/dev/null || sudo wc -c < {$escaped} 2>/dev/null", $sizeOutput);
+        $fileSize = (int) trim($sizeOutput[0] ?? '0');
+
+        $content = '';
+        if ($fileSize > 2 * 1024 * 1024) {
+            $out = [];
+            exec("sudo head -n 2500 {$escaped} 2>/dev/null", $out);
+            $content = implode("\n", $out) . "\n\n... [File truncated: showing first 2,500 lines]";
+        } else {
+            $out = [];
+            exec("sudo cat {$escaped} 2>/dev/null", $out);
+            $content = implode("\n", $out);
+        }
+
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+        }
+
+        $lineCount = substr_count($content, "\n") + 1;
+
+        // Extract domain and relative path for file editor navigation
+        $domain = '';
+        $relPath = '';
+        if (preg_match('#^/var/www/([^/]+)(?:/(.*))?$#', $threat->file_path, $m)) {
+            $domain = $m[1];
+            $relPath = $m[2] ?? '';
+        }
+
+        return response()->json([
+            'success' => true,
+            'threat' => $threat,
+            'file_path' => $threat->file_path,
+            'quarantined_path' => $quarantinedPath,
+            'is_quarantined' => $isQuarantined,
+            'size' => $fileSize,
+            'lines' => $lineCount,
+            'domain' => $domain,
+            'relative_path' => $relPath,
+            'content' => $content
+        ]);
+    }
+
+    /**
+     * Mark a threat as ignored / whitelisted
+     */
+    public function ignoreThreat(Request $request)
+    {
+        $id = $request->input('id');
+        $threat = SecurityThreat::find($id);
+        if (!$threat) return response()->json(['error' => 'Threat not found'], 404);
+
+        // If it was quarantined, restore it first
+        if ($threat->status === 'quarantined' && preg_match('/Quarantined to: (.+)$/', $threat->details, $matches)) {
+            $quarantinedPath = trim($matches[1]);
+            $originalPath = $threat->file_path;
+
+            $output = [];
+            $returnCode = 0;
+            exec("sudo test -f " . escapeshellarg($quarantinedPath), $output, $returnCode);
+            if ($returnCode === 0) {
+                $dir = dirname($originalPath);
+                $this->executeSudoCommand("mkdir -p " . escapeshellarg($dir));
+                $this->executeSudoCommand("mv " . escapeshellarg($quarantinedPath) . " " . escapeshellarg($originalPath));
+                $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($originalPath));
+                $this->executeSudoCommand("chmod 644 " . escapeshellarg($originalPath));
+            }
+        }
+
+        $cleanDetails = explode(' | Quarantined to:', $threat->details)[0];
+        $threat->update([
+            'status' => 'ignored',
+            'details' => $cleanDetails . ' (Ignored by administrator)',
+            'resolved_at' => now()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Threat marked as Ignored. It will be skipped/protected from future quarantine.'
+        ]);
+    }
+
+    /**
+     * Reset an ignored threat back to detected
+     */
+    public function unignoreThreat(Request $request)
+    {
+        $id = $request->input('id');
+        $threat = SecurityThreat::find($id);
+        if (!$threat) return response()->json(['error' => 'Threat not found'], 404);
+
+        $cleanDetails = str_replace(' (Ignored by administrator)', '', $threat->details);
+        $cleanDetails = str_replace(' (Restored & Ignored)', '', $cleanDetails);
+        $threat->update([
+            'status' => 'detected',
+            'details' => $cleanDetails,
+            'resolved_at' => null
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Threat reset to Detected status'
+        ]);
+    }
+
+    /**
+     * Bulk restore all or selected quarantined files
+     */
+    public function bulkRestore(Request $request)
+    {
+        $ids = $request->input('ids');
+        $query = SecurityThreat::query();
+        if (!empty($ids) && is_array($ids)) {
+            $query->whereIn('id', $ids);
+        } else {
+            $query->where('status', 'quarantined');
+        }
+        $threats = $query->get();
+
+        $restoredCount = 0;
+        $errors = [];
+
+        foreach ($threats as $threat) {
+            if (preg_match('/Quarantined to: (.+)$/', $threat->details, $matches)) {
+                $quarantinedPath = trim($matches[1]);
+                $originalPath = $threat->file_path;
+
+                $output = [];
+                $returnCode = 0;
+                exec("sudo test -f " . escapeshellarg($quarantinedPath), $output, $returnCode);
+                if ($returnCode === 0) {
+                    try {
+                        $dir = dirname($originalPath);
+                        $this->executeSudoCommand("mkdir -p " . escapeshellarg($dir));
+                        $this->executeSudoCommand("mv " . escapeshellarg($quarantinedPath) . " " . escapeshellarg($originalPath));
+                        $this->executeSudoCommand("chown www-data:www-data " . escapeshellarg($originalPath));
+                        $this->executeSudoCommand("chmod 644 " . escapeshellarg($originalPath));
+
+                        // Find all threats pointing to this same quarantined file
+                        $relatedThreats = SecurityThreat::where('details', 'like', "%Quarantined to: {$quarantinedPath}%")->get();
+                        foreach ($relatedThreats as $rThreat) {
+                            $cleanDetails = explode(' | Quarantined to:', $rThreat->details)[0];
+                            $rThreat->update([
+                                'status' => 'ignored',
+                                'details' => $cleanDetails . ' (Restored & Ignored)',
+                                'resolved_at' => now()
+                            ]);
+                        }
+                        $restoredCount++;
+                    } catch (\Exception $e) {
+                        $errors[] = basename($originalPath) . ': ' . $e->getMessage();
+                    }
+                } else {
+                    $cleanDetails = explode(' | Quarantined to:', $threat->details)[0];
+                    $threat->update([
+                        'status' => 'ignored',
+                        'details' => $cleanDetails . ' (File already restored or removed)',
+                        'resolved_at' => now()
+                    ]);
+                    $restoredCount++;
+                }
+            } else {
+                // If threat is not quarantined (e.g. detected), mark as safe / ignored
+                $cleanDetails = explode(' | Quarantined to:', $threat->details)[0];
+                $threat->update([
+                    'status' => 'ignored',
+                    'details' => $cleanDetails . ' (Restored & Whitelisted)',
+                    'resolved_at' => now()
+                ]);
+                $restoredCount++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Successfully recovered {$restoredCount} file(s).",
+            'restored_count' => $restoredCount,
+            'errors' => $errors
+        ]);
     }
 
     private function sendEncryptedEmail($to, $subject, $htmlContent)
@@ -770,22 +1034,25 @@ class ShieldController extends Controller
             ];
         }
 
-        // 3. Check for shell patterns
-        try {
-            $content = file_get_contents($filePath);
-            if ($content) {
-                $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
-                foreach ($shellPatterns as $pattern) {
-                    if (str_contains($content, $pattern)) {
-                        return [
-                            'type' => 'Potential Web Shell',
-                            'details' => "Contains suspicious function: $pattern"
-                        ];
+        // 3. Check for shell patterns (only in executable PHP scripts)
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        if (in_array($ext, ['php', 'phtml', 'php5', 'php7', 'inc'])) {
+            try {
+                $content = file_get_contents($filePath);
+                if ($content) {
+                    $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
+                    foreach ($shellPatterns as $pattern) {
+                        if (str_contains($content, $pattern)) {
+                            return [
+                                'type' => 'Potential Web Shell',
+                                'details' => "Contains suspicious function: $pattern"
+                            ];
+                        }
                     }
                 }
+            } catch (\Exception $e) {
+                \Log::warning("Shell pattern scanFile failed: " . $e->getMessage());
             }
-        } catch (\Exception $e) {
-            \Log::warning("Shell pattern scanFile failed: " . $e->getMessage());
         }
 
         return null;
