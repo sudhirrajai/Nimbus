@@ -1365,8 +1365,13 @@ onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)
   const urlPath = urlParams.get('path') || ''
   currentPath.value = urlPath || props.initialPath || ''
+  const fileToOpen = urlParams.get('file') || urlParams.get('open')
 
-  loadFiles()
+  loadFiles().then(() => {
+    if (fileToOpen) {
+      editFile(fileToOpen)
+    }
+  })
   checkGitToken()
   window.addEventListener('keydown', handleKeyboardShortcuts)
   window.addEventListener('popstate', handlePopState)

@@ -520,6 +520,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/quarantine', [\App\Http\Controllers\ShieldController::class, 'quarantine'])->name('quarantine');
             Route::post('/restore', [\App\Http\Controllers\ShieldController::class, 'restoreQuarantine'])->name('restore');
             Route::post('/delete', [\App\Http\Controllers\ShieldController::class, 'deleteThreat'])->name('delete');
+            Route::post('/file-preview', [\App\Http\Controllers\ShieldController::class, 'previewFile'])->name('file-preview');
+            Route::post('/ignore', [\App\Http\Controllers\ShieldController::class, 'ignoreThreat'])->name('ignore');
+            Route::post('/unignore', [\App\Http\Controllers\ShieldController::class, 'unignoreThreat'])->name('unignore');
+            Route::post('/bulk-restore', [\App\Http\Controllers\ShieldController::class, 'bulkRestore'])->name('bulk-restore');
             // Firewall management
             Route::get('/firewall/rules', [\App\Http\Controllers\ShieldController::class, 'getFirewallRules'])->name('firewall.rules');
             Route::post('/firewall/add', [\App\Http\Controllers\ShieldController::class, 'addFirewallRule'])->name('firewall.add');
