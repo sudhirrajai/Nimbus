@@ -693,9 +693,10 @@
                     <label class="form-label text-xs text-uppercase font-weight-bold">Privilege Scope</label>
                     <select class="form-select form-control" v-model="pgAssignment.privileges">
                       <option value="ALL">ALL PRIVILEGES (Full Control)</option>
-                      <option value="CONNECT">CONNECT ONLY</option>
+                      <option value="OWNER">MAKE OWNER (Transfer Ownership)</option>
                       <option value="READ_WRITE">READ & WRITE (SELECT, INSERT, UPDATE, DELETE)</option>
                       <option value="READ_ONLY">READ ONLY (SELECT)</option>
+                      <option value="CONNECT">CONNECT ONLY</option>
                     </select>
                   </div>
                   <button class="btn bg-gradient-info w-100" @click="assignPostgresUser" :disabled="!pgAssignment.database || !pgAssignment.username || assigningPgUser">
@@ -731,7 +732,7 @@
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Database</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Size</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Owner</th>
-                          <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Encoding</th>
+                          <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Users</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Associated Projects</th>
                           <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
                         </tr>
@@ -764,7 +765,14 @@
                             </span>
                           </td>
                           <td>
-                            <span class="text-xs text-secondary">{{ db.encoding || 'UTF8' }}</span>
+                            <div v-if="db.users && db.users.length > 0" class="d-flex flex-wrap gap-1">
+                              <span v-for="user in db.users" :key="user.username" class="badge-db-user">
+                                <i class="material-symbols-rounded text-xxs me-1">person</i>
+                                {{ user.username }}
+                                <span v-if="user.is_owner" class="text-xxs text-primary ms-1 font-weight-bold">(owner)</span>
+                              </span>
+                            </div>
+                            <span v-else class="text-xs text-secondary opacity-7">No users assigned</span>
                           </td>
                           <td>
                             <div v-if="db.projects && db.projects.length > 0" class="d-flex flex-wrap gap-1">

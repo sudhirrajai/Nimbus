@@ -114,8 +114,13 @@ echo "Updating package lists..." >> "$LOG_FILE"
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update >> "$LOG_FILE" 2>&1
 
-echo "Installing PostgreSQL and PHP extensions (postgresql postgresql-contrib php-pgsql)..." >> "$LOG_FILE"
-sudo apt-get install -y postgresql postgresql-contrib php-pgsql >> "$LOG_FILE" 2>&1
+echo "Detecting installed PHP versions and installing PostgreSQL and PHP extensions..." >> "$LOG_FILE"
+PHP_VERS=$(dpkg -l | grep -oE 'php[0-9]\.[0-9]' | sort -u)
+PKGS="postgresql postgresql-contrib php-pgsql"
+for V in $PHP_VERS; do
+    PKGS="$PKGS ${V}-pgsql"
+done
+sudo apt-get install -y $PKGS >> "$LOG_FILE" 2>&1
 
 if ! which psql > /dev/null 2>&1; then
     echo "ERROR: PostgreSQL installation failed! psql binary not found." >> "$LOG_FILE"
@@ -151,7 +156,7 @@ if [ -n "$HBA_FILE" ] && [ -f "$HBA_FILE" ]; then
 fi
 
 # Reload active PHP-FPM pools
-for FPM in $(systemctl list-units --type=service --state=running | grep -o 'php[0-9.]*-fpm' | sort -u); do
+for FPM in $(systemctl list-units --type=service --state=running | grep -oE '(nimbus-php-fpm|php[0-9.]*-fpm)' | sort -u); do
     echo "Reloading $FPM for php-pgsql extension..." >> "$LOG_FILE"
     sudo systemctl reload "$FPM" >> "$LOG_FILE" 2>&1 || sudo systemctl restart "$FPM" >> "$LOG_FILE" 2>&1
 done
@@ -243,7 +248,18 @@ BASH;
                 pg_database_size(d.datname) as size_bytes,
                 pg_catalog.pg_get_userbyid(d.datdba) as owner,
                 pg_catalog.pg_encoding_to_char(d.encoding) as encoding,
-                d.datcollate as collation
+                d.datcollate as collation,
+                (
+                    SELECT ARRAY_TO_STRING(ARRAY_AGG(DISTINCT u.usr), ',')
+                    FROM (
+                        SELECT pg_catalog.pg_get_userbyid(d.datdba) as usr
+                        UNION
+                        SELECT a.grantee::regrole::text as usr
+                        FROM aclexplode(d.datacl) a
+                        WHERE a.grantee != 0
+                    ) u
+                    WHERE u.usr NOT IN ('postgres') AND u.usr NOT LIKE 'pg_%'
+                ) as users_list
             FROM pg_catalog.pg_database d
             WHERE d.datistemplate = false
               AND d.datname NOT IN ('postgres', 'template0', 'template1')
@@ -260,6 +276,20 @@ BASH;
                 $owner = $row[3] ?? 'postgres';
                 $encoding = $row[4] ?? 'UTF8';
                 $collation = $row[5] ?? '';
+                $usersRaw = $row[6] ?? '';
+
+                $userNames = !empty($usersRaw) ? array_filter(array_map('trim', explode(',', $usersRaw))) : [$owner];
+                if (!in_array($owner, $userNames)) {
+                    $userNames[] = $owner;
+                }
+
+                $users = [];
+                foreach ($userNames as $u) {
+                    $users[] = [
+                        'username' => $u,
+                        'is_owner' => ($u === $owner)
+                    ];
+                }
 
                 // Get linked projects
                 $meta = NimbusDatabase::where('name', $name)->first();
@@ -277,9 +307,7 @@ BASH;
                     'owner' => $owner,
                     'encoding' => $encoding,
                     'collation' => $collation,
-                    'users' => [
-                        ['username' => $owner]
-                    ],
+                    'users' => $users,
                     'projects' => $projects,
                     'created_by' => $meta ? $meta->created_by : 'System',
                     'created_at' => $meta && $meta->created_at ? $meta->created_at->format('Y-m-d H:i') : null
@@ -509,22 +537,45 @@ BASH;
         try {
             $request->validate([
                 'database' => 'required|string|max:63',
-                'username' => 'required|string|max:63'
+                'username' => 'required|string|max:63',
+                'privileges' => 'nullable|string'
             ]);
 
             $database = preg_replace('/[^a-zA-Z0-9_]/', '', $request->input('database'));
             $username = preg_replace('/[^a-zA-Z0-9_]/', '', $request->input('username'));
+            $privileges = strtoupper(trim($request->input('privileges', 'ALL')));
 
-            // Grant connect and all privileges on database
-            $this->executeSudoPsql("GRANT ALL PRIVILEGES ON DATABASE \"{$database}\" TO \"{$username}\";");
+            if ($privileges === 'OWNER') {
+                $this->executeSudoPsql("ALTER DATABASE \"{$database}\" OWNER TO \"{$username}\";");
+                $schemaSql = "GRANT ALL ON SCHEMA public TO \"{$username}\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"{$username}\"; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"{$username}\";";
+                $this->executeSudoPsql($schemaSql, $database);
 
-            // Grant schema privileges inside the database
-            $schemaSql = "GRANT ALL ON SCHEMA public TO \"{$username}\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"{$username}\";";
-            $this->executeSudoPsql($schemaSql, $database);
+                return response()->json([
+                    'success' => true,
+                    'message' => "Ownership of database '{$database}' transferred to '{$username}'."
+                ]);
+            }
+
+            if ($privileges === 'CONNECT') {
+                $this->executeSudoPsql("GRANT CONNECT ON DATABASE \"{$database}\" TO \"{$username}\";");
+            } elseif ($privileges === 'READ_ONLY') {
+                $this->executeSudoPsql("GRANT CONNECT ON DATABASE \"{$database}\" TO \"{$username}\";");
+                $schemaSql = "GRANT USAGE ON SCHEMA public TO \"{$username}\"; GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"{$username}\";";
+                $this->executeSudoPsql($schemaSql, $database);
+            } elseif ($privileges === 'READ_WRITE') {
+                $this->executeSudoPsql("GRANT CONNECT ON DATABASE \"{$database}\" TO \"{$username}\";");
+                $schemaSql = "GRANT USAGE, CREATE ON SCHEMA public TO \"{$username}\"; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"{$username}\"; GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO \"{$username}\";";
+                $this->executeSudoPsql($schemaSql, $database);
+            } else {
+                // ALL PRIVILEGES
+                $this->executeSudoPsql("GRANT ALL PRIVILEGES ON DATABASE \"{$database}\" TO \"{$username}\";");
+                $schemaSql = "GRANT ALL ON SCHEMA public TO \"{$username}\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"{$username}\"; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"{$username}\"; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"{$username}\";";
+                $this->executeSudoPsql($schemaSql, $database);
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => "User '{$username}' assigned to database '{$database}' with full privileges."
+                'message' => "User '{$username}' assigned to database '{$database}' with {$privileges} privileges."
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
