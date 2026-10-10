@@ -27,6 +27,9 @@
           </div>
         </div>
         <div class="terminal-header-right">
+          <button class="terminal-header-btn" :class="{ 'copied': copiedNotice }" @click="handleHeaderCopy" :title="copiedNotice ? 'Copied to clipboard!' : 'Copy selection or output'">
+            <i class="material-symbols-rounded">{{ copiedNotice ? 'check' : 'content_copy' }}</i>
+          </button>
           <button class="terminal-header-btn" @click="clearTerminal" title="Clear (Ctrl+L)">
             <i class="material-symbols-rounded">cleaning_services</i>
           </button>
@@ -40,7 +43,20 @@
       </div>
 
       <!-- Terminal Body -->
-      <div class="terminal-body" ref="terminalBody" @click="focusInput">
+      <div 
+        class="terminal-body" 
+        ref="terminalBody" 
+        @click="handleBodyClick" 
+        @mouseup="handleBodyMouseUp"
+        @touchend="handleBodyTouchEnd"
+      >
+        <!-- Copied Toast -->
+        <transition name="fade">
+          <div v-if="copiedNotice" class="terminal-copy-toast">
+            <i class="material-symbols-rounded">check</i>
+            <span>Copied to clipboard!</span>
+          </div>
+        </transition>
         <!-- Output Lines -->
         <div v-for="(line, index) in outputLines" :key="index" class="terminal-line">
           <template v-if="line.type === 'prompt'">
@@ -202,7 +218,88 @@ const clearTerminal = () => {
   nextTick(() => focusInput())
 }
 
+// Copy & Selection handling
+const copiedNotice = ref(false)
+let copiedTimer = null
+
+const copyToClipboard = async (text, showToast = true) => {
+  if (!text) return
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    if (showToast) {
+      copiedNotice.value = true
+      clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copiedNotice.value = false
+      }, 1800)
+    }
+  } catch (err) {
+    console.warn('Copy failed:', err)
+  }
+}
+
+const handleHeaderCopy = () => {
+  const selection = window.getSelection()?.toString().trim()
+  if (selection) {
+    copyToClipboard(selection, true)
+  } else {
+    // Copy all output lines
+    const allText = outputLines.value.map(l => {
+      if (l.type === 'prompt') {
+        return `${l.user || terminalUser.value}@nimbus:${l.cwd ? '~/' + l.cwd : '~'}$ ${l.command}`
+      }
+      return l.text || (l.html ? l.html.replace(/<[^>]+>/g, '') : '')
+    }).join('\n')
+    copyToClipboard(allText, true)
+  }
+}
+
+const handleBodyClick = () => {
+  // If the user has highlighted / selected text, do not steal focus (which erases the selection)
+  const selection = window.getSelection()
+  if (selection && selection.toString().trim().length > 0) {
+    return
+  }
+  focusInput()
+}
+
+const handleBodyMouseUp = () => {
+  const selection = window.getSelection()
+  const text = selection ? selection.toString().trim() : ''
+  if (text.length > 0) {
+    // Auto-copy selected text to clipboard on release without clearing the visual highlight
+    copyToClipboard(text, true)
+  }
+}
+
+const handleBodyTouchEnd = () => {
+  // Mobile touch release — allow selection callout or auto-copy
+  setTimeout(() => {
+    const selection = window.getSelection()
+    const text = selection ? selection.toString().trim() : ''
+    if (text.length > 0) {
+      copyToClipboard(text, true)
+    }
+  }, 80)
+}
+
 const focusInput = () => {
+  const selection = window.getSelection()
+  if (selection && selection.toString().trim().length > 0) {
+    return // Keep user's selection intact!
+  }
   nextTick(() => {
     terminalInput.value?.focus()
   })
@@ -237,14 +334,21 @@ const handleKeyDown = (e) => {
       }
       break
     case 'c':
-      if (e.ctrlKey && !currentCommand.value) {
-        // Add a cancelled prompt line
-        outputLines.value.push({
-          type: 'prompt',
-          cwd: terminalCwd.value,
-          command: '^C',
-        })
-        scrollToBottom()
+      if (e.ctrlKey) {
+        const selection = window.getSelection()?.toString()
+        if (selection && selection.length > 0) {
+          copyToClipboard(selection, true)
+          return
+        }
+        if (!currentCommand.value) {
+          // Add a cancelled prompt line
+          outputLines.value.push({
+            type: 'prompt',
+            cwd: terminalCwd.value,
+            command: '^C',
+          })
+          scrollToBottom()
+        }
       }
       break
   }
@@ -791,5 +895,65 @@ defineExpose({ openTerminal, closeTerminal })
 .executing-text {
   color: #8b949e;
   font-size: 12px;
+}
+
+/* Text Selection and Copy Toast */
+.terminal-body {
+  position: relative;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+}
+
+.terminal-line,
+.output-text,
+.output-error,
+.output-info,
+.prompt-user,
+.prompt-command,
+.prompt-path,
+.prompt-dollar,
+.prompt-host {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+}
+
+.terminal-body ::selection {
+  background: rgba(88, 166, 255, 0.45) !important;
+  color: #ffffff !important;
+}
+
+.terminal-body ::-moz-selection {
+  background: rgba(88, 166, 255, 0.45) !important;
+  color: #ffffff !important;
+}
+
+.terminal-copy-toast {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  background: rgba(35, 134, 54, 0.95);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  pointer-events: none;
+  letter-spacing: 0.2px;
+}
+
+.terminal-copy-toast i {
+  font-size: 14px;
+}
+
+.terminal-header-btn.copied {
+  color: #3fb950 !important;
 }
 </style>
