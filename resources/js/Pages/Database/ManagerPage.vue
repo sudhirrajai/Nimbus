@@ -19,9 +19,10 @@
               </ol>
             </nav>
             <h4 class="font-weight-bolder mb-0 d-flex align-items-center gap-2">
-              <i class="material-symbols-rounded text-info">database</i>
+              <i class="material-symbols-rounded" :class="engine === 'postgres' ? 'text-primary' : 'text-info'">{{ engine === 'postgres' ? 'deployed_code' : 'database' }}</i>
               {{ database }}
-              <span class="badge bg-gradient-info text-xxs font-weight-bold ms-2">{{ tables.length }} Tables</span>
+              <span class="badge" :class="engine === 'postgres' ? 'bg-gradient-primary' : 'bg-gradient-secondary'">{{ engine === 'postgres' ? 'PostgreSQL' : 'MySQL' }}</span>
+              <span class="badge bg-gradient-info text-xxs font-weight-bold ms-1">{{ tables.length }} Tables</span>
             </h4>
           </div>
 
@@ -1768,7 +1769,27 @@ import { extractTargetQuery } from '@/utils/sqlHelper'
 
 const props = defineProps({
   database: String,
-  token: String
+  token: String,
+  engine: {
+    type: String,
+    default: 'mysql'
+  }
+})
+
+// Automatically append engine parameter to all Database Manager API requests
+axios.interceptors.request.use((config) => {
+  if (config.url && config.url.includes('/database/manager/')) {
+    config.params = config.params || {}
+    if (!config.params.engine && props.engine) {
+      config.params.engine = props.engine
+    }
+    if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
+      if (!config.data.engine && props.engine) {
+        config.data.engine = props.engine
+      }
+    }
+  }
+  return config
 })
 
 const activeTab = ref('browse')
