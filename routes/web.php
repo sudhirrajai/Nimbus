@@ -20,6 +20,7 @@ use App\Http\Controllers\WebmailController;
 use App\Http\Controllers\SsoController;
 use App\Http\Controllers\FtpAccountController;
 use App\Http\Controllers\Pm2Controller;
+use App\Http\Controllers\PostgresController;
 
 // 1-Click Single Sign-On (SSO) from VmCoreCentral
 Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
@@ -281,6 +282,24 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
 
         // Custom Multi-Table Export
         Route::post('/manager/{db}/export/custom', [DatabaseManagerController::class, 'exportCustom'])->name('manager.export.custom');
+
+        // PostgreSQL Management Endpoints
+        Route::prefix('postgres')->name('postgres.')->group(function () {
+            Route::get('/status', [PostgresController::class, 'getStatus'])->name('status');
+            Route::post('/install', [PostgresController::class, 'install'])->name('install');
+            Route::get('/install-status', [PostgresController::class, 'getInstallStatus'])->name('install-status');
+            Route::get('/list', [PostgresController::class, 'getDatabases'])->name('list');
+            Route::get('/users', [PostgresController::class, 'getUsers'])->name('users');
+            Route::post('/create', [PostgresController::class, 'createDatabase'])->name('create');
+            Route::post('/delete', [PostgresController::class, 'deleteDatabase'])->name('delete');
+            Route::post('/user/create', [PostgresController::class, 'createUser'])->name('user.create');
+            Route::post('/user/delete', [PostgresController::class, 'deleteUser'])->name('user.delete');
+            Route::post('/user/password', [PostgresController::class, 'updatePassword'])->name('user.password');
+            Route::post('/user/assign', [PostgresController::class, 'assignUser'])->name('user.assign');
+            Route::post('/assign-project', [PostgresController::class, 'assignProject'])->name('assign-project');
+            Route::post('/service', [PostgresController::class, 'serviceControl'])->name('service');
+            Route::post('/manager/token', [PostgresController::class, 'openManager'])->name('manager.token');
+        });
     });
 
     // WordPress Management — accessible to users with 'wordpress' permission (controller filters)

@@ -120,11 +120,51 @@ class DatabaseManagerController extends Controller
     }
 
     /**
+     * Get valid PostgreSQL credentials
+     */
+    private function getValidPostgresCredentials(): array
+    {
+        $path = storage_path('app/nimbus_postgres_credentials.json');
+        if (file_exists($path)) {
+            $data = json_decode(@file_get_contents($path), true);
+            if (!empty($data['username']) && !empty($data['password'])) {
+                return [
+                    'username' => $data['username'],
+                    'password' => $data['password'],
+                    'host' => $data['host'] ?? '127.0.0.1',
+                    'port' => $data['port'] ?? 5432
+                ];
+            }
+        }
+        return [
+            'username' => 'nimbus_admin',
+            'password' => '',
+            'host' => '127.0.0.1',
+            'port' => 5432
+        ];
+    }
+
+    /**
      * Helper to get a PDO instance connected to a specific database
      */
-    private function getPdoConnection(string $dbName): PDO
+    private function getPdoConnection(string $dbName, ?string $engine = null): PDO
     {
         $safeDb = preg_replace('/[^a-zA-Z0-9_]/', '', $dbName);
+
+        if ($engine === null) {
+            $engine = request()->input('engine', 'mysql');
+        }
+
+        if ($engine === 'postgres') {
+            $creds = $this->getValidPostgresCredentials();
+            $dsn = "pgsql:host={$creds['host']};port={$creds['port']};dbname={$safeDb}";
+            return new PDO($dsn, $creds['username'], $creds['password'], [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+        }
+
         $creds = $this->getValidMysqlCredentials();
 
         $username = $creds['username'];
@@ -185,6 +225,7 @@ class DatabaseManagerController extends Controller
     {
         try {
             $database = $request->input('database');
+            $engine = $request->input('engine', 'mysql');
             if (empty($database)) {
                 return response()->json(['error' => 'Database name is required'], 400);
             }
@@ -202,6 +243,7 @@ class DatabaseManagerController extends Controller
             $tokenData = [
                 'token' => $token,
                 'database' => $database,
+                'engine' => $engine,
                 'user_id' => auth()->id(),
                 'user_email' => auth()->user()->email ?? 'unknown',
                 'created_at' => time(),
@@ -214,6 +256,7 @@ class DatabaseManagerController extends Controller
                 'success' => true,
                 'token' => $token,
                 'database' => $database,
+                'engine' => $engine,
                 'url' => "/database/manager/view/{$token}"
             ]);
         } catch (\Exception $e) {
@@ -238,6 +281,7 @@ class DatabaseManagerController extends Controller
         }
 
         $database = $tokenData['database'];
+        $engine = $tokenData['engine'] ?? 'mysql';
 
         if (!$this->checkDatabaseAccess($database)) {
             return redirect()->route('database.index')->with('error', 'Permission denied for this database.');
@@ -245,7 +289,8 @@ class DatabaseManagerController extends Controller
 
         return \Inertia\Inertia::render('Database/ManagerPage', [
             'database' => $database,
-            'token' => $token
+            'token' => $token,
+            'engine' => $engine
         ]);
     }
 
@@ -264,14 +309,70 @@ class DatabaseManagerController extends Controller
     /**
      * 1. Get list of all tables in a database
      */
-    public function getTables(string $db)
+    public function getTables(Request $request, string $db)
     {
         try {
             if (!$this->checkDatabaseAccess($db)) {
                 return response()->json(['error' => 'Permission denied: You do not have access to this database.'], 403);
             }
 
-            $pdo = $this->getPdoConnection($db);
+            $engine = $request->input('engine', 'mysql');
+            $pdo = $this->getPdoConnection($db, $engine);
+
+            if ($engine === 'postgres') {
+                $sql = "SELECT 
+                    c.relname AS name,
+                    CASE c.relkind 
+                        WHEN 'r' THEN 'table'
+                        WHEN 'v' THEN 'view'
+                        WHEN 'm' THEN 'materialized view'
+                        ELSE 'other'
+                    END AS type,
+                    pg_total_relation_size(c.oid) AS total_bytes,
+                    pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
+                    pg_relation_size(c.oid) AS data_bytes,
+                    pg_size_pretty(pg_relation_size(c.oid)) AS data_size,
+                    pg_size_pretty(pg_total_relation_size(c.oid) - pg_relation_size(c.oid)) AS index_size,
+                    c.reltuples::bigint AS rows
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relkind IN ('r', 'v', 'm')
+                ORDER BY c.relname;";
+
+                $stmt = $pdo->query($sql);
+                $rows = $stmt ? $stmt->fetchAll() : [];
+
+                $result = [];
+                foreach ($rows as $row) {
+                    $result[] = [
+                        'name' => $row['name'],
+                        'engine' => 'PostgreSQL',
+                        'rows' => max(0, (int)($row['rows'] ?? 0)),
+                        'data_length' => (int)($row['data_bytes'] ?? 0),
+                        'index_length' => 0,
+                        'data_free' => 0,
+                        'data_size' => $row['data_size'] ?? '0 kB',
+                        'index_size' => $row['index_size'] ?? '0 kB',
+                        'overhead' => '0 B',
+                        'total_size' => $row['total_size'] ?? '0 kB',
+                        'total_bytes' => (int)($row['total_bytes'] ?? 0),
+                        'collation' => 'UTF8',
+                        'auto_increment' => null,
+                        'comment' => $row['type'] ?? 'table',
+                        'created_at' => null,
+                    ];
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'database' => $db,
+                    'engine' => $engine,
+                    'tables' => $result,
+                    'count' => count($result)
+                ]);
+            }
+
             $stmt = $pdo->query("SHOW TABLE STATUS FROM `" . $this->sanitizeIdentifier($db) . "`");
             $tablesStatus = $stmt->fetchAll();
 
@@ -319,16 +420,77 @@ class DatabaseManagerController extends Controller
     /**
      * 2. Get full table schema (columns, indexes, foreign keys)
      */
-    public function getTableSchema(string $db, string $table)
+    public function getTableSchema(Request $request, string $db, string $table)
     {
         try {
             if (!$this->checkDatabaseAccess($db)) {
                 return response()->json(['error' => 'Permission denied'], 403);
             }
 
-            $pdo = $this->getPdoConnection($db);
+            $engine = $request->input('engine', 'mysql');
+            $pdo = $this->getPdoConnection($db, $engine);
             $safeDb = $this->sanitizeIdentifier($db);
             $safeTable = $this->sanitizeIdentifier($table);
+
+            if ($engine === 'postgres') {
+                $sql = "SELECT 
+                    col.column_name AS \"Field\",
+                    col.data_type AS \"Type\",
+                    col.is_nullable AS \"Null\",
+                    col.column_default AS \"Default\",
+                    '' AS \"Extra\",
+                    CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN 'PRI' ELSE '' END AS \"Key\"
+                FROM information_schema.columns col
+                LEFT JOIN (
+                    SELECT kcu.column_name, tc.constraint_type
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                     AND tc.table_schema = kcu.table_schema
+                     AND tc.table_name = kcu.table_name
+                    WHERE tc.table_schema = 'public'
+                      AND tc.table_name = :table
+                      AND tc.constraint_type = 'PRIMARY KEY'
+                ) tc ON col.column_name = tc.column_name
+                WHERE col.table_schema = 'public'
+                  AND col.table_name = :table
+                ORDER BY col.ordinal_position;";
+
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute(['table' => $safeTable]);
+                $columnsRaw = $stmt->fetchAll();
+
+                $columns = [];
+                $primaryKeys = [];
+                foreach ($columnsRaw as $col) {
+                    $isPrimary = ($col['Key'] === 'PRI');
+                    if ($isPrimary) {
+                        $primaryKeys[] = $col['Field'];
+                    }
+                    $columns[] = [
+                        'name' => $col['Field'],
+                        'type' => $col['Type'],
+                        'null' => $col['Null'] === 'YES',
+                        'key' => $col['Key'] ?? '',
+                        'default' => $col['Default'],
+                        'extra' => '',
+                        'collation' => 'UTF8',
+                        'comment' => '',
+                        'is_primary' => $isPrimary,
+                        'is_auto_increment' => str_contains(strtolower($col['Default'] ?? ''), 'nextval'),
+                    ];
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'database' => $db,
+                    'table' => $safeTable,
+                    'columns' => $columns,
+                    'primary_keys' => $primaryKeys,
+                    'indexes' => [],
+                    'foreign_keys' => []
+                ]);
+            }
 
             // Columns
             $stmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTable}`");
@@ -409,7 +571,8 @@ class DatabaseManagerController extends Controller
                 return response()->json(['error' => 'Permission denied'], 403);
             }
 
-            $pdo = $this->getPdoConnection($db);
+            $engine = $request->input('engine', 'mysql');
+            $pdo = $this->getPdoConnection($db, $engine);
             $safeDb = $this->sanitizeIdentifier($db);
             $safeTable = $this->sanitizeIdentifier($table);
 
@@ -421,6 +584,74 @@ class DatabaseManagerController extends Controller
             $sortDir = strtoupper($request->input('sort_dir', 'ASC')) === 'DESC' ? 'DESC' : 'ASC';
             $searchQuery = trim($request->input('search_query', ''));
             $searchCol = $request->input('search_col', '');
+
+            if ($engine === 'postgres') {
+                $colsStmt = $pdo->prepare("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = :tbl ORDER BY ordinal_position");
+                $colsStmt->execute(['tbl' => $safeTable]);
+                $columnNames = $colsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                $pkSql = "SELECT kcu.column_name 
+                          FROM information_schema.table_constraints tc
+                          JOIN information_schema.key_column_usage kcu
+                            ON tc.constraint_name = kcu.constraint_name
+                           AND tc.table_schema = kcu.table_schema
+                          WHERE tc.table_schema = 'public'
+                            AND tc.table_name = :tbl
+                            AND tc.constraint_type = 'PRIMARY KEY'";
+                $pkStmt = $pdo->prepare($pkSql);
+                $pkStmt->execute(['tbl' => $safeTable]);
+                $primaryKeys = $pkStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                $whereClause = "";
+                $bindings = [];
+
+                if (!empty($searchQuery)) {
+                    if (!empty($searchCol) && in_array($searchCol, $columnNames)) {
+                        $whereClause = " WHERE CAST(\"{$this->sanitizeIdentifier($searchCol)}\" AS TEXT) ILIKE :search ";
+                        $bindings[':search'] = "%{$searchQuery}%";
+                    } else {
+                        $orConditions = [];
+                        foreach ($columnNames as $idx => $cName) {
+                            $param = ":search_{$idx}";
+                            $orConditions[] = "CAST(\"{$this->sanitizeIdentifier($cName)}\" AS TEXT) ILIKE {$param}";
+                            $bindings[$param] = "%{$searchQuery}%";
+                        }
+                        if (!empty($orConditions)) {
+                            $whereClause = " WHERE (" . implode(" OR ", $orConditions) . ")";
+                        }
+                    }
+                }
+
+                $countSql = "SELECT COUNT(*) FROM \"{$safeTable}\" {$whereClause}";
+                $countStmt = $pdo->prepare($countSql);
+                $countStmt->execute($bindings);
+                $totalRows = (int)$countStmt->fetchColumn();
+
+                $orderByClause = "";
+                if (!empty($sortCol) && in_array($sortCol, $columnNames)) {
+                    $safeSort = $this->sanitizeIdentifier($sortCol);
+                    $orderByClause = " ORDER BY \"{$safeSort}\" {$sortDir}";
+                } elseif (!empty($primaryKeys)) {
+                    $safePk = $this->sanitizeIdentifier($primaryKeys[0]);
+                    $orderByClause = " ORDER BY \"{$safePk}\" ASC";
+                }
+
+                $dataSql = "SELECT * FROM \"{$safeTable}\" {$whereClause}{$orderByClause} LIMIT {$perPage} OFFSET {$offset}";
+                $dataStmt = $pdo->prepare($dataSql);
+                $dataStmt->execute($bindings);
+                $rows = $dataStmt->fetchAll();
+
+                return response()->json([
+                    'success' => true,
+                    'columns' => $columnNames,
+                    'primary_keys' => $primaryKeys,
+                    'rows' => $rows,
+                    'total_rows' => $totalRows,
+                    'current_page' => $page,
+                    'per_page' => $perPage,
+                    'total_pages' => ceil($totalRows / $perPage)
+                ]);
+            }
 
             // Columns and primary key
             $colsStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTable}`");
