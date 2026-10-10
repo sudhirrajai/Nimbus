@@ -46,9 +46,7 @@
       <div 
         class="terminal-body" 
         ref="terminalBody" 
-        @click="handleBodyClick" 
-        @mouseup="handleBodyMouseUp"
-        @touchend="handleBodyTouchEnd"
+        @click="handleBodyClick"
       >
         <!-- Copied Toast -->
         <transition name="fade">
@@ -273,26 +271,6 @@ const handleBodyClick = () => {
     return
   }
   focusInput()
-}
-
-const handleBodyMouseUp = () => {
-  const selection = window.getSelection()
-  const text = selection ? selection.toString().trim() : ''
-  if (text.length > 0) {
-    // Auto-copy selected text to clipboard on release without clearing the visual highlight
-    copyToClipboard(text, true)
-  }
-}
-
-const handleBodyTouchEnd = () => {
-  // Mobile touch release — allow selection callout or auto-copy
-  setTimeout(() => {
-    const selection = window.getSelection()
-    const text = selection ? selection.toString().trim() : ''
-    if (text.length > 0) {
-      copyToClipboard(text, true)
-    }
-  }, 80)
 }
 
 const focusInput = () => {
