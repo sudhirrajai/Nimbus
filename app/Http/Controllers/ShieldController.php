@@ -234,8 +234,9 @@ class ShieldController extends Controller
             exec("sudo find " . escapeshellarg($path) . " -type f -regex '.*/[0-9a-f]\{10,20\}\.html' 2>/dev/null", $hexFiles);
             foreach ($hexFiles as $file) {
                 if (empty(trim($file))) continue;
-                $findings[] = [
-                    'file_path' => trim($file),
+                $filePath = trim($file);
+                $findings[$filePath] = [
+                    'file_path' => $filePath,
                     'type' => 'Suspicious HTML (Hex-named)',
                     'details' => 'Likely SEO injection or backdoor.'
                 ];
@@ -244,7 +245,7 @@ class ShieldController extends Controller
             $ignoredPolicy = Setting::where('key', 'shield_ignored_policy')->value('value') ?: 'flag_only';
             $customExcludedPaths = Setting::where('key', 'shield_excluded_paths')->value('value') ?: '';
 
-            $excludeDirs = ['vendor', 'node_modules', 'storage', '.git', 'nimbus', 'graphify-out', '.npm', '.cache', 'cache', '.composer'];
+            $excludeDirs = ['vendor', 'node_modules', 'storage', '.git', 'nimbus', 'graphify-out', '.npm', '.cache', 'cache', '.composer', 'backups'];
             if (!empty($customExcludedPaths)) {
                 foreach (preg_split('/[\r\n,]+/', $customExcludedPaths) as $cPath) {
                     $cPath = trim($cPath);
@@ -275,7 +276,7 @@ class ShieldController extends Controller
                         
                         if (str_contains($filePath, '/usr/local/nimbus')) continue;
 
-                        $findings[] = [
+                        $findings[$filePath] = [
                             'file_path' => $filePath,
                             'type' => 'Potential Web Shell',
                             'details' => "Contains suspicious function: $pattern"
@@ -284,7 +285,7 @@ class ShieldController extends Controller
                 }
             }
 
-            // 3. Scan with ClamAV if installed
+            // 3. Scan with ClamAV if installed (with strict timeouts and folder exclusions)
             try {
                 $clamOutput = [];
                 $clamReturn = 0;
@@ -292,14 +293,28 @@ class ShieldController extends Controller
                 exec("which clamdscan 2>/dev/null", $whichClamdOutput, $whichClamdReturn);
                 exec("which clamscan 2>/dev/null", $whichClamOutput, $whichClamReturn);
 
+                // Build clamscan exclusion arguments matching all excludeDirs
+                $clamExcludeArgs = '';
+                foreach ($excludeDirs as $ed) {
+                    $clamExcludeArgs .= ' --exclude-dir=' . escapeshellarg($ed);
+                }
+                $clamExcludeArgs .= ' --max-filesize=25M';
+
                 if ($whichClamdReturn === 0) {
-                    exec("sudo clamdscan --fdpass -m -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    // Check if clamd is actively responding to avoid hanging
+                    exec("clamdscan --ping 1 2>/dev/null", $pingOut, $pingReturn);
+                    if ($pingReturn === 0) {
+                        exec("sudo timeout 600 clamdscan --fdpass -m -r --no-summary " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    } else {
+                        $clamReturn = 2; // clamd daemon not responding, fall back to on-demand clamscan
+                    }
+
                     if ($clamReturn === 2 && $whichClamReturn === 0) {
                         $clamOutput = [];
-                        exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' --exclude-dir='graphify-out' --exclude-dir='.npm' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                        exec("sudo timeout 600 clamscan -r --no-summary {$clamExcludeArgs} " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                     }
                 } elseif ($whichClamReturn === 0) {
-                    exec("sudo clamscan -r --no-summary --exclude-dir='vendor' --exclude-dir='node_modules' --exclude-dir='.git' --exclude-dir='graphify-out' --exclude-dir='.npm' " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
+                    exec("sudo timeout 600 clamscan -r --no-summary {$clamExcludeArgs} " . escapeshellarg($path) . " 2>/dev/null", $clamOutput, $clamReturn);
                 }
                 
                 if ($clamReturn === 1) {
@@ -310,7 +325,7 @@ class ShieldController extends Controller
                             $threatType = trim($parts[1] ?? 'Malware Detected');
                             
                             if ($filePath && !str_contains($filePath, '/usr/local/nimbus')) {
-                                $findings[] = [
+                                $findings[$filePath] = [
                                     'file_path' => $filePath,
                                     'type' => 'ClamAV: ' . $threatType,
                                     'details' => 'Detected by ClamAV Antivirus engine.'
@@ -336,15 +351,22 @@ class ShieldController extends Controller
             }
 
             $quarantinedFiles = []; // Map of original_path => quarantined_path
+            $activeFindings = [];
+            $ignoredCount = 0;
+            $quarantinedCount = 0;
+            $typesCount = [];
+            $sitesCount = [];
 
-            foreach ($findings as $finding) {
+            foreach ($findings as $filePath => $finding) {
                 $status = 'detected';
                 $details = $finding['details'];
-                $filePath = $finding['file_path'];
 
                 // Check if this file has been marked as ignored/restored in the past
                 $existingThreat = SecurityThreat::where('file_path', $filePath)->first();
-                if ($existingThreat && $existingThreat->status === 'ignored') {
+                $isIgnored = ($existingThreat && $existingThreat->status === 'ignored');
+
+                if ($isIgnored) {
+                    $ignoredCount++;
                     if ($ignoredPolicy === 'skip') {
                         // Completely skip this file from report and quarantine
                         continue;
@@ -367,6 +389,7 @@ class ShieldController extends Controller
                         // File was already quarantined in this scan!
                         $status = 'quarantined';
                         $details .= " | Quarantined to: " . $quarantinedFiles[$filePath];
+                        $quarantinedCount++;
                     } else {
                         $filename = basename($filePath) . '.' . time() . '_' . rand(1000, 9999) . '.bak';
                         $destination = $quarantineDir . '/' . $filename;
@@ -377,6 +400,7 @@ class ShieldController extends Controller
                             $status = 'quarantined';
                             $details .= " | Quarantined to: $destination";
                             $quarantinedFiles[$filePath] = $destination;
+                            $quarantinedCount++;
                         } catch (\Exception $e) {
                             \Log::warning("Auto-quarantine failed for {$filePath}: " . $e->getMessage());
                         }
@@ -384,7 +408,7 @@ class ShieldController extends Controller
                 }
 
                 SecurityThreat::updateOrCreate(
-                    ['file_path' => $finding['file_path']],
+                    ['file_path' => $filePath],
                     [
                         'type' => $finding['type'],
                         'details' => $details,
@@ -393,20 +417,37 @@ class ShieldController extends Controller
                         'resolved_at' => $status === 'quarantined' ? now() : null
                     ]
                 );
+
+                $activeFindings[] = [
+                    'file_path' => $filePath,
+                    'type' => $finding['type'],
+                    'status' => $status,
+                ];
+
+                $tType = explode(':', $finding['type'])[0];
+                $typesCount[$tType] = ($typesCount[$tType] ?? 0) + 1;
+
+                if (preg_match('#^/var/www/([^/]+)#', $filePath, $m)) {
+                    $domainName = $m[1];
+                    $sitesCount[$domainName] = ($sitesCount[$domainName] ?? 0) + 1;
+                }
             }
 
-            \Log::info("Shield scan completed for $path. Findings: " . count($findings));
+            $activeThreatCount = count($activeFindings);
+            \Log::info("Shield scan completed for $path. Total raw findings: " . count($findings) . ", Active: {$activeThreatCount}, Ignored: {$ignoredCount}");
 
             if ($emailAlerts && !empty($emails)) {
-                $threatCount = count($findings);
-                $statusBadgeColor = $threatCount > 0 ? '#ef4444' : '#10b981';
-                $statusBadgeText = $threatCount > 0 ? "{$threatCount} Threats Detected" : "Clean (0 Threats Detected)";
+                $statusBadgeColor = $activeThreatCount > 0 ? '#ef4444' : '#10b981';
+                $statusBadgeText = $activeThreatCount > 0 ? "{$activeThreatCount} Active Threats" : "Clean (0 Active Threats)";
 
-                $htmlReport = "<div style='font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;'>";
+                $panelUrl = config('app.url') ? rtrim(config('app.url'), '/') . '/shield' : url('/shield');
+
+                $htmlReport = "<div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;'>";
                 $htmlReport .= "<div style='border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px;'>";
-                $htmlReport .= "<h2 style='color: #0f172a; margin: 0;'>🛡️ Nimbus Shield: Scan Report</h2>";
+                $htmlReport .= "<h2 style='color: #0f172a; margin: 0; font-size: 20px;'>🛡️ Nimbus Shield: Scan Report</h2>";
                 $htmlReport .= "</div>";
 
+                // Scan overview card
                 $htmlReport .= "<div style='background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;'>";
                 $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Scanned Path:</strong> <span style='font-family: monospace; color: #0f172a;'>" . htmlspecialchars($path) . "</span></p>";
                 $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Scan Completed:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>";
@@ -414,25 +455,60 @@ class ShieldController extends Controller
                 $htmlReport .= "<p style='margin: 4px 0; color: #475569;'><strong>Auto-Quarantine:</strong> " . ($autoQuarantine ? "<span style='color: #10b981; font-weight: 600;'>Enabled</span>" : "<span style='color: #64748b;'>Disabled</span>") . "</p>";
                 $htmlReport .= "</div>";
 
-                if ($threatCount > 0) {
-                    $htmlReport .= "<h4 style='color: #dc2626; margin-top: 20px; margin-bottom: 10px;'>⚠️ Detected Threats:</h4>";
-                    $htmlReport .= "<table style='width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; border: 1px solid #cbd5e1;'>";
-                    $htmlReport .= "<thead style='background: #f1f5f9;'><tr><th style='padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1;'>File</th><th style='padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1;'>Threat</th><th style='padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1;'>Status</th></tr></thead><tbody>";
-                    foreach ($findings as $f) {
-                        $fStatus = $autoQuarantine ? "<span style='color: #d97706; font-weight: 600;'>Quarantined</span>" : "<span style='color: #ef4444; font-weight: 600;'>Detected</span>";
-                        $htmlReport .= "<tr><td style='padding: 8px 10px; border: 1px solid #cbd5e1; word-break: break-all; font-family: monospace;'>" . htmlspecialchars($f['file_path']) . "</td><td style='padding: 8px 10px; border: 1px solid #cbd5e1;'>" . htmlspecialchars($f['type']) . "</td><td style='padding: 8px 10px; border: 1px solid #cbd5e1;'>{$fStatus}</td></tr>";
+                // High-level statistics summary table
+                $htmlReport .= "<table style='width: 100%; border-collapse: separate; border-spacing: 8px 0; text-align: center; margin-bottom: 20px;'><tr>";
+                $htmlReport .= "<td style='padding: 12px; background: " . ($activeThreatCount > 0 ? '#fef2f2' : '#f0fdf4') . "; border: 1px solid " . ($activeThreatCount > 0 ? '#fecaca' : '#bbf7d0') . "; border-radius: 6px; width: 33%;'>";
+                $htmlReport .= "<div style='font-size: 22px; font-weight: 700; color: " . ($activeThreatCount > 0 ? '#dc2626' : '#16a34a') . ";'>{$activeThreatCount}</div>";
+                $htmlReport .= "<div style='font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;'>Active Threats</div>";
+                $htmlReport .= "</td>";
+                $htmlReport .= "<td style='padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; width: 33%;'>";
+                $htmlReport .= "<div style='font-size: 22px; font-weight: 700; color: #64748b;'>{$ignoredCount}</div>";
+                $htmlReport .= "<div style='font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;'>Ignored (Excluded)</div>";
+                $htmlReport .= "</td>";
+                $htmlReport .= "<td style='padding: 12px; background: " . ($quarantinedCount > 0 ? '#fffbeb' : '#f8fafc') . "; border: 1px solid " . ($quarantinedCount > 0 ? '#fde68a' : '#e2e8f0') . "; border-radius: 6px; width: 33%;'>";
+                $htmlReport .= "<div style='font-size: 22px; font-weight: 700; color: " . ($quarantinedCount > 0 ? '#d97706' : '#64748b') . ";'>{$quarantinedCount}</div>";
+                $htmlReport .= "<div style='font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;'>Quarantined</div>";
+                $htmlReport .= "</td>";
+                $htmlReport .= "</tr></table>";
+
+                if ($activeThreatCount > 0) {
+                    $htmlReport .= "<h4 style='color: #0f172a; margin-top: 18px; margin-bottom: 8px; font-size: 14px;'>Threat Category Breakdown:</h4>";
+                    $htmlReport .= "<table style='width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; border: 1px solid #e2e8f0;'>";
+                    $htmlReport .= "<thead style='background: #f1f5f9;'><tr><th style='padding: 6px 10px; text-align: left; border: 1px solid #e2e8f0;'>Threat Type</th><th style='padding: 6px 10px; text-align: right; border: 1px solid #e2e8f0;'>Count</th></tr></thead><tbody>";
+                    foreach ($typesCount as $tName => $tCnt) {
+                        $htmlReport .= "<tr><td style='padding: 6px 10px; border: 1px solid #e2e8f0; color: #334155;'><strong>" . htmlspecialchars($tName) . "</strong></td><td style='padding: 6px 10px; border: 1px solid #e2e8f0; text-align: right; color: #dc2626; font-weight: 600;'>{$tCnt}</td></tr>";
                     }
                     $htmlReport .= "</tbody></table>";
+
+                    if (!empty($sitesCount)) {
+                        $htmlReport .= "<h4 style='color: #0f172a; margin-top: 14px; margin-bottom: 8px; font-size: 14px;'>Affected Sites:</h4>";
+                        $htmlReport .= "<ul style='margin: 0 0 18px 0; padding-left: 20px; font-size: 13px; color: #475569;'>";
+                        foreach ($sitesCount as $siteDomain => $siteCount) {
+                            $htmlReport .= "<li style='margin-bottom: 4px;'><strong>" . htmlspecialchars($siteDomain) . "</strong>: {$siteCount} threat(s) detected</li>";
+                        }
+                        $htmlReport .= "</ul>";
+                    }
+
+                    $htmlReport .= "<div style='text-align: center; margin: 24px 0 16px 0;'>";
+                    $htmlReport .= "<a href='{$panelUrl}' style='display: inline-block; background-color: #2563eb; color: #ffffff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;'>Review Threats in Nimbus Shield</a>";
+                    $htmlReport .= "</div>";
                 } else {
-                    $htmlReport .= "<div style='background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 14px 16px; color: #065f46;'>";
-                    $htmlReport .= "<strong>✅ All clear!</strong> No malware, web shells, or compromised files were detected during this scan.";
+                    $htmlReport .= "<div style='background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 14px 16px; color: #065f46; margin-bottom: 16px;'>";
+                    $htmlReport .= "<strong>✅ All clear!</strong> No active malware, web shells, or compromised files were detected.";
+                    if ($ignoredCount > 0) {
+                        $htmlReport .= "<div style='margin-top: 6px; font-size: 13px; color: #047857;'>ℹ️ {$ignoredCount} previously ignored/whitelisted files were safely skipped.</div>";
+                    }
+                    $htmlReport .= "</div>";
+
+                    $htmlReport .= "<div style='text-align: center; margin: 18px 0;'>";
+                    $htmlReport .= "<a href='{$panelUrl}' style='display: inline-block; background-color: #059669; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;'>Open Shield Dashboard</a>";
                     $htmlReport .= "</div>";
                 }
 
-                $htmlReport .= "<p style='color: #94a3b8; font-size: 12px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px;'>This is an automated security alert from Nimbus Panel Shield.</p>";
+                $htmlReport .= "<p style='color: #94a3b8; font-size: 12px; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 12px;'>This is an automated summary report from Nimbus Shield.</p>";
                 $htmlReport .= "</div>";
 
-                $subject = "Nimbus Shield: Scan Completed (" . ($threatCount > 0 ? "{$threatCount} Threats Detected" : "Clean") . ") - " . basename($path);
+                $subject = "Nimbus Shield: Scan Completed (" . ($activeThreatCount > 0 ? "{$activeThreatCount} Active Threats" : "Clean") . ") - " . basename($path);
                 NotificationService::send($subject, $htmlReport, $emails);
             }
         } catch (\Exception $e) {
@@ -451,6 +527,7 @@ class ShieldController extends Controller
         exec("sudo pkill -f 'shield:scan' 2>/dev/null");
         exec("sudo pkill -f 'clamdscan' 2>/dev/null");
         exec("sudo pkill -f 'clamscan' 2>/dev/null");
+        exec("sudo pkill -f 'grep -rl' 2>/dev/null");
         Setting::updateOrCreate(['key' => 'shield_scan_status'], ['value' => 'idle']);
         return response()->json(['success' => true, 'message' => 'Scan stopped and status reset']);
     }
