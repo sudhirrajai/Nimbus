@@ -171,6 +171,14 @@
                   <i class="material-symbols-rounded text-sm me-1 text-success">terminal</i>
                   <span>Terminal</span>
                 </button>
+
+                <button class="btn btn-sm bg-white mb-0 shadow-sm text-dark position-relative border" @click="openTrashModal" title="Open Recycle Bin">
+                  <i class="material-symbols-rounded text-sm me-1 text-danger">delete_sweep</i>
+                  <span>Recycle Bin</span>
+                  <span v-if="trashTotalCount > 0" class="badge bg-gradient-danger text-xxs ms-1 px-2 py-0 border-radius-sm">
+                    {{ trashTotalCount }}
+                  </span>
+                </button>
               </div>
 
               <!-- Search & Controls Group -->
@@ -765,20 +773,170 @@
         <div class="modal-dialog modal-dialog-centered">
           <div class="glass-card modal-content border-0 shadow-2xl">
             <div class="modal-body text-center py-5">
-              <div class="modal-icon bg-gradient-danger mx-auto mb-4 shadow-danger">
-                <i class="material-symbols-rounded text-white" style="font-size: 32px;">delete_forever</i>
+              <div class="modal-icon mx-auto mb-4" :class="permanentDelete ? 'bg-gradient-danger shadow-danger' : 'bg-gradient-warning shadow-warning'">
+                <i class="material-symbols-rounded text-white" style="font-size: 32px;">{{ permanentDelete ? 'delete_forever' : 'delete' }}</i>
               </div>
-              <h4 class="font-weight-bolder">Confirm Deletion</h4>
-              <p class="text-secondary px-4">
-                {{ isBulkDelete ? `Are you sure you want to permanently delete ${selectedItems.length} selected items?` : `Delete "${selectedItem?.name}" permanently? This cannot be undone.` }}
+              <h4 class="font-weight-bolder">{{ permanentDelete ? 'Permanent Deletion' : 'Move to Recycle Bin' }}</h4>
+              <p class="text-secondary px-4 mb-3">
+                <template v-if="permanentDelete">
+                  {{ isBulkDelete ? `Are you sure you want to permanently delete ${selectedItems.length} selected items? This cannot be undone.` : `Delete "${selectedItem?.name}" permanently? This cannot be undone.` }}
+                </template>
+                <template v-else>
+                  {{ isBulkDelete ? `Move ${selectedItems.length} selected items to the Recycle Bin? You can restore them anytime within 30 days.` : `Move "${selectedItem?.name}" to the Recycle Bin? You can restore it anytime within 30 days.` }}
+                </template>
               </p>
-              <div class="d-flex justify-content-center gap-3 mt-4">
+
+              <!-- Permanent Delete Checkbox Option -->
+              <div class="form-check d-inline-flex align-items-center gap-2 mb-4 text-start bg-gray-100 px-3 py-2 border-radius-lg border">
+                <input class="form-check-input mt-0 cursor-pointer" type="checkbox" id="permDeleteCheck" v-model="permanentDelete">
+                <label class="form-check-label text-xs text-danger font-weight-bold mb-0 cursor-pointer user-select-none" for="permDeleteCheck">
+                  Delete permanently (skip Recycle Bin)
+                </label>
+              </div>
+
+              <div class="d-flex justify-content-center gap-3">
                 <button class="btn btn-link text-secondary mb-0 font-weight-bold" @click="showDeleteModal = false">Cancel</button>
-                <button class="btn bg-gradient-danger mb-0 border-radius-lg px-4 shadow-danger" @click="executeDelete" :disabled="deleteProcessing">
-                  <span v-if="deleteProcessing" class="spinner-border spinner-border-sm me-2"></span>
-                  Delete Forever
+                <button class="btn mb-0 border-radius-lg px-4 shadow-sm d-inline-flex align-items-center gap-1"
+                  :class="permanentDelete ? 'bg-gradient-danger shadow-danger text-white' : 'bg-gradient-warning shadow-warning text-dark font-weight-bold'"
+                  @click="executeDelete" :disabled="deleteProcessing">
+                  <span v-if="deleteProcessing" class="spinner-border spinner-border-sm me-1"></span>
+                  <i class="material-symbols-rounded text-sm">{{ permanentDelete ? 'delete_forever' : 'delete_sweep' }}</i>
+                  <span>{{ permanentDelete ? 'Delete Forever' : 'Move to Trash' }}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recycle Bin Modal -->
+      <div class="modal-backdrop fade show" v-if="showTrashModal" @click="showTrashModal = false"></div>
+      <div class="modal fade show d-block" v-if="showTrashModal">
+        <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+          <div class="glass-card modal-content border-0 shadow-2xl overflow-hidden" style="max-height: 90vh;">
+            <div class="modal-header border-bottom p-3 d-flex justify-content-between align-items-center bg-white">
+              <div class="d-flex align-items-center">
+                <div class="icon-shape icon-sm bg-gradient-danger shadow-danger text-center border-radius-lg me-2 d-flex align-items-center justify-content-center">
+                  <i class="material-symbols-rounded text-white text-sm">delete_sweep</i>
+                </div>
+                <div>
+                  <h5 class="font-weight-bolder mb-0">Recycle Bin</h5>
+                  <p class="text-xxs text-secondary mb-0">
+                    {{ trashItems.length }} item(s) • {{ trashTotalSize }} • Automatically purged after 30 days
+                  </p>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <button v-if="trashItems.length > 0" class="btn btn-sm btn-outline-danger mb-0 d-flex align-items-center gap-1" @click="confirmEmptyTrash" :disabled="trashActionLoading">
+                  <i class="material-symbols-rounded text-sm">delete_forever</i>
+                  <span>Empty Recycle Bin</span>
+                </button>
+                <button class="btn btn-sm btn-link text-secondary mb-0 p-1" @click="showTrashModal = false">
+                  <i class="material-symbols-rounded text-lg">close</i>
+                </button>
+              </div>
+            </div>
+
+            <div class="modal-body p-3 bg-gray-50">
+              <!-- Search bar inside trash -->
+              <div v-if="trashItems.length > 0" class="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="input-group input-group-sm bg-white border-radius-lg border px-2 shadow-sm" style="max-width: 320px;">
+                  <span class="input-group-text bg-transparent border-0 pe-1"><i class="material-symbols-rounded text-sm text-secondary">search</i></span>
+                  <input type="text" v-model="trashSearch" class="form-control border-0 ps-1 text-xs" placeholder="Filter trashed items...">
+                  <button v-if="trashSearch" class="btn btn-link text-secondary p-0 mb-0" @click="trashSearch = ''"><i class="material-symbols-rounded text-xs">close</i></button>
+                </div>
+                <div v-if="selectedTrashIds.length > 0" class="d-flex align-items-center gap-2">
+                  <span class="text-xs font-weight-bold text-dark">{{ selectedTrashIds.length }} selected</span>
+                  <button class="btn btn-xs bg-gradient-success mb-0 d-flex align-items-center gap-1 shadow-sm" @click="restoreSelectedTrash" :disabled="trashActionLoading">
+                    <i class="material-symbols-rounded text-xs">settings_backup_restore</i>
+                    <span>Restore Selected</span>
+                  </button>
+                  <button class="btn btn-xs bg-gradient-danger mb-0 d-flex align-items-center gap-1 shadow-sm" @click="deleteSelectedTrashPermanently" :disabled="trashActionLoading">
+                    <i class="material-symbols-rounded text-xs">delete_forever</i>
+                    <span>Delete Forever</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Loading State -->
+              <div v-if="loadingTrash" class="text-center py-5">
+                <div class="spinner-border text-primary mb-2" role="status"></div>
+                <p class="text-xs text-secondary mb-0">Loading Recycle Bin...</p>
+              </div>
+
+              <!-- Empty State -->
+              <div v-else-if="filteredTrashItems.length === 0" class="text-center py-5 bg-white border-radius-xl border border-dashed my-2">
+                <div class="icon-shape icon-lg bg-gray-100 text-secondary mx-auto mb-3 border-radius-xl d-flex align-items-center justify-content-center">
+                  <i class="material-symbols-rounded text-2xl opacity-6">recycling</i>
+                </div>
+                <h6 class="font-weight-bold text-dark mb-1">Recycle Bin is empty</h6>
+                <p class="text-xs text-secondary mb-0">Deleted files and folders are safely stored here for up to 30 days before being purged.</p>
+              </div>
+
+              <!-- Trash Items Table -->
+              <div v-else class="table-responsive bg-white border-radius-xl shadow-sm border">
+                <table class="table align-items-center mb-0">
+                  <thead class="bg-gray-100">
+                    <tr>
+                      <th class="ps-3 py-2 text-uppercase text-secondary text-xxs font-weight-bolder" style="width: 40px;">
+                        <input type="checkbox" class="form-check-input cursor-pointer" :checked="isAllTrashSelected" @change="toggleSelectAllTrash">
+                      </th>
+                      <th class="ps-2 text-uppercase text-secondary text-xxs font-weight-bolder">Item Name</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Original Location</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Size</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder">Deleted</th>
+                      <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder pe-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="tItem in filteredTrashItems" :key="tItem.id" class="cursor-pointer hover-bg-gray-50">
+                      <td class="ps-3 py-2">
+                        <input type="checkbox" class="form-check-input cursor-pointer" :value="tItem.id" v-model="selectedTrashIds">
+                      </td>
+                      <td class="ps-2">
+                        <div class="d-flex align-items-center">
+                          <i class="material-symbols-rounded text-lg me-2" :class="tItem.is_directory ? 'text-warning' : 'text-primary'">
+                            {{ tItem.is_directory ? 'folder' : 'draft' }}
+                          </i>
+                          <span class="text-xs font-weight-bold text-dark text-truncate" style="max-width: 220px;" :title="tItem.original_name">
+                            {{ tItem.original_name }}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="text-xxs text-secondary font-monospace text-truncate d-inline-block" style="max-width: 280px;" :title="tItem.original_path">
+                          {{ tItem.original_path }}
+                        </span>
+                      </td>
+                      <td>
+                        <span class="text-xs text-secondary">{{ tItem.size_formatted }}</span>
+                      </td>
+                      <td>
+                        <span class="text-xs text-secondary" :title="tItem.deleted_at_exact">{{ tItem.deleted_at }}</span>
+                      </td>
+                      <td class="text-center pe-3">
+                        <div class="d-flex align-items-center justify-content-center gap-1">
+                          <button class="btn btn-xs btn-outline-success mb-0 d-inline-flex align-items-center gap-1" @click="restoreTrashItem(tItem)" :disabled="trashActionLoading" title="Restore to original location">
+                            <i class="material-symbols-rounded text-xs">settings_backup_restore</i>
+                            <span>Restore</span>
+                          </button>
+                          <button class="btn btn-xs btn-outline-danger mb-0 d-inline-flex align-items-center gap-1" @click="deleteTrashPermanentlyItem(tItem)" :disabled="trashActionLoading" title="Delete permanently">
+                            <i class="material-symbols-rounded text-xs">delete_forever</i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="modal-footer p-2 bg-white border-top d-flex justify-content-between align-items-center">
+              <span class="text-xxs text-muted ps-2">
+                <i class="material-symbols-rounded text-xs me-1 align-middle text-info">info</i>
+                Restoring an item puts it back in its original path. If an item already exists with that name, it restores as a copy with a timestamp.
+              </span>
+              <button class="btn btn-sm btn-secondary mb-0" @click="showTrashModal = false">Close</button>
             </div>
           </div>
         </div>
@@ -1131,6 +1289,10 @@ const props = defineProps({
   availableDomains: {
     type: Array,
     default: () => []
+  },
+  trashCount: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -1194,6 +1356,17 @@ const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
 const isBulkDelete = ref(false)
 const deleteProcessing = ref(false)
+const permanentDelete = ref(false)
+
+// Recycle Bin state
+const showTrashModal = ref(false)
+const trashItems = ref([])
+const trashTotalCount = ref(props.trashCount || 0)
+const trashTotalSize = ref('0 B')
+const loadingTrash = ref(false)
+const trashActionLoading = ref(false)
+const trashSearch = ref('')
+const selectedTrashIds = ref([])
 const showEditorModal = ref(false)
 const showUnsavedConfirmModal = ref(false)
 const showShortcutsHelp = ref(false)
@@ -1831,6 +2004,7 @@ const renameItem = async () => {
 const confirmDelete = (item) => {
   isBulkDelete.value = false
   selectedItem.value = item
+  permanentDelete.value = false
   showDeleteModal.value = true
 }
 
@@ -1838,25 +2012,161 @@ const executeDelete = async () => {
   try {
     deleteProcessing.value = true
     if (isBulkDelete.value) {
-      await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
+      const res = await axios.post(`/file-manager/${props.domain}/delete-multiple`, {
         path: currentPath.value || '',
-        items: selectedItems.value.map(i => i.name)
+        items: selectedItems.value.map(i => i.name),
+        permanent: permanentDelete.value
       })
-      showAlert('success', 'Items deleted')
+      showAlert('success', res.data.message || (permanentDelete.value ? 'Items deleted permanently' : 'Items moved to Recycle Bin'))
       selectedItems.value = []
+      allSelected.value = false
     } else {
-      await axios.post(`/file-manager/${props.domain}/delete`, {
+      const res = await axios.post(`/file-manager/${props.domain}/delete`, {
         path: currentPath.value || '',
-        name: selectedItem.value.name
+        name: selectedItem.value.name,
+        permanent: permanentDelete.value
       })
-      showAlert('success', 'Item deleted')
+      showAlert('success', res.data.message || (permanentDelete.value ? 'Item deleted permanently' : 'Item moved to Recycle Bin'))
     }
     showDeleteModal.value = false
     loadFiles(true)
+    fetchTrashCount()
   } catch (error) {
     showAlert('danger', error.response?.data?.error || 'Failed to delete')
   } finally {
     deleteProcessing.value = false
+  }
+}
+
+const filteredTrashItems = computed(() => {
+  if (!trashSearch.value) return trashItems.value
+  const q = trashSearch.value.toLowerCase()
+  return trashItems.value.filter(i =>
+    i.original_name.toLowerCase().includes(q) ||
+    i.original_path.toLowerCase().includes(q)
+  )
+})
+
+const isAllTrashSelected = computed(() => {
+  return filteredTrashItems.value.length > 0 &&
+         selectedTrashIds.value.length === filteredTrashItems.value.length
+})
+
+const openTrashModal = () => {
+  showTrashModal.value = true
+  loadTrash()
+}
+
+const fetchTrashCount = async () => {
+  try {
+    const res = await axios.post(`/file-manager/${props.domain}/trash/list`)
+    trashTotalCount.value = res.data.count || 0
+    trashTotalSize.value = res.data.total_size || '0 B'
+  } catch (e) {}
+}
+
+const loadTrash = async () => {
+  try {
+    loadingTrash.value = true
+    selectedTrashIds.value = []
+    const res = await axios.post(`/file-manager/${props.domain}/trash/list`)
+    trashItems.value = res.data.items || []
+    trashTotalCount.value = res.data.count || 0
+    trashTotalSize.value = res.data.total_size || '0 B'
+  } catch (err) {
+    showAlert('danger', 'Failed to load Recycle Bin')
+  } finally {
+    loadingTrash.value = false
+  }
+}
+
+const toggleSelectAllTrash = () => {
+  if (isAllTrashSelected.value) {
+    selectedTrashIds.value = []
+  } else {
+    selectedTrashIds.value = filteredTrashItems.value.map(i => i.id)
+  }
+}
+
+const restoreTrashItem = async (item) => {
+  try {
+    trashActionLoading.value = true
+    await axios.post(`/file-manager/${props.domain}/trash/restore`, {
+      ids: [item.id]
+    })
+    showAlert('success', `Restored "${item.original_name}"`)
+    await loadTrash()
+    loadFiles(true)
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to restore item')
+  } finally {
+    trashActionLoading.value = false
+  }
+}
+
+const restoreSelectedTrash = async () => {
+  if (!selectedTrashIds.value.length) return
+  try {
+    trashActionLoading.value = true
+    const res = await axios.post(`/file-manager/${props.domain}/trash/restore`, {
+      ids: selectedTrashIds.value
+    })
+    showAlert('success', res.data.message || 'Items restored')
+    selectedTrashIds.value = []
+    await loadTrash()
+    loadFiles(true)
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to restore items')
+  } finally {
+    trashActionLoading.value = false
+  }
+}
+
+const deleteTrashPermanentlyItem = async (item) => {
+  if (!confirm(`Permanently delete "${item.original_name}"? This cannot be undone.`)) return
+  try {
+    trashActionLoading.value = true
+    await axios.post(`/file-manager/${props.domain}/trash/delete-permanently`, {
+      ids: [item.id]
+    })
+    showAlert('success', 'Item permanently deleted')
+    await loadTrash()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to delete item')
+  } finally {
+    trashActionLoading.value = false
+  }
+}
+
+const deleteSelectedTrashPermanently = async () => {
+  if (!selectedTrashIds.value.length) return
+  if (!confirm(`Permanently delete ${selectedTrashIds.value.length} selected items from Recycle Bin? This cannot be undone.`)) return
+  try {
+    trashActionLoading.value = true
+    await axios.post(`/file-manager/${props.domain}/trash/delete-permanently`, {
+      ids: selectedTrashIds.value
+    })
+    showAlert('success', 'Items permanently deleted')
+    selectedTrashIds.value = []
+    await loadTrash()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to delete items')
+  } finally {
+    trashActionLoading.value = false
+  }
+}
+
+const confirmEmptyTrash = async () => {
+  if (!confirm('Are you sure you want to empty the Recycle Bin? All deleted items will be permanently erased.')) return
+  try {
+    trashActionLoading.value = true
+    await axios.post(`/file-manager/${props.domain}/trash/empty`)
+    showAlert('success', 'Recycle Bin emptied')
+    await loadTrash()
+  } catch (err) {
+    showAlert('danger', err.response?.data?.error || 'Failed to empty Recycle Bin')
+  } finally {
+    trashActionLoading.value = false
   }
 }
 
@@ -2202,7 +2512,7 @@ const toggleSelectAll = () => {
   }
 }
 
-const bulkDelete = () => { isBulkDelete.value = true; showDeleteModal.value = true }
+const bulkDelete = () => { isBulkDelete.value = true; permanentDelete.value = false; showDeleteModal.value = true }
 
 const bulkZip = async () => {
   const name = prompt('Zip name:', 'archive.zip')

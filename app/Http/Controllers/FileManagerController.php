@@ -3,16 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\ShieldController;
+use App\Models\RecycleBinItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class FileManagerController extends Controller
 {
     private $basePath = '/var/www/';
     private $gitSystemUser = 'www-data';
+    private $trashStoragePath = '/var/nimbus/trash';
 
     /**
      * Display file manager for a scope or domain
@@ -65,6 +68,17 @@ class FileManagerController extends Controller
             }
         }
 
+        $trashCount = 0;
+        try {
+            if ($user->hasFileManagerRootAccess() || $user->hasFileManagerProjectsAccess()) {
+                $trashCount = RecycleBinItem::count();
+            } else {
+                $trashCount = RecycleBinItem::where('domain', $scopeInfo['domainParam'])->count();
+            }
+        } catch (\Exception $e) {
+            $trashCount = 0;
+        }
+
         return Inertia::render('Files/FileManager', [
             'domain' => $scopeInfo['domainParam'],
             'scope' => $scopeInfo['scope'],
@@ -73,6 +87,7 @@ class FileManagerController extends Controller
             'userScope' => $user->getFileManagerScope(),
             'allowedScopes' => $user->getAllowedFileManagerScopes(),
             'availableDomains' => $domains,
+            'trashCount' => $trashCount,
         ]);
     }
 
@@ -251,18 +266,21 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Delete file or directory
+     * Delete file or directory (soft-delete to Recycle Bin by default, or permanent)
      */
     public function delete(Request $request, $domain)
     {
         try {
             $request->validate([
                 'path' => 'nullable|string',
-                'name' => 'required|string'
+                'name' => 'required|string',
+                'permanent' => 'nullable|boolean'
             ]);
 
             $path = $request->input('path', '');
             $name = $request->input('name');
+            $permanent = filter_var($request->input('permanent', false), FILTER_VALIDATE_BOOLEAN);
+
             $dirPath = $this->getFullPath($domain, $path);
             $targetPath = $dirPath . '/' . $name;
 
@@ -274,11 +292,45 @@ class FileManagerController extends Controller
                 return response()->json(['error' => 'File or directory not found'], 404);
             }
 
-            $escapedPath = escapeshellarg($targetPath);
-            $this->executeSudoCommand("rm -rf {$escapedPath}");
+            if ($permanent) {
+                $escapedPath = escapeshellarg($targetPath);
+                $this->executeSudoCommand("rm -rf {$escapedPath}");
+                $this->clearFileManagerCache();
+                return response()->json([
+                    'message' => 'Deleted permanently',
+                    'permanent' => true
+                ]);
+            }
+
+            // Soft-delete: Move to /var/nimbus/trash
+            $this->ensureTrashDirectoryExists();
+            $isDir = File::isDirectory($targetPath);
+            $size = $isDir ? $this->getRawDirectorySizeBytes($targetPath) : (File::size($targetPath) ?: 0);
+
+            $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $name);
+            $trashName = (string) Str::uuid() . '_' . $safeName;
+            $trashPath = $this->trashStoragePath . '/' . $trashName;
+
+            $escapedTarget = escapeshellarg($targetPath);
+            $escapedTrash = escapeshellarg($trashPath);
+            $this->executeSudoCommand("mv {$escapedTarget} {$escapedTrash}");
+
+            RecycleBinItem::create([
+                'user_id' => $request->user()?->id,
+                'domain' => $domain,
+                'original_name' => $name,
+                'original_path' => $targetPath,
+                'trash_name' => $trashName,
+                'trash_path' => $trashPath,
+                'size_bytes' => $size,
+                'is_directory' => $isDir,
+            ]);
 
             $this->clearFileManagerCache();
-            return response()->json(['message' => 'Deleted successfully']);
+            return response()->json([
+                'message' => 'Moved to Recycle Bin',
+                'permanent' => false
+            ]);
         } catch (\Exception $e) {
             \Log::error("Delete error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -286,7 +338,7 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Delete multiple items
+     * Delete multiple items (soft-delete to Recycle Bin by default, or permanent)
      */
     public function deleteMultiple(Request $request, $domain)
     {
@@ -294,30 +346,235 @@ class FileManagerController extends Controller
             $request->validate([
                 'path' => 'nullable|string',
                 'items' => 'required|array',
-                'items.*' => 'string'
+                'items.*' => 'string',
+                'permanent' => 'nullable|boolean'
             ]);
 
             $path = $request->input('path', '');
             $items = $request->input('items');
+            $permanent = filter_var($request->input('permanent', false), FILTER_VALIDATE_BOOLEAN);
             $dirPath = $this->getFullPath($domain, $path);
 
+            if (!$permanent) {
+                $this->ensureTrashDirectoryExists();
+            }
+
+            $processed = 0;
             foreach ($items as $item) {
                 $targetPath = $dirPath . '/' . $item;
 
-                if (!$this->isValidPath($domain, $targetPath)) {
+                if (!$this->isValidPath($domain, $targetPath) || !File::exists($targetPath)) {
                     continue;
                 }
 
-                if (File::exists($targetPath)) {
+                if ($permanent) {
                     $escapedPath = escapeshellarg($targetPath);
                     $this->executeSudoCommand("rm -rf {$escapedPath}");
+                } else {
+                    $isDir = File::isDirectory($targetPath);
+                    $size = $isDir ? $this->getRawDirectorySizeBytes($targetPath) : (File::size($targetPath) ?: 0);
+
+                    $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $item);
+                    $trashName = (string) Str::uuid() . '_' . $safeName;
+                    $trashPath = $this->trashStoragePath . '/' . $trashName;
+
+                    $escapedTarget = escapeshellarg($targetPath);
+                    $escapedTrash = escapeshellarg($trashPath);
+                    $this->executeSudoCommand("mv {$escapedTarget} {$escapedTrash}");
+
+                    RecycleBinItem::create([
+                        'user_id' => $request->user()?->id,
+                        'domain' => $domain,
+                        'original_name' => $item,
+                        'original_path' => $targetPath,
+                        'trash_name' => $trashName,
+                        'trash_path' => $trashPath,
+                        'size_bytes' => $size,
+                        'is_directory' => $isDir,
+                    ]);
                 }
+                $processed++;
             }
 
             $this->clearFileManagerCache();
-            return response()->json(['message' => 'Items deleted successfully']);
+            return response()->json([
+                'message' => $permanent ? "{$processed} items deleted permanently" : "{$processed} items moved to Recycle Bin",
+                'permanent' => $permanent,
+                'count' => $processed
+            ]);
         } catch (\Exception $e) {
             \Log::error("Multiple delete error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * List items in the Recycle Bin
+     */
+    public function trashList(Request $request, $domain)
+    {
+        try {
+            $user = $request->user();
+            $query = RecycleBinItem::with('user:id,name,email')->latest('id');
+
+            // Permission scoping
+            if (!$user->hasFileManagerRootAccess() && !$user->hasFileManagerProjectsAccess()) {
+                $query->where('domain', $domain);
+            } elseif ($domain !== 'root' && $domain !== 'projects') {
+                $query->where('domain', $domain);
+            }
+
+            $rawItems = $query->get();
+            $items = $rawItems->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'original_name' => $item->original_name,
+                    'original_path' => $item->original_path,
+                    'size_formatted' => $item->formatted_size,
+                    'size_bytes' => $item->size_bytes,
+                    'is_directory' => (bool) $item->is_directory,
+                    'deleted_at' => $item->created_at ? $item->created_at->diffForHumans() : 'Recently',
+                    'deleted_at_exact' => $item->created_at ? $item->created_at->toDateTimeString() : '',
+                    'deleted_by' => $item->user?->name ?: 'System',
+                    'domain' => $item->domain,
+                ];
+            });
+
+            $totalBytes = $rawItems->sum('size_bytes');
+
+            return response()->json([
+                'items' => $items,
+                'count' => $items->count(),
+                'total_size' => $this->formatBytes($totalBytes),
+                'total_bytes' => $totalBytes,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Trash list error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Restore one or more items from Recycle Bin
+     */
+    public function trashRestore(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'ids' => 'required|array',
+                'ids.*' => 'integer',
+                'overwrite' => 'nullable|boolean',
+            ]);
+
+            $ids = $request->input('ids');
+            $overwrite = filter_var($request->input('overwrite', false), FILTER_VALIDATE_BOOLEAN);
+
+            $items = RecycleBinItem::whereIn('id', $ids)->get();
+            $restoredCount = 0;
+
+            foreach ($items as $item) {
+                if (!File::exists($item->trash_path)) {
+                    $item->delete();
+                    continue;
+                }
+
+                $destPath = $item->original_path;
+                $destDir = dirname($destPath);
+
+                if (!File::exists($destDir)) {
+                    $this->executeSudoCommand("mkdir -p " . escapeshellarg($destDir));
+                }
+
+                if (File::exists($destPath)) {
+                    if ($overwrite) {
+                        $this->executeSudoCommand("rm -rf " . escapeshellarg($destPath));
+                    } else {
+                        $pi = pathinfo($destPath);
+                        $ext = !empty($pi['extension']) ? '.' . $pi['extension'] : '';
+                        $destPath = $destDir . '/' . $pi['filename'] . ' (restored ' . date('Y-m-d_His') . ')' . $ext;
+                    }
+                }
+
+                $this->executeSudoCommand("mv " . escapeshellarg($item->trash_path) . " " . escapeshellarg($destPath));
+                $item->delete();
+                $restoredCount++;
+            }
+
+            $this->clearFileManagerCache();
+            return response()->json([
+                'message' => "Successfully restored {$restoredCount} item(s)",
+                'restored_count' => $restoredCount
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Trash restore error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Delete selected items permanently from Recycle Bin
+     */
+    public function trashDeletePermanently(Request $request, $domain)
+    {
+        try {
+            $request->validate([
+                'ids' => 'required|array',
+                'ids.*' => 'integer',
+            ]);
+
+            $ids = $request->input('ids');
+            $items = RecycleBinItem::whereIn('id', $ids)->get();
+            $deletedCount = 0;
+
+            foreach ($items as $item) {
+                if (File::exists($item->trash_path)) {
+                    $this->executeSudoCommand("rm -rf " . escapeshellarg($item->trash_path));
+                }
+                $item->delete();
+                $deletedCount++;
+            }
+
+            return response()->json([
+                'message' => "Permanently deleted {$deletedCount} item(s)",
+                'deleted_count' => $deletedCount
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Trash delete permanently error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Empty entire Recycle Bin
+     */
+    public function trashEmpty(Request $request, $domain)
+    {
+        try {
+            $user = $request->user();
+            $query = RecycleBinItem::query();
+
+            if (!$user->hasFileManagerRootAccess() && !$user->hasFileManagerProjectsAccess()) {
+                $query->where('domain', $domain);
+            } elseif ($domain !== 'root' && $domain !== 'projects') {
+                $query->where('domain', $domain);
+            }
+
+            $items = $query->get();
+            $count = $items->count();
+
+            foreach ($items as $item) {
+                if (File::exists($item->trash_path)) {
+                    $this->executeSudoCommand("rm -rf " . escapeshellarg($item->trash_path));
+                }
+                $item->delete();
+            }
+
+            return response()->json([
+                'message' => "Recycle Bin emptied ({$count} items removed)",
+                'deleted_count' => $count
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Trash empty error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -1402,6 +1659,38 @@ class FileManagerController extends Controller
         }
 
         return $this->formatBytes($size);
+    }
+
+    private function getRawDirectorySizeBytes($path): int
+    {
+        $size = 0;
+        try {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            foreach ($files as $file) {
+                $size += $file->getSize();
+            }
+        } catch (\Exception $e) {
+            try {
+                $escaped = escapeshellarg($path);
+                $out = $this->executeSudoCommand("du -sb {$escaped} | cut -f1");
+                if (!empty($out)) {
+                    $size = (int) trim($out[0]);
+                }
+            } catch (\Exception $ex) {
+                $size = 0;
+            }
+        }
+        return $size;
+    }
+
+    private function ensureTrashDirectoryExists()
+    {
+        if (!File::exists($this->trashStoragePath)) {
+            $this->executeSudoCommand("mkdir -p " . escapeshellarg($this->trashStoragePath));
+            $this->executeSudoCommand("chmod 770 " . escapeshellarg($this->trashStoragePath));
+        }
     }
 
     private function getBreadcrumbs($path, $domain = null)

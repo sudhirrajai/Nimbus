@@ -161,6 +161,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::post('/{domain}/git/token', [FileManagerController::class, 'saveGitToken'])->name('git.token.save');
         Route::get('/{domain}/git/token', [FileManagerController::class, 'getGitToken'])->name('git.token.get');
         Route::post('/{domain}/search', [FileManagerController::class, 'search'])->name('search');
+        // Recycle Bin (Trash)
+        Route::post('/{domain}/trash/list', [FileManagerController::class, 'trashList'])->name('trash.list');
+        Route::post('/{domain}/trash/restore', [FileManagerController::class, 'trashRestore'])->name('trash.restore');
+        Route::post('/{domain}/trash/delete-permanently', [FileManagerController::class, 'trashDeletePermanently'])->name('trash.delete-permanently');
+        Route::post('/{domain}/trash/empty', [FileManagerController::class, 'trashEmpty'])->name('trash.empty');
         // Web Terminal
         Route::post('/{domain}/terminal/execute', [\App\Http\Controllers\TerminalController::class, 'execute'])->name('terminal.execute');
     });
