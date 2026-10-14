@@ -21,6 +21,7 @@ use App\Http\Controllers\SsoController;
 use App\Http\Controllers\FtpAccountController;
 use App\Http\Controllers\Pm2Controller;
 use App\Http\Controllers\PostgresController;
+use App\Http\Controllers\NodeController;
 
 // 1-Click Single Sign-On (SSO) from VmCoreCentral
 Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
@@ -448,6 +449,16 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
             Route::post('/versions/{version}/extensions/install', [PhpController::class, 'installExtension'])->name('versions.extensions.install');
             Route::post('/versions/{version}/extensions/toggle', [PhpController::class, 'toggleExtension'])->name('versions.extensions.toggle');
             Route::get('/versions/{version}/extensions/install-status', [PhpController::class, 'getExtensionInstallStatus'])->name('versions.extensions.install-status');
+        });
+
+        // Node.js Version Manager routes
+        Route::prefix('node')->name('node.')->group(function () {
+            Route::get('/', [NodeController::class, 'index'])->name('index');
+            Route::get('/status', [NodeController::class, 'getStatus'])->name('status');
+            Route::post('/install', [NodeController::class, 'install'])->name('install');
+            Route::get('/install-status', [NodeController::class, 'getInstallStatus'])->name('install-status');
+            Route::post('/switch', [NodeController::class, 'switchGlobal'])->name('switch');
+            Route::post('/uninstall', [NodeController::class, 'uninstall'])->name('uninstall');
         });
 
         // Email Management routes

@@ -98,6 +98,13 @@
         </li>
 
         <li v-if="isRootOrAdmin" class="nav-item">
+          <Link href="/node" class="nav-link" :class="isActive('/node')">
+            <i class="material-symbols-rounded opacity-5">javascript</i>
+            <span class="nav-link-text ms-1">Node.js Manager</span>
+          </Link>
+        </li>
+
+        <li v-if="isRootOrAdmin" class="nav-item">
           <Link href="/redis" class="nav-link" :class="isActive('/redis')">
             <i class="material-symbols-rounded opacity-5">memory</i>
             <span class="nav-link-text ms-1">Redis Manager</span>
