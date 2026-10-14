@@ -8,20 +8,32 @@ if [ ! -d "$APP_DIR" ]; then
     APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
+BIN_NAME="$(basename "$0")"
+
+# If invoked directly as a prefixed binary (e.g. nimbus:reset-admin-password)
+if [ "$BIN_NAME" = "nimbus:reset-admin-password" ]; then
+    exec php "$APP_DIR/artisan" nimbus:reset-admin-password "$@"
+fi
+
+if [ "$BIN_NAME" = "nimbus:2fa-disable" ]; then
+    exec php "$APP_DIR/artisan" nimbus:2fa-disable "$@"
+fi
+
+# If invoked as 'nimbus <subcommand>'
 case "$1" in
-    reset-admin-password)
+    reset-admin-password|nimbus:reset-admin-password)
         shift
         exec php "$APP_DIR/artisan" nimbus:reset-admin-password "$@"
         ;;
-    2fa-disable|disable-2fa)
+    2fa-disable|disable-2fa|nimbus:2fa-disable)
         shift
         exec php "$APP_DIR/artisan" nimbus:2fa-disable "$@"
         ;;
-    purge-trash)
+    purge-trash|nimbus:purge-trash)
         shift
         exec php "$APP_DIR/artisan" nimbus:purge-trash "$@"
         ;;
-    collect-metrics)
+    collect-metrics|nimbus:collect-metrics)
         shift
         exec php "$APP_DIR/artisan" nimbus:collect-metrics "$@"
         ;;
