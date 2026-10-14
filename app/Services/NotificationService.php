@@ -126,13 +126,13 @@ class NotificationService
 
         // Check global alert emails setting
         $alertEmails = Setting::where('key', 'global_alert_emails')->value('value');
-        if (!empty(trim($alertEmails))) {
+        if (!empty(trim($alertEmails ?? ''))) {
             $emails = array_merge($emails, array_map('trim', explode(',', $alertEmails)));
         }
 
         // Check shield alert emails setting
         $shieldEmails = Setting::where('key', 'shield_alert_emails')->value('value');
-        if (!empty(trim($shieldEmails))) {
+        if (!empty(trim($shieldEmails ?? ''))) {
             $emails = array_merge($emails, array_map('trim', explode(',', $shieldEmails)));
         }
 

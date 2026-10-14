@@ -10,7 +10,6 @@
     "php artisan migrate --force",
     "php artisan config:clear",
     "php artisan route:clear",
-    "php artisan cache:clear",
-    "systemctl restart nimbus-php-fpm"
+    "php artisan cache:clear"
   ]
 }

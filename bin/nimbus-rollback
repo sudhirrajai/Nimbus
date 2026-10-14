@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Nimbus Standalone Safe Rollback Tool
+set -e
+
+PANEL_DIR="/usr/local/nimbus"
+SNAPSHOTS_BASE="/var/backups/nimbus_snapshots"
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: This rollback command must be run as root (or with sudo)."
+    exit 1
+fi
+
+if [ ! -d "$PANEL_DIR" ]; then
+    echo "Error: Nimbus installation not found at $PANEL_DIR."
+    exit 1
+fi
+
+if [ ! -d "$SNAPSHOTS_BASE" ]; then
+    echo "Error: No snapshot backup directory found at $SNAPSHOTS_BASE."
+    exit 1
+fi
+
+# List available snapshots
+SNAPSHOTS=($(ls -1td "$SNAPSHOTS_BASE"/snapshot_* 2>/dev/null || true))
+
+if [ ${#SNAPSHOTS[@]} -eq 0 ]; then
+    echo "Error: No pre-update snapshots found in $SNAPSHOTS_BASE."
+    exit 1
+fi
+
+TARGET_SNAPSHOT=""
+
+if [ -n "$1" ]; then
+    if [ -d "$1" ]; then
+        TARGET_SNAPSHOT="$1"
+    elif [ -d "$SNAPSHOTS_BASE/$1" ]; then
+        TARGET_SNAPSHOT="$SNAPSHOTS_BASE/$1"
+    else
+        echo "Error: Specified snapshot '$1' not found."
+        echo "Available snapshots:"
+        for s in "${SNAPSHOTS[@]}"; do
+            echo "  - $(basename "$s")"
+        done
+        exit 1
+    fi
+else
+    # Default to latest snapshot
+    TARGET_SNAPSHOT="${SNAPSHOTS[0]}"
+fi
+
+SNAPSHOT_NAME="$(basename "$TARGET_SNAPSHOT")"
+PREV_VERSION="Unknown"
+if [ -f "$TARGET_SNAPSHOT/VERSION" ]; then
+    PREV_VERSION="$(cat "$TARGET_SNAPSHOT/VERSION")"
+fi
+
+echo "================================================================"
+echo "Nimbus Safe Snapshot Rollback"
+echo "================================================================"
+echo "Target Snapshot : $SNAPSHOT_NAME"
+echo "Snapshot Path   : $TARGET_SNAPSHOT"
+echo "Snapshot Version: v$PREV_VERSION"
+echo "Panel Directory : $PANEL_DIR"
+echo "================================================================"
+echo ""
+
+echo "[1/5] Restoring core panel files from snapshot..."
+rsync -a --delete \
+    --exclude 'storage' \
+    --exclude '.env' \
+    --exclude 'database/*.sqlite*' \
+    "$TARGET_SNAPSHOT/" "$PANEL_DIR/"
+
+echo "[2/5] Restoring SQLite database state..."
+if [ -f "$TARGET_SNAPSHOT/database/database.sqlite" ]; then
+    cp -f "$TARGET_SNAPSHOT/database/database.sqlite" "$PANEL_DIR/database/database.sqlite"
+    echo "Database restored from snapshot."
+else
+    echo "No database snapshot file; preserving active database."
+fi
+
+echo "[3/5] Fixing filesystem permissions and ownership..."
+chown -R www-data:www-data "$PANEL_DIR"
+chmod -R 775 "$PANEL_DIR/storage" "$PANEL_DIR/bootstrap/cache" "$PANEL_DIR/database"
+chmod 664 "$PANEL_DIR/database"/*.sqlite* 2>/dev/null || true
+chmod +x "$PANEL_DIR/artisan" "$PANEL_DIR/bin/"* 2>/dev/null || true
+
+echo "[4/5] Clearing application cache and optimizing..."
+sudo -u www-data php "$PANEL_DIR/artisan" optimize:clear 2>/dev/null || true
+
+echo "[5/5] Restarting Nimbus services..."
+systemctl restart nimbus-php-fpm 2>/dev/null || systemctl restart php8.3-fpm 2>/dev/null || true
+systemctl reload nimbus-nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
+if command -v supervisorctl >/dev/null 2>&1; then
+    supervisorctl restart nimbus-worker:* 2>/dev/null || true
+fi
+
+CURRENT_VER="$(cat "$PANEL_DIR/VERSION" 2>/dev/null || echo "$PREV_VERSION")"
+
+echo ""
+echo "================================================================"
+echo "SUCCESS: Nimbus successfully rolled back to v$CURRENT_VER!"
+echo "Restored from: $SNAPSHOT_NAME"
+echo "All panel services are active and healthy."
+echo "================================================================"

@@ -11,7 +11,7 @@ class UpdateController extends Controller
 {
     // GitHub repository
     const GITHUB_REPO = 'sudhirrajai/Nimbus';
-    
+
     /**
      * Get current version from VERSION file
      */
@@ -23,7 +23,7 @@ class UpdateController extends Controller
         }
         return '1.0.0'; // Fallback
     }
-    
+
     /**
      * Display updates page
      */
@@ -44,7 +44,7 @@ class UpdateController extends Controller
             $updateInfo = Cache::remember('nimbus_update_check', 120, function () {
                 return $this->fetchUpdateInfo();
             });
-            
+
             $currentVersion = $this->getCurrentVersion();
             $latestVersion = $updateInfo['version'] ?? $currentVersion;
             $hasUpdate = version_compare($latestVersion, $currentVersion, '>');
@@ -137,23 +137,23 @@ class UpdateController extends Controller
     private function parseChangelog($body)
     {
         if (empty($body)) return [];
-        
+
         $changelog = [];
         $lines = explode("\n", $body);
-        
+
         foreach ($lines as $line) {
             $line = trim($line);
             if (empty($line)) continue;
-            
+
             if (preg_match('/^#+\s/', $line)) continue;
-            
+
             if (preg_match('/^[-*•]\s*(.+)$/', $line, $matches)) {
                 $changelog[] = $matches[1];
             } else {
                 $changelog[] = $line;
             }
         }
-        
+
         return $changelog;
     }
 
@@ -193,7 +193,7 @@ class UpdateController extends Controller
 
             $logFile = storage_path('logs/update.log');
             $statusFile = storage_path('logs/update_status.txt');
-            
+
             // Clear old logs
             file_put_contents($logFile, "Update initialization started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
@@ -303,7 +303,7 @@ fi
 echo "Snapshot safely secured at \$BACKUP_DIR."
 
 echo ""
-echo "[Step 2/8] Downloading release package from VMCore Central..."
+echo "[Step 2/8] Downloading release package from Roook..."
 curl -sSL --fail --retry 3 --connect-timeout 20 "\$DOWNLOAD_URL" -o "\$ZIP_FILE"
 
 if [ ! -s "\$ZIP_FILE" ]; then
@@ -357,6 +357,14 @@ rsync -a \
     --exclude 'database/*.sqlite*' \
     "\$STAGING_DIR/" "\$PANEL_DIR/"
 
+# Immediately enforce proper permissions before manifest commands run
+chown -R www-data:www-data "\$PANEL_DIR"
+chmod -R 775 "\$PANEL_DIR/storage" "\$PANEL_DIR/bootstrap/cache" "\$PANEL_DIR/database"
+chmod 664 "\$PANEL_DIR/database"/*.sqlite* 2>/dev/null || true
+chmod +x "\$PANEL_DIR/artisan" "\$PANEL_DIR/bin/"* 2>/dev/null || true
+ln -sf "\$PANEL_DIR/bin/nimbus" /usr/local/bin/nimbus 2>/dev/null || true
+ln -sf "\$PANEL_DIR/bin/nimbus-rollback" /usr/local/bin/nimbus-rollback 2>/dev/null || true
+
 cd "\$PANEL_DIR"
 
 echo ""
@@ -374,8 +382,11 @@ echo "Artisan framework health check passed."
 echo ""
 echo "[Step 8/8] Finalizing permissions and restarting background workers..."
 chown -R www-data:www-data "\$PANEL_DIR"
-chmod -R 775 "\$PANEL_DIR/storage" "\$PANEL_DIR/bootstrap/cache"
-chmod +x "\$PANEL_DIR/artisan" 2>/dev/null || true
+chmod -R 775 "\$PANEL_DIR/storage" "\$PANEL_DIR/bootstrap/cache" "\$PANEL_DIR/database"
+chmod 664 "\$PANEL_DIR/database"/*.sqlite* 2>/dev/null || true
+chmod +x "\$PANEL_DIR/artisan" "\$PANEL_DIR/bin/"* 2>/dev/null || true
+ln -sf "\$PANEL_DIR/bin/nimbus" /usr/local/bin/nimbus 2>/dev/null || true
+ln -sf "\$PANEL_DIR/bin/nimbus-rollback" /usr/local/bin/nimbus-rollback 2>/dev/null || true
 
 systemctl restart nimbus-php-fpm 2>/dev/null || systemctl restart php8.3-fpm 2>/dev/null || true
 systemctl reload nimbus-nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
@@ -404,10 +415,10 @@ BASH;
             $tempScript = "/tmp/nimbus_ota_update.sh";
             file_put_contents($tempScript, $script);
             chmod($tempScript, 0755);
-            
+
             // Execute in background with root/sudo privileges
             exec("sudo bash {$tempScript} > /dev/null 2>&1 &");
-            
+
             return response()->json([
                 'success' => true,
                 'message' => "Safe update pipeline initiated for v{$targetVersion}."
@@ -424,10 +435,10 @@ BASH;
     {
         $logFile = storage_path('logs/update.log');
         $statusFile = storage_path('logs/update_status.txt');
-        
+
         $log = file_exists($logFile) ? file_get_contents($logFile) : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
-        
+
         // Detect completion or failure in log
         if (strpos($log, 'Update completed successfully') !== false) {
             $status = 'done';
@@ -436,7 +447,7 @@ BASH;
             $status = 'failed';
             file_put_contents($statusFile, 'failed');
         }
-        
+
         return response()->json([
             'status' => $status,
             'log' => $log

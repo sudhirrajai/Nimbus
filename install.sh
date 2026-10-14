@@ -877,6 +877,12 @@ else
     ufw --force enable
 fi
 
+# Link global CLI commands
+chmod +x "${NIMBUS_DIR}/bin/nimbus" 2>/dev/null || true
+chmod +x "${NIMBUS_DIR}/bin/nimbus-rollback" 2>/dev/null || true
+ln -sf "${NIMBUS_DIR}/bin/nimbus" /usr/local/bin/nimbus
+ln -sf "${NIMBUS_DIR}/bin/nimbus-rollback" /usr/local/bin/nimbus-rollback
+
 # Get server IP
 SERVER_IP=$(hostname -I | awk '{print $1}')
 
