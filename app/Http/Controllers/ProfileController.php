@@ -16,8 +16,17 @@ class ProfileController extends Controller
      */
     public function index()
     {
+        $user = Auth::user();
         return Inertia::render('Profile/Index', [
-            'user' => Auth::user()
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'status' => $user->status,
+                'has_2fa' => $user->hasTwoFactorEnabled(),
+                'two_factor_confirmed_at' => $user->two_factor_confirmed_at?->toDateTimeString(),
+            ]
         ]);
     }
 
@@ -65,6 +74,130 @@ class ProfileController extends Controller
         ]);
 
         return back()->with('success', 'Password changed successfully');
+    }
+
+    /**
+     * Start 2FA setup — generate secret and QR code SVG
+     */
+    public function setupTwoFactor(\App\Services\TwoFactorService $twoFactorService)
+    {
+        $user = Auth::user();
+        $secret = $twoFactorService->generateSecretKey();
+        $qrSvg = $twoFactorService->getQrCodeSvg($user, $secret);
+
+        return response()->json([
+            'success' => true,
+            'secret' => $secret,
+            'qr_svg' => $qrSvg,
+        ]);
+    }
+
+    /**
+     * Confirm 2FA setup with user-supplied TOTP code
+     */
+    public function confirmTwoFactor(Request $request, \App\Services\TwoFactorService $twoFactorService)
+    {
+        $request->validate([
+            'secret' => 'required|string',
+            'code' => 'required|string|size:6',
+        ]);
+
+        $user = Auth::user();
+        $result = $twoFactorService->confirmTwoFactor($user, $request->secret, $request->code);
+
+        if (!$result['status']) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['message'],
+            ], 422);
+        }
+
+        \App\Models\ActivityLog::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'action' => 'security_2fa_enabled',
+            'service' => 'auth',
+            'description' => 'Enabled two-factor authentication',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['message'],
+            'recovery_codes' => $result['recovery_codes'],
+        ]);
+    }
+
+    /**
+     * Disable 2FA with current password confirmation
+     */
+    public function disableTwoFactor(Request $request, \App\Services\TwoFactorService $twoFactorService)
+    {
+        $request->validate([
+            'password' => 'required|string',
+        ]);
+
+        $user = Auth::user();
+
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The provided password was incorrect.',
+            ], 422);
+        }
+
+        $twoFactorService->disableTwoFactor($user);
+
+        \App\Models\ActivityLog::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'action' => 'security_2fa_disabled',
+            'service' => 'auth',
+            'description' => 'Disabled two-factor authentication',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Two-factor authentication has been disabled.',
+        ]);
+    }
+
+    /**
+     * Regenerate 2FA recovery codes
+     */
+    public function regenerateRecoveryCodes(Request $request, \App\Services\TwoFactorService $twoFactorService)
+    {
+        $request->validate([
+            'password' => 'required|string',
+        ]);
+
+        $user = Auth::user();
+
+        if (!$user->hasTwoFactorEnabled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Two-factor authentication is not enabled.',
+            ], 400);
+        }
+
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The provided password was incorrect.',
+            ], 422);
+        }
+
+        $codes = $twoFactorService->generateRecoveryCodes();
+        $user->two_factor_recovery_codes = $codes;
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'recovery_codes' => $codes,
+        ]);
     }
 
     /**

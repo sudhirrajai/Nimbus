@@ -89,6 +89,182 @@
                 </div>
             </div>
 
+            <!-- Two-Factor Authentication (2FA) -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">
+                                    <i class="material-symbols-rounded text-sm me-1 text-primary">security</i>
+                                    Two-Factor Authentication (2FA)
+                                </h6>
+                                <p class="text-xs text-secondary mb-0">
+                                    Add an extra layer of security using standard TOTP authenticator apps (Google Authenticator, Authy, 1Password).
+                                </p>
+                            </div>
+                            <span class="badge" :class="hasTwoFactor ? 'bg-gradient-success' : 'bg-gradient-secondary'">
+                                {{ hasTwoFactor ? 'Active' : 'Disabled' }}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <!-- When 2FA is NOT enabled and NOT setting up -->
+                            <div v-if="!hasTwoFactor && !settingUp2fa">
+                                <p class="text-sm text-secondary">
+                                    When two-factor authentication is enabled, you will be prompted for a secure 6-digit one-time token from your authenticator application in addition to your password during sign-in.
+                                </p>
+                                <button type="button" class="btn bg-gradient-primary btn-sm mb-0" @click="start2faSetup" :disabled="loading2fa">
+                                    <span v-if="loading2fa" class="spinner-border spinner-border-sm me-2"></span>
+                                    <i class="material-symbols-rounded text-sm me-1">lock_open</i>
+                                    Enable Two-Factor Authentication
+                                </button>
+                            </div>
+
+                            <!-- Setup Flow (QR Code & Secret) -->
+                            <div v-if="settingUp2fa" class="border rounded p-4 bg-gray-100">
+                                <h6 class="text-sm font-weight-bold mb-3">
+                                    <span class="badge bg-primary me-2">1</span> Scan this QR Code with your Authenticator App
+                                </h6>
+                                <div class="row align-items-center mb-4">
+                                    <div class="col-auto">
+                                        <div class="p-2 bg-white rounded shadow-sm d-inline-block" v-html="setupData.qr_svg" style="max-width: 200px; max-height: 200px;"></div>
+                                    </div>
+                                    <div class="col">
+                                        <p class="text-xs text-secondary mb-1">Or manually enter this secret setup key:</p>
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <code class="p-2 bg-white rounded border font-weight-bold text-dark text-xs" style="letter-spacing: 1px;">
+                                                {{ setupData.secret }}
+                                            </code>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm mb-0 py-1 px-2" @click="copyText(setupData.secret)">
+                                                <i class="material-symbols-rounded text-xs">content_copy</i>
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-muted mb-0">Compatible with Google Authenticator, Authy, Apple Passwords, Microsoft Authenticator, and 1Password.</p>
+                                    </div>
+                                </div>
+
+                                <h6 class="text-sm font-weight-bold mb-2">
+                                    <span class="badge bg-primary me-2">2</span> Enter the 6-Digit Verification Code
+                                </h6>
+                                <form @submit.prevent="confirm2fa" class="row g-2 align-items-center" style="max-width: 450px;">
+                                    <div class="col">
+                                        <input 
+                                            type="text" 
+                                            class="form-control form-control-sm text-center fw-bold" 
+                                            v-model="confirmCode" 
+                                            placeholder="123456" 
+                                            maxlength="6"
+                                            inputmode="numeric"
+                                            required
+                                            style="letter-spacing: 4px; font-size: 1.1rem;"
+                                        >
+                                    </div>
+                                    <div class="col-auto">
+                                        <button type="submit" class="btn bg-gradient-success btn-sm mb-0" :disabled="confirming2fa || confirmCode.length !== 6">
+                                            <span v-if="confirming2fa" class="spinner-border spinner-border-sm me-1"></span>
+                                            Verify & Activate
+                                        </button>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button type="button" class="btn btn-link text-secondary btn-sm mb-0" @click="cancel2faSetup">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- When 2FA is ENABLED -->
+                            <div v-if="hasTwoFactor && !settingUp2fa">
+                                <div class="alert alert-success text-white d-flex align-items-center mb-3 py-2 px-3">
+                                    <i class="material-symbols-rounded me-2">verified_user</i>
+                                    <span class="text-sm">Two-factor authentication is active and protecting your account.</span>
+                                </div>
+
+                                <!-- Display Recovery Codes if just generated or regenerated -->
+                                <div v-if="recoveryCodes.length > 0" class="border border-warning rounded p-3 mb-3 bg-light">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="text-sm text-warning font-weight-bold mb-0">
+                                            <i class="material-symbols-rounded text-sm me-1">warning</i>
+                                            Emergency Recovery Codes
+                                        </h6>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-dark btn-sm py-1 px-2 mb-0" @click="copyRecoveryCodes">
+                                                <i class="material-symbols-rounded text-xs me-1">content_copy</i> Copy All
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm py-1 px-2 mb-0" @click="downloadRecoveryCodes">
+                                                <i class="material-symbols-rounded text-xs me-1">download</i> Download (.txt)
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-secondary mb-2">
+                                        Store these recovery codes in a secure password manager. Each code can only be used once if you lose access to your authenticator app.
+                                    </p>
+                                    <div class="row g-2">
+                                        <div v-for="(code, idx) in recoveryCodes" :key="idx" class="col-md-3 col-6">
+                                            <code class="d-block p-2 bg-white text-dark rounded border text-center font-weight-bold text-xs" style="letter-spacing: 1px;">
+                                                {{ code }}
+                                            </code>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm mb-0" @click="promptRegenerateCodes" :disabled="regeneratingCodes">
+                                        <span v-if="regeneratingCodes" class="spinner-border spinner-border-sm me-1"></span>
+                                        <i class="material-symbols-rounded text-sm me-1">sync</i>
+                                        Regenerate Recovery Codes
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm mb-0" @click="promptDisable2fa" :disabled="disabling2fa">
+                                        <span v-if="disabling2fa" class="spinner-border spinner-border-sm me-1"></span>
+                                        <i class="material-symbols-rounded text-sm me-1">lock_reset</i>
+                                        Disable Two-Factor Authentication
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Password Prompt Modal for 2FA actions -->
+            <div v-if="showPasswordModal" class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);" role="dialog">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h6 class="modal-title font-weight-bold">
+                                <i class="material-symbols-rounded text-sm me-1 text-danger">lock</i>
+                                Confirm Password
+                            </h6>
+                            <button type="button" class="btn-close text-dark" @click="closePasswordModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-sm text-secondary mb-3">
+                                For your security, please confirm your account password before proceeding with this action.
+                            </p>
+                            <div class="mb-3">
+                                <label class="form-label text-xs">Current Password</label>
+                                <input 
+                                    type="password" 
+                                    class="form-control" 
+                                    v-model="modalPassword" 
+                                    placeholder="Enter your current password"
+                                    required 
+                                    autofocus
+                                    @keyup.enter="executePasswordAction"
+                                >
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary btn-sm mb-0" @click="closePasswordModal">Cancel</button>
+                            <button type="button" class="btn bg-gradient-danger btn-sm mb-0" @click="executePasswordAction" :disabled="modalLoading || !modalPassword">
+                                <span v-if="modalLoading" class="spinner-border spinner-border-sm me-1"></span>
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Account Info -->
             <div class="row">
                 <div class="col-12">
@@ -161,6 +337,23 @@ const passwordForm = ref({
 const savingProfile = ref(false)
 const savingPassword = ref(false)
 
+// 2FA state
+const hasTwoFactor = ref(!!props.user.has_2fa)
+const settingUp2fa = ref(false)
+const loading2fa = ref(false)
+const confirming2fa = ref(false)
+const disabling2fa = ref(false)
+const regeneratingCodes = ref(false)
+const setupData = ref({ secret: '', qr_svg: '' })
+const confirmCode = ref('')
+const recoveryCodes = ref([])
+
+// Password Confirmation Modal
+const showPasswordModal = ref(false)
+const modalPassword = ref('')
+const modalAction = ref('') // 'disable' or 'regenerate'
+const modalLoading = ref(false)
+
 // Toast
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -203,6 +396,109 @@ const changePassword = async () => {
     } finally {
         savingPassword.value = false
     }
+}
+
+const start2faSetup = async () => {
+    loading2fa.value = true
+    try {
+        const res = await axios.post('/profile/2fa/setup')
+        setupData.value = res.data
+        settingUp2fa.value = true
+        confirmCode.value = ''
+    } catch (err) {
+        notify(err.response?.data?.message || 'Failed to initialize 2FA setup', 'error')
+    } finally {
+        loading2fa.value = false
+    }
+}
+
+const cancel2faSetup = () => {
+    settingUp2fa.value = false
+    setupData.value = { secret: '', qr_svg: '' }
+    confirmCode.value = ''
+}
+
+const confirm2fa = async () => {
+    confirming2fa.value = true
+    try {
+        const res = await axios.post('/profile/2fa/confirm', {
+            secret: setupData.value.secret,
+            code: confirmCode.value
+        })
+        hasTwoFactor.value = true
+        settingUp2fa.value = false
+        recoveryCodes.value = res.data.recovery_codes || []
+        notify(res.data.message || 'Two-Factor Authentication enabled!', 'success')
+    } catch (err) {
+        notify(err.response?.data?.message || 'Invalid verification code. Please try again.', 'error')
+    } finally {
+        confirming2fa.value = false
+    }
+}
+
+const promptDisable2fa = () => {
+    modalAction.value = 'disable'
+    modalPassword.value = ''
+    showPasswordModal.value = true
+}
+
+const promptRegenerateCodes = () => {
+    modalAction.value = 'regenerate'
+    modalPassword.value = ''
+    showPasswordModal.value = true
+}
+
+const closePasswordModal = () => {
+    showPasswordModal.value = false
+    modalPassword.value = ''
+}
+
+const executePasswordAction = async () => {
+    if (!modalPassword.value) return
+    modalLoading.value = true
+    try {
+        if (modalAction.value === 'disable') {
+            await axios.post('/profile/2fa/disable', { password: modalPassword.value })
+            hasTwoFactor.value = false
+            recoveryCodes.value = []
+            notify('Two-Factor Authentication disabled', 'success')
+            closePasswordModal()
+        } else if (modalAction.value === 'regenerate') {
+            const res = await axios.post('/profile/2fa/recovery-codes', { password: modalPassword.value })
+            recoveryCodes.value = res.data.recovery_codes || []
+            notify('Recovery codes regenerated successfully', 'success')
+            closePasswordModal()
+        }
+    } catch (err) {
+        notify(err.response?.data?.message || 'Password incorrect', 'error')
+    } finally {
+        modalLoading.value = false
+    }
+}
+
+const copyText = (text) => {
+    navigator.clipboard.writeText(text)
+    notify('Copied to clipboard!', 'success')
+}
+
+const copyRecoveryCodes = () => {
+    const text = recoveryCodes.value.join('\n')
+    navigator.clipboard.writeText(text)
+    notify('All recovery codes copied to clipboard!', 'success')
+}
+
+const downloadRecoveryCodes = () => {
+    const text = "NIMBUS 2FA EMERGENCY RECOVERY CODES\n" +
+                 "Generated: " + new Date().toISOString() + "\n\n" +
+                 recoveryCodes.value.join('\n') + "\n\n" +
+                 "Keep these codes in a safe place. Each code can only be used once to regain account access."
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `nimbus-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
 }
 
 

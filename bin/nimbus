@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Nimbus Master CLI Wrapper
+set -e
+
+APP_DIR="/usr/local/nimbus"
+
+if [ ! -d "$APP_DIR" ]; then
+    APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
+case "$1" in
+    reset-admin-password)
+        shift
+        exec php "$APP_DIR/artisan" nimbus:reset-admin-password "$@"
+        ;;
+    2fa-disable|disable-2fa)
+        shift
+        exec php "$APP_DIR/artisan" nimbus:2fa-disable "$@"
+        ;;
+    purge-trash)
+        shift
+        exec php "$APP_DIR/artisan" nimbus:purge-trash "$@"
+        ;;
+    collect-metrics)
+        shift
+        exec php "$APP_DIR/artisan" nimbus:collect-metrics "$@"
+        ;;
+    *)
+        exec php "$APP_DIR/artisan" "$@"
+        ;;
+esac

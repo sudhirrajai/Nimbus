@@ -30,6 +30,8 @@ Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('auth.login');
     Route::post('/login', [AuthController::class, 'login'])->name('auth.login.store');
+    Route::get('/two-factor-challenge', [AuthController::class, 'showTwoFactorChallenge'])->name('two-factor.login');
+    Route::post('/two-factor-challenge', [AuthController::class, 'twoFactorLogin'])->name('two-factor.verify');
     Route::get('/setup', [AuthController::class, 'showSetup'])->name('auth.setup');
     Route::post('/setup', [AuthController::class, 'setup'])->name('auth.setup.store');
 });
@@ -105,6 +107,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureSetupComplete::class, \App
         Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('index');
         Route::post('/update', [\App\Http\Controllers\ProfileController::class, 'updateProfile'])->name('update');
         Route::post('/password', [\App\Http\Controllers\ProfileController::class, 'changePassword'])->name('password');
+        Route::post('/2fa/setup', [\App\Http\Controllers\ProfileController::class, 'setupTwoFactor'])->name('2fa.setup');
+        Route::post('/2fa/confirm', [\App\Http\Controllers\ProfileController::class, 'confirmTwoFactor'])->name('2fa.confirm');
+        Route::post('/2fa/disable', [\App\Http\Controllers\ProfileController::class, 'disableTwoFactor'])->name('2fa.disable');
+        Route::post('/2fa/recovery-codes', [\App\Http\Controllers\ProfileController::class, 'regenerateRecoveryCodes'])->name('2fa.recovery-codes');
     });
 
     // ─── DOMAIN-SCOPED PAGES ─────────────────────────────────────
