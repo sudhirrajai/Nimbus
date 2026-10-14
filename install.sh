@@ -23,7 +23,7 @@ PHP_VERSION="8.3"
 NODE_VERSION="20"
 GITHUB_REPO="https://github.com/sudhirrajai/Nimbus.git"
 INSTALL_MODE="git"
-VMCORE_URL="https://nimbus-host.vmcore.in"
+VMCORE_URL="https://roook.vmcore.in"
 SKIP_EXISTING=false
 LICENSE_KEY=""
 PANEL_SYSTEM_USER=""
@@ -478,8 +478,8 @@ echo -e "${YELLOW}Creating SQLite database for Nimbus...${NC}"
 mkdir -p /usr/local/nimbus/database
 touch /usr/local/nimbus/database/database.sqlite
 chown -R www-data:www-data /usr/local/nimbus/database
-chmod 750 /usr/local/nimbus/database
-chmod 660 /usr/local/nimbus/database/database.sqlite
+chmod 775 /usr/local/nimbus/database
+chmod 664 /usr/local/nimbus/database/database.sqlite
 
 echo -e "${GREEN}[10/12]${NC} Setting up Nimbus..."
 cd $NIMBUS_DIR
@@ -555,6 +555,10 @@ http {
 
     sendfile on;
     keepalive_timeout 65;
+
+    # Rate limiting zone for authentication endpoints (10 requests/minute per IP)
+    limit_req_zone $binary_remote_addr zone=nimbus_login:10m rate=10r/m;
+    limit_req_status 429;
     
     server {
         listen 2095 default_server;
@@ -570,6 +574,19 @@ http {
         add_header X-XSS-Protection "1; mode=block" always;
 
         client_max_body_size 100M;
+
+        # Custom static error page for rate limiting
+        error_page 429 /rate-limit.html;
+        location = /rate-limit.html {
+            root /usr/local/nimbus/public;
+            internal;
+        }
+
+        # Apply rate limiting to login endpoint
+        location = /login {
+            limit_req zone=nimbus_login burst=5 nodelay;
+            try_files $uri $uri/ /index.php?$query_string;
+        }
 
         location / {
             try_files $uri $uri/ /index.php?$query_string;
@@ -698,6 +715,31 @@ chown ${NIMBUS_USER}:${NIMBUS_USER} ${NIMBUS_DIR}/storage/logs/laravel.log
 # Restore execute bits for required binaries
 chmod +x ${NIMBUS_DIR}/artisan
 [ -d "${NIMBUS_DIR}/node_modules/.bin" ] && chmod -R +x ${NIMBUS_DIR}/node_modules/.bin
+
+# Install direct Nimbus CLI tools into /usr/local/bin
+tee /usr/local/bin/nimbus > /dev/null << 'EOF'
+#!/bin/bash
+php /usr/local/nimbus/artisan "$@"
+EOF
+chmod +x /usr/local/bin/nimbus
+
+tee /usr/local/bin/nimbus:reset-admin-password > /dev/null << 'EOF'
+#!/bin/bash
+php /usr/local/nimbus/artisan nimbus:reset-admin-password "$@"
+EOF
+chmod +x /usr/local/bin/nimbus:reset-admin-password
+
+tee /usr/local/bin/nimbus:2fa-disable > /dev/null << 'EOF'
+#!/bin/bash
+php /usr/local/nimbus/artisan nimbus:2fa-disable "$@"
+EOF
+chmod +x /usr/local/bin/nimbus:2fa-disable
+
+tee /usr/local/bin/nimbus:unban > /dev/null << 'EOF'
+#!/bin/bash
+php /usr/local/nimbus/artisan nimbus:unban "$@"
+EOF
+chmod +x /usr/local/bin/nimbus:unban
 
 # Setup /var/www/ directory for hosting websites with multi-tenant ACL support
 mkdir -p /var/www

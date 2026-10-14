@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 # Configuration (must match install.sh)
 NIMBUS_DIR="/usr/local/nimbus"
 PHP_VERSION="8.3"
-VMCORE_URL="https://nimbus-host.vmcore.in"
+VMCORE_URL="https://roook.vmcore.in"
 
 # ─────────────────────────────────────────────────────────────────
 # Helper functions
@@ -110,7 +110,14 @@ remove_nimbus_portal() {
     rm -f /tmp/adminer_install.sh \
           /tmp/adminer_reinstall.sh \
           /tmp/nodesource_setup.sh \
-          /tmp/nimbus_update.sh
+          /tmp/nimbus_update.sh \
+          /tmp/nimbus_ota_update.sh
+
+    # Remove CLI commands
+    rm -f /usr/local/bin/nimbus \
+          /usr/local/bin/nimbus:reset-admin-password \
+          /usr/local/bin/nimbus:2fa-disable \
+          /usr/local/bin/nimbus:unban
 
     # Remove Adminer
     rm -rf /usr/share/adminer
