@@ -292,8 +292,12 @@ rsync -a \
     --exclude 'storage/logs/*' \
     --exclude 'storage/framework/cache/*' \
     --exclude 'storage/framework/sessions/*' \
+    --exclude 'database/*.sqlite*' \
+    --exclude 'database/*-journal*' \
+    --exclude 'database/*-wal*' \
+    --exclude 'database/*-shm*' \
     --exclude 'node_modules' \
-    "\$PANEL_DIR/" "\$BACKUP_DIR/"
+    "\$PANEL_DIR/" "\$BACKUP_DIR/" || [ \$? -eq 24 ]
 
 if [ -f "\$PANEL_DIR/database/database.sqlite" ]; then
     mkdir -p "\$BACKUP_DIR/database"
@@ -355,7 +359,10 @@ rsync -a \
     --exclude 'storage/app' \
     --exclude 'storage/logs' \
     --exclude 'database/*.sqlite*' \
-    "\$STAGING_DIR/" "\$PANEL_DIR/"
+    --exclude 'database/*-journal*' \
+    --exclude 'database/*-wal*' \
+    --exclude 'database/*-shm*' \
+    "\$STAGING_DIR/" "\$PANEL_DIR/" || [ \$? -eq 24 ]
 
 # Immediately enforce proper permissions before manifest commands run
 chown -R www-data:www-data "\$PANEL_DIR"

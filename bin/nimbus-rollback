@@ -69,7 +69,10 @@ rsync -a --delete \
     --exclude 'storage' \
     --exclude '.env' \
     --exclude 'database/*.sqlite*' \
-    "$TARGET_SNAPSHOT/" "$PANEL_DIR/"
+    --exclude 'database/*-journal*' \
+    --exclude 'database/*-wal*' \
+    --exclude 'database/*-shm*' \
+    "$TARGET_SNAPSHOT/" "$PANEL_DIR/" || [ $? -eq 24 ]
 
 echo "[2/5] Restoring SQLite database state..."
 if [ -f "$TARGET_SNAPSHOT/database/database.sqlite" ]; then
