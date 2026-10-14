@@ -36,7 +36,7 @@ return [
     ],
 
     'vmcore' => [
-        'api_url' => env('VMCORE_API_URL', 'http://localhost:8001'),
+        'api_url' => env('VMCORE_API_URL', 'https://roook.vmcore.in'),
     ],
 
     'nimbus' => [

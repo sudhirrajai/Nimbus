@@ -35,13 +35,13 @@ class UpdateController extends Controller
     }
 
     /**
-     * Check for updates from GitHub
+     * Check for updates from VMCore Central
      */
     public function checkForUpdates()
     {
         try {
-            // Cache the check for 5 minutes to avoid rate limiting
-            $updateInfo = Cache::remember('nimbus_update_check', 300, function () {
+            // Cache the check for 2 minutes
+            $updateInfo = Cache::remember('nimbus_update_check', 120, function () {
                 return $this->fetchUpdateInfo();
             });
             
@@ -54,7 +54,7 @@ class UpdateController extends Controller
                 if (!Cache::has($cacheKey)) {
                     \App\Services\NotificationService::send(
                         "Nimbus Update Available: v{$latestVersion}",
-                        "<p>Hello,</p><p>A new version of the Nimbus control panel is available for update.</p><p><strong>Current Version:</strong> v{$currentVersion}<br><strong>Latest Version:</strong> v{$latestVersion}<br><strong>Release URL:</strong> <a href=\"" . e($updateInfo['releaseUrl'] ?? '') . "\">" . e($updateInfo['releaseUrl'] ?? 'View on GitHub') . "</a></p><p>You can upgrade your installation via the System Updates panel in Nimbus.</p>"
+                        "<p>Hello,</p><p>A new version of the Nimbus control panel is available on VMCore Central.</p><p><strong>Current Version:</strong> v{$currentVersion}<br><strong>Latest Version:</strong> v{$latestVersion}<br><strong>Release URL:</strong> <a href=\"" . e($updateInfo['releaseUrl'] ?? '') . "\">" . e($updateInfo['releaseUrl'] ?? 'Download Package') . "</a></p><p>You can upgrade your installation safely via the System Updates panel in Nimbus.</p>"
                     );
                     Cache::put($cacheKey, true, now()->addDays(1));
                 }
@@ -66,8 +66,12 @@ class UpdateController extends Controller
                 'latestVersion' => $latestVersion,
                 'hasUpdate' => $hasUpdate,
                 'changelog' => $updateInfo['changelog'] ?? [],
+                'commands' => $updateInfo['commands'] ?? [],
+                'sha256' => $updateInfo['sha256'] ?? null,
+                'downloadUrl' => $updateInfo['downloadUrl'] ?? null,
                 'releaseDate' => $updateInfo['releaseDate'] ?? null,
-                'releaseUrl' => $updateInfo['releaseUrl'] ?? null
+                'releaseUrl' => $updateInfo['releaseUrl'] ?? null,
+                'source' => $updateInfo['source'] ?? 'VMCore Central'
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -79,55 +83,56 @@ class UpdateController extends Controller
     }
 
     /**
-     * Fetch update info from GitHub
+     * Fetch update info from VMCore Central
      */
     private function fetchUpdateInfo()
     {
-        // Try to get latest release from GitHub API
-        $response = Http::timeout(10)->get('https://api.github.com/repos/' . self::GITHUB_REPO . '/releases/latest');
-        
-        if ($response->successful()) {
-            $release = $response->json();
-            
-            // Parse version from tag (remove 'v' prefix if present)
-            $version = ltrim($release['tag_name'] ?? '1.0.0', 'v');
-            
-            // Parse changelog from body
-            $changelog = $this->parseChangelog($release['body'] ?? '');
-            
-            return [
-                'version' => $version,
-                'changelog' => $changelog,
-                'releaseDate' => $release['published_at'] ?? null,
-                'releaseUrl' => $release['html_url'] ?? null
-            ];
+        $apiUrl = rtrim(config('services.vmcore.api_url', 'https://roook.vmcore.in'), '/');
+
+        // Attempt 1: Standard API endpoint
+        $endpoints = [
+            "{$apiUrl}/api/v1/nimbus/updates/check",
+            "{$apiUrl}/v1/nimbus/updates/check"
+        ];
+
+        foreach ($endpoints as $endpoint) {
+            try {
+                $response = Http::timeout(10)->withoutVerifying()->get($endpoint);
+                if ($response->successful()) {
+                    $data = $response->json();
+                    if (!empty($data['version'])) {
+                        return [
+                            'source' => 'VMCore Central (' . parse_url($apiUrl, PHP_URL_HOST) . ')',
+                            'version' => trim($data['version']),
+                            'downloadUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
+                            'sha256' => $data['sha256'] ?? null,
+                            'changelog' => $data['changelog'] ?? [],
+                            'commands' => $data['commands'] ?? [],
+                            'releaseDate' => $data['release_date'] ?? null,
+                            'releaseUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                // Try next endpoint
+            }
         }
-        
-        // Fallback: Try to read from VERSION file in repo (main or dev)
-        $versionResponse = Http::timeout(10)->get('https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/main/VERSION');
-        if (!$versionResponse->successful()) {
-            $versionResponse = Http::timeout(10)->get('https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/dev/VERSION');
-        }
-        
-        if ($versionResponse->successful()) {
-            return [
-                'version' => trim($versionResponse->body()),
-                'changelog' => [],
-                'releaseDate' => null,
-                'releaseUrl' => 'https://github.com/' . self::GITHUB_REPO . '/releases'
-            ];
-        }
-        
+
+        // Fallback: Check local or return current version
         return [
+            'source' => 'Local / Offline',
             'version' => $this->getCurrentVersion(),
-            'changelog' => [],
+            'downloadUrl' => null,
+            'sha256' => null,
+            'changelog' => ['Panel is running the latest installed version.'],
+            'commands' => [],
             'releaseDate' => null,
             'releaseUrl' => null
         ];
     }
 
     /**
-     * Parse changelog from release body
+     * Parse changelog helper
      */
     private function parseChangelog($body)
     {
@@ -140,14 +145,11 @@ class UpdateController extends Controller
             $line = trim($line);
             if (empty($line)) continue;
             
-            // Skip markdown headers
             if (preg_match('/^#+\s/', $line)) continue;
             
-            // Match lines starting with - or * or •
             if (preg_match('/^[-*•]\s*(.+)$/', $line, $matches)) {
                 $changelog[] = $matches[1];
             } else {
-                // For non-bulleted text, include it as-is
                 $changelog[] = $line;
             }
         }
@@ -156,142 +158,259 @@ class UpdateController extends Controller
     }
 
     /**
-     * Perform update
+     * Perform safe update with ordered manifest execution and automated rollback
      */
     public function performUpdate()
     {
         try {
-            // Check if another installation is in progress (phpMyAdmin, mail server, etc.)
+            // Check if another installation is in progress
             $lockFile = storage_path('logs/nimbus_install.lock');
             if (file_exists($lockFile)) {
                 $lockContent = file_get_contents($lockFile);
                 return response()->json([
-                    'error' => "Cannot update while another installation is in progress: {$lockContent}. Please wait for it to complete."
+                    'error' => "Cannot update while another operation is in progress: {$lockContent}."
                 ], 409);
             }
-            
+
+            // Fetch latest metadata
+            $updateInfo = $this->fetchUpdateInfo();
+            $targetVersion = $updateInfo['version'] ?? $this->getCurrentVersion();
+            $downloadUrl = $updateInfo['downloadUrl'] ?? (rtrim(config('services.vmcore.api_url', 'https://roook.vmcore.in'), '/') . '/nimbus.zip');
+            $expectedSha256 = $updateInfo['sha256'] ?? '';
+            $manifestCommands = $updateInfo['commands'] ?? [];
+
+            if (empty($manifestCommands)) {
+                $manifestCommands = [
+                    'composer install --no-dev --optimize-autoloader --no-interaction',
+                    'php artisan migrate --force',
+                    'npm run build',
+                    'php artisan config:clear',
+                    'php artisan route:clear',
+                    'php artisan cache:clear',
+                    'systemctl restart nimbus-php-fpm'
+                ];
+            }
+
             $logFile = storage_path('logs/update.log');
             $statusFile = storage_path('logs/update_status.txt');
             
             // Clear old logs
-            file_put_contents($logFile, "Update started at " . date('Y-m-d H:i:s') . "\n");
+            file_put_contents($logFile, "Update initialization started at " . date('Y-m-d H:i:s') . "\n");
             file_put_contents($statusFile, 'running');
-            
-            // Update script - uses sudo and detects PHP version
-            $script = <<<'BASH'
+
+            // Build dynamic commands bash block
+            $commandsScript = '';
+            foreach ($manifestCommands as $index => $cmd) {
+                $stepNum = $index + 1;
+                $escapedCmd = trim($cmd);
+                if (empty($escapedCmd)) continue;
+
+                $commandsScript .= "echo \"[Step 6.{$stepNum}] Executing: {$escapedCmd}\"\n";
+                // Add superuser flag for composer
+                if (str_starts_with($escapedCmd, 'composer')) {
+                    $commandsScript .= "COMPOSER_ALLOW_SUPERUSER=1 {$escapedCmd} 2>&1\n";
+                } elseif (str_starts_with($escapedCmd, 'npm run build')) {
+                    // Try npm run build or fallback to vite build directly
+                    $commandsScript .= "if [ -f \"./node_modules/.bin/vite\" ]; then ./node_modules/.bin/vite build 2>&1 || npm run build 2>&1 || true; else npm run build 2>&1 || true; fi\n";
+                } else {
+                    $commandsScript .= "{$escapedCmd} 2>&1\n";
+                }
+                $commandsScript .= "echo \"[Step 6.{$stepNum}] Completed successfully.\"\n\n";
+            }
+
+            // Bash update script with automated safe rollback
+            $script = <<<BASH
 #!/bin/bash
-cd /usr/local/nimbus
+set -e
+exec > >(tee -a "{$logFile}") 2>&1
 
-# Fix git safe directory issue
-sudo git config --global --add safe.directory /usr/local/nimbus
+PANEL_DIR="/usr/local/nimbus"
+STATUS_FILE="{$statusFile}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/var/backups/nimbus_snapshots/snapshot_\$TIMESTAMP"
+STAGING_DIR="/tmp/nimbus_staging_\$TIMESTAMP"
+ZIP_FILE="/tmp/nimbus_update_\$TIMESTAMP.zip"
+DOWNLOAD_URL="{$downloadUrl}"
+EXPECTED_SHA256="{$expectedSha256}"
+TARGET_VERSION="{$targetVersion}"
 
-# Detect PHP version
-PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
-echo "Detected PHP version: $PHP_VERSION"
+echo "running" > "\$STATUS_FILE"
 
-# Function to wait for apt locks
-wait_for_apt() {
-    while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
-        echo "Waiting for other apt process to finish..."
-        sleep 3
-    done
+echo "================================================================"
+echo "Nimbus Safe OTA Update Pipeline -> v\$TARGET_VERSION"
+echo "Timestamp: \$(date '+%Y-%m-%d %H:%M:%S')"
+echo "================================================================"
+
+# Automated Safe Rollback handler
+rollback() {
+    local exit_code=\$?
+    if [ \$exit_code -ne 0 ]; then
+        echo ""
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "CRITICAL: UPDATE FAILED AT STEP WITH EXIT CODE: \$exit_code"
+        echo "INITIATING AUTOMATED SAFE ROLLBACK..."
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        
+        if [ -d "\$BACKUP_DIR" ]; then
+            echo "Restoring panel files from pre-update snapshot: \$BACKUP_DIR..."
+            rsync -a --delete \
+                --exclude 'storage' \
+                --exclude '.env' \
+                --exclude 'database/*.sqlite*' \
+                "\$BACKUP_DIR/" "\$PANEL_DIR/" 2>/dev/null || true
+        fi
+        
+        if [ -f "\$BACKUP_DIR/database/database.sqlite" ]; then
+            echo "Restoring SQLite database from pre-update backup..."
+            cp -f "\$BACKUP_DIR/database/database.sqlite" "\$PANEL_DIR/database/database.sqlite" 2>/dev/null || true
+        fi
+        
+        echo "Re-establishing system permissions..."
+        chown -R www-data:www-data "\$PANEL_DIR" 2>/dev/null || true
+        chmod -R 775 "\$PANEL_DIR/storage" "\$PANEL_DIR/bootstrap/cache" 2>/dev/null || true
+        chmod +x "\$PANEL_DIR/artisan" 2>/dev/null || true
+        
+        echo "Restarting Nimbus services to preserve panel uptime..."
+        systemctl restart nimbus-php-fpm 2>/dev/null || systemctl restart php8.3-fpm 2>/dev/null || true
+        systemctl reload nimbus-nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
+        
+        echo "failed" > "\$STATUS_FILE"
+        echo ""
+        echo "AUTOMATIC ROLLBACK COMPLETE. PANEL RESTORED TO PRE-UPDATE STATE."
+        rm -rf "\$STAGING_DIR" "\$ZIP_FILE" 2>/dev/null || true
+        exit \$exit_code
+    fi
 }
 
+trap rollback EXIT
+
 echo ""
-echo "Creating pre-update backup snapshot..."
-sudo mkdir -p /tmp/nimbus_backups
-sudo cp -r /usr/local/nimbus /tmp/nimbus_backups/nimbus_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
-if [ -f /usr/local/nimbus/database/database.sqlite ]; then
-    sudo cp /usr/local/nimbus/database/database.sqlite /usr/local/nimbus/database/database.sqlite.pre_update 2>/dev/null || true
+echo "[Step 1/8] Creating pre-update backup snapshot..."
+mkdir -p "/var/backups/nimbus_snapshots"
+mkdir -p "\$BACKUP_DIR"
+rsync -a \
+    --exclude 'storage/logs/*' \
+    --exclude 'storage/framework/cache/*' \
+    --exclude 'storage/framework/sessions/*' \
+    --exclude 'node_modules' \
+    "\$PANEL_DIR/" "\$BACKUP_DIR/"
+
+if [ -f "\$PANEL_DIR/database/database.sqlite" ]; then
+    mkdir -p "\$BACKUP_DIR/database"
+    cp -f "\$PANEL_DIR/database/database.sqlite" "\$BACKUP_DIR/database/database.sqlite"
+    cp -f "\$PANEL_DIR/database/database.sqlite" "\$PANEL_DIR/database/database.sqlite.pre_update_bak"
+fi
+echo "Snapshot safely secured at \$BACKUP_DIR."
+
+echo ""
+echo "[Step 2/8] Downloading release package from VMCore Central..."
+curl -sSL --fail --retry 3 --connect-timeout 20 "\$DOWNLOAD_URL" -o "\$ZIP_FILE"
+
+if [ ! -s "\$ZIP_FILE" ]; then
+    echo "ERROR: Downloaded release archive is empty or could not be downloaded."
+    exit 1
+fi
+echo "Downloaded successfully (\$(du -h "\$ZIP_FILE" | cut -f1))."
+
+echo ""
+echo "[Step 3/8] Verifying package integrity..."
+if [ -n "\$EXPECTED_SHA256" ]; then
+    ACTUAL_SHA256=\$(sha256sum "\$ZIP_FILE" | awk '{print \$1}')
+    if [ "\$ACTUAL_SHA256" != "\$EXPECTED_SHA256" ]; then
+        echo "ERROR: SHA-256 Checksum mismatch!"
+        echo "Expected: \$EXPECTED_SHA256"
+        echo "Actual:   \$ACTUAL_SHA256"
+        exit 1
+    fi
+    echo "SHA-256 integrity verified successfully: \$ACTUAL_SHA256"
+else
+    echo "Notice: SHA-256 not provided by server; proceeding with signature caution."
 fi
 
 echo ""
-echo "Ensuring required PHP extensions are installed..."
-wait_for_apt
-sudo apt-get update -qq 2>&1
+echo "[Step 4/8] Extracting release files into staging sandbox..."
+rm -rf "\$STAGING_DIR"
+mkdir -p "\$STAGING_DIR"
+unzip -q -o "\$ZIP_FILE" -d "\$STAGING_DIR"
 
-# Try to install PHP extensions for detected version only (avoid installing new PHP)
-wait_for_apt
-sudo apt-get install -y php${PHP_VERSION}-xml php${PHP_VERSION}-mysql php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl php${PHP_VERSION}-sqlite3 2>&1 || true
-
-# Detect active git branch
-CURRENT_BRANCH=$(sudo git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-if [ -z "$CURRENT_BRANCH" ] || [ "$CURRENT_BRANCH" = "HEAD" ]; then
-    CURRENT_BRANCH="main"
+# Handle possible nested archive directory
+if [ ! -f "\$STAGING_DIR/artisan" ]; then
+    SUBDIR=\$(find "\$STAGING_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+    if [ -n "\$SUBDIR" ] && [ -f "\$SUBDIR/artisan" ]; then
+        echo "Flattening nested archive directory structure..."
+        mv "\$SUBDIR"/* "\$STAGING_DIR/" 2>/dev/null || true
+        mv "\$SUBDIR"/.* "\$STAGING_DIR/" 2>/dev/null || true
+    fi
 fi
-echo "Active git branch: $CURRENT_BRANCH"
+
+if [ ! -f "\$STAGING_DIR/artisan" ]; then
+    echo "ERROR: Corrupt or invalid Nimbus archive (missing artisan entry point)."
+    exit 1
+fi
 
 echo ""
-echo "Stashing local changes..."
-sudo git stash 2>&1 || true
+echo "[Step 5/8] Safely synchronizing files (preserving .env, storage, and SQLite database)..."
+rsync -a \
+    --exclude '.env' \
+    --exclude 'storage/app' \
+    --exclude 'storage/logs' \
+    --exclude 'database/*.sqlite*' \
+    "\$STAGING_DIR/" "\$PANEL_DIR/"
+
+cd "\$PANEL_DIR"
 
 echo ""
-echo "Pulling latest changes from origin/$CURRENT_BRANCH..."
-sudo git fetch origin "$CURRENT_BRANCH" 2>&1
-sudo git reset --hard "origin/$CURRENT_BRANCH" 2>&1
+echo "[Step 6/8] Executing ordered manifest commands..."
+{$commandsScript}
 
 echo ""
-echo "Installing composer dependencies..."
-export COMPOSER_ALLOW_SUPERUSER=1
-sudo -E composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=ext-dom 2>&1 || true
+echo "[Step 7/8] Performing post-update health check..."
+if ! php "\$PANEL_DIR/artisan" --version >/dev/null 2>&1; then
+    echo "ERROR: Post-update artisan health check failed!"
+    exit 1
+fi
+echo "Artisan framework health check passed."
 
 echo ""
-echo "Running database migrations..."
-sudo php artisan migrate --force 2>&1 || true
+echo "[Step 8/8] Finalizing permissions and restarting background workers..."
+chown -R www-data:www-data "\$PANEL_DIR"
+chmod -R 775 "\$PANEL_DIR/storage" "\$PANEL_DIR/bootstrap/cache"
+chmod +x "\$PANEL_DIR/artisan" 2>/dev/null || true
 
-echo ""
-echo "Clearing and optimizing application caches..."
-sudo php artisan config:clear 2>&1 || true
-sudo php artisan cache:clear 2>&1 || true
-sudo php artisan view:clear 2>&1 || true
-sudo php artisan route:clear 2>&1 || true
-sudo php artisan config:cache 2>&1 || true
-sudo php artisan route:cache 2>&1 || true
-sudo php artisan view:cache 2>&1 || true
-
-echo ""
-echo "Installing npm dependencies..."
-sudo npm install 2>&1
-
-echo ""
-echo "Building frontend assets..."
-# Use npx to run vite directly to avoid permission issues
-sudo ./node_modules/.bin/vite build 2>&1 || sudo npx vite build 2>&1 || true
-
-echo ""
-echo "Setting permissions..."
-sudo chown -R www-data:www-data /usr/local/nimbus
-sudo chmod -R 775 /usr/local/nimbus/storage
-sudo chmod -R 775 /usr/local/nimbus/bootstrap/cache
-sudo mkdir -p /usr/local/nimbus/storage/logs
-sudo touch /usr/local/nimbus/storage/logs/laravel.log
-sudo chown www-data:www-data /usr/local/nimbus/storage/logs/laravel.log
-sudo chmod 664 /usr/local/nimbus/storage/logs/laravel.log
-sudo chmod +x /usr/local/nimbus/artisan 2>/dev/null || true
-
-echo ""
-echo "Restarting Nimbus services and queue workers..."
-sudo systemctl restart nimbus-php-fpm 2>&1 || sudo systemctl restart php${PHP_VERSION}-fpm 2>&1 || true
-sudo systemctl reload nimbus-nginx 2>&1 || sudo systemctl reload nginx 2>&1 || true
+systemctl restart nimbus-php-fpm 2>/dev/null || systemctl restart php8.3-fpm 2>/dev/null || true
+systemctl reload nimbus-nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
 if command -v supervisorctl >/dev/null 2>&1; then
-    sudo supervisorctl restart nimbus-worker:* 2>&1 || true
+    supervisorctl restart nimbus-worker:* 2>/dev/null || true
 fi
-sudo php artisan queue:restart 2>&1 || true
+php "\$PANEL_DIR/artisan" queue:restart 2>/dev/null || true
+
+# Record current version
+echo "\$TARGET_VERSION" > "\$PANEL_DIR/VERSION"
+
+# Cleanup staging files
+rm -rf "\$STAGING_DIR" "\$ZIP_FILE" 2>/dev/null || true
+
+# Clear rollback trap
+trap - EXIT
+echo "done" > "\$STATUS_FILE"
 
 echo ""
-echo "Update completed successfully!"
+echo "================================================================"
+echo "Update completed successfully to v\$TARGET_VERSION!"
+echo "Timestamp: \$(date '+%Y-%m-%d %H:%M:%S')"
+echo "================================================================"
 BASH;
 
-            $tempScript = "/tmp/nimbus_update.sh";
+            $tempScript = "/tmp/nimbus_ota_update.sh";
             file_put_contents($tempScript, $script);
             chmod($tempScript, 0755);
             
-            // Run update in background
-            exec("sudo bash {$tempScript} >> {$logFile} 2>&1 &");
+            // Execute in background with root/sudo privileges
+            exec("sudo bash {$tempScript} > /dev/null 2>&1 &");
             
             return response()->json([
                 'success' => true,
-                'message' => 'Update started. Please wait...'
+                'message' => "Safe update pipeline initiated for v{$targetVersion}."
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -309,10 +428,13 @@ BASH;
         $log = file_exists($logFile) ? file_get_contents($logFile) : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
         
-        // Check if update is complete
+        // Detect completion or failure in log
         if (strpos($log, 'Update completed successfully') !== false) {
-            file_put_contents($statusFile, 'done');
             $status = 'done';
+            file_put_contents($statusFile, 'done');
+        } elseif (strpos($log, 'AUTOMATIC ROLLBACK COMPLETE') !== false || strpos($log, 'CRITICAL: UPDATE FAILED') !== false) {
+            $status = 'failed';
+            file_put_contents($statusFile, 'failed');
         }
         
         return response()->json([
