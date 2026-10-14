@@ -1,15 +1,13 @@
 {
-  "version": "1.0.8",
+  "version": "1.0.9",
   "changelog": [
-    "Integrated two-factor authentication (TOTP/Google Authenticator)",
-    "Added adaptive math captcha and intelligent rate limiting on failed logins",
-    "Transitioned OTA updates to self-hosted VMCore Central with safe automated rollback",
-    "Optimized SQLite security and direct artisan CLI commands"
+    "Fully responsive OTA Updates center with mobile-first card metrics and quick-actions",
+    "Optimized mobile navigation bar with adaptive search and touch-friendly controls",
+    "Enhanced mobile sidebar drawer with glassmorphism backdrop and instant close-on-tap",
+    "One-click SHA-256 hash copying and improved real-time update execution terminal"
   ],
   "commands": [
-    "composer install --no-dev --optimize-autoloader --no-interaction",
     "php artisan migrate --force",
-    "npm run build",
     "php artisan config:clear",
     "php artisan route:clear",
     "php artisan cache:clear",
