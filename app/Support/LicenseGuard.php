@@ -66,6 +66,16 @@ class LicenseGuard
                 return false;
             }
 
+            // Check 4: Check if license subscription has expired
+            if (!empty($decoded['expires_at']) && strtolower($decoded['expires_at']) !== 'never') {
+                $expiresTimestamp = strtotime($decoded['expires_at']);
+                if ($expiresTimestamp && $expiresTimestamp < time()) {
+                    self::$cached = false;
+                    self::flag('License has expired');
+                    return false;
+                }
+            }
+
             // Token is cryptographically valid
             self::$cached = true;
             return true;

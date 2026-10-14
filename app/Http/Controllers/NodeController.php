@@ -125,7 +125,7 @@ class NodeController extends Controller
     {
         try {
             $request->validate([
-                'version' => 'required|string|regex:/^(18|20|22|24|lts|latest|[0-9]+\.[0-9]+\.[0-9]+)$/'
+                'version' => ['required', 'string', 'regex:/^(18|20|22|24|lts|latest|[0-9]+(\.[0-9]+(\.[0-9]+)?)?)$/']
             ]);
 
             $version = $request->input('version');
@@ -230,7 +230,7 @@ BASH;
     {
         try {
             $request->validate([
-                'version' => 'required|string|regex:/^[0-9]+(\.[0-9]+\.[0-9]+)?$/'
+                'version' => ['required', 'string', 'regex:/^[0-9]+(\.[0-9]+(\.[0-9]+)?)?$/']
             ]);
 
             $version = $request->input('version');
@@ -266,7 +266,7 @@ BASH;
     {
         try {
             $request->validate([
-                'version' => 'required|string|regex:/^[0-9]+(\.[0-9]+\.[0-9]+)?$/'
+                'version' => ['required', 'string', 'regex:/^[0-9]+(\.[0-9]+(\.[0-9]+)?)?$/']
             ]);
 
             $version = $request->input('version');

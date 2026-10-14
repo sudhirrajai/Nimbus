@@ -92,7 +92,7 @@
                                     <i v-else class="material-symbols-rounded text-sm">sync</i>
                                     Sync Status
                                 </button>
-                                <button class="btn btn-outline-danger mb-0 d-flex align-items-center gap-1" @click="deactivateLicense">
+                                <button v-if="$page.props.auth?.user?.role === 'root'" class="btn btn-outline-danger mb-0 d-flex align-items-center gap-1" @click="deactivateLicense">
                                     <i class="material-symbols-rounded text-sm">no_encryption</i>
                                     Deactivate Key
                                 </button>

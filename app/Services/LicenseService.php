@@ -76,6 +76,8 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
     /**
      * Validate the locally stored signed token without any network call.
+     * Returns null if the token is expired/missing and a network call is need    /**
+     * Validate the locally stored signed token without any network call.
      * Returns null if the token is expired/missing and a network call is needed.
      */
     private function validateStoredToken(): ?array
@@ -93,10 +95,39 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
             return ['status' => false, 'message' => 'License verification failed.'];
         }
 
-        // Check if token's valid_until has expired
+        // Check if token was generated for a different machine
+        if (!empty($decoded['machine_id']) && $decoded['machine_id'] !== $this->getMachineId()) {
+            Log::warning('License machine ID mismatch — token belongs to another machine');
+            $this->triggerDegradation('License is locked to another machine.');
+            return ['status' => false, 'message' => 'License is locked to another server.'];
+        }
+
+        // Check if token license key matches current stored license key
+        $activeKey = $this->getLicenseKey();
+        if (!empty($decoded['license_key']) && $activeKey && $decoded['license_key'] !== $activeKey) {
+            Log::warning('License key mismatch between token and settings');
+            $this->triggerDegradation('License key mismatch detected.');
+            return ['status' => false, 'message' => 'License key mismatch detected.'];
+        }
+
+        // Check if license subscription (expires_at) has passed
+        if (!empty($decoded['expires_at']) && strtolower($decoded['expires_at']) !== 'never') {
+            $expiresAtTimestamp = strtotime($decoded['expires_at']);
+            if ($expiresAtTimestamp && $expiresAtTimestamp < time()) {
+                Log::warning('License has expired on ' . $decoded['expires_at']);
+                $this->triggerDegradation('License expired on ' . date('Y-m-d', $expiresAtTimestamp));
+                return [
+                    'status'     => false,
+                    'message'    => 'Your Nimbus license has expired. Please renew your subscription to continue.',
+                    'expires_at' => $decoded['expires_at'],
+                ];
+            }
+        }
+
+        // Check if token's 24h valid_until cache window has expired
         $validUntil = strtotime($decoded['valid_until'] ?? '');
         if ($validUntil && $validUntil < time()) {
-            // Token expired — need a fresh one from the server
+            // Token cache window expired — need a fresh refresh from the server
             return null;
         }
 
@@ -105,6 +136,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
             'message'     => 'License is valid.',
             'plan'        => $decoded['plan'] ?? 'free',
             'max_domains' => $decoded['max_domains'] ?? 3,
+            'expires_at'  => $decoded['expires_at'] ?? null,
         ];
     }
 
@@ -127,6 +159,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
             if ($response->successful()) {
                 $data = $response->json();
+                $decoded = null;
 
                 // Store the signed token for offline validation
                 if (!empty($data['signed_token'])) {
@@ -156,6 +189,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                     'message'     => $data['message'] ?? 'License is valid.',
                     'plan'        => $data['plan'] ?? 'free',
                     'max_domains' => $data['max_domains'] ?? 3,
+                    'expires_at'  => $data['expires_at'] ?? ($decoded['expires_at'] ?? null),
                 ];
             }
 
@@ -178,7 +212,8 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
     /**
      * Handle the case when VmCoreCentral is unreachable.
-     * Applies grace period logic — panel continues working for GRACE_PERIOD_HOURS.
+     * Applies grace period logic — panel continues working for GRACE_PERIOD_HOURS
+     * ONLY if there is an authentic RSA-signed token for this machine that has not expired.
      */
     private function handleOffline(string $reason): array
     {
@@ -189,25 +224,39 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
             $hoursSince = (time() - $lastCheckTime) / 3600;
 
             if ($hoursSince <= self::GRACE_PERIOD_HOURS) {
-                // Still within grace period — allow access using stored token
+                // Must have a cryptographically valid token to grant grace
                 $storedToken = $this->getSetting('license_token');
                 if ($storedToken) {
                     $decoded = $this->verifySignedToken($storedToken);
                     if ($decoded) {
+                        // Validate machine binding
+                        if (!empty($decoded['machine_id']) && $decoded['machine_id'] !== $this->getMachineId()) {
+                            $this->triggerDegradation('License locked to a different machine.');
+                            return ['status' => false, 'message' => 'License is locked to another server.'];
+                        }
+
+                        // Validate expiration
+                        if (!empty($decoded['expires_at']) && strtolower($decoded['expires_at']) !== 'never') {
+                            $expiresAt = strtotime($decoded['expires_at']);
+                            if ($expiresAt && $expiresAt < time()) {
+                                $this->triggerDegradation('License has expired.');
+                                return ['status' => false, 'message' => 'License has expired.', 'expires_at' => $decoded['expires_at']];
+                            }
+                        }
+
                         return [
                             'status'      => true,
                             'message'     => 'License validated offline (grace period).',
                             'plan'        => $decoded['plan'] ?? 'free',
                             'max_domains' => $decoded['max_domains'] ?? 3,
+                            'expires_at'  => $decoded['expires_at'] ?? null,
                         ];
                     }
                 }
 
-                // No valid token but within grace — still allow
-                return [
-                    'status'  => true,
-                    'message' => 'License validated offline (grace period).',
-                ];
+                // No valid signed token found — cannot grant offline access
+                $this->triggerDegradation('No authentic signed license token found for this server.');
+                return ['status' => false, 'message' => 'License verification failed.'];
             }
 
             // Grace period exceeded

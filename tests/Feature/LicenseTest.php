@@ -334,4 +334,101 @@ rtmnnObzqUeWMPffTvN1IQ==
         $this->assertFalse($result);
         $this->assertTrue($service->isLocked());
     }
+
+    /**
+     * Test that token with mismatched machine ID is detected as tampering and locked.
+     */
+    public function test_tampered_machine_id_triggers_lock()
+    {
+        $service = app(LicenseService::class);
+        $currentMachineId = $service->getMachineId();
+
+        // Create token with a DIFFERENT machine_id
+        $payload = [
+            'license_key' => 'NIMB-1234-5678-ABCD',
+            'machine_id'  => 'different_machine_rogue_host',
+            'plan'        => 'pro',
+            'max_domains' => 50,
+            'valid_until' => date('Y-m-d H:i:s', time() + 3600),
+        ];
+        $token = $this->generateToken($payload);
+
+        DB::table('settings')->insert([
+            ['key' => 'license_key', 'value' => 'NIMB-1234-5678-ABCD', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'license_token', 'value' => $token, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        LicenseGuard::reset();
+        $result = $service->checkLicense();
+
+        $this->assertFalse($result['status']);
+        $this->assertTrue($service->isLocked());
+    }
+
+    /**
+     * Test that expired license token triggers immediate degradation and lock.
+     */
+    public function test_expired_token_triggers_lock()
+    {
+        $service = app(LicenseService::class);
+        $currentMachineId = $service->getMachineId();
+
+        // Create token with expires_at in the past
+        $payload = [
+            'license_key' => 'NIMB-1234-5678-ABCD',
+            'machine_id'  => $currentMachineId,
+            'plan'        => 'pro',
+            'max_domains' => 50,
+            'expires_at'  => date('Y-m-d H:i:s', time() - 3600), // Expired 1 hour ago
+            'valid_until' => date('Y-m-d H:i:s', time() + 3600),
+        ];
+        $token = $this->generateToken($payload);
+
+        DB::table('settings')->insert([
+            ['key' => 'license_key', 'value' => 'NIMB-1234-5678-ABCD', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'license_token', 'value' => $token, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        LicenseGuard::reset();
+        $this->assertFalse(LicenseGuard::ok());
+
+        $result = $service->checkLicense();
+        $this->assertFalse($result['status']);
+        $this->assertTrue($service->isLocked());
+    }
+
+    /**
+     * Test that non-root user cannot deactivate license key.
+     */
+    public function test_non_root_cannot_deactivate_license()
+    {
+        $service = app(LicenseService::class);
+        $currentMachineId = $service->getMachineId();
+
+        $payload = [
+            'license_key' => 'NIMB-1234-5678-ABCD',
+            'machine_id'  => $currentMachineId,
+            'plan'        => 'pro',
+            'max_domains' => 50,
+            'valid_until' => date('Y-m-d H:i:s', time() + 3600),
+        ];
+        $token = $this->generateToken($payload);
+
+        DB::table('settings')->insert([
+            ['key' => 'license_key', 'value' => 'NIMB-1234-5678-ABCD', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'license_token', 'value' => $token, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        LicenseGuard::reset();
+
+        $user = \App\Models\User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($user)->post(route('settings.license.deactivate'));
+        $response->assertStatus(403);
+
+        // Root user CAN deactivate
+        $rootUser = \App\Models\User::factory()->create(['role' => 'root']);
+        $rootResponse = $this->actingAs($rootUser)->post(route('settings.license.deactivate'));
+        $rootResponse->assertRedirect(route('activate.index'));
+    }
 }
+

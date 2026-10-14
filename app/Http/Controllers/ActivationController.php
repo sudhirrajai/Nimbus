@@ -70,13 +70,24 @@ class ActivationController extends Controller
         $licenseKey = $this->licenseService->getLicenseKey();
         $tokenData = $this->licenseService->getLicenseToken();
 
+        $expiresRaw = $license['expires_at'] ?? ($tokenData['expires_at'] ?? null);
+        $expiresFormatted = null;
+        if (!empty($expiresRaw) && strtolower($expiresRaw) !== 'never') {
+            $ts = strtotime($expiresRaw);
+            $expiresFormatted = $ts ? date('F j, Y', $ts) : $expiresRaw;
+        }
+
+        $licenseData = array_merge($license, [
+            'expires_at' => $expiresFormatted,
+        ]);
+
         return Inertia::render('Settings/License', [
-            'license'    => $license,
+            'license'    => $licenseData,
             'licenseKey' => $licenseKey,
             'machineId'  => $this->licenseService->getMachineId(),
             'serverIp'   => request()->server('SERVER_ADDR') ?? '127.0.0.1',
-            'plan'       => $tokenData['plan'] ?? null,
-            'maxDomains' => $tokenData['max_domains'] ?? null,
+            'plan'       => $tokenData['plan'] ?? ($license['plan'] ?? null),
+            'maxDomains' => $tokenData['max_domains'] ?? ($license['max_domains'] ?? null),
         ]);
     }
 
@@ -100,6 +111,10 @@ class ActivationController extends Controller
      */
     public function deactivateLicense()
     {
+        if (auth()->user()?->role !== 'root') {
+            abort(403, 'Unauthorized. Only the root administrator can deactivate the license.');
+        }
+
         $this->licenseService->deactivate();
         return redirect()->route('activate.index')->with('success', 'License deactivated successfully.');
     }
