@@ -120,19 +120,17 @@
                     </div>
                 </div>
 
-                <!-- Changelog & Execution Manifest -->
+                <!-- Changelog -->
                 <div class="col-lg-6 mb-4">
                     <div class="card h-100">
                         <div class="card-header pb-0">
                             <h6 class="mb-0">
                                 <i class="material-symbols-rounded text-sm me-1">list</i>
-                                Release Notes & Update Manifest
+                                Release Notes & Changelog
                             </h6>
                         </div>
                         <div class="card-body">
-                            <!-- Changelog -->
-                            <h6 class="text-xs text-uppercase text-secondary font-weight-bolder mb-2">Changelog</h6>
-                            <div v-if="changelog.length > 0" class="mb-4">
+                            <div v-if="changelog.length > 0">
                                 <ul class="list-unstyled">
                                     <li v-for="(item, index) in changelog" :key="index" class="mb-2 text-sm">
                                         <i class="material-symbols-rounded text-success text-sm me-2">check_circle</i>
@@ -140,25 +138,9 @@
                                     </li>
                                 </ul>
                             </div>
-                            <div v-else class="text-center text-muted py-3">
+                            <div v-else class="text-center text-muted py-4">
                                 <i class="material-symbols-rounded text-3xl">description</i>
-                                <p class="mt-1 text-sm">No changelog notes available</p>
-                            </div>
-
-                            <!-- Ordered Commands -->
-                            <div v-if="commands.length > 0">
-                                <h6 class="text-xs text-uppercase text-secondary font-weight-bolder mb-2">
-                                    Execution Manifest (Ordered Post-Update Steps)
-                                </h6>
-                                <div class="bg-dark p-2 rounded text-light font-monospace text-xs space-y-1">
-                                    <div v-for="(cmd, idx) in commands" :key="idx" class="d-flex align-items-center gap-2">
-                                        <span class="text-secondary select-none">{{ idx + 1 }}.</span>
-                                        <span class="text-success">{{ cmd }}</span>
-                                    </div>
-                                </div>
-                                <p class="text-xxs text-muted mt-1">
-                                    These commands run sequentially inside the update sandbox with automated rollback on any error.
-                                </p>
+                                <p class="mt-2 text-sm">No changelog notes available</p>
                             </div>
                         </div>
                     </div>
