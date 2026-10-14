@@ -19,6 +19,10 @@ if [ "$BIN_NAME" = "nimbus:2fa-disable" ]; then
     exec php "$APP_DIR/artisan" nimbus:2fa-disable "$@"
 fi
 
+if [ "$BIN_NAME" = "nimbus:unban" ]; then
+    exec php "$APP_DIR/artisan" nimbus:unban "$@"
+fi
+
 # If invoked as 'nimbus <subcommand>'
 case "$1" in
     reset-admin-password|nimbus:reset-admin-password)
@@ -28,6 +32,10 @@ case "$1" in
     2fa-disable|disable-2fa|nimbus:2fa-disable)
         shift
         exec php "$APP_DIR/artisan" nimbus:2fa-disable "$@"
+        ;;
+    unban|nimbus:unban)
+        shift
+        exec php "$APP_DIR/artisan" nimbus:unban "$@"
         ;;
     purge-trash|nimbus:purge-trash)
         shift

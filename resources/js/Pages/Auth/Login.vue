@@ -77,6 +77,29 @@
               </div>
             </div>
 
+            <!-- Adaptive Captcha (shown on 2+ failed attempts) -->
+            <div v-if="captcha && captcha.required" class="form-group">
+              <label for="captcha">Security Verification</label>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <img :src="captcha.image" alt="Security Puzzle" style="border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);">
+                <span class="text-xs text-muted">Solve the puzzle to verify you are human</span>
+              </div>
+              <div class="input-field">
+                <i class="material-symbols-rounded">calculate</i>
+                <input 
+                  type="number" 
+                  id="captcha" 
+                  v-model="form.captcha_answer" 
+                  placeholder="Enter the result"
+                  required
+                  autocomplete="off"
+                >
+              </div>
+              <div v-if="form.errors.captcha_answer" class="text-danger text-xs mt-1">
+                {{ form.errors.captcha_answer }}
+              </div>
+            </div>
+
             <div class="form-options">
               <label class="checkbox-wrapper">
                 <input type="checkbox" v-model="form.remember">
@@ -107,6 +130,10 @@
 import { ref } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 
+const props = defineProps({
+  captcha: Object
+})
+
 const page = usePage()
 const loading = ref(false)
 const showPassword = ref(false)
@@ -114,6 +141,7 @@ const showPassword = ref(false)
 const form = useForm({
   email: '',
   password: '',
+  captcha_answer: '',
   remember: false
 })
 

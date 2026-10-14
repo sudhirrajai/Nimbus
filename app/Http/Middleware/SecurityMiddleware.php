@@ -29,6 +29,15 @@ class SecurityMiddleware
             return $next($request);
         }
 
+        // Check for temporary brute-force lockout
+        $banExpiresAt = \Illuminate\Support\Facades\Cache::get('login_banned_ip_' . $ip);
+        if ($banExpiresAt && $banExpiresAt > time()) {
+            \Illuminate\Support\Facades\Log::warning("SecurityMiddleware blocking IP {$ip} due to active login ban");
+            return response()->view('errors.ip-blocked', [
+                'ip' => $ip,
+            ], 429);
+        }
+
         try {
             $mode = \App\Models\Setting::where('key', 'ip_restriction_mode')->first()?->value ?? 'off';
             \Illuminate\Support\Facades\Log::info("SecurityMiddleware mode: {$mode}");

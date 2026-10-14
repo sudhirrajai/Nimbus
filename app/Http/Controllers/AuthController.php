@@ -13,21 +13,63 @@ class AuthController extends Controller
     /**
      * Show login page
      */
-    public function showLogin()
+    public function showLogin(Request $request, \App\Services\LoginSecurityService $securityService)
     {
         // If no users exist, redirect to setup
         if (User::count() === 0) {
             return redirect()->route('auth.setup');
         }
 
-        return Inertia::render('Auth/Login');
+        if ($securityService->getIpBanSecondsRemaining($request->ip())) {
+            return response()->view('errors.ip-blocked', ['ip' => $request->ip()], 429);
+        }
+
+        $captcha = null;
+        if ($securityService->requiresCaptcha($request)) {
+            $captcha = $securityService->generateCaptcha($request);
+        }
+
+        return Inertia::render('Auth/Login', [
+            'captcha' => $captcha,
+        ]);
     }
 
     /**
      * Handle login
      */
-    public function login(Request $request)
+    public function login(Request $request, \App\Services\LoginSecurityService $securityService)
     {
+        // Check temporary brute force ban (10+ failures)
+        if ($seconds = $securityService->getIpBanSecondsRemaining($request->ip())) {
+            $mins = max(1, (int) ceil($seconds / 60));
+            return back()->withErrors([
+                'email' => "Your IP has been temporarily locked out due to multiple failed login attempts. Please try again in {$mins} minute(s)."
+            ]);
+        }
+
+        // Check throttle soft-lock (5 attempts in 1 min)
+        if ($seconds = $securityService->getThrottleSecondsRemaining($request)) {
+            return back()->withErrors([
+                'email' => "Too many login attempts. Please wait {$seconds} seconds before trying again."
+            ]);
+        }
+
+        // If captcha is required, verify it
+        if ($securityService->requiresCaptcha($request)) {
+            $request->validate([
+                'captcha_answer' => 'required',
+            ], [
+                'captcha_answer.required' => 'Please solve the security challenge.',
+            ]);
+
+            if (!$securityService->verifyCaptcha($request)) {
+                $securityService->recordFailedAttempt($request);
+                return back()->withErrors([
+                    'captcha_answer' => 'Incorrect answer. Please solve the security puzzle.',
+                ])->with('captcha', $securityService->generateCaptcha($request));
+            }
+        }
+
         $credentials = $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
@@ -48,6 +90,9 @@ class AuthController extends Controller
                 return redirect()->route('activate.index')->with('error', 'System integrity check failed.');
             }
 
+            // Reset rate limiter on valid credentials
+            $securityService->recordSuccessfulLogin($request);
+
             // If user has 2FA enabled, challenge them
             if ($user->hasTwoFactorEnabled()) {
                 $request->session()->put('login.id', $user->id);
@@ -58,6 +103,9 @@ class AuthController extends Controller
 
             return $this->completeLogin($user, $request, $request->boolean('remember'));
         }
+
+        // Record failed attempt in rate limiter and tracking cache
+        $result = $securityService->recordFailedAttempt($request);
 
         // Send alert for failed login
         $ip = $request->ip();
@@ -79,8 +127,15 @@ class AuthController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
+        $errorMessage = 'The provided credentials do not match our records.';
+        if (!empty($result['banned'])) {
+            $errorMessage = 'Too many failed attempts. Your IP has been temporarily locked out for 15 minutes.';
+        } elseif (!empty($result['requires_captcha'])) {
+            $errorMessage .= ' Please solve the security verification challenge to continue.';
+        }
+
         return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
+            'email' => $errorMessage,
         ])->onlyInput('email');
     }
 
