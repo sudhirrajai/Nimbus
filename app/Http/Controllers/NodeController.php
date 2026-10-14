@@ -26,9 +26,17 @@ class NodeController extends Controller
     public function getStatus()
     {
         try {
-            $nodePath = trim(shell_exec('which node 2>/dev/null') ?: '');
-            $npmPath = trim(shell_exec('which npm 2>/dev/null') ?: '');
-            $nPath = trim(shell_exec('which n 2>/dev/null') ?: '');
+            $nodePath = trim(shell_exec('PATH=$PATH:/usr/local/bin:/usr/bin which node 2>/dev/null') ?: '');
+            if (!$nodePath && file_exists('/usr/local/bin/node')) $nodePath = '/usr/local/bin/node';
+            if (!$nodePath && file_exists('/usr/bin/node')) $nodePath = '/usr/bin/node';
+
+            $npmPath = trim(shell_exec('PATH=$PATH:/usr/local/bin:/usr/bin which npm 2>/dev/null') ?: '');
+            if (!$npmPath && file_exists('/usr/local/bin/npm')) $npmPath = '/usr/local/bin/npm';
+            if (!$npmPath && file_exists('/usr/bin/npm')) $npmPath = '/usr/bin/npm';
+
+            $nPath = trim(shell_exec('PATH=$PATH:/usr/local/bin:/usr/bin which n 2>/dev/null') ?: '');
+            if (!$nPath && file_exists('/usr/local/bin/n')) $nPath = '/usr/local/bin/n';
+            if (!$nPath && file_exists('/usr/bin/n')) $nPath = '/usr/bin/n';
 
             $rawNodeVersion = $nodePath ? trim(shell_exec("{$nodePath} -v 2>/dev/null") ?: '') : '';
             $activeVersion = ltrim($rawNodeVersion, 'v');
