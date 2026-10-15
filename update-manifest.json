@@ -1,12 +1,12 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "release_date": "2026-10-15",
-  "sha256": "ad33557d482d960105052966bf757094d5b289e2d71971e50cf8c80fb8809d42",
+  "sha256": "4975e8e98f0487a47f12917ff2706ff9a491ff46f5e4be8863a2190a572d9baf",
   "changelog": [
+    "Resolved update pipeline freeze at Step 8/8 during PHP-FPM service restart",
+    "Enhanced OTA Updates Center UI with real-time visual progress stepper and auto-scrolling log console",
     "Strict multi-tenant FTP scoping and user isolation with super-admin global management",
-    "Redesigned OTA Updates Center with modern glassmorphism UI, real-time safety pipeline & status metrics",
-    "Streamlined changelog feed with categorized release insights and one-click checksum verification",
-    "Enhanced permission enforcement preventing cross-account access and unauthorized FTP modifications"
+    "Automatic recovery and status reconciliation when returning to the Updates page"
   ],
   "commands": [
     "php artisan migrate --force",
