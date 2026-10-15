@@ -77,17 +77,26 @@ class ActivationController extends Controller
             $expiresFormatted = $ts ? date('F j, Y', $ts) : $expiresRaw;
         }
 
+        $maxServers = $license['max_servers'] ?? ($tokenData['max_servers'] ?? $this->licenseService->getMaxServers());
+        $activeServers = $license['active_servers'] ?? ($tokenData['active_servers'] ?? $this->licenseService->getActiveServers());
+        $maxDomains = $license['max_domains'] ?? ($tokenData['max_domains'] ?? (int) ($this->licenseService->getSetting('license_max_domains') ?: 3));
+
         $licenseData = array_merge($license, [
-            'expires_at' => $expiresFormatted,
+            'expires_at'     => $expiresFormatted,
+            'max_servers'    => (int) $maxServers,
+            'active_servers' => (int) $activeServers,
+            'max_domains'    => (int) $maxDomains,
         ]);
 
         return Inertia::render('Settings/License', [
-            'license'    => $licenseData,
-            'licenseKey' => $licenseKey,
-            'machineId'  => $this->licenseService->getMachineId(),
-            'serverIp'   => request()->server('SERVER_ADDR') ?? '127.0.0.1',
-            'plan'       => $tokenData['plan'] ?? ($license['plan'] ?? null),
-            'maxDomains' => $tokenData['max_domains'] ?? ($license['max_domains'] ?? null),
+            'license'       => $licenseData,
+            'licenseKey'    => $licenseKey,
+            'machineId'     => $this->licenseService->getMachineId(),
+            'serverIp'      => request()->server('SERVER_ADDR') ?? '127.0.0.1',
+            'plan'          => $tokenData['plan'] ?? ($license['plan'] ?? 'free'),
+            'maxDomains'    => (int) $maxDomains,
+            'maxServers'    => (int) $maxServers,
+            'activeServers' => (int) $activeServers,
         ]);
     }
 

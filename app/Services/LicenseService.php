@@ -132,11 +132,13 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
         }
 
         return [
-            'status'      => true,
-            'message'     => 'License is valid.',
-            'plan'        => $decoded['plan'] ?? 'free',
-            'max_domains' => $decoded['max_domains'] ?? 3,
-            'expires_at'  => $decoded['expires_at'] ?? null,
+            'status'         => true,
+            'message'        => 'License is valid.',
+            'plan'           => $decoded['plan'] ?? 'free',
+            'max_domains'    => $decoded['max_domains'] ?? 3,
+            'max_servers'    => $decoded['max_servers'] ?? (int) ($this->getSetting('license_max_servers') ?? 1),
+            'active_servers' => $decoded['active_servers'] ?? (int) ($this->getSetting('license_active_servers') ?? 1),
+            'expires_at'     => $decoded['expires_at'] ?? null,
         ];
     }
 
@@ -184,12 +186,24 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                 // Clear any degradation state
                 $this->clearDegradation();
 
+                if (isset($data['max_servers'])) {
+                    $this->setSetting('license_max_servers', $data['max_servers']);
+                }
+                if (isset($data['active_servers'])) {
+                    $this->setSetting('license_active_servers', $data['active_servers']);
+                }
+                if (isset($data['max_domains'])) {
+                    $this->setSetting('license_max_domains', $data['max_domains']);
+                }
+
                 return [
-                    'status'      => true,
-                    'message'     => $data['message'] ?? 'License is valid.',
-                    'plan'        => $data['plan'] ?? 'free',
-                    'max_domains' => $data['max_domains'] ?? 3,
-                    'expires_at'  => $data['expires_at'] ?? ($decoded['expires_at'] ?? null),
+                    'status'         => true,
+                    'message'        => $data['message'] ?? 'License is valid.',
+                    'plan'           => $data['plan'] ?? 'free',
+                    'max_domains'    => $data['max_domains'] ?? ($decoded['max_domains'] ?? 3),
+                    'max_servers'    => $data['max_servers'] ?? ($decoded['max_servers'] ?? 1),
+                    'active_servers' => $data['active_servers'] ?? ($decoded['active_servers'] ?? 1),
+                    'expires_at'     => $data['expires_at'] ?? ($decoded['expires_at'] ?? null),
                 ];
             }
 
@@ -245,11 +259,13 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                         }
 
                         return [
-                            'status'      => true,
-                            'message'     => 'License validated offline (grace period).',
-                            'plan'        => $decoded['plan'] ?? 'free',
-                            'max_domains' => $decoded['max_domains'] ?? 3,
-                            'expires_at'  => $decoded['expires_at'] ?? null,
+                            'status'         => true,
+                            'message'        => 'License validated offline (grace period).',
+                            'plan'           => $decoded['plan'] ?? 'free',
+                            'max_domains'    => $decoded['max_domains'] ?? 3,
+                            'max_servers'    => $decoded['max_servers'] ?? (int) ($this->getSetting('license_max_servers') ?? 1),
+                            'active_servers' => $decoded['active_servers'] ?? (int) ($this->getSetting('license_active_servers') ?? 1),
+                            'expires_at'     => $decoded['expires_at'] ?? null,
                         ];
                     }
                 }
@@ -342,6 +358,17 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                     return false;
                 }
 
+                if (isset($data['max_servers'])) {
+                    $this->setSetting('license_max_servers', $data['max_servers']);
+                }
+                if (isset($data['active_servers'])) {
+                    $this->setSetting('license_active_servers', $data['active_servers']);
+                }
+
+                if (!empty($data['signed_token'])) {
+                    $this->setSetting('license_token', $data['signed_token']);
+                }
+
                 if (!empty($data['status_changed_at'])) {
                     $serverChangedAt = strtotime($data['status_changed_at']);
                     $localSyncedAt = strtotime($this->getSetting('last_status_sync_at') ?? '');
@@ -374,6 +401,42 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
         }
 
         return $this->verifySignedToken($storedToken);
+    }
+
+    /**
+     * Get the max allowed server activations for this license.
+     */
+    public function getMaxServers(): int
+    {
+        $setting = $this->getSetting('license_max_servers');
+        if ($setting !== null && $setting !== '') {
+            return (int) $setting;
+        }
+
+        $token = $this->getLicenseToken();
+        if (!empty($token['max_servers'])) {
+            return (int) $token['max_servers'];
+        }
+
+        return 1;
+    }
+
+    /**
+     * Get the number of active server nodes currently registered for this license key.
+     */
+    public function getActiveServers(): int
+    {
+        $setting = $this->getSetting('license_active_servers');
+        if ($setting !== null && $setting !== '') {
+            return (int) $setting;
+        }
+
+        $token = $this->getLicenseToken();
+        if (!empty($token['active_servers'])) {
+            return (int) $token['active_servers'];
+        }
+
+        return 1;
     }
 
     /**
