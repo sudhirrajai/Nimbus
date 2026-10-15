@@ -186,6 +186,9 @@
                       <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                         Status
                       </th>
+                      <th v-if="$page.props.auth?.user?.is_root" class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
+                        Created By
+                      </th>
                       <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7" style="min-width: 170px;">
                         Actions
                       </th>
@@ -291,6 +294,19 @@
                         </button>
                       </td>
 
+                      <!-- Created By (Visible to Super Admin) -->
+                      <td v-if="$page.props.auth?.user?.is_root">
+                        <div class="d-flex align-items-center">
+                          <div class="icon-avatar me-2 bg-gradient-light border d-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style="width: 28px; height: 28px;">
+                            <i class="material-symbols-rounded text-secondary" style="font-size: 15px;">person</i>
+                          </div>
+                          <div class="d-flex flex-column">
+                            <span class="text-xs font-weight-bold text-dark">{{ acc.user?.name || 'System' }}</span>
+                            <span class="text-xxs text-secondary text-truncate" style="max-width: 160px;" :title="acc.user?.email">{{ acc.user?.email || 'N/A' }}</span>
+                          </div>
+                        </div>
+                      </td>
+
                       <!-- Actions -->
                       <td class="align-middle text-center">
                         <div class="d-flex justify-content-center gap-2">
@@ -326,7 +342,7 @@
 
                     <!-- Empty State -->
                     <tr v-if="filteredAccounts.length === 0">
-                      <td colspan="6" class="text-center py-5">
+                      <td :colspan="$page.props.auth?.user?.is_root ? 7 : 6" class="text-center py-5">
                         <div class="d-flex flex-column align-items-center">
                           <div class="icon-empty-state mb-3">
                             <i class="material-symbols-rounded text-secondary opacity-4" style="font-size: 52px;">cloud_upload</i>
@@ -876,7 +892,9 @@ const filteredAccounts = computed(() => {
     a.username.toLowerCase().includes(q) ||
     a.domain.toLowerCase().includes(q) ||
     a.homedir.toLowerCase().includes(q) ||
-    (a.notes && a.notes.toLowerCase().includes(q))
+    (a.notes && a.notes.toLowerCase().includes(q)) ||
+    (a.user?.name && a.user.name.toLowerCase().includes(q)) ||
+    (a.user?.email && a.user.email.toLowerCase().includes(q))
   )
 })
 

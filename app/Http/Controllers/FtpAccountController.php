@@ -71,6 +71,20 @@ class FtpAccountController extends Controller
     }
 
     /**
+     * Determine whether the user is authorized to manage the given FTP account.
+     * Super admin (root) can manage all accounts.
+     * Regular users can only manage accounts they created.
+     */
+    protected function authorizeAccountAccess($user, FtpAccount $account): bool
+    {
+        if ($user->isRoot()) {
+            return true;
+        }
+
+        return (int) $account->user_id === (int) $user->id && $user->canAccessDomain($account->domain);
+    }
+
+    /**
      * Update the password for an FTP account.
      */
     public function updatePassword(Request $request, FtpAccount $account)
@@ -81,7 +95,7 @@ class FtpAccountController extends Controller
 
         $user = $request->user();
 
-        if (!$user->canAccessDomain($account->domain)) {
+        if (!$this->authorizeAccountAccess($user, $account)) {
             return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
@@ -106,7 +120,7 @@ class FtpAccountController extends Controller
 
         $user = $request->user();
 
-        if (!$user->canAccessDomain($account->domain)) {
+        if (!$this->authorizeAccountAccess($user, $account)) {
             return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
@@ -127,7 +141,7 @@ class FtpAccountController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->canAccessDomain($account->domain)) {
+        if (!$this->authorizeAccountAccess($user, $account)) {
             return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 
@@ -149,7 +163,7 @@ class FtpAccountController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->canAccessDomain($account->domain)) {
+        if (!$this->authorizeAccountAccess($user, $account)) {
             return back()->with('error', 'Unauthorized action.')->withErrors(['error' => 'Unauthorized action.']);
         }
 

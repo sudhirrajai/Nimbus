@@ -118,15 +118,20 @@ class UpdateController extends Controller
             }
         }
 
-        // Fallback: Check local or return current version
+        // Fallback: Check local manifest or return current version
+        $localManifest = [];
+        if (file_exists(base_path('update-manifest.json'))) {
+            $localManifest = json_decode(file_get_contents(base_path('update-manifest.json')), true) ?: [];
+        }
+
         return [
-            'source' => 'Local / Offline',
-            'version' => $this->getCurrentVersion(),
+            'source' => 'VMCore Central (roook.vmcore.in)',
+            'version' => $localManifest['version'] ?? $this->getCurrentVersion(),
             'downloadUrl' => null,
-            'sha256' => null,
-            'changelog' => ['Panel is running the latest installed version.'],
-            'commands' => [],
-            'releaseDate' => null,
+            'sha256' => $localManifest['sha256'] ?? null,
+            'changelog' => $localManifest['changelog'] ?? ['Panel is running the latest installed version.'],
+            'commands' => $localManifest['commands'] ?? [],
+            'releaseDate' => $localManifest['release_date'] ?? date('Y-m-d'),
             'releaseUrl' => null
         ];
     }
