@@ -30,7 +30,7 @@
                                     <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
                                         <div class="hero-pill-badge">
                                             <span class="hero-pill-label">CURRENT</span>
-                                            <span class="hero-pill-val font-monospace">v{{ currentVersion }}</span>
+                                            <span class="hero-pill-val font-monospace">v{{ activeVersion }}</span>
                                         </div>
 
                                         <div v-if="hasUpdate" class="hero-pill-badge hero-pill-update animate-pulse">
@@ -53,7 +53,7 @@
                                 <div class="w-100 w-md-auto d-flex flex-column flex-sm-row gap-2">
                                     <button class="btn btn-hero-check btn-sm mb-0 px-3 py-2.5 w-100 w-sm-auto d-flex align-items-center justify-content-center gap-2 shadow-sm"
                                         @click="checkUpdates"
-                                        :disabled="checking">
+                                        :disabled="checking || updating">
                                         <span v-if="checking" class="spinner-border spinner-border-sm" style="width: 14px; height: 14px;"></span>
                                         <i v-else class="material-symbols-rounded text-base">sync</i>
                                         <span class="font-weight-bold">{{ checking ? 'Checking Release Feed...' : 'Check for Updates' }}</span>
@@ -134,13 +134,13 @@
                             <div class="row g-2 g-sm-3 mb-3">
                                 <!-- Current Version Box -->
                                 <div class="col-6">
-                                    <div class="version-stat-card current-stat-card p-3 rounded-3 h-100 d-flex flex-column justify-content-between">
+                                    <div class="version-stat-card current-stat-card p-3 rounded-3 h-100 d-flex flex-column justify-content-between shadow-xs">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <span class="text-xxs text-uppercase text-secondary font-weight-bold">Installed Version</span>
                                             <span class="badge bg-white text-dark text-xxs border shadow-xs px-1.5 py-0.5 rounded">Local</span>
                                         </div>
                                         <div class="mt-2">
-                                            <h3 class="mb-0 font-weight-bolder text-dark font-monospace tracking-tight">v{{ currentVersion }}</h3>
+                                            <h3 class="mb-0 font-weight-bolder text-dark font-monospace tracking-tight">v{{ activeVersion }}</h3>
                                             <span class="text-xxs text-muted d-block mt-0.5">Active runtime release</span>
                                         </div>
                                     </div>
@@ -148,7 +148,7 @@
 
                                 <!-- Latest Available Box -->
                                 <div class="col-6">
-                                    <div class="version-stat-card p-3 rounded-3 h-100 d-flex flex-column justify-content-between"
+                                    <div class="version-stat-card p-3 rounded-3 h-100 d-flex flex-column justify-content-between shadow-xs"
                                          :class="hasUpdate ? 'latest-stat-card-update' : 'latest-stat-card-normal'">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <span class="text-xxs text-uppercase font-weight-bold"
@@ -169,28 +169,32 @@
                                 </div>
                             </div>
 
-                            <!-- Metadata Spec Strip -->
-                            <div class="spec-strip p-2.5 rounded-3 mb-3 border">
-                                <div class="row g-2 align-items-center">
-                                    <div class="col-6 col-sm-4">
-                                        <span class="text-xxs text-muted text-uppercase d-block font-weight-bold">Release Date</span>
-                                        <div class="d-flex align-items-center gap-1 mt-0.5">
+                            <!-- Metadata Spec Micro-Cards Grid -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <div class="spec-mini-card p-2.5 rounded-3 border bg-gray-50 h-100 d-flex flex-column justify-content-center">
+                                        <span class="text-xxs text-muted text-uppercase font-weight-bold d-block">Release Date</span>
+                                        <div class="d-flex align-items-center gap-1.5 mt-1">
                                             <i class="material-symbols-rounded text-xs text-secondary">calendar_today</i>
-                                            <span class="text-xs text-dark font-weight-bold">{{ releaseDate ? formatDate(releaseDate) : 'Today' }}</span>
+                                            <span class="text-xs text-dark font-weight-bold text-truncate">{{ releaseDate ? formatDate(releaseDate) : 'Today' }}</span>
                                         </div>
                                     </div>
-                                    <div class="col-6 col-sm-4 border-start-sm ps-sm-3">
-                                        <span class="text-xxs text-muted text-uppercase d-block font-weight-bold">Integrity Guard</span>
-                                        <div class="d-flex align-items-center gap-1 mt-0.5">
-                                            <i class="material-symbols-rounded text-xs text-success">verified</i>
-                                            <span class="text-xs text-dark font-weight-bold">Cryptographically Verified</span>
+                                </div>
+                                <div class="col-4">
+                                    <div class="spec-mini-card p-2.5 rounded-3 border bg-gray-50 h-100 d-flex flex-column justify-content-center">
+                                        <span class="text-xxs text-muted text-uppercase font-weight-bold d-block">Integrity Guard</span>
+                                        <div class="d-flex align-items-center gap-1.5 mt-1 text-success">
+                                            <i class="material-symbols-rounded text-xs">verified</i>
+                                            <span class="text-xs font-weight-bold text-truncate">Verified</span>
                                         </div>
                                     </div>
-                                    <div class="col-12 col-sm-4 border-start-sm ps-sm-3 mt-2 mt-sm-0">
-                                        <span class="text-xxs text-muted text-uppercase d-block font-weight-bold">Engine Stability</span>
-                                        <div class="d-flex align-items-center gap-1 mt-0.5">
+                                </div>
+                                <div class="col-4">
+                                    <div class="spec-mini-card p-2.5 rounded-3 border bg-gray-50 h-100 d-flex flex-column justify-content-center">
+                                        <span class="text-xxs text-muted text-uppercase font-weight-bold d-block">Engine Stability</span>
+                                        <div class="d-flex align-items-center gap-1.5 mt-1">
                                             <span class="status-indicator-dot bg-success"></span>
-                                            <span class="text-xs text-dark font-weight-bold">Production Ready</span>
+                                            <span class="text-xs text-dark font-weight-bold text-truncate">Production</span>
                                         </div>
                                     </div>
                                 </div>
@@ -200,22 +204,22 @@
                             <div v-if="sha256" class="checksum-container mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-1.5">
                                     <div class="d-flex align-items-center gap-1.5">
-                                        <i class="material-symbols-rounded text-xs text-secondary">fingerprint</i>
-                                        <span class="text-xxs text-uppercase text-secondary font-weight-bold">Package SHA-256 Checksum</span>
+                                        <i class="material-symbols-rounded text-xs text-primary">fingerprint</i>
+                                        <span class="text-xxs text-uppercase text-secondary font-weight-bolder">Package SHA-256 Checksum</span>
                                     </div>
                                     <button class="btn btn-copy-hash btn-xs mb-0 d-flex align-items-center gap-1"
                                             @click="copySha256" :title="copiedSha ? 'Copied!' : 'Copy checksum'">
-                                        <i class="material-symbols-rounded text-xs" :class="copiedSha ? 'text-success' : 'text-secondary'">
-                                            {{ copiedSha ? 'done' : 'content_copy' }}
+                                        <i class="material-symbols-rounded text-xs" :class="copiedSha ? 'text-success' : 'text-primary'">
+                                            {{ copiedSha ? 'done_all' : 'content_copy' }}
                                         </i>
-                                        <span class="text-xxs" :class="copiedSha ? 'text-success font-weight-bold' : 'text-secondary'">
-                                            {{ copiedSha ? 'Copied' : 'Copy Hash' }}
+                                        <span class="text-xxs font-weight-bold" :class="copiedSha ? 'text-success' : 'text-secondary'">
+                                            {{ copiedSha ? 'Copied!' : 'Copy Hash' }}
                                         </span>
                                     </button>
                                 </div>
-                                <div class="hash-code-block p-2.5 rounded-3 font-monospace text-xxs text-break user-select-all shadow-inner d-flex align-items-center justify-content-between gap-2">
-                                    <span class="hash-text text-truncate">{{ sha256 }}</span>
-                                    <span class="badge bg-secondary text-white text-xxs px-1.5 py-0.5 rounded font-monospace flex-shrink-0">SHA-256</span>
+                                <div class="hash-code-block px-3 py-2.5 rounded-3 border d-flex align-items-center justify-content-between gap-2 shadow-xs">
+                                    <code class="hash-text text-truncate">{{ sha256 }}</code>
+                                    <span class="badge bg-secondary text-white text-xxs px-2 py-0.5 rounded font-monospace flex-shrink-0">SHA-256</span>
                                 </div>
                             </div>
 
@@ -249,15 +253,17 @@
                                 </div>
 
                                 <!-- When Up To Date -->
-                                <div v-else class="up-to-date-card p-3 rounded-3 border d-flex align-items-center gap-3">
-                                    <div class="check-icon-circle bg-success-subtle text-success flex-shrink-0">
-                                        <i class="material-symbols-rounded text-base">check_circle</i>
+                                <div v-else class="up-to-date-card p-3 rounded-3 border d-flex align-items-center justify-content-between gap-3 shadow-xs">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="check-icon-circle bg-success-subtle text-success flex-shrink-0">
+                                            <i class="material-symbols-rounded text-base">check_circle</i>
+                                        </div>
+                                        <div>
+                                            <h6 class="text-xs font-weight-bold text-dark mb-0.5">You are running the latest installed version</h6>
+                                            <p class="text-xxs text-secondary mb-0">Your panel is fully patched, isolated, and up to date with all release channels.</p>
+                                        </div>
                                     </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="text-xs font-weight-bold text-dark mb-0.5">You are running the latest installed version</h6>
-                                        <p class="text-xxs text-secondary mb-0">Your panel is fully patched, isolated, and up to date with all release channels.</p>
-                                    </div>
-                                    <button class="btn btn-outline-dark btn-xs mb-0 d-flex align-items-center gap-1 flex-shrink-0"
+                                    <button class="btn btn-outline-dark btn-xs mb-0 d-flex align-items-center gap-1 flex-shrink-0 px-2.5 py-1.5"
                                             @click="checkUpdates" :disabled="checking">
                                         <i class="material-symbols-rounded text-xs">sync</i>
                                         <span>Refresh</span>
@@ -334,9 +340,45 @@
 
             </div>
 
-            <!-- Terminal / Execution Log -->
+            <!-- Terminal / Execution Log & Pipeline Progress -->
             <div v-if="updating || updateLog" class="row mt-3 mt-md-4">
                 <div class="col-12">
+                    
+                    <!-- Visual Pipeline Stepper -->
+                    <div class="pipeline-progress-bar p-3 rounded-3 bg-white border mb-3 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2.5">
+                            <span class="text-xs font-weight-bold text-dark d-flex align-items-center gap-1.5">
+                                <i class="material-symbols-rounded text-sm text-primary">linear_scale</i>
+                                Live Pipeline Stages
+                            </span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span v-if="updateComplete" class="badge bg-success text-white text-xxs px-2.5 py-1 rounded-pill font-weight-bold d-flex align-items-center gap-1">
+                                    <i class="material-symbols-rounded text-xxs">check_circle</i> Pipeline Finished
+                                </span>
+                                <span v-else-if="updating" class="badge bg-warning-subtle text-warning border border-warning-subtle text-xxs px-2.5 py-1 rounded-pill font-weight-bold d-flex align-items-center gap-1">
+                                    <span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px;"></span>
+                                    {{ currentStepBadgeText }}
+                                </span>
+                                <button v-if="updateComplete" class="btn btn-dark btn-xs mb-0 d-flex align-items-center gap-1 px-2 py-1" @click="reloadPage">
+                                    <i class="material-symbols-rounded text-xxs">refresh</i>
+                                    <span>Reload Panel</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div v-for="step in pipelineSteps" :key="step.id" class="col-6 col-md-3">
+                                <div class="pipeline-step-box p-2.5 rounded-3 text-center border" :class="step.statusClass">
+                                    <div class="d-flex align-items-center justify-content-center gap-1.5">
+                                        <i class="material-symbols-rounded text-xs">{{ step.icon }}</i>
+                                        <span class="text-xxs font-weight-bold text-truncate">{{ step.name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Card -->
                     <div class="card border-0 shadow-lg overflow-hidden terminal-card">
                         <div class="card-header bg-dark text-white py-2.5 px-3 d-flex justify-content-between align-items-center border-bottom border-dark">
                             <div class="d-flex align-items-center gap-2">
@@ -353,7 +395,7 @@
                             <div class="d-flex align-items-center gap-2">
                                 <span v-if="updating" class="badge bg-warning text-dark text-xxs d-inline-flex align-items-center px-2 py-1 rounded-pill font-weight-bold">
                                     <span class="spinner-border spinner-border-sm me-1" style="width: 10px; height: 10px;"></span>
-                                    Applying Changes...
+                                    {{ currentStepBadgeText }}
                                 </span>
                                 <span v-else-if="updateFailed" class="badge bg-danger text-white text-xxs d-inline-flex align-items-center px-2 py-1 rounded-pill font-weight-bold">
                                     <i class="material-symbols-rounded text-xxs me-1">warning</i> Rolled Back
@@ -368,10 +410,11 @@
                             </div>
                         </div>
                         <div class="card-body p-0 bg-darker">
-                            <pre class="update-log m-0 p-3 text-light font-monospace text-xxs text-sm-xs"
-                                 style="max-height: 380px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;">{{ updateLog || 'Initializing safe update pipeline runner...' }}</pre>
+                            <pre ref="terminalPre" class="update-log m-0 p-3 text-light font-monospace text-xxs text-sm-xs"
+                                 style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;">{{ updateLog || 'Initializing safe update pipeline runner...' }}</pre>
                         </div>
                     </div>
+
                 </div>
             </div>
 
@@ -398,7 +441,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/date'
 
@@ -406,6 +449,7 @@ const props = defineProps({
     currentVersion: String
 })
 
+const activeVersion = ref(props.currentVersion)
 const checking = ref(false)
 const updating = ref(false)
 const latestVersion = ref(props.currentVersion)
@@ -418,6 +462,7 @@ const releaseUrl = ref(null)
 const updateLog = ref('')
 const updateComplete = ref(false)
 const updateFailed = ref(false)
+const terminalPre = ref(null)
 
 let pollInterval = null
 
@@ -427,12 +472,16 @@ const toastMessage = ref('')
 const toastType = ref('success')
 
 const hasUpdate = computed(() => {
-    return latestVersion.value !== props.currentVersion &&
-        compareVersions(latestVersion.value, props.currentVersion) > 0
+    return latestVersion.value !== activeVersion.value &&
+        compareVersions(latestVersion.value, activeVersion.value) > 0
 })
 
 onMounted(async () => {
     await checkUpdates()
+    await pollUpdateStatus()
+    if (updating.value) {
+        pollInterval = setInterval(pollUpdateStatus, 1500)
+    }
 })
 
 onUnmounted(() => {
@@ -444,6 +493,7 @@ const checkUpdates = async () => {
     try {
         const response = await axios.get('/updates/check')
         if (response.data.success) {
+            activeVersion.value = response.data.currentVersion || props.currentVersion
             latestVersion.value = response.data.latestVersion
             changelog.value = response.data.changelog || []
             commands.value = response.data.commands || []
@@ -469,7 +519,8 @@ const startUpdate = async () => {
 
     try {
         await axios.post('/updates/perform')
-        pollInterval = setInterval(pollUpdateStatus, 2000)
+        if (pollInterval) clearInterval(pollInterval)
+        pollInterval = setInterval(pollUpdateStatus, 1500)
     } catch (error) {
         notify('Failed to start update pipeline', 'error')
         updating.value = false
@@ -479,25 +530,136 @@ const startUpdate = async () => {
 const pollUpdateStatus = async () => {
     try {
         const response = await axios.get('/updates/status')
-        updateLog.value = response.data.log
+        if (response.data.log) {
+            updateLog.value = response.data.log
+            scrollToTerminalBottom()
+        }
 
-        if (response.data.status === 'done') {
+        const log = response.data.log || ''
+        const isDone = response.data.status === 'done' || 
+                       log.includes('Update completed successfully') ||
+                       (log.includes('[Step 8/8]') && log.includes('health check passed'))
+
+        const isFailed = response.data.status === 'failed' || 
+                         log.includes('CRITICAL: UPDATE FAILED') || 
+                         log.includes('AUTOMATIC ROLLBACK COMPLETE')
+
+        if (response.data.status === 'running' && !isDone && !isFailed) {
+            updating.value = true
+        }
+
+        if (isDone) {
             updating.value = false
             updateComplete.value = true
             updateFailed.value = false
-            clearInterval(pollInterval)
-            notify('Update completed successfully! Please refresh the page.', 'success')
-        } else if (response.data.status === 'failed') {
+            if (response.data.currentVersion) {
+                activeVersion.value = response.data.currentVersion
+            }
+            if (pollInterval) {
+                clearInterval(pollInterval)
+                pollInterval = null
+            }
+            notify('Update completed successfully! All panel services online.', 'success')
+            setTimeout(async () => {
+                await checkUpdates()
+            }, 1200)
+        } else if (isFailed) {
             updating.value = false
             updateComplete.value = false
             updateFailed.value = true
-            clearInterval(pollInterval)
+            if (pollInterval) {
+                clearInterval(pollInterval)
+                pollInterval = null
+            }
             notify('Update encountered an error and was safely rolled back. Your system remains online.', 'error')
         }
     } catch (error) {
-        // Temporary network blip during service reload is expected
+        // Network reload blips during service restart are expected; keep polling
     }
 }
+
+const scrollToTerminalBottom = () => {
+    nextTick(() => {
+        if (terminalPre.value) {
+            terminalPre.value.scrollTop = terminalPre.value.scrollHeight
+        }
+    })
+}
+
+const reloadPage = () => {
+    window.location.reload()
+}
+
+// Visual Pipeline Stepper
+const pipelineSteps = computed(() => {
+    const log = updateLog.value || ''
+    
+    // Step 1: Snapshot Backup
+    const s1Active = log.includes('[Step 1/8]')
+    const s1Done = log.includes('[Step 2/8]') || log.includes('Snapshot safely secured')
+    
+    // Step 2: Download & Verify
+    const s2Active = log.includes('[Step 2/8]') || log.includes('[Step 3/8]')
+    const s2Done = log.includes('[Step 4/8]') || log.includes('Extracting release files')
+    
+    // Step 3: Extract, Sync & Migrations
+    const s3Active = log.includes('[Step 4/8]') || log.includes('[Step 5/8]') || log.includes('[Step 6')
+    const s3Done = log.includes('[Step 7/8]') || log.includes('Performing post-update health check')
+    
+    // Step 4: Health Check & Finalize
+    const s4Active = log.includes('[Step 7/8]') || log.includes('[Step 8/8]')
+    const s4Done = updateComplete.value || log.includes('Update completed successfully') || (log.includes('health check passed') && log.includes('[Step 8/8]'))
+
+    return [
+        {
+            id: 1,
+            name: '1. Backup Snapshot',
+            icon: s1Done ? 'check_circle' : (s1Active ? 'sync' : 'camera_alt'),
+            statusClass: s1Done ? 'step-completed' : (s1Active ? 'step-active' : 'step-pending')
+        },
+        {
+            id: 2,
+            name: '2. Download & Verify',
+            icon: s2Done ? 'check_circle' : (s2Active ? 'sync' : 'cloud_download'),
+            statusClass: s2Done ? 'step-completed' : (s2Active ? 'step-active' : 'step-pending')
+        },
+        {
+            id: 3,
+            name: '3. Sync & Migrations',
+            icon: s3Done ? 'check_circle' : (s3Active ? 'sync' : 'integration_instructions'),
+            statusClass: s3Done ? 'step-completed' : (s3Active ? 'step-active' : 'step-pending')
+        },
+        {
+            id: 4,
+            name: '4. Health & Finalize',
+            icon: s4Done ? 'check_circle' : (s4Active ? 'sync' : 'verified_user'),
+            statusClass: s4Done ? 'step-completed' : (s4Active ? 'step-active' : 'step-pending')
+        }
+    ]
+})
+
+const currentStepBadgeText = computed(() => {
+    if (updateComplete.value) return 'Update Completed'
+    if (updateFailed.value) return 'Rolled Back'
+    if (!updating.value) return 'Ready'
+    const log = updateLog.value || ''
+    if (log.includes('[Step 8/8]')) return 'Finalizing & Versioning'
+    if (log.includes('[Step 7/8]')) return 'Health Check'
+    if (log.includes('[Step 6.')) {
+        const matches = [...log.matchAll(/\[Step 6\.(\d+)\] Executing: ([^\n]+)/g)]
+        if (matches && matches.length > 0) {
+            const last = matches[matches.length - 1][2]
+            return last.slice(0, 26)
+        }
+        return 'Manifest Commands'
+    }
+    if (log.includes('[Step 5/8]')) return 'Syncing Files'
+    if (log.includes('[Step 4/8]')) return 'Extracting Files'
+    if (log.includes('[Step 3/8]')) return 'Verifying SHA-256'
+    if (log.includes('[Step 2/8]')) return 'Downloading Release'
+    if (log.includes('[Step 1/8]')) return 'Creating Snapshot'
+    return 'In Progress'
+})
 
 const compareVersions = (v1, v2) => {
     const parts1 = (v1 || '').split('.').map(Number)
@@ -740,16 +902,15 @@ const getCategory = (text) => {
     border-color: #86efac !important;
 }
 
-/* Spec Strip */
-.spec-strip {
+/* Spec Mini Cards */
+.spec-mini-card {
     background: #f8fafc;
     border-color: #e2e8f0 !important;
+    transition: all 0.15s ease;
 }
 
-@media (min-width: 576px) {
-    .border-start-sm {
-        border-left: 1px solid #e2e8f0;
-    }
+.spec-mini-card:hover {
+    border-color: #cbd5e1 !important;
 }
 
 .status-indicator-dot {
@@ -762,23 +923,26 @@ const getCategory = (text) => {
 /* Checksum Container */
 .hash-code-block {
     background: #0f172a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.12) !important;
     color: #e2e8f0;
 }
 
 .hash-text {
-    letter-spacing: 0.5px;
-    color: #94a3b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.74rem;
+    color: #38bdf8;
+    letter-spacing: 0.4px;
 }
 
 .btn-copy-hash {
     background: transparent;
     border: none;
     padding: 2px 4px;
+    cursor: pointer;
 }
 
 .btn-copy-hash:hover {
-    color: #0f172a;
+    opacity: 0.8;
 }
 
 /* Up to Date & Update Ready Callouts */
@@ -788,8 +952,8 @@ const getCategory = (text) => {
 }
 
 .check-icon-circle {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -857,6 +1021,35 @@ const getCategory = (text) => {
     border: 1px solid #dcfce7;
 }
 
+/* Visual Pipeline Progress Stepper */
+.pipeline-progress-bar {
+    border-color: #e2e8f0 !important;
+}
+
+.pipeline-step-box {
+    transition: all 0.2s ease;
+}
+
+.step-pending {
+    background: #f8fafc;
+    border-color: #e2e8f0 !important;
+    color: #94a3b8;
+}
+
+.step-active {
+    background: #fffbeb;
+    border-color: #fde68a !important;
+    color: #d97706;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    animation: pulse 1.8s infinite;
+}
+
+.step-completed {
+    background: #f0fdf4;
+    border-color: #bbf7d0 !important;
+    color: #166534;
+}
+
 /* Terminal Card */
 .terminal-card {
     border-radius: 1rem;
@@ -897,7 +1090,7 @@ const getCategory = (text) => {
 
 @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(1.15); }
+    50% { opacity: 0.6; transform: scale(1.05); }
 }
 
 @media (max-width: 575.98px) {

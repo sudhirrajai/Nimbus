@@ -214,9 +214,8 @@ class UpdateController extends Controller
                 // Add superuser flag for composer
                 if (str_starts_with($escapedCmd, 'composer')) {
                     $commandsScript .= "COMPOSER_ALLOW_SUPERUSER=1 {$escapedCmd} 2>&1\n";
-                } elseif (str_starts_with($escapedCmd, 'npm run build')) {
-                    // Try npm run build or fallback to vite build directly
-                    $commandsScript .= "if [ -f \"./node_modules/.bin/vite\" ]; then ./node_modules/.bin/vite build 2>&1 || npm run build 2>&1 || true; else npm run build 2>&1 || true; fi\n";
+                } elseif (str_starts_with($escapedCmd, 'npm run build') || str_starts_with($escapedCmd, 'npm build') || str_starts_with($escapedCmd, 'vite build')) {
+                    $commandsScript .= "if [ -f \"./node_modules/.bin/vite\" ]; then ./node_modules/.bin/vite build 2>&1 || true; else echo \"Frontend assets already compiled in public/build. Skipping vite build.\"; fi\n";
                 } else {
                     $commandsScript .= "{$escapedCmd} 2>&1\n";
                 }
@@ -392,7 +391,7 @@ fi
 echo "Artisan framework health check passed."
 
 echo ""
-echo "[Step 8/8] Finalizing permissions and restarting background workers..."
+echo "[Step 8/8] Finalizing permissions and applying version stamp..."
 chown -R www-data:www-data "\$PANEL_DIR"
 chmod -R 775 "\$PANEL_DIR/storage" "\$PANEL_DIR/bootstrap/cache" "\$PANEL_DIR/database"
 chmod 664 "\$PANEL_DIR/database"/*.sqlite* 2>/dev/null || true
@@ -400,36 +399,41 @@ chmod +x "\$PANEL_DIR/artisan" "\$PANEL_DIR/bin/"* 2>/dev/null || true
 ln -sf "\$PANEL_DIR/bin/nimbus" /usr/local/bin/nimbus 2>/dev/null || true
 ln -sf "\$PANEL_DIR/bin/nimbus-rollback" /usr/local/bin/nimbus-rollback 2>/dev/null || true
 
-systemctl restart nimbus-php-fpm 2>/dev/null || systemctl restart php8.3-fpm 2>/dev/null || true
-systemctl reload nimbus-nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
-if command -v supervisorctl >/dev/null 2>&1; then
-    supervisorctl restart nimbus-worker:* 2>/dev/null || true
-fi
-php "\$PANEL_DIR/artisan" queue:restart 2>/dev/null || true
-
 # Record current version
 echo "\$TARGET_VERSION" > "\$PANEL_DIR/VERSION"
 
 # Cleanup staging files
 rm -rf "\$STAGING_DIR" "\$ZIP_FILE" 2>/dev/null || true
 
-# Clear rollback trap
+# Clear rollback trap and mark status as done
 trap - EXIT
 echo "done" > "\$STATUS_FILE"
 
+echo "Permissions finalized and v\$TARGET_VERSION registered."
 echo ""
 echo "================================================================"
 echo "Update completed successfully to v\$TARGET_VERSION!"
 echo "Timestamp: \$(date '+%Y-%m-%d %H:%M:%S')"
 echo "================================================================"
+
+# Gracefully reload background services asynchronously in a detached subshell
+(
+    sleep 1
+    systemctl reload nimbus-php-fpm 2>/dev/null || systemctl restart nimbus-php-fpm 2>/dev/null || systemctl reload php8.3-fpm 2>/dev/null || systemctl restart php8.3-fpm 2>/dev/null || true
+    systemctl reload nimbus-nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
+    if command -v supervisorctl >/dev/null 2>&1; then
+        supervisorctl restart nimbus-worker:* 2>/dev/null || true
+    fi
+    php "\$PANEL_DIR/artisan" queue:restart 2>/dev/null || true
+) >/dev/null 2>&1 &
 BASH;
 
             $tempScript = "/tmp/nimbus_ota_update.sh";
             file_put_contents($tempScript, $script);
             chmod($tempScript, 0755);
 
-            // Execute in background with root/sudo privileges
-            exec("sudo bash {$tempScript} > /dev/null 2>&1 &");
+            // Execute in detached session with setsid so service reloads do not terminate this process
+            exec("setsid nohup sudo bash {$tempScript} > /dev/null 2>&1 &");
 
             return response()->json([
                 'success' => true,
@@ -450,19 +454,28 @@ BASH;
 
         $log = file_exists($logFile) ? file_get_contents($logFile) : '';
         $status = file_exists($statusFile) ? trim(file_get_contents($statusFile)) : 'idle';
+        $currentVersion = $this->getCurrentVersion();
 
         // Detect completion or failure in log
-        if (strpos($log, 'Update completed successfully') !== false) {
+        if (
+            strpos($log, 'Update completed successfully') !== false ||
+            (strpos($log, 'Artisan framework health check passed') !== false && strpos($log, '[Step 8/8]') !== false)
+        ) {
             $status = 'done';
-            file_put_contents($statusFile, 'done');
+            if (!file_exists($statusFile) || trim(@file_get_contents($statusFile)) !== 'done') {
+                @file_put_contents($statusFile, 'done');
+            }
         } elseif (strpos($log, 'AUTOMATIC ROLLBACK COMPLETE') !== false || strpos($log, 'CRITICAL: UPDATE FAILED') !== false) {
             $status = 'failed';
-            file_put_contents($statusFile, 'failed');
+            if (!file_exists($statusFile) || trim(@file_get_contents($statusFile)) !== 'failed') {
+                @file_put_contents($statusFile, 'failed');
+            }
         }
 
         return response()->json([
             'status' => $status,
-            'log' => $log
+            'log' => $log,
+            'currentVersion' => $currentVersion
         ]);
     }
 

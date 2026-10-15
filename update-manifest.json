@@ -1,6 +1,7 @@
 {
   "version": "1.1.0",
   "release_date": "2026-10-15",
+  "sha256": "c2eeb6459a13fa7e001701b56fdf769ed1d6c163435f38c39170afcf8467974d",
   "changelog": [
     "Strict multi-tenant FTP scoping and user isolation with super-admin global management",
     "Redesigned OTA Updates Center with modern glassmorphism UI, real-time safety pipeline & status metrics",
@@ -11,7 +12,6 @@
     "php artisan migrate --force",
     "php artisan config:clear",
     "php artisan route:clear",
-    "php artisan cache:clear",
-    "npm run build"
+    "php artisan cache:clear"
   ]
 }
