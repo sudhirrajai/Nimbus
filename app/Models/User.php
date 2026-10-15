@@ -82,7 +82,7 @@ class User extends Authenticatable
 
     public function isRoot(): bool
     {
-        return $this->role === 'root';
+        return $this->role === 'root' || $this->id === 1;
     }
 
     public function isAdmin(): bool

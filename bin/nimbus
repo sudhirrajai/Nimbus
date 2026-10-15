@@ -45,6 +45,14 @@ case "$1" in
         shift
         exec php "$APP_DIR/artisan" nimbus:collect-metrics "$@"
         ;;
+    rollback|nimbus:rollback)
+        shift
+        if [ -x "$APP_DIR/bin/nimbus-rollback" ]; then
+            exec "$APP_DIR/bin/nimbus-rollback" "$@"
+        else
+            exec php "$APP_DIR/artisan" nimbus:rollback "$@"
+        fi
+        ;;
     *)
         exec php "$APP_DIR/artisan" "$@"
         ;;

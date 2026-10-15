@@ -79,10 +79,9 @@ class FtpService
             $query->where('domain', $domain);
         }
 
-        // Role-based visibility
-        if (!$user->isRoot() && $user->role !== 'admin') {
-            $allowedDomains = $user->assigned_domains ?? [];
-            $query->whereIn('domain', $allowedDomains);
+        // Role-based visibility: Super admin sees all, regular users see only their own created accounts
+        if (!$user->isRoot()) {
+            $query->where('user_id', $user->id);
         }
 
         return $query->get();

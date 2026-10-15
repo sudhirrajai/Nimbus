@@ -1,18 +1,16 @@
 {
-  "version": "1.0.8",
+  "version": "1.1.0",
+  "release_date": "2026-10-15",
   "changelog": [
-    "Integrated two-factor authentication (TOTP/Google Authenticator)",
-    "Added adaptive math captcha and intelligent rate limiting on failed logins",
-    "Transitioned OTA updates to self-hosted VMCore Central with safe automated rollback",
-    "Optimized SQLite security and direct artisan CLI commands"
+    "Strict multi-tenant FTP scoping and user isolation with super-admin global management",
+    "Redesigned OTA Updates Center with modern glassmorphism UI, real-time safety pipeline & status metrics",
+    "Streamlined changelog feed with categorized release insights and one-click checksum verification",
+    "Enhanced permission enforcement preventing cross-account access and unauthorized FTP modifications"
   ],
   "commands": [
-    "composer install --no-dev --optimize-autoloader --no-interaction",
     "php artisan migrate --force",
-    "npm run build",
     "php artisan config:clear",
     "php artisan route:clear",
-    "php artisan cache:clear",
-    "systemctl restart nimbus-php-fpm"
+    "php artisan cache:clear"
   ]
 }

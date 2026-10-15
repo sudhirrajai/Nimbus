@@ -348,6 +348,15 @@ const logout = () => {
   color: #1f2937;
 }
 
+@media (max-width: 575.98px) {
+  .btn-report-header {
+    padding: 6px 8px;
+  }
+  .btn-report-header i {
+    font-size: 22px;
+  }
+}
+
 .btn-report-header i {
   font-size: 20px;
   color: #10b981;

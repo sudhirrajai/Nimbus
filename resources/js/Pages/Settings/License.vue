@@ -71,7 +71,19 @@
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                     <div class="text-secondary text-sm">Active Plan</div>
-                                    <div class="text-sm font-weight-bold text-dark uppercase">{{ license?.plan || 'Free' }}</div>
+                                    <div class="text-sm font-weight-bold text-dark uppercase">{{ license?.plan || plan || 'Free' }}</div>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <div class="text-secondary text-sm">Server Node Quota</div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-gradient-info text-xxs font-weight-bold">
+                                            {{ serverLimitDisplay }}
+                                        </span>
+                                    </div>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <div class="text-secondary text-sm">Domains Quota</div>
+                                    <div class="text-sm font-weight-bold text-dark">{{ domainLimitDisplay }}</div>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                     <div class="text-secondary text-sm">Renewal / Expiration</div>
@@ -142,6 +154,10 @@ const props = defineProps({
     licenseKey: String,
     machineId: String,
     serverIp: String,
+    plan: String,
+    maxDomains: [Number, String],
+    maxServers: [Number, String],
+    activeServers: [Number, String],
     errors: Object
 })
 
@@ -149,6 +165,19 @@ const syncing = ref(false)
 const showFullKey = ref(false)
 
 const errorMsg = computed(() => props.errors?.error || '')
+
+const serverLimitDisplay = computed(() => {
+    const max = Number(props.maxServers ?? props.license?.max_servers ?? 1)
+    const active = Number(props.activeServers ?? props.license?.active_servers ?? 1)
+    if (max >= 9999) return 'Unlimited Server Nodes'
+    return `${active} / ${max} Active Nodes`
+})
+
+const domainLimitDisplay = computed(() => {
+    const max = Number(props.maxDomains ?? props.license?.max_domains ?? 3)
+    if (max >= 9999 || max === -1) return 'Unlimited Domains'
+    return `${max} Domains`
+})
 
 const maskedKey = computed(() => {
     if (!props.licenseKey) return 'No Key Registered'
