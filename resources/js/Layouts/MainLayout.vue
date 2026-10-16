@@ -9,7 +9,7 @@
 
     <Sidebar />
 
-    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg d-flex flex-column min-vh-100">
+    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg d-flex flex-column min-vh-100" style="z-index: 1;">
       <Navbar />
 
       <div v-if="$page.props.license_warning" class="container-fluid pt-3 pb-0 position-relative z-index-2">
@@ -110,7 +110,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1 !important;
   overflow: hidden;
 }
 
@@ -118,52 +118,52 @@ onUnmounted(() => {
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
-  filter: blur(85px);
-  -webkit-filter: blur(85px);
+  filter: blur(80px);
+  -webkit-filter: blur(80px);
   will-change: transform;
 }
 
 .ambient-glow-1 {
   top: -80px;
-  right: 5%;
+  right: 8%;
   width: 520px;
   height: 520px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.18) 0%, rgba(59, 130, 246, 0.1) 45%, transparent 70%);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.08) 45%, transparent 70%);
   animation: floatOrb 22s ease-in-out infinite alternate;
 }
 
 .ambient-glow-2 {
-  top: 30%;
-  left: -120px;
-  width: 560px;
-  height: 560px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.16) 0%, rgba(14, 165, 233, 0.08) 50%, transparent 70%);
+  top: 35%;
+  left: -100px;
+  width: 540px;
+  height: 540px;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.06) 50%, transparent 70%);
   animation: floatOrbReverse 26s ease-in-out infinite alternate;
 }
 
 .ambient-glow-3 {
-  bottom: 5%;
-  right: 20%;
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.14) 0%, rgba(236, 72, 153, 0.06) 50%, transparent 70%);
+  bottom: 8%;
+  right: 18%;
+  width: 460px;
+  height: 460px;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.14) 0%, rgba(13, 148, 136, 0.06) 50%, transparent 70%);
   animation: floatOrb 30s ease-in-out infinite alternate;
 }
 
-/* Enhanced Dark Mode glow intensities */
+/* Enhanced Dark Mode Green Ambient Lighting */
 :global(body.dark-version) .ambient-glow-1 {
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.28) 0%, rgba(59, 130, 246, 0.15) 50%, transparent 70%);
-  filter: blur(95px);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, rgba(4, 120, 87, 0.12) 50%, transparent 70%);
+  filter: blur(90px);
 }
 
 :global(body.dark-version) .ambient-glow-2 {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.22) 0%, rgba(14, 165, 233, 0.12) 50%, transparent 70%);
-  filter: blur(95px);
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, rgba(5, 150, 105, 0.1) 50%, transparent 70%);
+  filter: blur(90px);
 }
 
 :global(body.dark-version) .ambient-glow-3 {
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, rgba(56, 189, 248, 0.1) 50%, transparent 70%);
-  filter: blur(95px);
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.18) 0%, rgba(16, 185, 129, 0.08) 50%, transparent 70%);
+  filter: blur(90px);
 }
 
 @keyframes floatOrb {

@@ -394,10 +394,10 @@ const logout = () => {
 }
 
 :global(body.dark-version) .glass-navbar {
-  background: rgba(13, 19, 34, 0.82) !important;
+  background: rgba(10, 19, 16, 0.85) !important;
   backdrop-filter: blur(24px) saturate(190%);
   -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.12) !important;
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4) !important;
 }
 
@@ -479,8 +479,8 @@ const logout = () => {
 }
 
 .icon-moon {
-  color: #6366f1;
-  filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.4));
+  color: #10b981;
+  filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.5));
 }
 
 .theme-toggle-text {

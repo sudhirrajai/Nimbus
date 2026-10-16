@@ -14,7 +14,7 @@
     border: 1px solid #9ca3af !important;
 }
 .form-control:focus, .form-select:focus {
-    border-color: #e91e63 !important;
+    border-color: #10b981 !important;
 }
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -660,8 +660,8 @@
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
 }
 .form-control:focus {
-    border-color: #e91e63 !important;
-    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1) !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18) !important;
     outline: none !important;
 }
 .form-control::placeholder {
@@ -1671,38 +1671,61 @@ html, body {
 }
 
 /* ==========================================================================
-   NIMBUS PREMIUM GLASSMORPHISM & DUAL THEME ENGINE
+   NIMBUS PREMIUM EMERALD GLASS THEME ENGINE (DUAL LIGHT / DARK)
    ========================================================================== */
 
 /* 1. Root Variables & Typography */
 :root {
   --nimbus-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --glass-bg-light: rgba(255, 255, 255, 0.84);
-  --glass-border-light: rgba(226, 232, 240, 0.85);
+  
+  /* Nimbus Signature Emerald Base Palette */
+  --nimbus-emerald-50: #f0fdf4;
+  --nimbus-emerald-100: #dcfce7;
+  --nimbus-emerald-200: #bbf7d0;
+  --nimbus-emerald-300: #86efac;
+  --nimbus-emerald-400: #34d399;
+  --nimbus-emerald-500: #10b981;
+  --nimbus-emerald-600: #059669;
+  --nimbus-emerald-700: #047857;
+  --nimbus-emerald-800: #065f46;
+  --nimbus-emerald-900: #064e3b;
+
+  /* Frosted Glass - Light Mode */
+  --glass-bg-light: rgba(255, 255, 255, 0.88);
+  --glass-border-light: rgba(226, 232, 240, 0.88);
   --glass-shadow-light: 0 10px 30px -10px rgba(15, 23, 42, 0.05), inset 0 1px 0 #fff;
 
-  --glass-bg-dark: rgba(15, 23, 42, 0.78);
-  --glass-border-dark: rgba(255, 255, 255, 0.08);
-  --glass-shadow-dark: 0 18px 45px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  /* Frosted Glass - Dark Mode */
+  --glass-bg-dark: rgba(14, 25, 21, 0.82);
+  --glass-border-dark: rgba(16, 185, 129, 0.15);
+  --glass-shadow-dark: 0 18px 45px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 body {
   font-family: var(--nimbus-font-sans);
-  background-color: #f8fafc;
+  background-color: #f3f6f4;
   color: #1e293b;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* 2. Global Dark Mode Canvas */
+/* 2. Global Dark Mode Canvas - Obsidian Emerald */
 body.dark-version,
 html.dark body {
-  background-color: #090d16 !important;
-  background-image: radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.07) 0px, transparent 50%),
-                    radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%) !important;
-  color: #cbd5e1 !important;
+  background-color: #08110e !important;
+  background-image: radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.09) 0px, transparent 50%),
+                    radial-gradient(at 0% 50%, rgba(5, 150, 105, 0.06) 0px, transparent 50%) !important;
+  color: #e2e8f0 !important;
 }
 
-/* 3. Universal Glassmorphic Cards across All Views */
+/* 3. Main Content Layer Stacking Fix (Resolves Dark Mode Obscurity) */
+main.main-content,
+body.dark-version .main-content {
+  background-color: transparent !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* 4. Universal Glassmorphic Cards across All Views */
 .card,
 .modern-panel-card,
 .glass-card {
@@ -1717,7 +1740,8 @@ html.dark body {
 
 .card:hover,
 .glass-card:hover {
-  box-shadow: 0 14px 35px -8px rgba(15, 23, 42, 0.08), inset 0 1px 0 #fff !important;
+  box-shadow: 0 14px 35px -8px rgba(16, 185, 129, 0.12), inset 0 1px 0 #fff !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
 }
 
 body.dark-version .card,
@@ -1729,12 +1753,13 @@ body.dark-version .glass-card {
   -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
   border: 1px solid var(--glass-border-dark) !important;
   box-shadow: var(--glass-shadow-dark) !important;
-  color: #cbd5e1;
+  color: #e2e8f0 !important;
 }
 
-body.dark-version .card:hover {
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  box-shadow: 0 22px 50px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
+body.dark-version .card:hover,
+body.dark-version .glass-card:hover {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 22px 50px -10px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Card Header & Footer adjustments */
@@ -1749,25 +1774,126 @@ body.dark-version .card:hover {
 }
 
 body.dark-version .card .card-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.12) !important;
 }
 
 body.dark-version .card .card-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.12) !important;
 }
 
-/* 4. Text & Typography Overrides in Dark Mode */
+/* 5. Nimbus Emerald Action Buttons & Badges (Per UI Reference) */
+.btn-primary,
+.bg-gradient-primary,
+.btn-success,
+.bg-gradient-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.btn-primary:hover,
+.bg-gradient-primary:hover,
+.btn-success:hover,
+.bg-gradient-success:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45) !important;
+  transform: translateY(-1px);
+  color: #ffffff !important;
+}
+
+.btn-outline-primary,
+.btn-outline-success {
+  border: 1px solid #10b981 !important;
+  color: #059669 !important;
+  background: transparent !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-success:hover {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+}
+
+body.dark-version .btn-outline-primary,
+body.dark-version .btn-outline-success {
+  border: 1px solid rgba(52, 211, 153, 0.45) !important;
+  color: #34d399 !important;
+}
+
+body.dark-version .btn-outline-primary:hover,
+body.dark-version .btn-outline-success:hover {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #10b981 !important;
+}
+
+/* Rounded Pill Navigation & Filter Tabs (Per UI Reference) */
+.nav-pills .nav-link {
+  border-radius: 9999px !important;
+  padding: 0.45rem 1.15rem !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  color: #475569;
+  transition: all 0.2s ease !important;
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+  color: #ffffff !important;
+}
+
+body.dark-version .nav-pills .nav-link:not(.active) {
+  color: #94a3b8 !important;
+}
+
+body.dark-version .nav-pills .nav-link:not(.active):hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+}
+
+/* Badges with Nature Emerald Accents */
+.badge.bg-gradient-primary,
+.badge.bg-gradient-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+}
+
+.badge-emerald-soft {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #047857 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+}
+
+body.dark-version .badge-emerald-soft {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+/* 6. Text & Typography Overrides in Dark Mode */
 body.dark-version h1,
 body.dark-version h2,
 body.dark-version h3,
 body.dark-version h4,
 body.dark-version h5,
 body.dark-version h6 {
-  color: #f8fafc !important;
+  color: #f0fdf4 !important;
 }
 
 body.dark-version .text-dark {
-  color: #f8fafc !important;
+  color: #f0fdf4 !important;
 }
 
 body.dark-version .text-body {
@@ -1781,10 +1907,14 @@ body.dark-version .text-muted {
 
 body.dark-version strong,
 body.dark-version b {
-  color: #f8fafc !important;
+  color: #f0fdf4 !important;
 }
 
-/* 5. Tables & Grids */
+body.dark-version .text-primary {
+  color: #34d399 !important;
+}
+
+/* 7. Tables & Grids */
 .table {
   color: inherit;
 }
@@ -1816,7 +1946,7 @@ body.dark-version b {
 
 body.dark-version .table thead th {
   color: #94a3b8 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.12) !important;
   background: transparent !important;
 }
 
@@ -1826,10 +1956,10 @@ body.dark-version .table tbody td {
 }
 
 body.dark-version .table tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: rgba(16, 185, 129, 0.04) !important;
 }
 
-/* 6. Form Controls & Inputs */
+/* 8. Form Controls & Inputs */
 .form-control,
 .form-select {
   border-radius: 0.75rem !important;
@@ -1848,14 +1978,14 @@ body:not(.dark-version) .form-select {
 body:not(.dark-version) .form-control:focus,
 body:not(.dark-version) .form-select:focus {
   background-color: #ffffff !important;
-  border-color: #6366f1 !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18) !important;
 }
 
 body.dark-version .form-control,
 body.dark-version .form-select {
-  background-color: rgba(15, 23, 42, 0.65) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(14, 25, 22, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
   color: #f8fafc !important;
 }
 
@@ -1865,28 +1995,28 @@ body.dark-version .form-control::placeholder {
 
 body.dark-version .form-control:focus,
 body.dark-version .form-select:focus {
-  background-color: rgba(15, 23, 42, 0.85) !important;
-  border-color: #818cf8 !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28) !important;
+  background-color: rgba(14, 25, 22, 0.9) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3) !important;
   color: #f8fafc !important;
 }
 
 body.dark-version .form-select option {
-  background-color: #0f172a !important;
+  background-color: #0b1311 !important;
   color: #f8fafc !important;
 }
 
 body.dark-version .input-group-text {
-  background-color: rgba(15, 23, 42, 0.65) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(14, 25, 22, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
   color: #94a3b8 !important;
 }
 
-/* 7. Glassmorphic Modal Dialogues */
+/* 9. Glassmorphic Modal Dialogues */
 .modal-backdrop {
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
-  background-color: rgba(15, 23, 42, 0.72) !important;
+  background-color: rgba(8, 17, 14, 0.75) !important;
 }
 
 .modal-content {
@@ -1903,57 +2033,74 @@ body:not(.dark-version) .modal-content {
 }
 
 body.dark-version .modal-content {
-  background: rgba(15, 23, 42, 0.94) !important;
+  background: rgba(14, 25, 22, 0.95) !important;
   backdrop-filter: blur(24px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.7) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.8) !important;
   color: #f8fafc !important;
 }
 
 body.dark-version .modal-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.12) !important;
 }
 
 body.dark-version .modal-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.12) !important;
 }
 
-/* 8. Dividers & Background Utilities in Dark Mode */
+/* 10. Dividers & Background Utilities in Dark Mode */
 body.dark-version hr.horizontal.dark {
-  background-image: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent) !important;
+  background-image: linear-gradient(to right, transparent, rgba(16, 185, 129, 0.15), transparent) !important;
   height: 1px !important;
   border: 0 !important;
 }
 
 body.dark-version hr.horizontal.light {
-  background-image: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.12), transparent) !important;
+  background-image: linear-gradient(to right, transparent, rgba(16, 185, 129, 0.18), transparent) !important;
   height: 1px !important;
   border: 0 !important;
 }
 
 body.dark-version .bg-gray-100,
 body.dark-version .bg-gray-50 {
-  background-color: rgba(15, 23, 42, 0.5) !important;
+  background-color: rgba(14, 25, 22, 0.55) !important;
 }
 
 body.dark-version .bg-white {
-  background-color: rgba(15, 23, 42, 0.75) !important;
+  background-color: rgba(14, 25, 22, 0.82) !important;
 }
 
 body.dark-version .border-bottom {
-  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  border-bottom-color: rgba(16, 185, 129, 0.12) !important;
 }
 
 body.dark-version .border-top {
-  border-top-color: rgba(255, 255, 255, 0.08) !important;
+  border-top-color: rgba(16, 185, 129, 0.12) !important;
 }
 
 body.dark-version .border {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.12) !important;
 }
 
-/* 9. Global Custom Scrollbar */
+/* 11. Sidenav & Navbar Styling Overrides */
+body.dark-version #sidenav-main,
+body.dark-version .sidenav {
+  background: rgba(10, 19, 16, 0.88) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border-right: 1px solid rgba(16, 185, 129, 0.12) !important;
+}
+
+body.dark-version #navbarBlur,
+body.dark-version .glass-navbar {
+  background: rgba(10, 19, 16, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.12) !important;
+}
+
+/* 12. Global Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
@@ -1969,13 +2116,14 @@ body.dark-version .border {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(16, 185, 129, 0.45);
 }
 
 body.dark-version ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(16, 185, 129, 0.25);
 }
 
 body.dark-version ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(16, 185, 129, 0.5);
 }
+

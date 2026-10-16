@@ -384,10 +384,10 @@ onUnmounted(() => {
 }
 
 :global(body.dark-version) .glass-sidebar {
-  background: rgba(13, 19, 34, 0.85) !important;
+  background: rgba(10, 19, 16, 0.88) !important;
   backdrop-filter: blur(24px) saturate(190%);
   -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.12) !important;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -409,7 +409,7 @@ onUnmounted(() => {
   border-color: rgba(0, 0, 0, 0.06) !important;
 }
 :global(body.dark-version) .sidebar-hr {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.12) !important;
 }
 
 .icon-sidebar-close {
@@ -444,18 +444,20 @@ onUnmounted(() => {
 }
 
 :global(body.dark-version) .nav-link:hover:not(.active) {
-  background-color: rgba(255, 255, 255, 0.06) !important;
+  background-color: rgba(16, 185, 129, 0.08) !important;
   color: #ffffff !important;
 }
 
 .active-glass-nav {
-  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%) !important;
-  box-shadow: 0 6px 18px -2px rgba(79, 70, 229, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
 }
 
 :global(body.dark-version) .active-glass-nav {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
-  box-shadow: 0 6px 20px -2px rgba(99, 102, 241, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
 }
 
 .glass-sidebar-footer {
@@ -465,8 +467,8 @@ onUnmounted(() => {
 }
 
 :global(body.dark-version) .glass-sidebar-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-  background: rgba(13, 19, 34, 0.6) !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.12) !important;
+  background: rgba(10, 19, 16, 0.6) !important;
 }
 
 .btn-outline-sidebar {
