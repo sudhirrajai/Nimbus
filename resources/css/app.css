@@ -1670,3 +1670,309 @@ html, body {
   }
 }
 
+/* ==========================================================================
+   NIMBUS PREMIUM GLASSMORPHISM & DUAL THEME ENGINE
+   ========================================================================== */
+
+/* 1. Root Variables & Typography */
+:root {
+  --nimbus-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --glass-bg-light: rgba(255, 255, 255, 0.84);
+  --glass-border-light: rgba(226, 232, 240, 0.85);
+  --glass-shadow-light: 0 10px 30px -10px rgba(15, 23, 42, 0.05), inset 0 1px 0 #fff;
+
+  --glass-bg-dark: rgba(15, 23, 42, 0.78);
+  --glass-border-dark: rgba(255, 255, 255, 0.08);
+  --glass-shadow-dark: 0 18px 45px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body {
+  font-family: var(--nimbus-font-sans);
+  background-color: #f8fafc;
+  color: #1e293b;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 2. Global Dark Mode Canvas */
+body.dark-version,
+html.dark body {
+  background-color: #090d16 !important;
+  background-image: radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.07) 0px, transparent 50%),
+                    radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%) !important;
+  color: #cbd5e1 !important;
+}
+
+/* 3. Universal Glassmorphic Cards across All Views */
+.card,
+.modern-panel-card {
+  background: var(--glass-bg-light) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border-light) !important;
+  border-radius: 1.15rem !important;
+  box-shadow: var(--glass-shadow-light) !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.card:hover {
+  box-shadow: 0 14px 35px -8px rgba(15, 23, 42, 0.08), inset 0 1px 0 #fff !important;
+}
+
+body.dark-version .card,
+html.dark .card,
+body.dark-version .modern-panel-card {
+  background: var(--glass-bg-dark) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid var(--glass-border-dark) !important;
+  box-shadow: var(--glass-shadow-dark) !important;
+  color: #cbd5e1;
+}
+
+body.dark-version .card:hover {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 22px 50px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
+}
+
+/* Card Header & Footer adjustments */
+.card .card-header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7) !important;
+}
+
+.card .card-footer {
+  background: transparent !important;
+  border-top: 1px solid rgba(226, 232, 240, 0.7) !important;
+}
+
+body.dark-version .card .card-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-version .card .card-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 4. Text & Typography Overrides in Dark Mode */
+body.dark-version h1,
+body.dark-version h2,
+body.dark-version h3,
+body.dark-version h4,
+body.dark-version h5,
+body.dark-version h6 {
+  color: #f8fafc !important;
+}
+
+body.dark-version .text-dark {
+  color: #f8fafc !important;
+}
+
+body.dark-version .text-body {
+  color: #cbd5e1 !important;
+}
+
+body.dark-version .text-secondary,
+body.dark-version .text-muted {
+  color: #94a3b8 !important;
+}
+
+body.dark-version strong,
+body.dark-version b {
+  color: #f8fafc !important;
+}
+
+/* 5. Tables & Grids */
+.table {
+  color: inherit;
+}
+
+.table thead th {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #64748b !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 12px 16px !important;
+}
+
+.table tbody td {
+  padding: 12px 16px !important;
+  font-size: 0.85rem !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  vertical-align: middle !important;
+}
+
+.table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(241, 245, 249, 0.65) !important;
+}
+
+body.dark-version .table thead th {
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
+}
+
+body.dark-version .table tbody td {
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+body.dark-version .table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* 6. Form Controls & Inputs */
+.form-control,
+.form-select {
+  border-radius: 0.75rem !important;
+  font-size: 0.875rem !important;
+  padding: 0.55rem 0.95rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+body:not(.dark-version) .form-control,
+body:not(.dark-version) .form-select {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+body:not(.dark-version) .form-control:focus,
+body:not(.dark-version) .form-select:focus {
+  background-color: #ffffff !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+}
+
+body.dark-version .form-control,
+body.dark-version .form-select {
+  background-color: rgba(15, 23, 42, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+body.dark-version .form-control::placeholder {
+  color: #64748b !important;
+}
+
+body.dark-version .form-control:focus,
+body.dark-version .form-select:focus {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28) !important;
+  color: #f8fafc !important;
+}
+
+body.dark-version .form-select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+body.dark-version .input-group-text {
+  background-color: rgba(15, 23, 42, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #94a3b8 !important;
+}
+
+/* 7. Glassmorphic Modal Dialogues */
+.modal-backdrop {
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  background-color: rgba(15, 23, 42, 0.72) !important;
+}
+
+.modal-content {
+  border-radius: 1.5rem !important;
+  overflow: hidden !important;
+}
+
+body:not(.dark-version) .modal-content {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 30px 70px -15px rgba(15, 23, 42, 0.28) !important;
+}
+
+body.dark-version .modal-content {
+  background: rgba(15, 23, 42, 0.94) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.7) !important;
+  color: #f8fafc !important;
+}
+
+body.dark-version .modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-version .modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 8. Dividers & Background Utilities in Dark Mode */
+body.dark-version hr.horizontal.dark {
+  background-image: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent) !important;
+  height: 1px !important;
+  border: 0 !important;
+}
+
+body.dark-version hr.horizontal.light {
+  background-image: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.12), transparent) !important;
+  height: 1px !important;
+  border: 0 !important;
+}
+
+body.dark-version .bg-gray-100,
+body.dark-version .bg-gray-50 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+body.dark-version .bg-white {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+}
+
+body.dark-version .border-bottom {
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-version .border-top {
+  border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-version .border {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 9. Global Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+body.dark-version ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+body.dark-version ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

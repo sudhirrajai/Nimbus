@@ -1,5 +1,5 @@
 <template>
-  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-xl-2 bg-white my-xl-2"
+  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-xl-2 glass-sidebar my-xl-2"
     id="sidenav-main">
     <div class="sidenav-header" style="height: 72px; width: 100%;">
       <button 
@@ -10,19 +10,19 @@
         style="cursor: pointer; z-index: 20; text-decoration: none; border: none; background: transparent; line-height: 1;"
         aria-label="Close Sidebar"
       >
-        <i class="material-symbols-rounded" style="font-size: 24px; color: #4b5563;">close</i>
+        <i class="material-symbols-rounded icon-sidebar-close" style="font-size: 24px;">close</i>
       </button>
 
       <Link class="navbar-brand px-4 py-3 m-0" href="/dashboard" style="display: flex; align-items: center; line-height: 1; gap: 8px;">
         <img :src="'/assets/img/nimbus_logo.png?v=2'" class="navbar-brand-img" alt="main_logo" style="width: 36px; height: 36px; border-radius: 6px;">
         <div style="display: flex; flex-direction: column; align-items: flex-start;">
-          <span class="text-sm text-dark font-weight-bold" style="letter-spacing: -0.03em;">nimbus</span>
-          <span class="text-xxs text-muted opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by VMCore</span>
+          <span class="text-sm sidebar-brand-title font-weight-bold" style="letter-spacing: -0.03em;">nimbus</span>
+          <span class="text-xxs sidebar-brand-sub opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by VMCore</span>
         </div>
       </Link>
     </div>
 
-    <hr class="horizontal dark mt-0 mb-2" />
+    <hr class="horizontal dark mt-0 mb-2 sidebar-hr" />
 
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main" @click="handleNavClick" style="display: block !important; height: calc(100% - 155px) !important; max-height: calc(100% - 155px) !important; overflow-y: auto !important; overflow-x: hidden !important; width: 100% !important; -webkit-overflow-scrolling: touch; touch-action: pan-y;">
       <ul class="navbar-nav">
@@ -276,9 +276,9 @@
       </ul>
     </div>
 
-    <div class="sidenav-footer position-absolute w-100 bottom-0 bg-white" style="z-index: 10; border-top: 1px solid rgba(0, 0, 0, 0.06); padding-top: 8px; padding-bottom: 8px;">
+    <div class="sidenav-footer position-absolute w-100 bottom-0 glass-sidebar-footer" style="z-index: 10; padding-top: 8px; padding-bottom: 8px;">
       <div class="mx-3">
-        <a class="btn btn-outline-dark w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank" @click="handleNavClick">
+        <a class="btn btn-outline-sidebar w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank" @click="handleNavClick">
           <i class="material-symbols-rounded text-sm">menu_book</i>
           <span>Documentation</span>
         </a>
@@ -319,15 +319,15 @@ const isActive = (path, exact = false) => {
   const currentPath = (page.url || '').split('?')[0]
 
   if (exact || path === '/settings') {
-    return currentPath === path ? 'active bg-gradient-dark text-white' : 'text-dark'
+    return currentPath === path ? 'active active-glass-nav text-white' : 'sidebar-nav-item'
   }
 
   // Check if current path matches or starts with the given path
   if (currentPath === path || currentPath.startsWith(path + '/')) {
-    return 'active bg-gradient-dark text-white'
+    return 'active active-glass-nav text-white'
   }
 
-  return 'text-dark'
+  return 'sidebar-nav-item'
 }
 
 const closeSidebar = () => {
@@ -374,22 +374,138 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.glass-sidebar {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  box-shadow: 0 15px 35px -10px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: all 0.3s ease;
+}
+
+:global(body.dark-version) .glass-sidebar {
+  background: rgba(13, 19, 34, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-brand-title {
+  color: #0f172a;
+}
+:global(body.dark-version) .sidebar-brand-title {
+  color: #f8fafc !important;
+}
+
+.sidebar-brand-sub {
+  color: #64748b;
+}
+:global(body.dark-version) .sidebar-brand-sub {
+  color: #94a3b8 !important;
+}
+
+.sidebar-hr {
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+:global(body.dark-version) .sidebar-hr {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.icon-sidebar-close {
+  color: #4b5563;
+}
+:global(body.dark-version) .icon-sidebar-close {
+  color: #94a3b8 !important;
+}
+
 .nav-link {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 0.75rem;
+  margin: 2px 10px;
+}
+
+.sidebar-nav-item {
+  color: #334155 !important;
+}
+
+:global(body.dark-version) .sidebar-nav-item {
+  color: #cbd5e1 !important;
+}
+
+:global(body.dark-version) .nav-item h6 {
+  color: #94a3b8 !important;
+  opacity: 0.85 !important;
 }
 
 .nav-link:hover:not(.active) {
-  background-color: rgba(0, 0, 0, 0.05);
-  transform: translateX(5px);
+  background-color: rgba(0, 0, 0, 0.04);
+  transform: translateX(4px);
 }
 
-.nav-link.active {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+:global(body.dark-version) .nav-link:hover:not(.active) {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+}
+
+.active-glass-nav {
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%) !important;
+  box-shadow: 0 6px 18px -2px rgba(79, 70, 229, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+
+:global(body.dark-version) .active-glass-nav {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+  box-shadow: 0 6px 20px -2px rgba(99, 102, 241, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+.glass-sidebar-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+:global(body.dark-version) .glass-sidebar-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(13, 19, 34, 0.6) !important;
+}
+
+.btn-outline-sidebar {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #334155;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-sidebar:hover {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+:global(body.dark-version) .btn-outline-sidebar {
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #e2e8f0 !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+:global(body.dark-version) .btn-outline-sidebar:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
 }
 
 #sidenav-collapse-main {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+:global(body.dark-version) #sidenav-collapse-main {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 #sidenav-collapse-main::-webkit-scrollbar {
@@ -403,6 +519,10 @@ onUnmounted(() => {
 #sidenav-collapse-main::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.18);
   border-radius: 10px;
+}
+
+:global(body.dark-version) #sidenav-collapse-main::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
 #sidenav-collapse-main::-webkit-scrollbar-thumb:hover {

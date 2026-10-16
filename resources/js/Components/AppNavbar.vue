@@ -1,6 +1,6 @@
 <template>
   <nav
-    class="navbar navbar-main navbar-expand-lg px-0 mx-2 mx-md-3 shadow-none border-radius-xl"
+    class="navbar navbar-main navbar-expand-lg px-0 mx-2 mx-md-3 shadow-none border-radius-xl glass-navbar"
     id="navbarBlur"
   >
     <div class="container-fluid py-1 px-2 px-md-3 d-flex align-items-center justify-content-between flex-nowrap">
@@ -8,13 +8,13 @@
       <div class="d-flex align-items-center gap-2">
         <div class="d-xl-none">
           <a href="#" class="nav-link text-body p-1 d-flex align-items-center" @click.prevent="toggleSidebar" aria-label="Toggle navigation">
-            <i class="material-symbols-rounded text-dark" style="font-size: 26px;">menu</i>
+            <i class="material-symbols-rounded navbar-icon-menu" style="font-size: 26px;">menu</i>
           </a>
         </div>
         <!-- Mobile/Tablet brand logo (when sidebar is hidden) -->
         <Link href="/dashboard" class="d-flex d-xl-none align-items-center text-decoration-none gap-2">
           <img :src="'/assets/img/nimbus_logo.png?v=2'" alt="nimbus" style="width: 28px; height: 28px; border-radius: 6px;">
-          <span class="text-sm font-weight-bold text-dark d-none d-sm-inline" style="letter-spacing: -0.03em;">nimbus</span>
+          <span class="text-sm font-weight-bold navbar-brand-logo-text d-none d-sm-inline" style="letter-spacing: -0.03em;">nimbus</span>
         </Link>
       </div>
 
@@ -40,17 +40,17 @@
             </div>
 
             <!-- Floating Clock Details Popover -->
-            <div v-if="isClockOpen" class="clock-popover shadow-lg border rounded-3 p-3 bg-white position-absolute z-index-modal">
-              <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+            <div v-if="isClockOpen" class="clock-popover shadow-lg border rounded-3 p-3 position-absolute z-index-modal">
+              <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom popover-header-row">
                 <div class="d-flex align-items-center gap-1.5">
                   <span class="live-dot"></span>
-                  <span class="text-xs font-weight-bold text-dark">Time Synchronization</span>
+                  <span class="text-xs font-weight-bold popover-title-text">Time Synchronization</span>
                 </div>
                 <span class="badge badge-xs bg-success-subtle text-success">Live Sync</span>
               </div>
               
               <!-- Server Time Card -->
-              <div class="p-2 rounded-2 mb-2 bg-gray-100 border">
+              <div class="p-2 rounded-2 mb-2 popover-time-card border">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                   <span class="text-xxs text-secondary text-uppercase font-weight-bold d-flex align-items-center">
                     <i class="material-symbols-rounded text-xxs me-1 text-primary">dns</i>Linux Server
@@ -58,13 +58,13 @@
                   <span class="badge badge-xs bg-dark font-monospace text-xxs">{{ serverTimezone }}</span>
                 </div>
                 <div class="d-flex justify-content-between align-items-baseline">
-                  <span class="font-monospace text-sm font-weight-bolder text-dark">{{ serverTimeDisplay }}</span>
+                  <span class="font-monospace text-sm font-weight-bolder popover-bold-time">{{ serverTimeDisplay }}</span>
                   <span class="text-xxs text-muted">{{ serverDateDisplay }}</span>
                 </div>
               </div>
 
               <!-- Local Time Card -->
-              <div class="p-2 rounded-2 mb-2 bg-white border">
+              <div class="p-2 rounded-2 mb-2 popover-time-card border">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                   <span class="text-xxs text-secondary text-uppercase font-weight-bold d-flex align-items-center">
                     <i class="material-symbols-rounded text-xxs me-1 text-info">laptop_mac</i>Your Browser
@@ -72,17 +72,35 @@
                   <span class="badge badge-xs bg-secondary font-monospace text-xxs">{{ localTimezoneShort }}</span>
                 </div>
                 <div class="d-flex justify-content-between align-items-baseline">
-                  <span class="font-monospace text-sm font-weight-bold text-dark">{{ localTimeDisplay }}</span>
+                  <span class="font-monospace text-sm font-weight-bold popover-bold-time">{{ localTimeDisplay }}</span>
                   <span class="text-xxs text-muted">{{ localDateDisplay }}</span>
                 </div>
               </div>
 
               <!-- Difference note -->
-              <div class="text-xxs text-secondary bg-gray-100 p-2 rounded-2 d-flex align-items-center gap-1.5">
+              <div class="text-xxs text-secondary popover-diff-box p-2 rounded-2 d-flex align-items-center gap-1.5">
                 <i class="material-symbols-rounded text-info text-xs">info</i>
                 <span>{{ timeDiffText }}</span>
               </div>
             </div>
+          </li>
+
+          <!-- Theme Toggle Switcher Button (Glass Light / Dark) -->
+          <li class="nav-item pe-1 pe-sm-2 d-flex align-items-center">
+            <button 
+              type="button" 
+              class="theme-toggle-btn" 
+              @click="toggleTheme" 
+              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+              aria-label="Toggle Light/Dark Theme"
+            >
+              <i class="material-symbols-rounded theme-toggle-icon" :class="isDarkMode ? 'icon-sun' : 'icon-moon'">
+                {{ isDarkMode ? 'light_mode' : 'dark_mode' }}
+              </i>
+              <span class="d-none d-lg-inline text-xxs font-weight-bold ms-1 theme-toggle-text">
+                {{ isDarkMode ? 'Light' : 'Dark' }}
+              </span>
+            </button>
           </li>
 
           <!-- Report Bug Button -->
@@ -105,9 +123,9 @@
               class="nav-link text-body p-1 d-flex align-items-center"
               @click.prevent="toggleDropdown"
             >
-              <i class="material-symbols-rounded text-dark" style="font-size: 24px;">account_circle</i>
-              <span class="d-none d-sm-inline ms-1 text-dark text-sm font-weight-medium">{{ userName }}</span>
-              <i class="material-symbols-rounded ms-1 text-sm d-none d-sm-inline">expand_more</i>
+              <i class="material-symbols-rounded navbar-icon-user" style="font-size: 24px;">account_circle</i>
+              <span class="d-none d-sm-inline ms-1 navbar-user-name text-sm font-weight-medium">{{ userName }}</span>
+              <i class="material-symbols-rounded ms-1 text-sm navbar-icon-user d-none d-sm-inline">expand_more</i>
             </a>
             <ul 
               class="dropdown-menu dropdown-menu-end px-2 py-3 shadow-lg" 
@@ -172,6 +190,41 @@ const userName = computed(() => {
 
 const userRole = computed(() => page.props.auth?.user?.role || 'user')
 const isRoot = computed(() => Boolean(page.props.auth?.user?.is_root || userRole.value === 'root'))
+
+// ═══ THEME MANAGEMENT (Light / Dark Glass) ═══
+const isDarkMode = ref(false)
+
+const applyTheme = (dark) => {
+  isDarkMode.value = dark
+  if (dark) {
+    document.documentElement.classList.add('dark')
+    document.body?.classList.add('dark-version')
+    localStorage.setItem('nimbus_theme', 'dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+    document.body?.classList.remove('dark-version')
+    localStorage.setItem('nimbus_theme', 'light')
+  }
+  window.dispatchEvent(new CustomEvent('nimbus-theme-changed', { detail: { isDark: dark } }))
+}
+
+const toggleTheme = () => {
+  applyTheme(!isDarkMode.value)
+}
+
+const syncThemeState = () => {
+  const saved = localStorage.getItem('nimbus_theme')
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  const activeDark = saved ? (saved === 'dark') : prefersDark
+  isDarkMode.value = activeDark
+  if (activeDark) {
+    document.documentElement.classList.add('dark')
+    document.body?.classList.add('dark-version')
+  } else {
+    document.documentElement.classList.remove('dark')
+    document.body?.classList.remove('dark-version')
+  }
+}
 
 const isClockOpen = ref(false)
 const clockDropdownRef = ref(null)
@@ -285,6 +338,7 @@ const handleClickOutside = (event) => {
 }
 
 onMounted(() => {
+  syncThemeState()
   document.addEventListener('click', handleClickOutside)
   window.closeMobileSidebar = closeSidebar
 
@@ -330,6 +384,115 @@ const logout = () => {
 </script>
 
 <style scoped>
+.glass-navbar {
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05) !important;
+  transition: all 0.3s ease;
+}
+
+:global(body.dark-version) .glass-navbar {
+  background: rgba(13, 19, 34, 0.82) !important;
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4) !important;
+}
+
+.navbar-icon-menu {
+  color: #1e293b;
+}
+:global(body.dark-version) .navbar-icon-menu {
+  color: #f8fafc !important;
+}
+
+.navbar-brand-logo-text {
+  color: #0f172a;
+}
+:global(body.dark-version) .navbar-brand-logo-text {
+  color: #f8fafc !important;
+}
+
+.navbar-icon-user {
+  color: #1e293b;
+}
+:global(body.dark-version) .navbar-icon-user {
+  color: #f8fafc !important;
+}
+
+.navbar-user-name {
+  color: #1e293b;
+}
+:global(body.dark-version) .navbar-user-name {
+  color: #f8fafc !important;
+}
+
+/* Theme Toggle Button */
+.theme-toggle-btn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  user-select: none;
+}
+
+.theme-toggle-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+:global(body.dark-version) .theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #f8fafc !important;
+}
+
+:global(body.dark-version) .theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+}
+
+.theme-toggle-icon {
+  font-size: 16px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-toggle-btn:hover .theme-toggle-icon {
+  transform: rotate(20deg) scale(1.1);
+}
+
+.icon-sun {
+  color: #f59e0b;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.6));
+}
+
+.icon-moon {
+  color: #6366f1;
+  filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.4));
+}
+
+.theme-toggle-text {
+  color: #475569;
+  font-size: 0.72rem;
+  letter-spacing: -0.01em;
+}
+
+:global(body.dark-version) .theme-toggle-text {
+  color: #e2e8f0 !important;
+}
+
 .btn-report-header {
   background: none;
   border: none;
@@ -346,6 +509,15 @@ const logout = () => {
 .btn-report-header:hover {
   background-color: #f0f2f5;
   color: #1f2937;
+}
+
+:global(body.dark-version) .btn-report-header {
+  color: #cbd5e1 !important;
+}
+
+:global(body.dark-version) .btn-report-header:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
 }
 
 @media (max-width: 575.98px) {
@@ -374,20 +546,51 @@ const logout = () => {
   right: 0;
   top: 100%;
   margin-top: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1rem !important;
+}
+
+:global(body.dark-version) .dropdown-menu {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6) !important;
 }
 
 .dropdown-item {
   padding: 10px 16px;
   font-size: 0.875rem;
   transition: all 0.2s;
+  border-radius: 0.65rem;
 }
 
 .dropdown-item:hover {
   background-color: #f0f2f5;
 }
 
+:global(body.dark-version) .dropdown-item {
+  color: #cbd5e1 !important;
+}
+
+:global(body.dark-version) .dropdown-item:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
 .dropdown-item.text-danger:hover {
   background-color: #fee2e2;
+}
+
+:global(body.dark-version) .dropdown-item.text-danger:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+:global(body.dark-version) .dropdown-divider {
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .sidenav-overlay {
@@ -398,8 +601,8 @@ const logout = () => {
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
   z-index: 1040;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 /* Premium Server Time Capsule */
@@ -420,6 +623,18 @@ const logout = () => {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
 }
 
+:global(body.dark-version) .server-time-capsule {
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+:global(body.dark-version) .server-time-capsule:hover,
+:global(body.dark-version) .server-time-capsule.capsule-active {
+  background: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
 .live-dot {
   width: 7px;
   height: 7px;
@@ -436,6 +651,9 @@ const logout = () => {
   color: #64748b;
   flex-shrink: 0;
 }
+:global(body.dark-version) .clock-icon {
+  color: #94a3b8 !important;
+}
 
 .time-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -446,6 +664,10 @@ const logout = () => {
   font-feature-settings: 'tnum';
   font-variant-numeric: tabular-nums;
   line-height: 1;
+}
+
+:global(body.dark-version) .time-text {
+  color: #f8fafc !important;
 }
 
 .tz-badge {
@@ -461,13 +683,67 @@ const logout = () => {
   line-height: 1.2;
 }
 
+:global(body.dark-version) .tz-badge {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #cbd5e1 !important;
+}
+
 .clock-popover {
   top: calc(100% + 8px);
   right: 0;
   width: 270px;
   z-index: 1060;
   border-color: #e2e8f0 !important;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 1rem !important;
   animation: popover-slide 0.15s ease-out;
+}
+
+:global(body.dark-version) .clock-popover {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6) !important;
+}
+
+:global(body.dark-version) .popover-header-row {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.popover-title-text {
+  color: #0f172a;
+}
+:global(body.dark-version) .popover-title-text {
+  color: #f8fafc !important;
+}
+
+.popover-time-card {
+  background: #f8fafc;
+  border-color: #e2e8f0 !important;
+}
+
+:global(body.dark-version) .popover-time-card {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.popover-bold-time {
+  color: #0f172a;
+}
+:global(body.dark-version) .popover-bold-time {
+  color: #f8fafc !important;
+}
+
+.popover-diff-box {
+  background: #f1f5f9;
+}
+:global(body.dark-version) .popover-diff-box {
+  background: rgba(30, 41, 59, 0.45) !important;
+  color: #94a3b8 !important;
 }
 
 @keyframes popover-slide {
@@ -508,6 +784,26 @@ const logout = () => {
 }
 .border-info-subtle {
   border-color: #bae6fd !important;
+}
+</style>
+
+<style>
+/* Global styles for mobile sidebar */
+#sidenav-main {
+  z-index: 999;
+}
+
+@media (max-width: 1199.98px) {
+  #sidenav-main {
+    transform: translateX(-110%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  #sidenav-main.show-mobile {
+    transform: translateX(0) !important;
+    z-index: 1050 !important;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
+  }
 }
 </style>
 

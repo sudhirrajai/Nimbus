@@ -20,6 +20,29 @@
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
         <link id="pagestyle" href="/assets/css/material-dashboard.css?v=3.2.0" rel="stylesheet" />
 
+        <!-- Theme Initializer (Zero Flash) -->
+        <script>
+            (function() {
+                try {
+                    const saved = localStorage.getItem('nimbus_theme');
+                    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const isDark = saved ? (saved === 'dark') : prefersDark;
+                    if (isDark) {
+                        document.documentElement.classList.add('dark');
+                        if (document.body) {
+                            document.body.classList.add('dark-version');
+                        } else {
+                            document.addEventListener('DOMContentLoaded', function() {
+                                document.body.classList.add('dark-version');
+                            });
+                        }
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                } catch (e) {}
+            })();
+        </script>
+
         <!-- Scripts -->
         @routes
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
