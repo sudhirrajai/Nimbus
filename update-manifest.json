@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1",
-  "release_date": "2026-10-15",
-  "sha256": "fc87e2ecf213032329a1b0a501cc1a7d8dacf8c997f39ae8187cf85d00d9df72",
+  "version": "1.1.2",
+  "release_date": "2026-10-16",
+  "sha256": "e96f0239f0423d583df631e25e4b535755efb499505b1937fe41bb7beb99a119",
   "changelog": [
     "Resolved WordPress installation permissions conflict under multi-tenant Site Isolation",
     "Resolved update pipeline freeze at Step 8/8 during PHP-FPM service restart",

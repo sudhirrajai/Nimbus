@@ -71,7 +71,7 @@ class UpdateController extends Controller
                 'downloadUrl' => $updateInfo['downloadUrl'] ?? null,
                 'releaseDate' => $updateInfo['releaseDate'] ?? null,
                 'releaseUrl' => $updateInfo['releaseUrl'] ?? null,
-                'source' => $updateInfo['source'] ?? 'VMCore Central'
+                'source' => $updateInfo['source'] ?? 'Roook'
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -102,7 +102,7 @@ class UpdateController extends Controller
                     $data = $response->json();
                     if (!empty($data['version'])) {
                         return [
-                            'source' => 'VMCore Central (' . parse_url($apiUrl, PHP_URL_HOST) . ')',
+                            'source' => 'Roook (' . parse_url($apiUrl, PHP_URL_HOST) . ')',
                             'version' => trim($data['version']),
                             'downloadUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
                             'sha256' => $data['sha256'] ?? null,
@@ -125,7 +125,7 @@ class UpdateController extends Controller
         }
 
         return [
-            'source' => 'VMCore Central (roook.vmcore.in)',
+            'source' => 'Roook (roook.vmcore.in)',
             'version' => $localManifest['version'] ?? $this->getCurrentVersion(),
             'downloadUrl' => null,
             'sha256' => $localManifest['sha256'] ?? null,
