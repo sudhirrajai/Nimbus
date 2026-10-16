@@ -385,6 +385,8 @@ const logout = () => {
 
 <style scoped>
 .glass-navbar {
+  position: relative !important;
+  z-index: 1050 !important;
   background: rgba(255, 255, 255, 0.82) !important;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);

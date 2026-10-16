@@ -2285,7 +2285,14 @@ body.dark-version .shortcut-plus {
   }
 }
 
+.navbar.glass-navbar,
+#navbarBlur {
+  position: relative !important;
+  z-index: 1050 !important;
+}
+
 .dropdown-menu {
+  z-index: 99999 !important;
   border-radius: 12px !important;
   padding: 6px !important;
   background: rgba(255, 255, 255, 0.97) !important;
