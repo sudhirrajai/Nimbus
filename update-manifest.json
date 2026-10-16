@@ -1,11 +1,11 @@
 {
-  "version": "1.1.2",
+  "version": "1.1.3",
   "release_date": "2026-10-16",
-  "sha256": "c3be65d78ab894a94965402720f3e3899424c32aed7b1ed2599cdd48de81190f",
+  "sha256": "686515bdc876cd90be034c8c1cb896ea7eac2cdeb6929424cad5376671863715",
   "changelog": [
-    "Resolved WordPress installation permissions conflict under multi-tenant Site Isolation",
-    "Resolved update pipeline freeze at Step 8/8 during PHP-FPM service restart",
-    "Enhanced OTA Updates Center with custom confirmation dialog, real-time safety pipeline and auto-scrolling console"
+    "Modern Nimbus Emerald Glass UI with dual dark & light mode support",
+    "Fixed dark mode rendering and contrast across all management modules",
+    "Automated Cloudflare DNS A-record creation for subdomains when root domain is connected"
   ],
   "commands": [
     "php artisan migrate --force",

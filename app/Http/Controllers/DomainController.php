@@ -501,9 +501,24 @@ class DomainController extends Controller
             }
             // ──────────────────────────────────────────────────────────
 
+            // ─── Automated Cloudflare DNS A-Record for Subdomains ────
+            $cfResult = null;
+            $message = 'Domain created successfully';
+            try {
+                $cfService = app(\App\Services\CloudflareDnsService::class);
+                $cfResult = $cfService->autoCreateSubdomainRecord($domain, $serverIp);
+                if (!empty($cfResult['synced'])) {
+                    $message = "Domain {$domain} created successfully. Cloudflare A-record automatically created pointing to {$serverIp}.";
+                }
+            } catch (\Throwable $cfEx) {
+                \Log::warning("[CloudflareAutoDNS] Could not auto-sync {$domain}: " . $cfEx->getMessage());
+            }
+            // ──────────────────────────────────────────────────────────
+
             return response()->json([
-                'message' => 'Domain created successfully',
-                'domain' => $domain
+                'message' => $message,
+                'domain' => $domain,
+                'cloudflare' => $cfResult
             ], 201);
 
         } catch (ValidationException $e) {
@@ -687,6 +702,17 @@ class DomainController extends Controller
 
             // ─── Comprehensive Cleanup: Files, Crons, Supervisors, Processes, SSL, DB ──
             $cleanup = \App\Services\ProjectControlService::cleanupDomainCompletely($domain);
+
+            // Attempt to clean up Cloudflare DNS record if it was a subdomain
+            try {
+                $cfCleanup = app(\App\Services\CloudflareDnsService::class)->autoDeleteSubdomainRecord($domain);
+                if (!empty($cfCleanup['deleted'])) {
+                    $cleanup['cloudflare_dns'] = 'Auto-deleted Cloudflare DNS record';
+                }
+            } catch (\Throwable $cfEx) {
+                \Log::warning("[CloudflareAutoDNS] Could not clean up {$domain} DNS on delete: " . $cfEx->getMessage());
+            }
+
             \Log::info("Comprehensive cleanup finished for $domain: " . json_encode($cleanup));
 
             return response()->json([

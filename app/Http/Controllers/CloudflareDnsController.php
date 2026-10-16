@@ -65,32 +65,7 @@ class CloudflareDnsController extends Controller
      */
     private static function getMainDomain($domain)
     {
-        $domain = strtolower($domain);
-        $parts = explode('.', $domain);
-        $count = count($parts);
-        
-        if ($count <= 2) {
-            return $domain;
-        }
-        
-        $lastTwo = $parts[$count - 2] . '.' . $parts[$count - 1];
-        $multipartTlds = [
-            'co.uk', 'me.uk', 'org.uk', 'net.uk', 'ltd.uk',
-            'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
-            'co.in', 'net.in', 'org.in', 'gen.in', 'firm.in', 'ind.in',
-            'com.br', 'net.br', 'org.br', 'co.nz', 'net.nz', 'org.nz',
-            'com.sg', 'net.sg', 'org.sg', 'com.tw', 'net.tw', 'org.tw',
-            'co.za', 'net.za', 'org.za', 'com.mx', 'net.mx', 'org.mx'
-        ];
-        
-        if (in_array($lastTwo, $multipartTlds)) {
-            if ($count == 3) {
-                return $domain;
-            }
-            return $parts[$count - 3] . '.' . $lastTwo;
-        }
-        
-        return $parts[$count - 2] . '.' . $parts[$count - 1];
+        return \App\Services\CloudflareDnsService::getMainDomain($domain);
     }
 
     public function saveCredentials(Request $request, $domain)
