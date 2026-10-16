@@ -383,14 +383,6 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 
-:global(body.dark-version) .glass-sidebar {
-  background: rgba(10, 19, 16, 0.88) !important;
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(16, 185, 129, 0.12) !important;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
 .sidebar-brand-title {
   color: #0f172a;
 }
