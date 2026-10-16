@@ -819,7 +819,7 @@
 
     <!-- MODAL: CREATE BACKUP NOW -->
     <div class="modal fade" id="modalCreateBackup" tabindex="-1" role="dialog" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content shadow-lg border-0">
           <div class="modal-header bg-gray-100 py-3">
             <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center mb-0">
@@ -944,7 +944,7 @@
 
     <!-- MODAL: CREATE / EDIT SCHEDULE -->
     <div class="modal fade" id="modalSchedule" tabindex="-1" role="dialog" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content shadow-lg border-0">
           <div class="modal-header bg-gray-100 py-3">
             <h5 class="modal-title font-weight-bolder text-dark d-flex align-items-center mb-0">

@@ -46,6 +46,13 @@
         @routes
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
+        <script>
+            document.addEventListener('show.bs.modal', function(e) {
+                if (e.target && e.target.parentElement !== document.body) {
+                    document.body.appendChild(e.target);
+                }
+            });
+        </script>
         <style>
             body {
                 overflow-x: hidden;

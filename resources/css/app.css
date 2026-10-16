@@ -2149,7 +2149,7 @@ body.dark-version ::-webkit-scrollbar-thumb:hover {
    13. NIMBUS MODERN ANIMATIONS & GLOBAL UI ENHANCEMENTS (v1.1.3)
    ========================================================================== */
 
-/* A. Page Entrance Animation (Fade only, no transform to avoid establishing containing blocks for fixed modals) */
+/* A. Page Entrance Animation (Applied to inner content only, never to container-fluid to avoid stacking context traps) */
 @keyframes nimbusPageEntrance {
   0% {
     opacity: 0;
@@ -2159,25 +2159,22 @@ body.dark-version ::-webkit-scrollbar-thumb:hover {
   }
 }
 
-.main-content > .container-fluid,
-.main-content > div:not(.ambient-glow-wrapper) {
-  animation: nimbusPageEntrance 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+.main-content > .container-fluid {
+  animation: none !important;
   transform: none !important;
   filter: none !important;
   perspective: none !important;
 }
 
-/* B. Global Modal Animations & Modern Glass Surface */
+/* B. Global Modal Animations, Z-Index Hierarchy & Modern Glass Surface */
 @keyframes nimbusModalEntry {
   0% {
     opacity: 0;
-    transform: scale(0.93) translateY(-14px);
-    filter: blur(4px);
+    transform: scale(0.96) translateY(-8px);
   }
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
-    filter: blur(0);
   }
 }
 
@@ -2187,9 +2184,9 @@ body.dark-version ::-webkit-scrollbar-thumb:hover {
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 1055 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 100050 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   margin: 0 !important;
@@ -2197,14 +2194,39 @@ body.dark-version ::-webkit-scrollbar-thumb:hover {
 }
 
 .modal-dialog {
+  position: relative !important;
+  width: auto !important;
   margin: 1.75rem auto !important;
-  max-width: 95vw;
+  pointer-events: none !important;
+  max-width: 92vw;
+}
+
+@media (min-width: 576px) {
+  .modal-dialog {
+    max-width: 540px !important;
+  }
+  .modal-dialog.modal-sm {
+    max-width: 380px !important;
+  }
+  .modal-dialog.modal-lg {
+    max-width: 800px !important;
+  }
+  .modal-dialog.modal-xl {
+    max-width: 1140px !important;
+  }
+}
+
+.modal-dialog .modal-content {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  pointer-events: auto !important;
 }
 
 .modal-dialog-centered {
   display: flex !important;
   align-items: center !important;
-  justify-content: center !important;
   min-height: calc(100vh - 3.5rem) !important;
   margin-top: auto !important;
   margin-bottom: auto !important;
@@ -2214,16 +2236,28 @@ body.modal-open .main-content {
   overflow: hidden !important;
 }
 
-.modal.show .modal-dialog,
-.modal.fade.show .modal-dialog {
-  animation: nimbusModalEntry 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+body.modal-open .sidenav,
+body.modal-open .navbar,
+body.modal-open #navbarBlur {
+  z-index: 1020 !important;
 }
 
+.modal.show .modal-dialog,
+.modal.fade.show .modal-dialog {
+  animation: nimbusModalEntry 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.modal-backdrop,
 .modal-backdrop.show {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
   opacity: 0.65 !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
-  z-index: 1050 !important;
+  z-index: 100040 !important;
 }
 
 .modal-content {
