@@ -1585,7 +1585,7 @@ onUnmounted(() => {
 .account-menu-dropdown {
   position: absolute;
   right: 0;
-  top: calc(100% + 8px);
+  top: calc(100% + 4px);
   width: 260px;
   background-color: var(--wm-surface);
   border: 1px solid var(--wm-border);

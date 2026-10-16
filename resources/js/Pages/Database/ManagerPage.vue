@@ -137,10 +137,10 @@
           </div>
 
           <!-- Right Panel: Data Grid & Schema Inspector -->
-          <div class="db-main-content flex-grow-1 p-4 bg-white d-flex flex-column h-100 overflow-hidden">
+          <div class="db-main-content flex-grow-1 p-3 bg-white d-flex flex-column h-100 overflow-hidden">
             <template v-if="selectedTable">
               <!-- Table Sub-Header & Controls -->
-              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 pb-2 border-bottom position-relative" style="z-index: 1050;">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom position-relative" style="z-index: 1050;">
                 <div class="d-flex align-items-center gap-2">
                   <h5 class="mb-0 font-weight-bolder text-dark">{{ selectedTable }}</h5>
                   <span v-if="tableSchema" class="badge bg-light text-secondary border text-xxs">{{ tableSchema.columns.length }} cols</span>
@@ -178,7 +178,7 @@
                       <span>Actions</span>
                       <i class="material-symbols-rounded text-xs ms-1">expand_more</i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-xl border-0 p-2 position-absolute" style="z-index: 99999 !important; min-width: 180px;">
+                    <ul class="dropdown-menu dropdown-menu-end shadow-xl border-0 p-1.5 position-absolute" style="z-index: 99999 !important; min-width: 180px; margin-top: 4px;">
                       <li>
                         <a class="dropdown-item text-xs border-radius-md py-2 d-flex align-items-center" href="#" @click.prevent="quickQuery(`SELECT * FROM \`${selectedTable}\` LIMIT 50`)">
                           <i class="material-symbols-rounded text-sm me-2 text-primary">terminal</i>

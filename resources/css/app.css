@@ -1960,12 +1960,22 @@ body.dark-version .table tbody tr:hover {
 }
 
 /* 8. Form Controls & Inputs */
-.form-control,
-.form-select {
+.form-control {
   border-radius: 0.75rem !important;
   font-size: 0.875rem !important;
   padding: 0.55rem 0.95rem !important;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.form-select {
+  border-radius: 0.75rem !important;
+  font-size: 0.8125rem !important;
+  padding: 0.45rem 2.2rem 0.45rem 0.85rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23059669' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.75rem center !important;
+  background-size: 14px 10px !important;
 }
 
 body:not(.dark-version) .form-control,
@@ -1982,11 +1992,18 @@ body:not(.dark-version) .form-select:focus {
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18) !important;
 }
 
-body.dark-version .form-control,
-body.dark-version .form-select {
+body.dark-version .form-control {
   background-color: rgba(14, 25, 22, 0.75) !important;
   border: 1px solid rgba(16, 185, 129, 0.22) !important;
   color: #f8fafc !important;
+}
+
+body.dark-version .form-select {
+  color-scheme: dark !important;
+  background-color: rgba(14, 25, 22, 0.85) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  color: #f8fafc !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2310b981' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
 }
 
 body.dark-version .form-control::placeholder {
@@ -2002,8 +2019,9 @@ body.dark-version .form-select:focus {
 }
 
 body.dark-version .form-select option {
-  background-color: #0b1311 !important;
+  background-color: #0b1814 !important;
   color: #f8fafc !important;
+  padding: 8px 12px !important;
 }
 
 body.dark-version .input-group-text {
@@ -2294,12 +2312,27 @@ body.dark-version .shortcut-plus {
 .dropdown-menu {
   z-index: 99999 !important;
   border-radius: 12px !important;
-  padding: 6px !important;
+  padding: 5px !important;
+  margin-top: 4px !important;
   background: rgba(255, 255, 255, 0.97) !important;
   backdrop-filter: blur(20px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(16, 185, 129, 0.06) !important;
+}
+
+.dropdown-menu::-webkit-scrollbar {
+  width: 5px;
+}
+.dropdown-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dropdown-menu::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
+}
+.dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.5);
 }
 
 .dropdown-menu.show {
@@ -2311,13 +2344,13 @@ body.dark-version .dropdown-menu {
   background: rgba(10, 20, 16, 0.96) !important;
   backdrop-filter: blur(24px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
-  border: 1px solid rgba(16, 185, 129, 0.22) !important;
-  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(16, 185, 129, 0.15) !important;
 }
 
 .dropdown-item {
   border-radius: 8px !important;
-  padding: 8px 12px !important;
+  padding: 6px 10px !important;
   font-size: 0.8125rem !important;
   font-weight: 500 !important;
   color: #1e293b !important;
@@ -2333,6 +2366,13 @@ body.dark-version .dropdown-menu {
   transform: translateX(3px) !important;
 }
 
+.dropdown-item.active,
+.dropdown-item:active {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #047857 !important;
+  font-weight: 600 !important;
+}
+
 body.dark-version .dropdown-item {
   color: #e2e8f0 !important;
 }
@@ -2344,6 +2384,13 @@ body.dark-version .dropdown-item:focus {
   transform: translateX(3px) !important;
 }
 
+body.dark-version .dropdown-item.active,
+body.dark-version .dropdown-item:active {
+  background: rgba(16, 185, 129, 0.25) !important;
+  color: #34d399 !important;
+  font-weight: 600 !important;
+}
+
 .dropdown-divider {
   border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
   margin: 4px 6px !important;
@@ -2352,6 +2399,18 @@ body.dark-version .dropdown-item:focus {
 
 body.dark-version .dropdown-divider {
   border-top: 1px solid rgba(16, 185, 129, 0.16) !important;
+}
+
+/* Compact spacing for tabs and headings throughout Nimbus */
+.nav-tabs,
+.nav-pills {
+  margin-bottom: 0.5rem !important;
+}
+
+.nav-tabs .nav-link,
+.nav-pills .nav-link {
+  padding: 0.4rem 0.85rem !important;
+  font-size: 0.8125rem !important;
 }
 
 /* F. Git Deployments Branch Pill & Universal Badge Contrast */

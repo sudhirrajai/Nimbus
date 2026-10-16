@@ -128,7 +128,7 @@
               <i class="material-symbols-rounded ms-1 text-sm navbar-icon-user d-none d-sm-inline">expand_more</i>
             </a>
             <ul 
-              class="dropdown-menu dropdown-menu-end px-2 py-3 shadow-lg" 
+              class="dropdown-menu dropdown-menu-end p-2 shadow-lg" 
               :class="{ 'show': dropdownOpen }"
               :style="dropdownOpen ? 'display: block;' : ''"
             >
@@ -502,17 +502,17 @@ const logout = () => {
   position: absolute;
   right: 0;
   top: 100%;
-  margin-top: 8px;
+  margin-top: 4px;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 1rem !important;
+  border-radius: 0.85rem !important;
 }
 
 .dropdown-item {
-  padding: 10px 16px;
-  font-size: 0.875rem;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
   transition: all 0.2s;
   border-radius: 0.65rem;
 }

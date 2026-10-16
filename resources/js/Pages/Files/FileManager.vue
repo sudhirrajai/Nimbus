@@ -1,13 +1,13 @@
 <template>
   <MainLayout>
     <Head title="File Manager" />
-    <div class="container-fluid py-4" @click="closeContextMenu">
+    <div class="container-fluid py-3" @click="closeContextMenu">
 
       <!-- Header -->
-      <div class="row mb-4">
+      <div class="row mb-2.5">
         <div class="col-12">
-          <div class="glass-card p-3">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div class="glass-card p-2.5 px-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
               <!-- Left: Title & Path Info -->
               <div class="d-flex align-items-center">
                 <div class="icon-shape icon-md bg-gradient-primary shadow-primary text-center border-radius-xl me-3">
@@ -61,18 +61,68 @@
                   </button>
                 </div>
 
-                <!-- Quick Domain Selector -->
-                <div v-if="availableDomains && availableDomains.length > 0" class="d-flex align-items-center" style="min-width: 170px;">
-                  <select 
-                    class="form-select form-select-sm border-radius-lg shadow-sm" 
-                    :value="scope === 'domain' ? domain : ''"
-                    @change="onDomainSelect($event.target.value)"
+                <!-- Quick Domain Selector (Custom Emerald Glass Dropdown) -->
+                <div 
+                  v-if="availableDomains && availableDomains.length > 0" 
+                  class="dropdown position-relative" 
+                  ref="domainDropdownRef"
+                  style="z-index: 1051;"
+                >
+                  <button 
+                    class="btn btn-sm btn-dark mb-0 border-radius-lg dropdown-toggle-custom d-flex align-items-center gap-1.5 shadow-sm" 
+                    type="button" 
+                    @click.stop="toggleDomainDropdown"
+                    :title="scope === 'domain' && domain ? 'Current: ' + domain : 'Jump to Website...'"
                   >
-                    <option value="" disabled selected>Jump to Website...</option>
-                    <option v-for="d in availableDomains" :key="d" :value="d">
-                      🌐 {{ d }}
-                    </option>
-                  </select>
+                    <i class="material-symbols-rounded text-sm text-emerald-400">public</i>
+                    <span class="text-truncate" style="max-width: 170px;">
+                      {{ scope === 'domain' && domain ? domain : 'Jump to Website...' }}
+                    </span>
+                    <i class="material-symbols-rounded text-xs ms-1 transition-transform" :class="{ 'rotate-180': domainDropdownOpen }">expand_more</i>
+                  </button>
+
+                  <ul 
+                    class="dropdown-menu dropdown-menu-end shadow-xl border-0 p-2 position-absolute" 
+                    :class="{ 'show': domainDropdownOpen }"
+                    :style="domainDropdownOpen ? 'display: block; min-width: 250px; max-height: 320px; overflow-y: auto; margin-top: 4px;' : 'display: none;'"
+                  >
+                    <!-- Quick Search in Dropdown if more than 5 domains -->
+                    <li v-if="availableDomains.length > 5" class="px-2 py-1 mb-1 border-bottom" style="border-color: rgba(16, 185, 129, 0.15) !important;">
+                      <div class="d-flex align-items-center gap-1.5 px-1 py-1">
+                        <i class="material-symbols-rounded text-xs text-secondary">search</i>
+                        <input 
+                          type="text" 
+                          v-model="domainSearchQuery" 
+                          class="form-control form-control-xs border-0 bg-transparent p-0 text-xs" 
+                          placeholder="Search websites..." 
+                          @click.stop
+                          @keydown.stop
+                        />
+                        <button v-if="domainSearchQuery" class="btn btn-link p-0 m-0 text-secondary" @click.stop="domainSearchQuery = ''">
+                          <i class="material-symbols-rounded text-xs">close</i>
+                        </button>
+                      </div>
+                    </li>
+
+                    <li v-if="filteredAvailableDomains.length === 0" class="text-center py-2 text-xs text-secondary">
+                      No websites found
+                    </li>
+
+                    <li v-for="d in filteredAvailableDomains" :key="d">
+                      <a 
+                        class="dropdown-item text-xs border-radius-md py-1.5 px-2.5 d-flex align-items-center justify-content-between" 
+                        :class="{ 'active font-weight-bold': d === domain && scope === 'domain' }"
+                        href="#" 
+                        @click.prevent="onDomainSelect(d); domainDropdownOpen = false"
+                      >
+                        <span class="d-flex align-items-center text-truncate">
+                          <i class="material-symbols-rounded text-sm me-2 text-info">public</i>
+                          <span class="text-truncate">{{ d }}</span>
+                        </span>
+                        <i v-if="d === domain && scope === 'domain'" class="material-symbols-rounded text-xs text-success ms-2">check</i>
+                      </a>
+                    </li>
+                  </ul>
                 </div>
 
                 <!-- Back button -->
@@ -103,9 +153,9 @@
 
       <div class="row">
         <!-- Sidebar -->
-        <div class="col-lg-3 col-md-4 mb-4">
-          <div class="glass-card h-100 p-3">
-            <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-3">Quick Navigation</h6>
+        <div class="col-lg-3 col-md-4 mb-3">
+          <div class="glass-card h-100 p-2.5 px-3">
+            <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-2">Quick Navigation</h6>
             <div class="nav-pills-container">
               <button class="nav-pill-btn" :class="{ active: !currentPath }" @click="navigateTo('')">
                 <i class="material-symbols-rounded">{{ scope === 'root' ? 'admin_panel_settings' : (scope === 'projects' ? 'folder_special' : 'home') }}</i>
@@ -117,10 +167,10 @@
               </button>
             </div>
 
-            <hr class="horizontal dark my-4">
+            <hr class="horizontal dark my-3">
 
-            <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-3">Git Repository</h6>
-            <div v-if="gitInfo.available" class="git-status-card p-3 border-radius-lg bg-gray-100 mb-3 shadow-sm border border-white">
+            <h6 class="text-uppercase text-xxs font-weight-bolder opacity-7 mb-2">Git Repository</h6>
+            <div v-if="gitInfo.available" class="git-status-card p-2.5 border-radius-lg bg-gray-100 mb-2.5 shadow-sm border border-white">
               <div class="d-flex align-items-center mb-2">
                 <i class="material-symbols-rounded text-sm me-2" :class="gitInfo.dirty ? 'text-warning' : 'text-success'">
                   {{ gitInfo.dirty ? 'warning' : 'check_circle' }}
@@ -135,8 +185,8 @@
                 <button class="btn btn-link text-primary text-xxs p-0 mb-0 font-weight-bold" @click="scrollToGit">Manage</button>
               </div>
             </div>
-            <div v-else class="text-center py-4 bg-gray-100 border-radius-lg mb-3 border border-dashed">
-              <i class="material-symbols-rounded text-secondary opacity-5 fs-2 mb-2">account_tree</i>
+            <div v-else class="text-center py-3 bg-gray-100 border-radius-lg mb-2.5 border border-dashed">
+              <i class="material-symbols-rounded text-secondary opacity-5 fs-2 mb-1">account_tree</i>
               <p class="text-xs text-secondary mb-0">No repository detected</p>
             </div>
           </div>
@@ -145,7 +195,7 @@
         <!-- Main Content Area -->
         <div class="col-lg-9 col-md-8">
           <!-- Toolbar -->
-          <div class="glass-card mb-3 p-3">
+          <div class="glass-card mb-2.5 p-2 px-3">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
               
               <!-- Action Buttons Group -->
@@ -1301,6 +1351,31 @@ const searchInput = ref(null)
 const lastSelected = ref(null)
 const items = ref([])
 const searchQuery = ref('')
+
+// Jump to Website Dropdown State
+const domainDropdownOpen = ref(false)
+const domainSearchQuery = ref('')
+const domainDropdownRef = ref(null)
+
+const toggleDomainDropdown = () => {
+  domainDropdownOpen.value = !domainDropdownOpen.value
+  if (domainDropdownOpen.value) {
+    domainSearchQuery.value = ''
+  }
+}
+
+const closeDomainDropdown = (e) => {
+  if (domainDropdownRef.value && !domainDropdownRef.value.contains(e.target)) {
+    domainDropdownOpen.value = false
+  }
+}
+
+const filteredAvailableDomains = computed(() => {
+  if (!props.availableDomains) return []
+  if (!domainSearchQuery.value) return props.availableDomains
+  const q = domainSearchQuery.value.toLowerCase().trim()
+  return props.availableDomains.filter(d => d.toLowerCase().includes(q))
+})
 const currentPage = ref(1)
 const savedItemsPerPage = typeof window !== 'undefined' ? Number(localStorage.getItem('nimbus_fm_items_per_page')) : null
 const itemsPerPage = ref(savedItemsPerPage && savedItemsPerPage > 0 ? savedItemsPerPage : 25)
@@ -1554,6 +1629,7 @@ onMounted(() => {
   window.addEventListener('dragover', handleWindowDragOver)
   window.addEventListener('dragleave', handleWindowDragLeave)
   window.addEventListener('drop', handleWindowDrop)
+  document.addEventListener('click', closeDomainDropdown)
 })
 
 onUnmounted(() => {
@@ -1564,6 +1640,7 @@ onUnmounted(() => {
   window.removeEventListener('dragover', handleWindowDragOver)
   window.removeEventListener('dragleave', handleWindowDragLeave)
   window.removeEventListener('drop', handleWindowDrop)
+  document.removeEventListener('click', closeDomainDropdown)
 })
 
 const onToggleHidden = () => {
