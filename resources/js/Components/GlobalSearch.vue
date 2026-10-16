@@ -16,7 +16,9 @@
         ref="searchInput"
       />
       <div class="search-shortcut d-none d-md-flex" v-if="!isFocused && !searchQuery">
-        <span>Ctrl</span><span>K</span>
+        <kbd class="shortcut-key">Ctrl</kbd>
+        <span class="shortcut-plus">+</span>
+        <kbd class="shortcut-key">K</kbd>
       </div>
       <div v-if="loading" class="search-loader">
         <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -79,7 +81,7 @@ const placeholderText = computed(() => {
   if (typeof window !== 'undefined' && window.innerWidth < 768) {
     return 'Search...'
   }
-  return 'Search everything... (Ctrl+K)'
+  return 'Search everything...'
 })
 
 const groupedResults = computed(() => {
@@ -226,17 +228,31 @@ onUnmounted(() => {
 
 .search-shortcut {
   display: flex;
-  gap: 4px;
-  opacity: 0.5;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  user-select: none;
 }
 
-.search-shortcut span {
+.shortcut-key {
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.shortcut-plus {
   font-size: 10px;
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 1px 4px;
-  font-weight: bold;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1;
 }
 
 .search-loader {

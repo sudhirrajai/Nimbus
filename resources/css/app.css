@@ -2127,3 +2127,271 @@ body.dark-version ::-webkit-scrollbar-thumb:hover {
   background: rgba(16, 185, 129, 0.5);
 }
 
+/* ==========================================================================
+   13. NIMBUS MODERN ANIMATIONS & GLOBAL UI ENHANCEMENTS (v1.1.3)
+   ========================================================================== */
+
+/* A. Page Entrance Animation */
+@keyframes nimbusPageEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.main-content > .container-fluid,
+.main-content > div:not(.ambient-glow-wrapper) {
+  animation: nimbusPageEntrance 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* B. Global Modal Animations & Modern Glass Surface */
+@keyframes nimbusModalEntry {
+  0% {
+    opacity: 0;
+    transform: scale(0.93) translateY(-14px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.modal.show .modal-dialog,
+.modal.fade.show .modal-dialog {
+  animation: nimbusModalEntry 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.modal-backdrop.show {
+  opacity: 0.65 !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+.modal-content {
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.97) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12) !important;
+  transition: all 0.25s ease !important;
+}
+
+body.dark-version .modal-content {
+  background: rgba(10, 20, 16, 0.94) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(16, 185, 129, 0.1) !important;
+}
+
+body.dark-version .modal-header,
+body.dark-version .modal-footer {
+  border-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+/* C. Search Bars throughout Portal (Top Navbar, Tables, Toolbars) */
+.search-control,
+.search-input-box,
+.table-search-input,
+.dataTables_filter input,
+input[type="search"],
+input.form-control[placeholder*="Search" i],
+input.form-control[placeholder*="search" i] {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  border-radius: 12px !important;
+}
+
+.search-input-box:focus-within,
+.table-search-input:focus,
+.dataTables_filter input:focus,
+input[type="search"]:focus,
+input.form-control[placeholder*="Search" i]:focus,
+input.form-control[placeholder*="search" i]:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22), 0 6px 20px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-1px);
+}
+
+body.dark-version .search-input-box,
+body.dark-version .table-search-input,
+body.dark-version .dataTables_filter input,
+body.dark-version input[type="search"],
+body.dark-version input.form-control[placeholder*="Search" i],
+body.dark-version input.form-control[placeholder*="search" i] {
+  background: rgba(11, 23, 19, 0.85) !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+}
+
+body.dark-version .search-input-box:focus-within,
+body.dark-version .table-search-input:focus,
+body.dark-version .dataTables_filter input:focus,
+body.dark-version input[type="search"]:focus,
+body.dark-version input.form-control[placeholder*="Search" i]:focus,
+body.dark-version input.form-control[placeholder*="search" i]:focus {
+  background: rgba(11, 23, 19, 0.98) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25), 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* D. Top Search Shortcut (Ctrl+K) High-Contrast Visibility */
+.shortcut-key {
+  font-family: inherit;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  padding: 3px 6px !important;
+  border-radius: 5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  display: inline-block !important;
+}
+
+.shortcut-plus {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  line-height: 1 !important;
+}
+
+body.dark-version .shortcut-key {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #a7f3d0 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-version .shortcut-plus {
+  color: #34d399 !important;
+}
+
+/* E. Universal Dropdown Styling (Per User Reference Image) */
+@keyframes nimbusDropdownPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dropdown-menu {
+  border-radius: 12px !important;
+  padding: 6px !important;
+  background: rgba(255, 255, 255, 0.97) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(16, 185, 129, 0.06) !important;
+}
+
+.dropdown-menu.show {
+  animation: nimbusDropdownPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transform-origin: top center;
+}
+
+body.dark-version .dropdown-menu {
+  background: rgba(10, 20, 16, 0.96) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(16, 185, 129, 0.12) !important;
+}
+
+.dropdown-item {
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  color: #1e293b !important;
+  transition: all 0.18s ease !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #065f46 !important;
+  transform: translateX(3px) !important;
+}
+
+body.dark-version .dropdown-item {
+  color: #e2e8f0 !important;
+}
+
+body.dark-version .dropdown-item:hover,
+body.dark-version .dropdown-item:focus {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #ffffff !important;
+  transform: translateX(3px) !important;
+}
+
+.dropdown-divider {
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+  margin: 4px 6px !important;
+  opacity: 1 !important;
+}
+
+body.dark-version .dropdown-divider {
+  border-top: 1px solid rgba(16, 185, 129, 0.16) !important;
+}
+
+/* F. Git Deployments Branch Pill & Universal Badge Contrast */
+.branch-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 4px 10px !important;
+  border-radius: 9999px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #047857 !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  transition: all 0.2s ease !important;
+}
+
+.branch-pill:hover {
+  background: rgba(16, 185, 129, 0.18) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+}
+
+body.dark-version .branch-pill {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.38) !important;
+}
+
+body.dark-version .branch-pill:hover {
+  background: rgba(16, 185, 129, 0.25) !important;
+  color: #a7f3d0 !important;
+}
+
+.badge.bg-light,
+.badge.bg-light.text-dark {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+body.dark-version .badge.bg-light,
+body.dark-version .badge.bg-light.text-dark {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+}
+
+

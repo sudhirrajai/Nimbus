@@ -1,11 +1,13 @@
 {
   "version": "1.1.3",
   "release_date": "2026-10-16",
-  "sha256": "686515bdc876cd90be034c8c1cb896ea7eac2cdeb6929424cad5376671863715",
+  "sha256": "efeb531b81c089ced6d84e396a87127206a51ab9f3f294901c48143c92bf653d",
   "changelog": [
     "Modern Nimbus Emerald Glass UI with dual dark & light mode support",
     "Fixed dark mode rendering and contrast across all management modules",
-    "Automated Cloudflare DNS A-record creation for subdomains when root domain is connected"
+    "Automated Cloudflare DNS A-record creation for subdomains when root domain is connected",
+    "Polished global animations for search bars, modals, page transitions, and emerald glass dropdown menus",
+    "Enhanced contrast and visibility for search shortcut keys and git branch badges"
   ],
   "commands": [
     "php artisan migrate --force",

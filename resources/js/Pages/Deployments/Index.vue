@@ -89,7 +89,10 @@
                         </p>
                       </td>
                       <td>
-                        <span class="badge bg-light text-dark border">{{ dep.branch }}</span>
+                        <span class="badge branch-pill">
+                          <i class="material-symbols-rounded branch-icon">fork_right</i>
+                          {{ dep.branch }}
+                        </span>
                       </td>
                       <td>
                         <div class="d-flex align-items-center">
@@ -901,6 +904,32 @@ watch(searchQuery, () => {
 
 .spin {
   animation: spin 1s linear infinite;
+}
+
+.branch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  transition: all 0.2s ease;
+}
+
+.branch-pill:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.branch-icon {
+  font-size: 13px !important;
+  line-height: 1;
 }
 
 @keyframes spin {
