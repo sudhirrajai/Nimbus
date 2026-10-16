@@ -1,7 +1,7 @@
 {
   "version": "1.1.3",
   "release_date": "2026-10-16",
-  "sha256": "0fa64f6e8e9f17635e687c65f94292eccd7b22db80cfaf7922aca19f44231396",
+  "sha256": "7a72ac9b03e9650a8eefc657da07164c857c97a08d808ecfab7bf21ec4b7a450",
   "changelog": [
     "Modern Nimbus Emerald Glass UI with dual dark & light mode support",
     "Fixed dark mode rendering and contrast across all management modules",
