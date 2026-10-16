@@ -4,9 +4,9 @@
     <div class="container-fluid py-3" @click="closeContextMenu">
 
       <!-- Header -->
-      <div class="row mb-2.5">
+      <div class="row mb-2.5 position-relative" style="z-index: 1050;">
         <div class="col-12">
-          <div class="glass-card p-2.5 px-3">
+          <div class="glass-card p-2.5 px-3 position-relative" style="z-index: 1050;">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
               <!-- Left: Title & Path Info -->
               <div class="d-flex align-items-center">
@@ -66,7 +66,7 @@
                   v-if="availableDomains && availableDomains.length > 0" 
                   class="dropdown position-relative" 
                   ref="domainDropdownRef"
-                  style="z-index: 1051;"
+                  style="z-index: 1060;"
                 >
                   <button 
                     class="btn btn-sm btn-dark mb-0 border-radius-lg dropdown-toggle-custom d-flex align-items-center gap-1.5 shadow-sm" 
@@ -82,9 +82,9 @@
                   </button>
 
                   <ul 
-                    class="dropdown-menu dropdown-menu-end shadow-xl border-0 p-2 position-absolute" 
+                    class="dropdown-menu dropdown-menu-end shadow-2xl border-0 p-2 position-absolute" 
                     :class="{ 'show': domainDropdownOpen }"
-                    :style="domainDropdownOpen ? 'display: block; min-width: 250px; max-height: 320px; overflow-y: auto; margin-top: 4px;' : 'display: none;'"
+                    :style="domainDropdownOpen ? 'display: block; min-width: 260px; max-height: 320px; overflow-y: auto; margin-top: 4px; z-index: 999999 !important;' : 'display: none;'"
                   >
                     <!-- Quick Search in Dropdown if more than 5 domains -->
                     <li v-if="availableDomains.length > 5" class="px-2 py-1 mb-1 border-bottom" style="border-color: rgba(16, 185, 129, 0.15) !important;">
@@ -93,7 +93,7 @@
                         <input 
                           type="text" 
                           v-model="domainSearchQuery" 
-                          class="form-control form-control-xs border-0 bg-transparent p-0 text-xs" 
+                          class="form-control form-control-xs border-0 bg-transparent p-0 text-xs text-body" 
                           placeholder="Search websites..." 
                           @click.stop
                           @keydown.stop
@@ -110,14 +110,14 @@
 
                     <li v-for="d in filteredAvailableDomains" :key="d">
                       <a 
-                        class="dropdown-item text-xs border-radius-md py-1.5 px-2.5 d-flex align-items-center justify-content-between" 
+                        class="dropdown-item text-xs border-radius-md py-2 px-2.5 d-flex align-items-center justify-content-between" 
                         :class="{ 'active font-weight-bold': d === domain && scope === 'domain' }"
                         href="#" 
                         @click.prevent="onDomainSelect(d); domainDropdownOpen = false"
                       >
                         <span class="d-flex align-items-center text-truncate">
                           <i class="material-symbols-rounded text-sm me-2 text-info">public</i>
-                          <span class="text-truncate">{{ d }}</span>
+                          <span class="text-truncate font-weight-500">{{ d }}</span>
                         </span>
                         <i v-if="d === domain && scope === 'domain'" class="material-symbols-rounded text-xs text-success ms-2">check</i>
                       </a>
