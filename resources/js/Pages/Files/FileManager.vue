@@ -235,12 +235,42 @@
               <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1 flex-xl-grow-0 justify-content-start justify-content-md-end">
                 <!-- Search Box -->
                 <div class="search-wrapper-premium shadow-sm flex-grow-1 flex-md-grow-0">
-                  <div class="search-type-selector">
-                    <i class="material-symbols-rounded text-sm">filter_list</i>
-                    <select v-model="searchType" class="form-select border-0 bg-transparent text-xxs font-weight-bold">
-                      <option value="filename">Name</option>
-                      <option value="content">Content</option>
-                    </select>
+                  <div class="dropdown search-type-selector position-relative" ref="searchTypeRef">
+                    <button 
+                      class="btn btn-link p-0 m-0 border-0 bg-transparent text-xxs font-weight-bold text-dark d-flex align-items-center gap-1 dropdown-toggle-custom" 
+                      type="button" 
+                      @click="searchTypeDropdownOpen = !searchTypeDropdownOpen"
+                    >
+                      <i class="material-symbols-rounded text-sm text-success">filter_list</i>
+                      <span>{{ searchType === 'filename' ? 'Name' : 'Content' }}</span>
+                      <i class="material-symbols-rounded text-xxs ms-0.5 transition-transform" :class="{ 'rotate-180': searchTypeDropdownOpen }">expand_more</i>
+                    </button>
+                    <ul 
+                      class="dropdown-menu shadow-xl border-0 p-1 position-absolute" 
+                      :class="{ 'show': searchTypeDropdownOpen }"
+                      :style="searchTypeDropdownOpen ? 'display: block; min-width: 125px; margin-top: 4px; z-index: 1055;' : 'display: none;'"
+                    >
+                      <li>
+                        <a 
+                          class="dropdown-item text-xs border-radius-md py-1.5 px-2 d-flex align-items-center gap-1.5" 
+                          :class="{ 'active font-weight-bold': searchType === 'filename' }"
+                          href="#" 
+                          @click.prevent="searchType = 'filename'; searchTypeDropdownOpen = false"
+                        >
+                          <i class="material-symbols-rounded text-xs text-primary">description</i> Name
+                        </a>
+                      </li>
+                      <li>
+                        <a 
+                          class="dropdown-item text-xs border-radius-md py-1.5 px-2 d-flex align-items-center gap-1.5" 
+                          :class="{ 'active font-weight-bold': searchType === 'content' }"
+                          href="#" 
+                          @click.prevent="searchType = 'content'; searchTypeDropdownOpen = false"
+                        >
+                          <i class="material-symbols-rounded text-xs text-info">find_in_page</i> Content
+                        </a>
+                      </li>
+                    </ul>
                   </div>
                   <div class="vr bg-gray-300 my-2" style="width: 1px;"></div>
                   <div class="search-input-box">
@@ -1357,6 +1387,10 @@ const domainDropdownOpen = ref(false)
 const domainSearchQuery = ref('')
 const domainDropdownRef = ref(null)
 
+// Search Type Dropdown State
+const searchTypeDropdownOpen = ref(false)
+const searchTypeRef = ref(null)
+
 const toggleDomainDropdown = () => {
   domainDropdownOpen.value = !domainDropdownOpen.value
   if (domainDropdownOpen.value) {
@@ -1367,6 +1401,9 @@ const toggleDomainDropdown = () => {
 const closeDomainDropdown = (e) => {
   if (domainDropdownRef.value && !domainDropdownRef.value.contains(e.target)) {
     domainDropdownOpen.value = false
+  }
+  if (searchTypeRef.value && !searchTypeRef.value.contains(e.target)) {
+    searchTypeDropdownOpen.value = false
   }
 }
 

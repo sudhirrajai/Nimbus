@@ -453,16 +453,19 @@
                       >
                       <button 
                         v-if="domains.length" 
-                        class="btn btn-outline-secondary dropdown-toggle mb-0" 
+                        class="btn btn-sm btn-dark mb-0 border-radius-lg dropdown-toggle-custom d-flex align-items-center gap-1 shadow-sm" 
                         type="button" 
                         data-bs-toggle="dropdown"
                       >
-                        Choose Domain
+                        <i class="material-symbols-rounded text-sm text-emerald-400">public</i>
+                        <span>Choose Domain</span>
+                        <i class="material-symbols-rounded text-xs ms-1">expand_more</i>
                       </button>
-                      <ul class="dropdown-menu dropdown-menu-end shadow-lg" style="max-height: 200px; overflow-y: auto;">
+                      <ul class="dropdown-menu dropdown-menu-end shadow-2xl border-0 p-1.5 position-absolute" style="max-height: 240px; overflow-y: auto; margin-top: 4px; z-index: 99999 !important; min-width: 220px;">
                         <li v-for="d in domains" :key="d">
-                          <a class="dropdown-item text-xs" href="javascript:;" @click="createForm.cwd = '/var/www/' + d">
-                            /var/www/{{ d }}
+                          <a class="dropdown-item text-xs border-radius-md py-1.5 px-2.5 d-flex align-items-center" href="javascript:;" @click="createForm.cwd = '/var/www/' + d">
+                            <i class="material-symbols-rounded text-sm me-2 text-info">public</i>
+                            <span>/var/www/{{ d }}</span>
                           </a>
                         </li>
                       </ul>
