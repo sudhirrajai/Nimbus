@@ -370,6 +370,11 @@ const pollInstallStatus = async () => {
       installing.value = false
       showToast('success', 'Node.js installed successfully!')
       await fetchStatus()
+    } else if (res.data.status === 'failed') {
+      stopPolling()
+      installing.value = false
+      showToast('danger', res.data.message || 'Node.js installation failed. Check logs.')
+      await fetchStatus()
     } else if (res.data.status === 'idle') {
       stopPolling()
       installing.value = false

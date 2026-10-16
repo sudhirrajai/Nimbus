@@ -37,6 +37,10 @@ class NodeController extends Controller
             $nPath = trim(shell_exec('PATH=$PATH:/usr/local/bin:/usr/bin which n 2>/dev/null') ?: '');
             if (!$nPath && file_exists('/usr/local/bin/n')) $nPath = '/usr/local/bin/n';
             if (!$nPath && file_exists('/usr/bin/n')) $nPath = '/usr/bin/n';
+            if (!$nPath && file_exists(base_path('scripts/n'))) {
+                exec('sudo cp ' . escapeshellarg(base_path('scripts/n')) . ' /usr/local/bin/n && sudo chmod 755 /usr/local/bin/n && sudo ln -sf /usr/local/bin/n /usr/bin/n 2>/dev/null');
+                if (file_exists('/usr/local/bin/n')) $nPath = '/usr/local/bin/n';
+            }
 
             $rawNodeVersion = $nodePath ? trim(shell_exec("{$nodePath} -v 2>/dev/null") ?: '') : '';
             $activeVersion = ltrim($rawNodeVersion, 'v');
@@ -141,32 +145,100 @@ class NodeController extends Controller
             file_put_contents($lockFile, "Installing Node.js {$version}");
 
             @unlink('/tmp/nimbus_node_install_done');
+            @unlink('/tmp/nimbus_node_install_failed');
 
             $logFile = storage_path('logs/node_install.log');
             file_put_contents($logFile, "=== Node.js {$version} Installation Started ===\n");
             file_put_contents($logFile, "Time: " . date('Y-m-d H:i:s') . "\n\n", FILE_APPEND);
 
             $scriptPath = storage_path('app/install_node_' . preg_replace('/[^a-zA-Z0-9]/', '_', $version) . '.sh');
+            $bundledN = base_path('scripts/n');
 
             $scriptContent = <<<BASH
 #!/bin/bash
+set -o pipefail
 export N_PREFIX=/usr/local
-export PATH=\$N_PREFIX/bin:\$PATH
+export PATH=\$N_PREFIX/bin:/usr/local/bin:/usr/bin:/bin:\$PATH
 
-echo "Installing Node.js {$version} via n..."
-sudo n {$version} 2>&1
+echo "Checking required system utilities..."
+if ! command -v xz >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+    echo "Installing xz-utils, curl, and tar for binary extraction..."
+    sudo apt-get update -qq 2>&1 && sudo apt-get install -y -qq xz-utils curl tar 2>&1
+fi
+
+# Ensure 'n' Node version manager is available
+if ! command -v n >/dev/null 2>&1 && [ ! -x /usr/local/bin/n ] && [ ! -x /usr/bin/n ]; then
+    echo "Node version manager (n) not found. Setting up 'n'..."
+    if [ -f "{$bundledN}" ]; then
+        sudo cp "{$bundledN}" /usr/local/bin/n 2>&1
+        sudo chmod 755 /usr/local/bin/n 2>&1
+        sudo ln -sf /usr/local/bin/n /usr/bin/n 2>&1
+        echo "✓ Installed 'n' from bundled Nimbus script."
+    elif [ -f /usr/local/nimbus/scripts/n ]; then
+        sudo cp /usr/local/nimbus/scripts/n /usr/local/bin/n 2>&1
+        sudo chmod 755 /usr/local/bin/n 2>&1
+        sudo ln -sf /usr/local/bin/n /usr/bin/n 2>&1
+        echo "✓ Installed 'n' from /usr/local/nimbus/scripts/n."
+    elif command -v npm >/dev/null 2>&1; then
+        echo "Installing 'n' via npm..."
+        sudo npm install -g n 2>&1
+    else
+        echo "Downloading 'n' from official repository..."
+        sudo curl -fsSL https://raw.githubusercontent.com/tj/n/master/bin/n -o /usr/local/bin/n 2>&1 || \
+        sudo curl -fsSL https://github.com/tj/n/raw/master/bin/n -o /usr/local/bin/n 2>&1 || \
+        sudo wget -qO /usr/local/bin/n https://raw.githubusercontent.com/tj/n/master/bin/n 2>&1
+        sudo chmod 755 /usr/local/bin/n 2>&1
+        sudo ln -sf /usr/local/bin/n /usr/bin/n 2>&1
+    fi
+fi
+
+N_EXEC=""
+if [ -x /usr/local/bin/n ]; then
+    N_EXEC="/usr/local/bin/n"
+elif [ -x /usr/bin/n ]; then
+    N_EXEC="/usr/bin/n"
+elif command -v n >/dev/null 2>&1; then
+    N_EXEC="\$(command -v n)"
+fi
+
+if [ -z "\$N_EXEC" ]; then
+    echo "ERROR: Failed to initialize Node version manager (n)."
+    touch /tmp/nimbus_node_install_failed
+    rm -f "{$lockFile}"
+    exit 1
+fi
+
+sudo mkdir -p /usr/local/n/versions/node 2>&1
+sudo chmod -R 775 /usr/local/n 2>&1
+
+echo "Installing Node.js {$version} via \$N_EXEC..."
+if ! sudo \$N_EXEC {$version} 2>&1; then
+    echo "ERROR: Node.js {$version} download/install failed."
+    touch /tmp/nimbus_node_install_failed
+    rm -f "{$lockFile}"
+    exit 1
+fi
 
 echo "Ensuring global symlinks..."
 sudo ln -sf /usr/local/bin/node /usr/bin/node 2>&1
 sudo ln -sf /usr/local/bin/npm /usr/bin/npm 2>&1
-sudo ln -sf /usr/local/bin/n /usr/bin/n 2>&1
+sudo ln -sf /usr/local/bin/npx /usr/bin/npx 2>&1
+sudo ln -sf "\$N_EXEC" /usr/bin/n 2>&1
+sudo ln -sf "\$N_EXEC" /usr/local/bin/n 2>&1
 
-echo "Node version verified:"
-/usr/local/bin/node -v 2>&1
+echo "Verifying installation..."
+NODE_VER=\$(/usr/local/bin/node -v 2>&1 || node -v 2>&1 || echo "")
+NPM_VER=\$(/usr/local/bin/npm -v 2>&1 || npm -v 2>&1 || echo "")
 
-echo "npm version verified:"
-/usr/local/bin/npm -v 2>&1
+if [ -z "\$NODE_VER" ] || [[ "\$NODE_VER" == *"No such file"* ]] || [[ "\$NODE_VER" == *"command not found"* ]]; then
+    echo "ERROR: Node.js executable not functional after installation."
+    touch /tmp/nimbus_node_install_failed
+    rm -f "{$lockFile}"
+    exit 1
+fi
 
+echo "Node version verified: \$NODE_VER"
+echo "npm version verified:  \$NPM_VER"
 echo "Node.js {$version} installation finished successfully."
 touch /tmp/nimbus_node_install_done
 rm -f "{$lockFile}"
@@ -197,9 +269,11 @@ BASH;
         $lockFile = storage_path('logs/node_install.lock');
         $logFile = storage_path('logs/node_install.log');
         $doneFile = '/tmp/nimbus_node_install_done';
+        $failedFile = '/tmp/nimbus_node_install_failed';
 
         $isInstalling = file_exists($lockFile);
         $isDone = file_exists($doneFile);
+        $isFailed = file_exists($failedFile);
 
         $logs = '';
         if (file_exists($logFile)) {
@@ -207,8 +281,19 @@ BASH;
             $logs = implode('', array_slice($lines, -40));
         }
 
+        if ($isFailed && !$isInstalling) {
+            @unlink($failedFile);
+            @unlink($doneFile);
+            return response()->json([
+                'status' => 'failed',
+                'message' => 'Node.js installation failed. Check the logs below.',
+                'logs' => $logs
+            ]);
+        }
+
         if ($isDone && !$isInstalling) {
             @unlink($doneFile);
+            @unlink($failedFile);
             return response()->json([
                 'status' => 'completed',
                 'message' => 'Node.js installation completed successfully.',
@@ -235,17 +320,18 @@ BASH;
 
             $version = $request->input('version');
             $escaped = escapeshellarg($version);
+            $nBin = $this->ensureN();
 
             $output = [];
             $ret = 0;
-            exec("sudo n {$escaped} 2>&1", $output, $ret);
+            exec("sudo {$nBin} {$escaped} 2>&1", $output, $ret);
 
             if ($ret !== 0) {
                 return response()->json(['error' => 'Failed to switch version: ' . implode("\n", $output)], 500);
             }
 
             // Refresh symlinks
-            exec("sudo ln -sf /usr/local/bin/node /usr/bin/node; sudo ln -sf /usr/local/bin/npm /usr/bin/npm; sudo ln -sf /usr/local/bin/n /usr/bin/n 2>&1");
+            exec("sudo ln -sf /usr/local/bin/node /usr/bin/node; sudo ln -sf /usr/local/bin/npm /usr/bin/npm; sudo ln -sf /usr/local/bin/npx /usr/bin/npx; sudo ln -sf {$nBin} /usr/bin/n 2>&1");
 
             $newVer = trim(shell_exec('/usr/local/bin/node -v 2>/dev/null') ?: '');
 
@@ -277,9 +363,10 @@ BASH;
             }
 
             $escaped = escapeshellarg($version);
+            $nBin = $this->ensureN();
             $output = [];
             $ret = 0;
-            exec("sudo n rm {$escaped} 2>&1", $output, $ret);
+            exec("sudo {$nBin} rm {$escaped} 2>&1", $output, $ret);
 
             if ($ret !== 0) {
                 return response()->json(['error' => 'Failed to remove version: ' . implode("\n", $output)], 500);
@@ -292,5 +379,34 @@ BASH;
             Log::error("Node.js uninstall error: " . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Ensure n version manager is installed and executable
+     */
+    private function ensureN(): string
+    {
+        $nPath = trim(shell_exec('PATH=$PATH:/usr/local/bin:/usr/bin which n 2>/dev/null') ?: '');
+        if ($nPath && is_executable($nPath)) {
+            return $nPath;
+        }
+
+        if (file_exists('/usr/local/bin/n') && is_executable('/usr/local/bin/n')) {
+            return '/usr/local/bin/n';
+        }
+
+        if (file_exists('/usr/bin/n') && is_executable('/usr/bin/n')) {
+            return '/usr/bin/n';
+        }
+
+        $bundled = base_path('scripts/n');
+        if (file_exists($bundled)) {
+            exec("sudo cp " . escapeshellarg($bundled) . " /usr/local/bin/n && sudo chmod 755 /usr/local/bin/n && sudo ln -sf /usr/local/bin/n /usr/bin/n 2>&1");
+            if (file_exists('/usr/local/bin/n')) {
+                return '/usr/local/bin/n';
+            }
+        }
+
+        return 'n';
     }
 }

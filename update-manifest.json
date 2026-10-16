@@ -1,16 +1,17 @@
 {
   "version": "1.1.3",
   "release_date": "2026-10-16",
-  "sha256": "17d8098ceaba67b8e7c15c559d8231181bbcbea29b2635e5162ad0d1e035dbe1",
+  "sha256": "0fa64f6e8e9f17635e687c65f94292eccd7b22db80cfaf7922aca19f44231396",
   "changelog": [
     "Modern Nimbus Emerald Glass UI with dual dark & light mode support",
     "Fixed dark mode rendering and contrast across all management modules",
     "Automated Cloudflare DNS A-record creation for subdomains when root domain is connected",
     "Polished global animations for search bars, modals, page transitions, and emerald glass dropdown menus",
-    "Enhanced contrast and visibility for search shortcut keys and git branch badges"
+    "Resolved Node.js installation issue by bundling 'n' runtime manager and adding failure detection"
   ],
   "commands": [
     "php artisan migrate --force",
+    "sudo cp /usr/local/nimbus/scripts/n /usr/local/bin/n 2>/dev/null && sudo chmod 755 /usr/local/bin/n 2>/dev/null && sudo ln -sf /usr/local/bin/n /usr/bin/n 2>/dev/null || true",
     "php artisan config:clear",
     "php artisan route:clear",
     "php artisan cache:clear"

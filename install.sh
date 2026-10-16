@@ -445,6 +445,13 @@ if [ "$NODE_INSTALLED" = false ]; then
     NODE_INSTALLED=true
 fi
 
+# Ensure 'n' Node version manager is available globally
+if [ -f "${NIMBUS_DIR}/scripts/n" ]; then
+    cp "${NIMBUS_DIR}/scripts/n" /usr/local/bin/n
+    chmod 755 /usr/local/bin/n
+    ln -sf /usr/local/bin/n /usr/bin/n
+fi
+
 # --- Final verification ---
 if ! command -v npm &>/dev/null || ! node_version_ok; then
     echo -e "${RED}ERROR: Node.js ${NODE_VERSION}+ / npm not available after installation!${NC}"
