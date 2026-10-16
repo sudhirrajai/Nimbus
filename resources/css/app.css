@@ -1704,7 +1704,8 @@ html.dark body {
 
 /* 3. Universal Glassmorphic Cards across All Views */
 .card,
-.modern-panel-card {
+.modern-panel-card,
+.glass-card {
   background: var(--glass-bg-light) !important;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -1714,13 +1715,15 @@ html.dark body {
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
 }
 
-.card:hover {
+.card:hover,
+.glass-card:hover {
   box-shadow: 0 14px 35px -8px rgba(15, 23, 42, 0.08), inset 0 1px 0 #fff !important;
 }
 
 body.dark-version .card,
 html.dark .card,
-body.dark-version .modern-panel-card {
+body.dark-version .modern-panel-card,
+body.dark-version .glass-card {
   background: var(--glass-bg-dark) !important;
   backdrop-filter: blur(24px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
