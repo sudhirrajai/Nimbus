@@ -229,25 +229,25 @@
                   <span class="badge bg-white text-primary text-xxs font-weight-bold">{{ filteredBackups.length }}</span>
                 </div>
                 <div class="d-flex gap-2 align-items-center flex-wrap">
-                  <div class="input-group input-group-sm input-group-outline bg-white rounded" style="width: 190px;">
+                  <div class="input-group input-group-sm input-group-outline custom-header-search rounded-3" style="width: 190px;">
                     <input type="text" v-model="searchQuery" class="form-control form-control-sm px-2" placeholder="Search target or file...">
                   </div>
                   <!-- Project / Domain Filter -->
-                  <select v-model="filterDomain" class="form-select form-select-sm bg-white border-0" style="min-width: 150px; max-width: 190px;">
+                  <select v-model="filterDomain" class="form-select form-select-sm custom-header-select" style="min-width: 150px; max-width: 190px;">
                     <option value="all">All Projects</option>
                     <option v-for="d in filterDomainOptions" :key="d" :value="d">
                       {{ d }}
                     </option>
                   </select>
                   <!-- Type Filter -->
-                  <select v-model="filterType" class="form-select form-select-sm bg-white border-0" style="width: 120px;">
+                  <select v-model="filterType" class="form-select form-select-sm custom-header-select" style="width: 120px;">
                     <option value="all">All Types</option>
                     <option value="full">Full (Both)</option>
                     <option value="database">Database</option>
                     <option value="files">Project Files</option>
                   </select>
                   <!-- Per Page Selector -->
-                  <select v-model="itemsPerPage" class="form-select form-select-sm bg-white border-0" style="width: 95px;">
+                  <select v-model="itemsPerPage" class="form-select form-select-sm custom-header-select" style="width: 105px;">
                     <option :value="10">10 / page</option>
                     <option :value="25">25 / page</option>
                     <option :value="50">50 / page</option>
@@ -917,12 +917,11 @@
                   <span>Storage Destination</span>
                   <a v-if="isRootOrAdmin" href="javascript:;" class="text-xxs text-info font-weight-bold" @click="openCreateDestinationModal()">+ Add New Destination</a>
                 </label>
-                <select v-model="backupForm.destination_id" class="form-select custom-form-select">
-                  <option :value="null">Default Destination ({{ defaultDestinationName }})</option>
-                  <option v-for="dest in destinations" :key="dest.id" :value="dest.id">
-                    {{ dest.name }} ({{ getDriverLabel(dest.driver) }}) {{ dest.is_default ? '— Default' : '' }}
-                  </option>
-                </select>
+                <SearchableSelect v-model="backupForm.destination_id"
+                                  :items="destinationOptions"
+                                  placeholder="Select storage destination..."
+                                  search-placeholder="Search destinations..."
+                                  icon="storage" />
                 <div class="p-2 mt-2 border-radius-md bg-light-info text-xxs text-secondary d-flex align-items-center border border-info-subtle">
                   <i class="material-symbols-rounded text-info me-2" style="font-size: 18px;">verified_user</i>
                   <span><strong>Dual-Copy Fail-Safe:</strong> A copy of this backup will always be safely stored on the local server first. If the offsite upload fails, your local backup remains intact and ready to restore.</span>
@@ -1068,15 +1067,11 @@
                 </div>
                 <div class="col-6" v-if="scheduleForm.frequency === 'weekly'">
                   <label class="form-label font-weight-bold text-xs text-uppercase text-secondary mb-1">Day of Week</label>
-                  <select v-model="scheduleForm.day_of_week" class="form-select custom-form-select">
-                    <option :value="0">Sunday</option>
-                    <option :value="1">Monday</option>
-                    <option :value="2">Tuesday</option>
-                    <option :value="3">Wednesday</option>
-                    <option :value="4">Thursday</option>
-                    <option :value="5">Friday</option>
-                    <option :value="6">Saturday</option>
-                  </select>
+                  <SearchableSelect v-model="scheduleForm.day_of_week"
+                                    :items="dayOfWeekOptions"
+                                    placeholder="Select day of week..."
+                                    search-placeholder="Search day..."
+                                    icon="calendar_today" />
                 </div>
               </div>
 
@@ -1093,12 +1088,11 @@
                   <span>Target Storage Destination</span>
                   <a href="javascript:;" class="text-xxs text-info font-weight-bold" @click="openCreateDestinationModal()">+ Add New Destination</a>
                 </label>
-                <select v-model="scheduleForm.destination_id" class="form-select custom-form-select">
-                  <option :value="null">Default Destination ({{ defaultDestinationName }})</option>
-                  <option v-for="dest in destinations" :key="dest.id" :value="dest.id">
-                    {{ dest.name }} ({{ getDriverLabel(dest.driver) }}) {{ dest.is_default ? '— Default' : '' }}
-                  </option>
-                </select>
+                <SearchableSelect v-model="scheduleForm.destination_id"
+                                  :items="destinationOptions"
+                                  placeholder="Select target storage destination..."
+                                  search-placeholder="Search destinations..."
+                                  icon="storage" />
                 <p class="text-xxs text-muted mb-0 mt-1">
                   Choose where this scheduled website/database backup will be stored (Google Drive, Backblaze B2, S3, or Local Server).
                 </p>
@@ -2329,6 +2323,31 @@ const defaultDestinationName = computed(() => {
   return d ? d.name : 'Local Server Storage'
 })
 
+const destinationOptions = computed(() => {
+  const list = [
+    { label: `Default Destination (${defaultDestinationName.value})`, value: null, subLabel: 'Local Server Storage', icon: 'storage' }
+  ]
+  ;(props.destinations || []).forEach(dest => {
+    list.push({
+      label: dest.name,
+      value: dest.id,
+      subLabel: `${getDriverLabel(dest.driver)}${dest.is_default ? ' • Default' : ''}`,
+      icon: 'cloud'
+    })
+  })
+  return list
+})
+
+const dayOfWeekOptions = [
+  { label: 'Sunday', value: 0 },
+  { label: 'Monday', value: 1 },
+  { label: 'Tuesday', value: 2 },
+  { label: 'Wednesday', value: 3 },
+  { label: 'Thursday', value: 4 },
+  { label: 'Friday', value: 5 },
+  { label: 'Saturday', value: 6 }
+]
+
 const getTargetBadgeBg = (type) => {
   if (type === 'database') return 'bg-gradient-info'
   if (type === 'files') return 'bg-gradient-secondary'
@@ -2491,8 +2510,22 @@ const getDestinationBadgeClass = (dest) => {
   border-color: #bbf7d0 !important;
 }
 
+.custom-header-select,
+.custom-header-search {
+  background-color: #ffffff;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  color: #1e293b !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease-in-out;
+}
+.custom-header-select:hover,
+.custom-header-search:focus-within {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
+}
+
 .custom-form-input, .custom-form-select {
-  border: 1px solid #d2d6da !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
   border-radius: 0.5rem !important;
   padding: 0.55rem 0.85rem !important;
   font-size: 0.875rem !important;
@@ -2502,22 +2535,48 @@ const getDestinationBadgeClass = (dest) => {
   transition: all 0.2s ease-in-out;
 }
 .custom-form-input:focus, .custom-form-select:focus {
-  border-color: #1a73e8 !important;
-  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
 }
 .selection-card {
-  border: 1px solid #e9ecef !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
   border-radius: 0.6rem !important;
   transition: all 0.2s ease;
   background: #fff;
 }
 .selection-card:hover {
-  border-color: #adb5bd !important;
+  border-color: #10b981 !important;
   transform: translateY(-1px);
 }
 .selection-card.active-card {
-  border-color: #1a73e8 !important;
-  background: #f0f7ff !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15) !important;
+}
+
+:global(body.dark-version) .custom-header-select,
+:global(body.dark-version) .custom-header-search {
+  background-color: rgba(12, 26, 21, 0.9) !important;
+  border-color: rgba(16, 185, 129, 0.28) !important;
+  color: #f1f5f9 !important;
+}
+:global(body.dark-version) .custom-header-select option {
+  background-color: #0b1a15 !important;
+  color: #f1f5f9 !important;
+}
+:global(body.dark-version) .custom-form-input,
+:global(body.dark-version) .custom-form-select {
+  background-color: rgba(12, 26, 21, 0.9) !important;
+  border-color: rgba(16, 185, 129, 0.28) !important;
+  color: #f8fafc !important;
+}
+:global(body.dark-version) .selection-card {
+  background-color: rgba(12, 26, 21, 0.8) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  color: #f8fafc !important;
+}
+:global(body.dark-version) .selection-card.active-card {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.2) !important;
 }
 </style>

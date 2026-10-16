@@ -523,12 +523,13 @@
 
               <div class="mb-3">
                 <label class="form-label font-weight-bold text-xs text-uppercase">Domain <span class="text-danger">*</span></label>
-                <select v-model="customSslForm.domain" class="form-select form-select-sm" :disabled="isCustomSslDomainLocked">
-                  <option value="" disabled>Select a domain...</option>
-                  <option v-for="d in domains" :key="d.domain" :value="d.domain">
-                    {{ d.domain }}
-                  </option>
-                </select>
+                <SearchableSelect v-model="customSslForm.domain"
+                                  :items="domains"
+                                  placeholder="Select a domain..."
+                                  search-placeholder="Search domains..."
+                                  icon="shield"
+                                  :disabled="isCustomSslDomainLocked"
+                                  :required="true" />
               </div>
 
               <div class="mb-3">
@@ -608,6 +609,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
 import MainLayout from '@/Layouts/MainLayout.vue'
+import SearchableSelect from '@/Components/SearchableSelect.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/date'

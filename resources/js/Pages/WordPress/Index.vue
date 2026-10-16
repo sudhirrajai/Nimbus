@@ -164,10 +164,12 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="form-label">Domain *</label>
-                <select class="form-control form-select" v-model="installForm.domain">
-                  <option value="">Select domain...</option>
-                  <option v-for="d in availableDomains" :key="d" :value="d">{{ d }}</option>
-                </select>
+                <SearchableSelect v-model="installForm.domain"
+                                  :items="availableDomains"
+                                  placeholder="Select domain..."
+                                  search-placeholder="Search available domains..."
+                                  icon="language"
+                                  :required="true" />
               </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label">Site Title *</label>
@@ -471,6 +473,7 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue'
+import SearchableSelect from '@/Components/SearchableSelect.vue'
 import { Head } from '@inertiajs/vue3'
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'

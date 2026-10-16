@@ -9,7 +9,7 @@
 
     <Sidebar />
 
-    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg d-flex flex-column min-vh-100" style="z-index: 1;">
+    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg d-flex flex-column min-vh-100">
       <Navbar />
 
       <div v-if="$page.props.license_warning" class="container-fluid pt-3 pb-0 position-relative z-index-2">
