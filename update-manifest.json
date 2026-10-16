@@ -1,13 +1,11 @@
 {
   "version": "1.1.2",
   "release_date": "2026-10-16",
-  "sha256": "e96f0239f0423d583df631e25e4b535755efb499505b1937fe41bb7beb99a119",
+  "sha256": "c3be65d78ab894a94965402720f3e3899424c32aed7b1ed2599cdd48de81190f",
   "changelog": [
     "Resolved WordPress installation permissions conflict under multi-tenant Site Isolation",
     "Resolved update pipeline freeze at Step 8/8 during PHP-FPM service restart",
-    "Enhanced OTA Updates Center UI with real-time visual progress stepper and auto-scrolling log console",
-    "Strict multi-tenant FTP scoping and user isolation with super-admin global management",
-    "Automatic recovery and status reconciliation when returning to the Updates page"
+    "Enhanced OTA Updates Center with custom confirmation dialog, real-time safety pipeline and auto-scrolling console"
   ],
   "commands": [
     "php artisan migrate --force",

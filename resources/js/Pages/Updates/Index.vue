@@ -239,7 +239,7 @@
 
                                     <div class="d-grid gap-2">
                                         <button class="btn bg-gradient-success btn-lg mb-0 d-flex align-items-center justify-content-center gap-2 shadow-success"
-                                            @click="startUpdate" :disabled="updating">
+                                            @click="openUpdateConfirm" :disabled="updating">
                                             <span v-if="updating" class="spinner-border spinner-border-sm"></span>
                                             <i v-else class="material-symbols-rounded text-lg">download</i>
                                             <span class="font-weight-bold">{{ updating ? 'Applying Safe Update Pipeline...' : 'Update Now (Safe Mode)' }}</span>
@@ -418,6 +418,88 @@
                 </div>
             </div>
 
+            <!-- Safe Update Confirmation Modal -->
+            <div v-if="showConfirmModal" class="confirm-modal-wrapper">
+                <div class="modal-backdrop fade show" @click="showConfirmModal = false"
+                     style="background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(6px); z-index: 1060;"></div>
+                <div class="modal fade show d-block" tabindex="-1" style="z-index: 1070;" @keydown.esc="showConfirmModal = false">
+                    <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
+                        <div class="modal-content border-0 shadow-2xl rounded-4 overflow-hidden bg-white">
+                            
+                            <!-- Modal Header / Visual Banner -->
+                            <div class="modal-header border-0 pb-0 pt-4 px-4 d-flex align-items-start justify-content-between">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="confirm-icon-box shadow-sm">
+                                        <i class="material-symbols-rounded text-success" style="font-size: 26px;">system_update_alt</i>
+                                    </div>
+                                    <div>
+                                        <h5 class="modal-title font-weight-bolder text-dark mb-0.5" style="letter-spacing: -0.02em;">Ready to Update?</h5>
+                                        <span class="text-xs text-muted">Safe OTA Deployment Pipeline</span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close text-secondary" @click="showConfirmModal = false"></button>
+                            </div>
+
+                            <!-- Modal Body -->
+                            <div class="modal-body px-4 py-3">
+                                
+                                <!-- Version Transition Card -->
+                                <div class="version-transition-card p-3 rounded-3 mb-3 border d-flex align-items-center justify-content-between">
+                                    <div class="text-center flex-grow-1">
+                                        <span class="text-xxs text-uppercase text-muted font-weight-bold d-block mb-0.5">Current</span>
+                                        <span class="font-monospace font-weight-bold text-dark text-sm">v{{ activeVersion }}</span>
+                                    </div>
+                                    <div class="px-2 text-secondary d-flex align-items-center">
+                                        <i class="material-symbols-rounded text-base text-success">arrow_forward</i>
+                                    </div>
+                                    <div class="text-center flex-grow-1">
+                                        <span class="text-xxs text-uppercase text-success font-weight-bold d-block mb-0.5">Target</span>
+                                        <span class="font-monospace font-weight-bolder text-success text-sm">v{{ latestVersion }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Checklist of Safety Protections -->
+                                <div class="safety-checklist d-flex flex-column gap-2 mb-3">
+                                    <div class="d-flex align-items-center gap-2.5 text-xs text-secondary">
+                                        <i class="material-symbols-rounded text-success text-sm flex-shrink-0">check_circle</i>
+                                        <span><strong>Automatic Snapshot:</strong> Backs up whole panel & SQLite database</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2.5 text-xs text-secondary">
+                                        <i class="material-symbols-rounded text-success text-sm flex-shrink-0">shield</i>
+                                        <span><strong>Zero-Downtime:</strong> Running sites and isolated PHP pools continue serving</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2.5 text-xs text-secondary">
+                                        <i class="material-symbols-rounded text-success text-sm flex-shrink-0">history</i>
+                                        <span><strong>Safe Rollback:</strong> Instantly rolls back if post-update health check fails</span>
+                                    </div>
+                                </div>
+
+                                <!-- Duration Notice -->
+                                <div class="p-2.5 rounded-3 bg-warning-subtle text-warning-emphasis border border-warning-subtle d-flex align-items-center gap-2">
+                                    <i class="material-symbols-rounded text-warning text-sm flex-shrink-0">timer</i>
+                                    <span class="text-xxs">Pipeline takes ~30–60 seconds. Please do not close this window during the update.</span>
+                                </div>
+
+                            </div>
+
+                            <!-- Modal Footer -->
+                            <div class="modal-footer border-0 pt-0 pb-4 px-4 d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-light btn-sm mb-0 px-3 py-2 font-weight-bold" @click="showConfirmModal = false">
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn bg-gradient-success btn-sm mb-0 px-3 py-2 d-flex align-items-center gap-1.5 shadow-success font-weight-bold"
+                                        @click="confirmAndUpdate" :disabled="updating">
+                                    <span v-if="updating" class="spinner-border spinner-border-sm" style="width: 13px; height: 13px;"></span>
+                                    <i v-else class="material-symbols-rounded text-sm">rocket_launch</i>
+                                    <span>{{ updating ? 'Starting Pipeline...' : 'Start Safe Update' }}</span>
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Toast Notifications -->
             <div class="position-fixed bottom-0 end-0 p-3 toast-container" style="z-index: 1080">
                 <div class="toast align-items-center border-0 shadow-2xl rounded-3"
@@ -509,9 +591,18 @@ const checkUpdates = async () => {
     }
 }
 
-const startUpdate = async () => {
-    if (!confirm('This will update your panel using the safe update pipeline (with pre-update snapshot & automated rollback). Continue?')) return
+const showConfirmModal = ref(false)
 
+const openUpdateConfirm = () => {
+    showConfirmModal.value = true
+}
+
+const confirmAndUpdate = async () => {
+    showConfirmModal.value = false
+    await startUpdate()
+}
+
+const startUpdate = async () => {
     updating.value = true
     updateLog.value = ''
     updateComplete.value = false
@@ -1114,6 +1205,39 @@ const getCategory = (text) => {
 
     .shield-badge i {
         font-size: 22px;
+    }
+}
+
+/* Confirmation Modal Enhancements */
+.confirm-icon-box {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    background: #ecfdf5;
+    border: 1px solid #d1fae5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.version-transition-card {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.confirm-modal-wrapper .modal-content {
+    animation: modalScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
     }
 }
 </style>
