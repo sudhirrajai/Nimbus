@@ -164,15 +164,19 @@ class WordPressController extends Controller
         $domain = $request->input('domain');
         $domainPath = rtrim($this->basePath, '/') . '/' . $domain;
 
+        // Ensure directory exists and isolated tenant user is configured
         if (!is_dir($domainPath)) {
             $dummy = '';
             $this->execCmd("sudo mkdir -p " . escapeshellarg($domainPath), $dummy);
-            $this->execCmd("sudo chown www-data:www-data " . escapeshellarg($domainPath), $dummy);
         }
+        $siteUser = SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
 
-        // Check if WP already exists
+        // Check if a healthy WordPress site already exists in this directory
         if (file_exists($domainPath . '/wp-config.php')) {
-            return response()->json(['success' => false, 'error' => 'WordPress is already installed in this directory.'], 400);
+            $existingSite = WordPressSite::where('domain', $domain)->first();
+            if ($existingSite && $existingSite->status === 'active') {
+                return response()->json(['success' => false, 'error' => 'WordPress is already installed and active in this directory.'], 400);
+            }
         }
 
         // Auto-generate DB credentials
@@ -181,51 +185,82 @@ class WordPressController extends Controller
         $dbUser = 'wp_' . substr($sanitizedDomain, 0, 10) . '_' . Str::random(6);
         $dbPass = Str::random(16);
 
-        // Track in DB
-        $site = WordPressSite::create([
-            'domain' => $domain,
-            'path' => $domainPath,
-            'site_title' => $request->site_title,
-            'admin_user' => $request->admin_user,
-            'admin_email' => $request->admin_email,
-            'db_name' => $dbName,
-            'db_user' => $dbUser,
-            'db_password' => $dbPass,
-            'status' => 'installing',
-        ]);
+        // Track in DB safely (updateOrCreate prevents unhandled UNIQUE constraint violations on retry)
+        try {
+            $site = WordPressSite::updateOrCreate(
+                ['domain' => $domain],
+                [
+                    'path' => $domainPath,
+                    'site_title' => $request->site_title,
+                    'admin_user' => $request->admin_user,
+                    'admin_email' => $request->admin_email,
+                    'db_name' => $dbName,
+                    'db_user' => $dbUser,
+                    'db_password' => $dbPass,
+                    'status' => 'installing',
+                ]
+            );
+        } catch (\Exception $e) {
+            Log::error("WordPress DB tracking error on {$domain}: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => 'Database tracking error: ' . $e->getMessage()], 500);
+        }
 
         try {
             $output = '';
 
-            // 0. Ensure wp-cli is installed
+            // 0. Ensure wp-cli is installed on the host
             $this->execCmd("if ! command -v wp &> /dev/null; then sudo curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && sudo chmod +x wp-cli.phar && sudo mv wp-cli.phar /usr/local/bin/wp; fi", $output);
 
-            // Execute database setup with safe shell quoting (single quotes)
+            // 1. Execute database setup with safe shell quoting
             $this->execCmd("sudo mysql -e 'CREATE DATABASE IF NOT EXISTS " . $dbName . "' 2>&1", $output);
-            $this->execCmd("sudo mysql -e 'CREATE USER IF NOT EXISTS " . $dbUser . "@localhost IDENTIFIED BY \"" . $dbPass . "\"' 2>&1", $output);
-            $this->execCmd("sudo mysql -e 'GRANT ALL PRIVILEGES ON " . $dbName . ".* TO " . $dbUser . "@localhost' 2>&1", $output);
+            $this->execCmd("sudo mysql -e 'CREATE USER IF NOT EXISTS \"" . $dbUser . "\"@\"localhost\" IDENTIFIED BY \"" . $dbPass . "\"' 2>&1", $output);
+            $this->execCmd("sudo mysql -e 'GRANT ALL PRIVILEGES ON " . $dbName . ".* TO \"" . $dbUser . "\"@\"localhost\"' 2>&1", $output);
             $this->execCmd("sudo mysql -e 'FLUSH PRIVILEGES' 2>&1", $output);
 
-            // 2. Download WordPress
-            $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core download --force --allow-root 2>&1", $output);
+            // Prepare directory ownership for isolated site user
+            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath), $output);
+            $this->execCmd("sudo chmod 750 " . escapeshellarg($domainPath), $output);
+
+            // 2. Download WordPress as the isolated site user
+            $dlResult = $this->runWpCmd($domain, $domainPath, "core download --force", $output);
             $this->execCmd("sudo rm -f " . escapeshellarg($domainPath . '/index.html'), $output);
 
-            // 3. Create wp-config.php
+            // Verify core download
+            $checkWp = shell_exec("sudo -u " . escapeshellarg($siteUser) . " test -f " . escapeshellarg($domainPath . '/wp-settings.php') . " && echo 'exists'");
+            if (trim($checkWp) !== 'exists') {
+                throw new \Exception("WordPress core download failed: " . trim($dlResult));
+            }
+
+            // 3. Create wp-config.php as the isolated site user
             $dbNameArg = escapeshellarg($dbName);
             $dbUserArg = escapeshellarg($dbUser);
             $dbPassArg = escapeshellarg($dbPass);
-            $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp config create --dbname={$dbNameArg} --dbuser={$dbUserArg} --dbpass={$dbPassArg} --dbhost=localhost --allow-root 2>&1", $output);
+            $cfgResult = $this->runWpCmd($domain, $domainPath, "config create --dbname={$dbNameArg} --dbuser={$dbUserArg} --dbpass={$dbPassArg} --dbhost=localhost", $output);
 
-            // 4. Install WordPress
+            $checkConfig = shell_exec("sudo -u " . escapeshellarg($siteUser) . " test -f " . escapeshellarg($domainPath . '/wp-config.php') . " && echo 'exists'");
+            if (trim($checkConfig) !== 'exists') {
+                throw new \Exception("WordPress config creation failed: " . trim($cfgResult));
+            }
+
+            // 4. Install WordPress as the isolated site user
             $url = 'http://' . $domain;
-            $this->execCmd("cd " . escapeshellarg($domainPath) . " && sudo -u www-data wp core install --url=" . escapeshellarg($url) . " --title=" . escapeshellarg($request->site_title) . " --admin_user=" . escapeshellarg($request->admin_user) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($request->admin_email) . " --allow-root 2>&1", $output);
+            $this->runWpCmd(
+                $domain,
+                $domainPath,
+                "core install --url=" . escapeshellarg($url) .
+                " --title=" . escapeshellarg($request->site_title) .
+                " --admin_user=" . escapeshellarg($request->admin_user) .
+                " --admin_password=" . escapeshellarg($request->admin_password) .
+                " --admin_email=" . escapeshellarg($request->admin_email),
+                $output
+            );
 
-            // 5. Set permissions with isolated site user
-            $siteUser = \App\Services\SiteIsolationService::siteUser($domain);
-            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($domainPath), $output);
-            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type d -exec chmod 750 {} \\;", $output);
-            $this->execCmd("sudo find " . escapeshellarg($domainPath) . " -type f -exec chmod 640 {} \\;", $output);
+            // 5. Enforce Site Isolation security: 750 dirs, 640 files, ACLs for www-data (nginx read-only)
+            SiteIsolationService::securePath($domainPath, $domain);
             $this->execCmd("sudo chmod 600 " . escapeshellarg($domainPath . '/wp-config.php') . " 2>/dev/null || true", $output);
+
+            // 6. Ensure isolated PHP-FPM pool is created and running for this domain
+            SiteIsolationService::createOrUpdatePool($domain, $domainPath);
 
             // Check WP version
             $wpVersion = 'Unknown';
@@ -272,8 +307,12 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $cmd = "cd " . escapeshellarg($site->path) . " && sudo -u www-data wp user update " . escapeshellarg($request->username) . " --user_pass=" . escapeshellarg($request->new_password) . " --allow-root 2>&1";
-            $this->execCmd($cmd, $output);
+            $this->runWpCmd(
+                $site->domain,
+                $site->path,
+                "user update " . escapeshellarg($request->username) . " --user_pass=" . escapeshellarg($request->new_password),
+                $output
+            );
 
             return response()->json(['success' => true, 'message' => 'Password changed successfully.', 'output' => $output]);
         } catch (\Exception $e) {
@@ -292,22 +331,22 @@ class WordPressController extends Controller
         try {
             // Get plugins
             $pluginsJson = '';
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin list --format=json --allow-root 2>&1", $pluginsJson);
+            $this->runWpCmd($site->domain, $site->path, "plugin list --format=json", $pluginsJson);
             $details['plugins'] = json_decode($pluginsJson, true) ?? [];
 
             // Get themes
             $themesJson = '';
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp theme list --format=json --allow-root 2>&1", $themesJson);
+            $this->runWpCmd($site->domain, $site->path, "theme list --format=json", $themesJson);
             $details['themes'] = json_decode($themesJson, true) ?? [];
 
             // Get users
             $usersJson = '';
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp user list --format=json --fields=ID,user_login,user_email,roles --allow-root 2>&1", $usersJson);
+            $this->runWpCmd($site->domain, $site->path, "user list --format=json --fields=ID,user_login,user_email,roles", $usersJson);
             $details['users'] = json_decode($usersJson, true) ?? [];
 
             // Check for core update
             $coreCheck = '';
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core check-update --format=json --allow-root 2>&1", $coreCheck);
+            $this->runWpCmd($site->domain, $site->path, "core check-update --format=json", $coreCheck);
             $coreUpdates = json_decode($coreCheck, true);
             if (is_array($coreUpdates) && count($coreUpdates) > 0) {
                 $details['core_update'] = $coreUpdates[0];
@@ -328,8 +367,12 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core update --allow-root 2>&1", $output);
+            $this->runWpCmd($site->domain, $site->path, "core update", $output);
             
+            // Re-apply site isolation security permissions after update
+            SiteIsolationService::securePath($site->path, $site->domain);
+            $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
+
             // Re-check version
             $versionFile = $site->path . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
@@ -354,7 +397,9 @@ class WordPressController extends Controller
         $output = '';
 
         try {
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin update --all --allow-root 2>&1", $output);
+            $this->runWpCmd($site->domain, $site->path, "plugin update --all", $output);
+            SiteIsolationService::securePath($site->path, $site->domain);
+
             return response()->json(['success' => true, 'message' => 'Plugins updated.', 'output' => $output]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
@@ -372,7 +417,9 @@ class WordPressController extends Controller
 
         try {
             $action = in_array($request->action, ['activate', 'deactivate', 'update', 'delete', 'install']) ? $request->action : 'list';
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp plugin " . escapeshellarg($action) . " " . escapeshellarg($request->plugin) . " --allow-root 2>&1", $output);
+            $this->runWpCmd($site->domain, $site->path, "plugin " . escapeshellarg($action) . " " . escapeshellarg($request->plugin), $output);
+            SiteIsolationService::securePath($site->path, $site->domain);
+
             return response()->json(['success' => true, 'message' => "Plugin {$request->action}d.", 'output' => $output]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
@@ -389,14 +436,14 @@ class WordPressController extends Controller
 
         try {
             if ($request->input('delete_files')) {
-                // Wipe the whole directory minus logs, or let's be safer and just empty it except logs
+                // Wipe the whole directory minus logs
                 $this->execCmd("sudo find " . escapeshellarg($site->path) . " -mindepth 1 -maxdepth 1 ! -name 'logs' -exec rm -rf {} +", $output);
             }
             if ($request->input('delete_database') && $site->db_name) {
                 // Must use sudo mysql instead of DB facade because nimbus DB user lacks DROP privileges
                 $this->execCmd("sudo mysql -e 'DROP DATABASE IF EXISTS " . $site->db_name . "' 2>&1", $output);
                 if ($site->db_user) {
-                    $this->execCmd("sudo mysql -e 'DROP USER IF EXISTS " . $site->db_user . "@localhost' 2>&1", $output);
+                    $this->execCmd("sudo mysql -e 'DROP USER IF EXISTS \"" . $site->db_user . "\"@\"localhost\"' 2>&1", $output);
                 }
             }
 
@@ -454,11 +501,12 @@ class WordPressController extends Controller
         $token = Str::random(64);
         $loginFile = rtrim($site->path, '/') . '/nimbus-login-' . substr($token, 0, 12) . '.php';
         $adminUser = $site->admin_user ?? 'admin';
+        $siteUser = SiteIsolationService::siteUser($site->domain);
 
         // Cleanup any old orphaned tokens immediately just in case
         foreach (glob(rtrim($site->path, '/') . '/nimbus-login-*.php') as $oldToken) {
             if (time() - filemtime($oldToken) > 60) {
-                @unlink($oldToken);
+                $this->execCmd("sudo rm -f " . escapeshellarg($oldToken), $dummy);
             }
         }
 
@@ -509,16 +557,13 @@ PHP;
             $temp = tempnam('/tmp', 'nimbus_wplogin_');
             file_put_contents($temp, $script);
             $dummy = '';
-            $this->execCmd("sudo mv " . escapeshellarg($temp) . " " . escapeshellarg($loginFile) . " && sudo chmod 644 " . escapeshellarg($loginFile) . " && sudo chown www-data:www-data " . escapeshellarg($loginFile), $dummy);
+            $this->execCmd("sudo mv " . escapeshellarg($temp) . " " . escapeshellarg($loginFile) . " && sudo chmod 644 " . escapeshellarg($loginFile) . " && sudo chown " . escapeshellarg($siteUser) . ":" . escapeshellarg($siteUser) . " " . escapeshellarg($loginFile), $dummy);
 
-            // 🔥 GUARANTEED AUTO-DELETE: 
-            // Spawn a background process that waits 60 seconds and forcefully deletes this exact file
-            // This ensures the file is deleted even if the user never clicks the link!
+            // Guaranteed auto-delete after 60 seconds
             $deleteCmd = "nohup bash -c 'sleep 60; sudo rm -f " . escapeshellarg($loginFile) . "' >/dev/null 2>&1 &";
             shell_exec($deleteCmd);
 
             $protocol = $site->ssl_enabled ? 'https' : 'http';
-            
             $relativePath = basename($loginFile);
             $url = $protocol . '://' . $site->domain . '/' . $relativePath . '?token=' . $token;
 
@@ -527,7 +572,7 @@ PHP;
             return response()->json(['success' => true, 'url' => $url]);
 
         } catch (\Exception $e) {
-            @unlink($loginFile);
+            $this->execCmd("sudo rm -f " . escapeshellarg($loginFile), $dummy);
             Log::error("WP auto-login error for {$site->domain}: " . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
@@ -553,12 +598,25 @@ PHP;
             $adminUser = $request->input('admin_user') ?: ($site->admin_user ?: 'admin');
             $adminEmail = $request->input('admin_email') ?: ($site->admin_email ?: 'admin@' . $site->domain);
 
-            // 1. Reset Database tables
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp db reset --yes --allow-root 2>&1", $output);
+            // 1. Reset Database tables as isolated site user
+            $this->runWpCmd($site->domain, $site->path, "db reset --yes", $output);
 
-            // 2. Re-install default tables
+            // 2. Re-install default tables as isolated site user
             $url = ($site->ssl_enabled ? 'https://' : 'http://') . $site->domain;
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core install --url=" . escapeshellarg($url) . " --title=" . escapeshellarg($siteTitle) . " --admin_user=" . escapeshellarg($adminUser) . " --admin_password=" . escapeshellarg($request->admin_password) . " --admin_email=" . escapeshellarg($adminEmail) . " --allow-root 2>&1", $output);
+            $this->runWpCmd(
+                $site->domain,
+                $site->path,
+                "core install --url=" . escapeshellarg($url) .
+                " --title=" . escapeshellarg($siteTitle) .
+                " --admin_user=" . escapeshellarg($adminUser) .
+                " --admin_password=" . escapeshellarg($request->admin_password) .
+                " --admin_email=" . escapeshellarg($adminEmail),
+                $output
+            );
+
+            // Re-enforce permissions
+            SiteIsolationService::securePath($site->path, $site->domain);
+            $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
             // 3. Update local site info
             $site->update([
@@ -589,14 +647,11 @@ PHP;
         $output = '';
 
         try {
-            // Re-download WordPress core files, forcing overwrite and skipping default content (themes/plugins)
-            $this->execCmd("cd " . escapeshellarg($site->path) . " && sudo -u www-data wp core download --force --skip-content --allow-root 2>&1", $output);
+            // Re-download WordPress core files as isolated tenant user
+            $this->runWpCmd($site->domain, $site->path, "core download --force --skip-content", $output);
 
-            // Reset permissions to ensure everything is correct
-            $siteUser = \App\Services\SiteIsolationService::siteUser(basename($site->path));
-            $this->execCmd("sudo chown -R {$siteUser}:{$siteUser} " . escapeshellarg($site->path), $output);
-            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type d -exec chmod 750 {} \\;", $output);
-            $this->execCmd("sudo find " . escapeshellarg($site->path) . " -type f -exec chmod 640 {} \\;", $output);
+            // Reset permissions to ensure strict Site Isolation
+            SiteIsolationService::securePath($site->path, $site->domain);
             $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
             // Re-check version in case it changed/was upgraded
@@ -618,6 +673,18 @@ PHP;
             Log::error("WordPress reinstall error on {$site->domain}: " . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Run a WP-CLI command as the site's isolated tenant user.
+     * Enforces strict Site Isolation security.
+     */
+    private function runWpCmd(string $domain, string $domainPath, string $wpSubcommand, &$output): string
+    {
+        $siteUser = SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
+        $cmd = "cd " . escapeshellarg($domainPath) . " && sudo -u " . escapeshellarg($siteUser) . " env HOME=/tmp wp " . $wpSubcommand . " --allow-root 2>&1";
+        $res = $this->execCmd($cmd, $output);
+        return $res ?? '';
     }
 
     /**

@@ -327,7 +327,7 @@
                                     <i class="material-symbols-rounded text-secondary" style="font-size: 36px;">description</i>
                                 </div>
                                 <h6 class="text-sm text-secondary font-weight-bold mb-1">No Changelog Entries Loaded</h6>
-                                <p class="text-xs text-muted mb-3">Click "Check for Updates" above to query release notes from VMCore Central.</p>
+                                <p class="text-xs text-muted mb-3">Click "Check for Updates" above to query release notes from Roook.</p>
                                 <button class="btn btn-sm btn-outline-dark mb-0 d-flex align-items-center gap-1"
                                         @click="checkUpdates" :disabled="checking">
                                     <i class="material-symbols-rounded text-xs">sync</i>
@@ -498,12 +498,12 @@ const checkUpdates = async () => {
             changelog.value = response.data.changelog || []
             commands.value = response.data.commands || []
             sha256.value = response.data.sha256 || null
-            updateSource.value = response.data.source || 'VMCore Central'
+            updateSource.value = response.data.source || 'Roook'
             releaseDate.value = response.data.releaseDate
             releaseUrl.value = response.data.releaseUrl
         }
     } catch (error) {
-        notify('Failed to check for updates from VMCore Central', 'error')
+        notify('Failed to check for updates from Roook', 'error')
     } finally {
         checking.value = false
     }

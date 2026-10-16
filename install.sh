@@ -372,11 +372,20 @@ else
     run_db_command "FLUSH PRIVILEGES;" 2>/dev/null || true
 fi
 
-echo -e "${GREEN}[6/12]${NC} Installing Composer..."
+echo -e "${GREEN}[6/12]${NC} Installing Composer & WP-CLI..."
 if [ "$SKIP_EXISTING" = true ] && command -v composer >/dev/null 2>&1; then
     echo -e "${YELLOW}Composer already installed. Skipping.${NC}"
 else
     curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+fi
+
+# Install WP-CLI globally for WordPress management
+if [ "$SKIP_EXISTING" = true ] && command -v wp >/dev/null 2>&1; then
+    echo -e "${YELLOW}WP-CLI already installed. Skipping.${NC}"
+else
+    echo -e "${YELLOW}Installing WP-CLI...${NC}"
+    curl -sS https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
+    chmod +x /usr/local/bin/wp
 fi
 
 echo -e "${GREEN}[7/12]${NC} Installing Node.js ${NODE_VERSION}..."
