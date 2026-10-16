@@ -150,20 +150,17 @@ onUnmounted(() => {
   animation: floatOrb 30s ease-in-out infinite alternate;
 }
 
-/* Enhanced Dark Mode Green Ambient Lighting */
-:global(body.dark-version) .ambient-glow-1 {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, rgba(4, 120, 87, 0.12) 50%, transparent 70%);
-  filter: blur(90px);
+/* In Dark Mode, adjust orb glow */
+.dark-mode-canvas .ambient-glow-1 {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.22) 0%, rgba(4, 120, 87, 0.1) 50%, transparent 70%);
 }
 
-:global(body.dark-version) .ambient-glow-2 {
-  background: radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, rgba(5, 150, 105, 0.1) 50%, transparent 70%);
-  filter: blur(90px);
+.dark-mode-canvas .ambient-glow-2 {
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.18) 0%, rgba(5, 150, 105, 0.08) 50%, transparent 70%);
 }
 
-:global(body.dark-version) .ambient-glow-3 {
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.18) 0%, rgba(16, 185, 129, 0.08) 50%, transparent 70%);
-  filter: blur(90px);
+.dark-mode-canvas .ambient-glow-3 {
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.16) 0%, rgba(16, 185, 129, 0.06) 50%, transparent 70%);
 }
 
 @keyframes floatOrb {

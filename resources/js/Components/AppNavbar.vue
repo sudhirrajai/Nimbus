@@ -393,40 +393,20 @@ const logout = () => {
   transition: all 0.3s ease;
 }
 
-:global(body.dark-version) .glass-navbar {
-  background: rgba(10, 19, 16, 0.85) !important;
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(16, 185, 129, 0.12) !important;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4) !important;
-}
-
 .navbar-icon-menu {
   color: #1e293b;
-}
-:global(body.dark-version) .navbar-icon-menu {
-  color: #f8fafc !important;
 }
 
 .navbar-brand-logo-text {
   color: #0f172a;
 }
-:global(body.dark-version) .navbar-brand-logo-text {
-  color: #f8fafc !important;
-}
 
 .navbar-icon-user {
   color: #1e293b;
 }
-:global(body.dark-version) .navbar-icon-user {
-  color: #f8fafc !important;
-}
 
 .navbar-user-name {
   color: #1e293b;
-}
-:global(body.dark-version) .navbar-user-name {
-  color: #f8fafc !important;
 }
 
 /* Theme Toggle Button */
@@ -450,18 +430,6 @@ const logout = () => {
   border-color: #cbd5e1;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-:global(body.dark-version) .theme-toggle-btn {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  color: #f8fafc !important;
-}
-
-:global(body.dark-version) .theme-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.14) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
 }
 
 .theme-toggle-icon {
@@ -489,10 +457,6 @@ const logout = () => {
   letter-spacing: -0.01em;
 }
 
-:global(body.dark-version) .theme-toggle-text {
-  color: #e2e8f0 !important;
-}
-
 .btn-report-header {
   background: none;
   border: none;
@@ -509,15 +473,6 @@ const logout = () => {
 .btn-report-header:hover {
   background-color: #f0f2f5;
   color: #1f2937;
-}
-
-:global(body.dark-version) .btn-report-header {
-  color: #cbd5e1 !important;
-}
-
-:global(body.dark-version) .btn-report-header:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
 }
 
 @media (max-width: 575.98px) {
@@ -553,14 +508,6 @@ const logout = () => {
   border-radius: 1rem !important;
 }
 
-:global(body.dark-version) .dropdown-menu {
-  background: rgba(15, 23, 42, 0.95) !important;
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6) !important;
-}
-
 .dropdown-item {
   padding: 10px 16px;
   font-size: 0.875rem;
@@ -572,25 +519,8 @@ const logout = () => {
   background-color: #f0f2f5;
 }
 
-:global(body.dark-version) .dropdown-item {
-  color: #cbd5e1 !important;
-}
-
-:global(body.dark-version) .dropdown-item:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
-}
-
 .dropdown-item.text-danger:hover {
   background-color: #fee2e2;
-}
-
-:global(body.dark-version) .dropdown-item.text-danger:hover {
-  background-color: rgba(239, 68, 68, 0.15) !important;
-}
-
-:global(body.dark-version) .dropdown-divider {
-  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .sidenav-overlay {
@@ -623,18 +553,6 @@ const logout = () => {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
 }
 
-:global(body.dark-version) .server-time-capsule {
-  background: rgba(15, 23, 42, 0.8) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
-}
-
-:global(body.dark-version) .server-time-capsule:hover,
-:global(body.dark-version) .server-time-capsule.capsule-active {
-  background: rgba(30, 41, 59, 0.9) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
-}
-
 .live-dot {
   width: 7px;
   height: 7px;
@@ -651,9 +569,6 @@ const logout = () => {
   color: #64748b;
   flex-shrink: 0;
 }
-:global(body.dark-version) .clock-icon {
-  color: #94a3b8 !important;
-}
 
 .time-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -664,10 +579,6 @@ const logout = () => {
   font-feature-settings: 'tnum';
   font-variant-numeric: tabular-nums;
   line-height: 1;
-}
-
-:global(body.dark-version) .time-text {
-  color: #f8fafc !important;
 }
 
 .tz-badge {
@@ -683,12 +594,6 @@ const logout = () => {
   line-height: 1.2;
 }
 
-:global(body.dark-version) .tz-badge {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  color: #cbd5e1 !important;
-}
-
 .clock-popover {
   top: calc(100% + 8px);
   right: 0;
@@ -702,23 +607,8 @@ const logout = () => {
   animation: popover-slide 0.15s ease-out;
 }
 
-:global(body.dark-version) .clock-popover {
-  background: rgba(15, 23, 42, 0.95) !important;
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6) !important;
-}
-
-:global(body.dark-version) .popover-header-row {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
 .popover-title-text {
   color: #0f172a;
-}
-:global(body.dark-version) .popover-title-text {
-  color: #f8fafc !important;
 }
 
 .popover-time-card {
@@ -726,24 +616,12 @@ const logout = () => {
   border-color: #e2e8f0 !important;
 }
 
-:global(body.dark-version) .popover-time-card {
-  background: rgba(30, 41, 59, 0.6) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
 .popover-bold-time {
   color: #0f172a;
-}
-:global(body.dark-version) .popover-bold-time {
-  color: #f8fafc !important;
 }
 
 .popover-diff-box {
   background: #f1f5f9;
-}
-:global(body.dark-version) .popover-diff-box {
-  background: rgba(30, 41, 59, 0.45) !important;
-  color: #94a3b8 !important;
 }
 
 @keyframes popover-slide {
@@ -788,41 +666,134 @@ const logout = () => {
 </style>
 
 <style>
-/* Global styles for mobile sidebar */
-#sidenav-main {
-  z-index: 999;
+/* AppNavbar Dark Mode Global Styles (Pure CSS, no Vue scoped mangling) */
+body.dark-version .glass-navbar {
+  background: rgba(10, 19, 16, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4) !important;
 }
 
-@media (max-width: 1199.98px) {
-  #sidenav-main {
-    transform: translateX(-110%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  #sidenav-main.show-mobile {
-    transform: translateX(0) !important;
-    z-index: 1050 !important;
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
-  }
-}
-</style>
-
-<style>
-/* Global styles for mobile sidebar */
-#sidenav-main {
-  z-index: 999;
+body.dark-version .navbar-icon-menu {
+  color: #f8fafc !important;
 }
 
-@media (max-width: 1199.98px) {
-  #sidenav-main {
-    transform: translateX(-110%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  #sidenav-main.show-mobile {
-    transform: translateX(0) !important;
-    z-index: 1050 !important;
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25) !important;
-  }
+body.dark-version .navbar-brand-logo-text {
+  color: #f8fafc !important;
+}
+
+body.dark-version .navbar-icon-user {
+  color: #f8fafc !important;
+}
+
+body.dark-version .navbar-user-name {
+  color: #f8fafc !important;
+}
+
+body.dark-version .theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #f8fafc !important;
+}
+
+body.dark-version .theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-version .theme-toggle-text {
+  color: #e2e8f0 !important;
+}
+
+body.dark-version .btn-report-header {
+  color: #cbd5e1 !important;
+}
+
+body.dark-version .btn-report-header:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+body.dark-version .dropdown-menu {
+  background: rgba(14, 25, 22, 0.95) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6) !important;
+}
+
+body.dark-version .dropdown-item {
+  color: #cbd5e1 !important;
+}
+
+body.dark-version .dropdown-item:hover {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #ffffff !important;
+}
+
+body.dark-version .dropdown-item.text-danger:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+body.dark-version .dropdown-divider {
+  border-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+body.dark-version .server-time-capsule {
+  background: rgba(14, 25, 22, 0.8) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-version .server-time-capsule:hover,
+body.dark-version .server-time-capsule.capsule-active {
+  background: rgba(20, 35, 30, 0.9) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+body.dark-version .clock-icon {
+  color: #94a3b8 !important;
+}
+
+body.dark-version .time-text {
+  color: #f8fafc !important;
+}
+
+body.dark-version .tz-badge {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+  color: #34d399 !important;
+}
+
+body.dark-version .clock-popover {
+  background: rgba(14, 25, 22, 0.95) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border-color: rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6) !important;
+}
+
+body.dark-version .popover-header-row {
+  border-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+body.dark-version .popover-title-text {
+  color: #f8fafc !important;
+}
+
+body.dark-version .popover-time-card {
+  background: rgba(20, 35, 30, 0.6) !important;
+  border-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+body.dark-version .popover-bold-time {
+  color: #f8fafc !important;
+}
+
+body.dark-version .popover-diff-box {
+  background: rgba(20, 35, 30, 0.45) !important;
+  color: #94a3b8 !important;
 }
 </style>
