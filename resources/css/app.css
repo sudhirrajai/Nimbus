@@ -1696,9 +1696,9 @@ html, body {
   --glass-shadow-light: 0 10px 30px -10px rgba(15, 23, 42, 0.05), inset 0 1px 0 #fff;
 
   /* Frosted Glass - Dark Mode */
-  --glass-bg-dark: rgba(16, 29, 24, 0.88);
-  --glass-border-dark: rgba(16, 185, 129, 0.22);
-  --glass-shadow-dark: 0 20px 50px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-bg-dark: rgba(18, 33, 27, 0.88);
+  --glass-border-dark: rgba(16, 185, 129, 0.25);
+  --glass-shadow-dark: 0 20px 50px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 body {
@@ -1711,9 +1711,9 @@ body {
 /* 2. Global Dark Mode Canvas - Obsidian Emerald */
 body.dark-version,
 html.dark body {
-  background-color: #08110e !important;
-  background-image: radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.09) 0px, transparent 50%),
-                    radial-gradient(at 0% 50%, rgba(5, 150, 105, 0.06) 0px, transparent 50%) !important;
+  background-color: #0c1814 !important;
+  background-image: radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+                    radial-gradient(at 0% 50%, rgba(5, 150, 105, 0.08) 0px, transparent 50%) !important;
   color: #e2e8f0 !important;
 }
 
@@ -2075,9 +2075,9 @@ body.dark-version .input-group-text {
 
 .modal-backdrop.show {
   display: block !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  background-color: rgba(8, 17, 14, 0.75) !important;
+  backdrop-filter: blur(3px) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+  background-color: rgba(4, 12, 9, 0.45) !important;
 }
 
 .modal-content {
@@ -2309,10 +2309,10 @@ body.modal-open #navbarBlur {
   left: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  opacity: 0.65 !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  background-color: rgba(8, 17, 14, 0.75) !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(3px) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+  background-color: rgba(4, 12, 9, 0.45) !important;
   z-index: 100040 !important;
   pointer-events: auto !important;
 }
@@ -2328,14 +2328,44 @@ body.modal-open #navbarBlur {
 }
 
 body.dark-version .modal-content {
-  background: rgba(10, 20, 16, 0.94) !important;
-  border: 1px solid rgba(16, 185, 129, 0.25) !important;
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(16, 185, 129, 0.1) !important;
+  background: rgba(18, 33, 27, 0.98) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.75), 0 0 40px rgba(16, 185, 129, 0.14) !important;
+  color: #f8fafc !important;
 }
 
 body.dark-version .modal-header,
 body.dark-version .modal-footer {
-  border-color: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+body.dark-version .modal-header.bg-gray-100 {
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Segmented Control & Option Cards in Dark Mode */
+body.dark-version .btn-group.bg-gray-100,
+body.dark-version .nav-pills.bg-gray-100 {
+  background-color: rgba(14, 28, 22, 0.9) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+}
+
+body.dark-version .btn-group .btn.bg-white,
+body.dark-version .nav-pills .nav-link.bg-white {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-version .selection-card {
+  background: rgba(14, 28, 22, 0.85) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+body.dark-version .selection-card.active-card {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.16) !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.25) !important;
 }
 
 /* C. Search Bars throughout Portal (Top Navbar, Tables, Toolbars) */

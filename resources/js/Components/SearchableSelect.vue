@@ -22,20 +22,21 @@
          :class="{ 'rotate-180': isOpen }">expand_more</i>
     </div>
 
-    <!-- Dropdown Menu -->
-    <div v-if="isOpen" class="custom-select-menu shadow-xl border rounded-3 position-absolute w-100 mt-1 py-2 z-index-modal">
-      <!-- Search Box -->
+    <!-- Dropdown Menu (Styled like File Manager Jump to Website) -->
+    <div v-if="isOpen" class="custom-select-menu shadow-2xl border position-absolute w-100 mt-1 z-index-modal">
+      <!-- Quick Search inside Dropdown -->
       <div class="px-2 pb-2 border-bottom select-search-wrapper">
-        <div class="input-group input-group-sm select-search-box rounded-2 px-2 py-1 align-items-center">
-          <i class="material-symbols-rounded text-xs me-1 select-search-icon">search</i>
+        <div class="select-search-box d-flex align-items-center gap-2 px-2.5 py-1.5 rounded-2">
+          <i class="material-symbols-rounded select-search-icon flex-shrink-0">search</i>
           <input type="text"
                  ref="searchInputRef"
                  v-model="searchQuery"
-                 class="form-control form-control-sm border-0 bg-transparent p-0 text-xs select-search-input"
+                 class="border-0 bg-transparent p-0 select-search-input flex-grow-1"
                  :placeholder="searchPlaceholder"
-                 @click.stop>
+                 @click.stop
+                 @keydown.stop>
           <i v-if="searchQuery"
-             class="material-symbols-rounded text-xs cursor-pointer select-clear-icon"
+             class="material-symbols-rounded select-clear-icon flex-shrink-0"
              @click.stop="searchQuery = ''">close</i>
         </div>
       </div>
@@ -206,10 +207,11 @@ onUnmounted(() => {
   top: calc(100% + 4px);
   left: 0;
   background: #ffffff;
-  border-color: rgba(16, 185, 129, 0.24) !important;
+  border: 1px solid rgba(16, 185, 129, 0.24) !important;
   border-radius: 12px !important;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(16, 185, 129, 0.08) !important;
   z-index: 1060;
+  padding: 6px !important;
   animation: selectMenuDrop 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -225,23 +227,49 @@ onUnmounted(() => {
 }
 
 .select-search-wrapper {
-  border-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.15) !important;
+  padding-bottom: 6px !important;
+  margin-bottom: 4px !important;
 }
 
 .select-search-box {
   background-color: #f8fafc;
   border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px !important;
+  transition: all 0.2s ease;
+}
+
+.select-search-box:focus-within {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18) !important;
+  background-color: #ffffff;
 }
 
 .select-search-input {
   color: #0f172a;
+  font-size: 0.8125rem !important;
   outline: none !important;
   box-shadow: none !important;
 }
 
-.select-search-icon,
-.select-clear-icon {
+.select-search-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+.select-search-icon {
   color: #10b981;
+  font-size: 16px !important;
+}
+
+.select-clear-icon {
+  color: #94a3b8;
+  font-size: 16px !important;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.select-clear-icon:hover {
+  color: #0f172a;
 }
 
 .select-empty {
@@ -250,22 +278,27 @@ onUnmounted(() => {
 
 .custom-select-item {
   user-select: none;
-  transition: all 0.18s ease;
-  margin: 1px 4px;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: 2px 2px;
+  padding: 7px 10px !important;
   border-radius: 8px;
 }
 
 .item-icon {
   color: #10b981;
+  font-size: 16px !important;
 }
 
 .item-label {
   color: #334155;
+  font-size: 0.8125rem !important;
+  font-weight: 500;
 }
 
 .custom-select-item:hover {
   background-color: rgba(16, 185, 129, 0.1);
   color: #065f46;
+  transform: translateX(3px);
 }
 
 .custom-select-item:hover .item-label {
@@ -278,6 +311,7 @@ onUnmounted(() => {
 
 .custom-select-item.active-item .item-label {
   color: #047857 !important;
+  font-weight: 600;
 }
 
 .rotate-180 {
@@ -313,18 +347,20 @@ onUnmounted(() => {
 }
 
 /* ==========================================================================
-   DARK VERSION (Emerald Glass Theme)
+   DARK VERSION (Matching File Manager Jump to Website)
    ========================================================================== */
 :global(body.dark-version) .custom-select-trigger {
-  background-color: rgba(12, 26, 21, 0.92) !important;
-  border-color: rgba(16, 185, 129, 0.28) !important;
+  background-color: rgba(14, 28, 22, 0.94) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 10px !important;
   color: #f8fafc !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
 }
 
 :global(body.dark-version) .custom-select-trigger:hover:not(.is-disabled) {
-  background-color: rgba(16, 34, 28, 0.98) !important;
+  background-color: rgba(18, 36, 28, 0.98) !important;
   border-color: rgba(16, 185, 129, 0.55) !important;
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.16) !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2) !important;
 }
 
 :global(body.dark-version) .custom-select-trigger.is-open {
@@ -338,7 +374,8 @@ onUnmounted(() => {
 }
 
 :global(body.dark-version) .select-label {
-  color: #f1f5f9 !important;
+  color: #f8fafc !important;
+  font-weight: 500 !important;
 }
 
 :global(body.dark-version) .select-placeholder {
@@ -350,57 +387,98 @@ onUnmounted(() => {
 }
 
 :global(body.dark-version) .custom-select-menu {
-  background: rgba(9, 21, 17, 0.98) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
-  border-color: rgba(16, 185, 129, 0.32) !important;
-  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.75), 0 0 25px rgba(16, 185, 129, 0.14) !important;
+  background: rgba(11, 23, 19, 0.98) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(16, 185, 129, 0.15) !important;
+  padding: 6px !important;
 }
 
 :global(body.dark-version) .select-search-wrapper {
   border-color: rgba(16, 185, 129, 0.15) !important;
+  padding-bottom: 6px !important;
+  margin-bottom: 4px !important;
 }
 
 :global(body.dark-version) .select-search-box {
-  background-color: rgba(16, 34, 27, 0.95) !important;
-  border: 1px solid rgba(16, 185, 129, 0.24) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 8px !important;
+}
+
+:global(body.dark-version) .select-search-box:focus-within {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.22) !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
 }
 
 :global(body.dark-version) .select-search-input {
-  color: #f8fafc !important;
+  color: #ffffff !important;
+  font-size: 0.8125rem !important;
 }
 
 :global(body.dark-version) .select-search-input::placeholder {
-  color: #64748b !important;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+:global(body.dark-version) .select-search-icon {
+  color: #34d399 !important;
+  font-size: 16px !important;
+}
+
+:global(body.dark-version) .select-clear-icon {
+  color: #94a3b8 !important;
+  font-size: 16px !important;
+}
+:global(body.dark-version) .select-clear-icon:hover {
+  color: #ffffff !important;
 }
 
 :global(body.dark-version) .item-label {
   color: #e2e8f0 !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
 }
 
 :global(body.dark-version) .select-empty {
-  color: #64748b !important;
+  color: #94a3b8 !important;
+}
+
+:global(body.dark-version) .custom-select-item {
+  border-radius: 8px !important;
+  padding: 7px 10px !important;
+  margin: 2px 2px !important;
 }
 
 :global(body.dark-version) .custom-select-item:hover {
   background-color: rgba(16, 185, 129, 0.16) !important;
+  color: #ffffff !important;
+  transform: translateX(3px) !important;
 }
 
 :global(body.dark-version) .custom-select-item:hover .item-label {
-  color: #34d399 !important;
+  color: #ffffff !important;
 }
 
 :global(body.dark-version) .custom-select-item.active-item {
-  background-color: rgba(16, 185, 129, 0.24) !important;
+  background-color: rgba(16, 185, 129, 0.25) !important;
 }
 
 :global(body.dark-version) .custom-select-item.active-item .item-label {
   color: #34d399 !important;
+  font-weight: 600 !important;
 }
 
 :global(body.dark-version) .select-sublabel {
   background-color: rgba(16, 185, 129, 0.16) !important;
   color: #34d399 !important;
-  border-color: rgba(16, 185, 129, 0.3) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 6px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 2px 7px !important;
 }
 </style>
