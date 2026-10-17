@@ -2675,5 +2675,200 @@ body.dark-version .form-select option {
   padding: 8px 12px !important;
 }
 
+/* H. SearchableSelect & Universal Custom Dropdowns (Matching FileManager Jump to Website) */
+.searchable-select-wrapper {
+  position: relative;
+}
+
+.custom-select-trigger {
+  min-height: 42px;
+  background-color: #ffffff;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  color: #1e293b;
+  border-radius: 10px !important;
+  user-select: none;
+  transition: all 0.22s ease-in-out;
+}
+
+.custom-select-trigger:hover:not(.is-disabled) {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.04);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12);
+}
+
+.custom-select-trigger.is-open {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22) !important;
+}
+
+.custom-select-trigger.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+  background-color: #f1f5f9;
+}
+
+.custom-select-trigger .select-icon {
+  color: #10b981;
+}
+
+.custom-select-trigger .select-label {
+  color: #0f172a;
+}
+
+.custom-select-trigger .select-placeholder {
+  color: #64748b;
+}
+
+.custom-select-trigger .select-chevron {
+  color: #64748b;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dark version of Trigger */
+body.dark-version .custom-select-trigger {
+  background-color: rgba(14, 28, 22, 0.94) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-version .custom-select-trigger:hover:not(.is-disabled) {
+  background-color: rgba(18, 36, 28, 0.98) !important;
+  border-color: rgba(16, 185, 129, 0.55) !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2) !important;
+}
+
+body.dark-version .custom-select-trigger.is-open {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+}
+
+body.dark-version .custom-select-trigger.is-disabled {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+  opacity: 0.5;
+}
+
+body.dark-version .custom-select-trigger .select-label {
+  color: #f8fafc !important;
+  font-weight: 500 !important;
+}
+
+body.dark-version .custom-select-trigger .select-placeholder {
+  color: #94a3b8 !important;
+}
+
+body.dark-version .custom-select-trigger .select-chevron {
+  color: #94a3b8 !important;
+}
+
+/* Custom Select Menu */
+.custom-select-menu {
+  top: calc(100% + 4px);
+  left: 0;
+  border-radius: 12px !important;
+  z-index: 999999 !important;
+  padding: 6px !important;
+}
+
+/* Search Box Inside Dropdowns */
+.select-search-box {
+  background-color: #f8fafc;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px !important;
+  transition: all 0.2s ease;
+}
+
+.select-search-box:focus-within {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18) !important;
+  background-color: #ffffff;
+}
+
+.select-search-box .select-search-input {
+  color: #0f172a !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.select-search-box .select-search-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+body.dark-version .select-search-box {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 8px !important;
+}
+
+body.dark-version .select-search-box:focus-within {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+body.dark-version .select-search-box .select-search-input {
+  color: #ffffff !important;
+}
+
+body.dark-version .select-search-box .select-search-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+body.dark-version .select-search-box .material-symbols-rounded {
+  color: #94a3b8 !important;
+}
+
+/* Dropdown items text contrast in dark mode */
+body.dark-version .custom-select-item {
+  color: #f8fafc !important;
+}
+
+body.dark-version .custom-select-item .item-label {
+  color: #f8fafc !important;
+  font-weight: 500 !important;
+}
+
+body.dark-version .custom-select-item:hover {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #ffffff !important;
+  transform: translateX(3px) !important;
+}
+
+body.dark-version .custom-select-item:hover .item-label {
+  color: #ffffff !important;
+}
+
+body.dark-version .custom-select-item.active,
+body.dark-version .custom-select-item.active-item {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+body.dark-version .custom-select-item.active .item-label,
+body.dark-version .custom-select-item.active-item .item-label {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+/* Badges inside dropdowns */
+.select-sublabel {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  color: #059669 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 2px 7px !important;
+  border-radius: 6px !important;
+}
+
+body.dark-version .select-sublabel {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
 
 
