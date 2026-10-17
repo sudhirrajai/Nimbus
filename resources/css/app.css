@@ -2773,21 +2773,28 @@ body.dark-version .custom-select-trigger .select-chevron {
 /* Search Box Inside Dropdowns */
 .select-search-box {
   background-color: #f8fafc;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 8px !important;
-  transition: all 0.2s ease;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 9px !important;
+  padding: 6px 10px !important;
+  transition: all 0.2s ease-in-out;
 }
 
 .select-search-box:focus-within {
   border-color: #10b981 !important;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.22) !important;
   background-color: #ffffff;
 }
 
 .select-search-box .select-search-input {
   color: #0f172a !important;
+  border: none !important;
+  background: transparent !important;
   outline: none !important;
   box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.4 !important;
 }
 
 .select-search-box .select-search-input::placeholder {
@@ -2795,20 +2802,40 @@ body.dark-version .custom-select-trigger .select-chevron {
   opacity: 1 !important;
 }
 
+.select-search-box .select-search-icon {
+  color: #10b981 !important;
+  font-size: 16px !important;
+}
+
+.select-search-box .select-search-clear {
+  color: #94a3b8 !important;
+  text-decoration: none !important;
+}
+
+.select-search-box .select-search-clear:hover {
+  color: #0f172a !important;
+}
+
 body.dark-version .select-search-box {
-  background-color: rgba(0, 0, 0, 0.4) !important;
-  border: 1px solid rgba(16, 185, 129, 0.25) !important;
-  border-radius: 8px !important;
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 9px !important;
 }
 
 body.dark-version .select-search-box:focus-within {
   border-color: #10b981 !important;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
-  background-color: rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3) !important;
+  background-color: rgba(0, 0, 0, 0.65) !important;
 }
 
 body.dark-version .select-search-box .select-search-input {
   color: #ffffff !important;
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 body.dark-version .select-search-box .select-search-input::placeholder {
@@ -2816,8 +2843,16 @@ body.dark-version .select-search-box .select-search-input::placeholder {
   opacity: 1 !important;
 }
 
-body.dark-version .select-search-box .material-symbols-rounded {
+body.dark-version .select-search-box .select-search-icon {
+  color: #10b981 !important;
+}
+
+body.dark-version .select-search-box .select-search-clear {
   color: #94a3b8 !important;
+}
+
+body.dark-version .select-search-box .select-search-clear:hover {
+  color: #ffffff !important;
 }
 
 /* Dropdown items text contrast in dark mode */
@@ -2869,6 +2904,182 @@ body.dark-version .select-sublabel {
   color: #34d399 !important;
   border: 1px solid rgba(16, 185, 129, 0.3) !important;
 }
+
+/* I. Universal Portal-Wide Search UI Enhancement (Seamless Modern Inputs) */
+.input-group {
+  border-radius: 10px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.input-group > .input-group-text {
+  border-top-left-radius: 10px !important;
+  border-bottom-left-radius: 10px !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-right: none !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  background-color: #f8fafc !important;
+  color: #10b981 !important;
+  padding-left: 10px !important;
+  padding-right: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.input-group > .form-control {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-top-right-radius: 10px !important;
+  border-bottom-right-radius: 10px !important;
+  border-left: none !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  transition: all 0.2s ease !important;
+}
+
+.input-group > .btn-link {
+  border-top-right-radius: 10px !important;
+  border-bottom-right-radius: 10px !important;
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-left: none !important;
+  background-color: #f8fafc !important;
+}
+
+.input-group:focus-within {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22) !important;
+}
+
+.input-group:focus-within > .input-group-text,
+.input-group:focus-within > .form-control,
+.input-group:focus-within > .btn-link {
+  border-color: #10b981 !important;
+}
+
+.input-group:focus-within > .form-control {
+  box-shadow: none !important;
+}
+
+/* Dark version of Input Group */
+body.dark-version .input-group > .input-group-text {
+  background-color: rgba(14, 25, 22, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-right: none !important;
+  color: #10b981 !important;
+}
+
+body.dark-version .input-group > .form-control {
+  background-color: rgba(14, 25, 22, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-left: none !important;
+  color: #f8fafc !important;
+}
+
+body.dark-version .input-group > .btn-link {
+  background-color: rgba(14, 25, 22, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-left: none !important;
+  color: #94a3b8 !important;
+}
+
+body.dark-version .input-group:focus-within > .input-group-text {
+  background-color: rgba(14, 25, 22, 0.95) !important;
+  border-color: #10b981 !important;
+  border-right: none !important;
+  color: #34d399 !important;
+}
+
+body.dark-version .input-group:focus-within > .form-control {
+  background-color: rgba(14, 25, 22, 0.95) !important;
+  border-color: #10b981 !important;
+  border-left: none !important;
+  box-shadow: none !important;
+}
+
+body.dark-version .input-group:focus-within > .btn-link {
+  background-color: rgba(14, 25, 22, 0.95) !important;
+  border-color: #10b981 !important;
+  border-left: none !important;
+}
+
+/* J. Top Navbar Global Search Modernization */
+body.dark-version .global-search-wrapper .search-input-group {
+  background: rgba(10, 22, 17, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+}
+
+body.dark-version .global-search-wrapper .search-input-group:hover {
+  background: rgba(14, 28, 22, 0.9) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+body.dark-version .global-search-wrapper .search-input-group.is-focused {
+  background: rgba(12, 26, 20, 0.98) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+}
+
+body.dark-version .global-search-wrapper .search-icon {
+  color: #10b981 !important;
+}
+
+body.dark-version .global-search-wrapper .search-control {
+  color: #f8fafc !important;
+}
+
+body.dark-version .global-search-wrapper .search-control::placeholder {
+  color: #94a3b8 !important;
+}
+
+body.dark-version .global-search-wrapper .shortcut-key {
+  background: rgba(16, 185, 129, 0.14) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.32) !important;
+}
+
+body.dark-version .global-search-wrapper .shortcut-plus {
+  color: #64748b !important;
+}
+
+body.dark-version .search-suggestions-dropdown {
+  background: rgba(10, 20, 16, 0.98) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(16, 185, 129, 0.15) !important;
+}
+
+body.dark-version .category-header {
+  color: #34d399 !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15) !important;
+}
+
+body.dark-version .suggestion-item {
+  color: #e2e8f0 !important;
+}
+
+body.dark-version .suggestion-item:hover,
+body.dark-version .suggestion-item.is-selected {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #ffffff !important;
+}
+
+body.dark-version .suggestion-item .item-title {
+  color: #f8fafc !important;
+}
+
+body.dark-version .suggestion-item .item-desc {
+  color: #94a3b8 !important;
+}
+
+body.dark-version .suggestion-item .item-icon-wrapper {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+}
+
 
 
 

@@ -30,17 +30,17 @@
       <!-- Quick Search inside Dropdown -->
       <li class="px-2 py-1 mb-1 border-bottom select-search-wrapper" style="border-color: rgba(16, 185, 129, 0.15) !important;">
         <div class="select-search-box d-flex align-items-center gap-2 px-2.5 py-1.5 rounded-3">
-          <i class="material-symbols-rounded text-xs text-secondary flex-shrink-0">search</i>
+          <i class="material-symbols-rounded select-search-icon text-xs flex-shrink-0">search</i>
           <input type="text"
                  ref="searchInputRef"
                  v-model="searchQuery"
-                 class="form-control form-control-xs border-0 bg-transparent p-0 text-xs text-body flex-grow-1 select-search-input"
+                 class="border-0 bg-transparent p-0 select-search-input flex-grow-1"
                  :placeholder="searchPlaceholder"
                  @click.stop
                  @keydown.stop>
           <button v-if="searchQuery"
                   type="button"
-                  class="btn btn-link p-0 m-0 text-secondary d-flex align-items-center"
+                  class="btn btn-link p-0 m-0 select-search-clear d-flex align-items-center"
                   @click.stop="searchQuery = ''">
             <i class="material-symbols-rounded text-xs">close</i>
           </button>

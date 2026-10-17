@@ -87,18 +87,18 @@
                     :style="domainDropdownOpen ? 'display: block; min-width: 260px; max-height: 320px; overflow-y: auto; margin-top: 4px; z-index: 999999 !important;' : 'display: none;'"
                   >
                     <!-- Quick Search in Dropdown if more than 5 domains -->
-                    <li v-if="availableDomains.length > 5" class="px-2 py-1 mb-1 border-bottom" style="border-color: rgba(16, 185, 129, 0.15) !important;">
-                      <div class="d-flex align-items-center gap-1.5 px-1 py-1">
-                        <i class="material-symbols-rounded text-xs text-secondary">search</i>
+                    <li v-if="availableDomains.length > 5" class="px-2 py-1 mb-1 border-bottom select-search-wrapper" style="border-color: rgba(16, 185, 129, 0.15) !important;">
+                      <div class="select-search-box d-flex align-items-center gap-2 px-2.5 py-1.5 rounded-3">
+                        <i class="material-symbols-rounded select-search-icon text-xs flex-shrink-0">search</i>
                         <input 
                           type="text" 
                           v-model="domainSearchQuery" 
-                          class="form-control form-control-xs border-0 bg-transparent p-0 text-xs text-body" 
+                          class="border-0 bg-transparent p-0 select-search-input flex-grow-1" 
                           placeholder="Search websites..." 
                           @click.stop
                           @keydown.stop
                         />
-                        <button v-if="domainSearchQuery" class="btn btn-link p-0 m-0 text-secondary" @click.stop="domainSearchQuery = ''">
+                        <button v-if="domainSearchQuery" class="btn btn-link p-0 m-0 select-search-clear d-flex align-items-center" @click.stop="domainSearchQuery = ''">
                           <i class="material-symbols-rounded text-xs">close</i>
                         </button>
                       </div>
