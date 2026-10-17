@@ -52,6 +52,12 @@
                     document.body.appendChild(e.target);
                 }
             });
+            document.addEventListener('hidden.bs.modal', function(e) {
+                document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            });
         </script>
         <style>
             body {

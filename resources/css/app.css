@@ -1696,9 +1696,9 @@ html, body {
   --glass-shadow-light: 0 10px 30px -10px rgba(15, 23, 42, 0.05), inset 0 1px 0 #fff;
 
   /* Frosted Glass - Dark Mode */
-  --glass-bg-dark: rgba(14, 25, 21, 0.82);
-  --glass-border-dark: rgba(16, 185, 129, 0.15);
-  --glass-shadow-dark: 0 18px 45px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --glass-bg-dark: rgba(16, 29, 24, 0.88);
+  --glass-border-dark: rgba(16, 185, 129, 0.22);
+  --glass-shadow-dark: 0 20px 50px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 body {
@@ -1944,19 +1944,52 @@ body.dark-version .text-primary {
   background-color: rgba(241, 245, 249, 0.65) !important;
 }
 
-body.dark-version .table thead th {
-  color: #94a3b8 !important;
-  border-bottom: 1px solid rgba(16, 185, 129, 0.12) !important;
-  background: transparent !important;
+body.dark-version .table> :not(caption)>*>* {
+  color: #e2e8f0 !important;
+  border-color: rgba(16, 185, 129, 0.14) !important;
 }
 
-body.dark-version .table tbody td {
-  color: #cbd5e1 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+body.dark-version .table thead th,
+body.dark-version .table thead tr th {
+  color: #a7f3d0 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.22) !important;
+  background: transparent !important;
+  opacity: 1 !important;
+}
+
+body.dark-version .table tbody td,
+body.dark-version .table tbody tr td {
+  color: #f1f5f9 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 
 body.dark-version .table tbody tr:hover {
-  background-color: rgba(16, 185, 129, 0.04) !important;
+  background-color: rgba(16, 185, 129, 0.06) !important;
+}
+
+body.dark-version .card p,
+body.dark-version p {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
+
+body.dark-version .text-secondary,
+body.dark-version .text-muted {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+body.dark-version .opacity-7,
+body.dark-version .opacity-6,
+body.dark-version .opacity-8,
+body.dark-version .opacity-5 {
+  opacity: 0.92 !important;
+}
+
+body.dark-version .card {
+  color: #e2e8f0 !important;
 }
 
 /* 8. Form Controls & Inputs */
@@ -2031,7 +2064,17 @@ body.dark-version .input-group-text {
 }
 
 /* 9. Glassmorphic Modal Dialogues */
-.modal-backdrop {
+.modal-backdrop:not(.show) {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.modal-backdrop.show {
+  display: block !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
   background-color: rgba(8, 17, 14, 0.75) !important;
@@ -2193,6 +2236,18 @@ body.dark-version ::-webkit-scrollbar-thumb:hover {
   padding: 0 !important;
 }
 
+.modal:not(.show):not([style*="display: block"]):not([style*="display:block"]) {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.modal.show,
+.modal[style*="display: block"],
+.modal[style*="display:block"] {
+  display: block !important;
+  pointer-events: auto !important;
+}
+
 .modal-dialog {
   position: relative !important;
   width: auto !important;
@@ -2247,8 +2302,8 @@ body.modal-open #navbarBlur {
   animation: nimbusModalEntry 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
 }
 
-.modal-backdrop,
 .modal-backdrop.show {
+  display: block !important;
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
@@ -2257,7 +2312,9 @@ body.modal-open #navbarBlur {
   opacity: 0.65 !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
+  background-color: rgba(8, 17, 14, 0.75) !important;
   z-index: 100040 !important;
+  pointer-events: auto !important;
 }
 
 .modal-content {

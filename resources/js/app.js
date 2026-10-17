@@ -3,10 +3,22 @@ import './bootstrap';
 import '../css/app.css';
 
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import { formatDate, formatDateTime, formatTime, getPanelTimezone, setPanelTimezone } from './utils/date';
+
+// Global cleanup on Inertia navigation to completely prevent stuck modal backdrops & dark dim filters
+router.on('navigate', () => {
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    document.querySelectorAll('body > .modal:not(#app .modal)').forEach(el => el.remove());
+    document.querySelectorAll('.modal:not(.show)').forEach(el => {
+        el.style.display = 'none';
+    });
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+});
 
 const appName = import.meta.env.VITE_APP_NAME || 'Nimbus';
 
