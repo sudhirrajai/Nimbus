@@ -1134,9 +1134,10 @@
         </div>
       </div>
 
-      <!-- Fullscreen Ace Editor -->
-      <transition name="fade">
-        <div v-if="showEditorModal" class="fullscreen-editor-overlay">
+      <!-- Fullscreen Ace Editor Teleported to Body -->
+      <Teleport to="body">
+        <transition name="fade">
+          <div v-if="showEditorModal" class="fullscreen-editor-overlay">
           <div class="editor-header px-4 py-3 bg-dark d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center">
               <i class="material-symbols-rounded text-white me-2">edit_note</i>
@@ -1181,6 +1182,7 @@
           <div id="ace-editor-container" class="flex-grow-1"></div>
         </div>
       </transition>
+    </Teleport>
 
       <!-- Unsaved Changes Warning Modal -->
       <div class="modal-backdrop fade show" v-if="showUnsavedConfirmModal" @click="showUnsavedConfirmModal = false" style="z-index: 10050;"></div>
@@ -2297,16 +2299,28 @@ const editFile = async (name) => {
     showEditorModal.value = true
     
     // Auto-detect language
-    const ext = name.split('.').pop().toLowerCase()
+    const lowerName = name.toLowerCase()
+    const ext = lowerName.split('.').pop()
     const modes = {
-      'php': 'php', 'js': 'javascript', 'html': 'html', 'css': 'css', 
-      'json': 'json', 'sh': 'sh', 'sql': 'sql', 'py': 'python',
-      'md': 'markdown', 'xml': 'xml', 'yaml': 'yaml', 'yml': 'yaml'
+      'php': 'php', 'blade.php': 'php', 'js': 'javascript', 'jsx': 'javascript',
+      'ts': 'typescript', 'tsx': 'typescript', 'vue': 'html', 'html': 'html',
+      'css': 'css', 'scss': 'scss', 'sass': 'sass', 'less': 'less',
+      'json': 'json', 'sh': 'sh', 'bash': 'sh', 'zsh': 'sh',
+      'sql': 'sql', 'py': 'python', 'md': 'markdown', 'xml': 'xml',
+      'svg': 'xml', 'yaml': 'yaml', 'yml': 'yaml', 'ini': 'ini',
+      'conf': 'apache_conf', 'htaccess': 'apache_conf', 'dockerfile': 'dockerfile'
     }
-    detectedMode.value = modes[ext] || 'text'
+    if (lowerName.includes('env') || lowerName.endsWith('.env') || lowerName.includes('.env.')) {
+      detectedMode.value = 'sh'
+    } else {
+      detectedMode.value = modes[ext] || modes[lowerName] || 'text'
+    }
 
     nextTick(() => {
       initAceEditor()
+      setTimeout(() => {
+        if (aceEditor) aceEditor.resize()
+      }, 150)
     })
   } catch (error) {
     const msg = error.response?.data?.error || 'Failed to read file'
@@ -2390,6 +2404,7 @@ const closeEditor = () => {
   fileTruncatedMessage.value = ''
   fileIsReadOnly.value = false
   document.body.style.overflow = '' // Restore scroll
+  document.body.classList.remove('editor-open')
 }
 
 const closeEditorConfirm = () => {
@@ -2422,8 +2437,18 @@ const jumpToPath = (path) => {
 }
 
 watch(showEditorModal, (val) => {
-  if (val) document.body.style.overflow = 'hidden'
-  else document.body.style.overflow = ''
+  if (val) {
+    document.body.style.overflow = 'hidden'
+    document.body.classList.add('editor-open')
+    nextTick(() => {
+      setTimeout(() => {
+        if (aceEditor) aceEditor.resize()
+      }, 150)
+    })
+  } else {
+    document.body.style.overflow = ''
+    document.body.classList.remove('editor-open')
+  }
 })
 
 const triggerUpload = () => fileInput.value.click()

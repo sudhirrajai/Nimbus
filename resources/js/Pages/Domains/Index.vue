@@ -653,9 +653,9 @@
               <div class="form-group mb-3">
                 <label class="form-control-label">PHP Version</label>
                 <select v-model="createPhpVersion" class="form-select" :disabled="submitting">
-                  <option value="8.4">PHP 8.4</option>
+                  <option value="8.4">PHP 8.4 (Recommended)</option>
                   <option value="8.3">PHP 8.3</option>
-                  <option value="8.2">PHP 8.2 (Recommended)</option>
+                  <option value="8.2">PHP 8.2</option>
                   <option value="8.1">PHP 8.1</option>
                   <option value="8.0">PHP 8.0</option>
                   <option value="7.4">PHP 7.4</option>
@@ -956,7 +956,7 @@ const showDeleteModal = ref(false)
 const showRootModal = ref(false)
 const showPhpModal = ref(false)
 const domainInput = ref("")
-const createPhpVersion = ref("8.2")
+const createPhpVersion = ref("8.4")
 const rootInput = ref("")
 const selectedDomainForRoot = ref("")
 const domainToDelete = ref("")
@@ -1233,7 +1233,7 @@ const clearValidationError = () => {
 
 const openAddModal = () => {
   domainInput.value = ""
-  createPhpVersion.value = "8.2"
+  createPhpVersion.value = "8.4"
   validationError.value = ""
   showModal.value = true
 }
@@ -1667,5 +1667,90 @@ const closeModal = () => {
 
 .empty-state {
   padding: 40px 0;
+}
+
+/* Dark Version Subdomain & Domains Overrides */
+:global(body.dark-version) .domain-row.parent-row {
+  background-color: transparent;
+}
+
+:global(body.dark-version) .domain-row:hover {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+:global(body.dark-version) .group-parent-expanded {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+:global(body.dark-version) .subdomain-row {
+  background-color: rgba(8, 18, 14, 0.85) !important;
+  border-top: 1px dashed rgba(16, 185, 129, 0.2) !important;
+}
+
+:global(body.dark-version) .subdomain-row:hover {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+:global(body.dark-version) .last-subdomain-row {
+  border-bottom: 2px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+:global(body.dark-version) .domain-row h6.text-dark,
+:global(body.dark-version) .domain-row span.text-dark {
+  color: #f8fafc !important;
+}
+
+:global(body.dark-version) .domain-row p.text-secondary,
+:global(body.dark-version) .domain-row span.text-secondary {
+  color: #94a3b8 !important;
+}
+
+:global(body.dark-version) .tree-guide-branch {
+  border-left: 2px dashed rgba(16, 185, 129, 0.5) !important;
+  border-bottom: 2px dashed rgba(16, 185, 129, 0.5) !important;
+}
+
+:global(body.dark-version) .subdomain-badge-tag {
+  background-color: rgba(16, 185, 129, 0.22) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+:global(body.dark-version) .subdomain-pill-btn {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+:global(body.dark-version) .subdomain-pill-btn:hover,
+:global(body.dark-version) .subdomain-pill-active {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+}
+
+:global(body.dark-version) .expand-chevron-btn {
+  color: #94a3b8 !important;
+}
+
+:global(body.dark-version) .expand-chevron-btn:hover {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  color: #ffffff !important;
+}
+
+:global(body.dark-version) .expand-chevron-btn.expanded {
+  color: #34d399 !important;
+}
+
+:global(body.dark-version) .domain-view-toggle {
+  background-color: rgba(8, 16, 13, 0.8) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+}
+
+:global(body.dark-version) .active-view-btn {
+  background-color: rgba(16, 185, 129, 0.25) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
 }
 </style>

@@ -1572,64 +1572,95 @@ class FileManagerController extends Controller
 
     private function isTextFile($file)
     {
-        $textExtensions = [
-            'txt',
-            'php',
-            'html',
-            'htm',
-            'css',
-            'js',
-            'json',
-            'xml',
-            'md',
-            'yml',
-            'yaml',
-            'ini',
-            'conf',
-            'sh',
-            'env',
-            'log',
-            'sql',
-            'py',
-            'java',
-            'c',
-            'cpp',
-            'h',
-            'vue',
-            'jsx',
-            'tsx',
-            'ts',
-            'sass',
-            'scss',
-            'less',
-            'blade.php',
-            'htaccess',
-            'gitignore',
-            'editorconfig',
-            'eslintrc',
-            'prettierrc'
-        ];
-
-        $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $basename = basename($file);
+        $basenameLower = strtolower($basename);
+        $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
-        // Check if it's a dotfile that's text-editable
-        if (str_starts_with($basename, '.')) {
-            $textDotFiles = [
-                '.htaccess',
-                '.env',
-                '.gitignore',
-                '.editorconfig',
-                '.eslintrc',
-                '.prettierrc',
-                '.babelrc'
+        // 1. Definite binary extensions (never open as plain text)
+        $binaryExtensions = [
+            'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'ico', 'tiff', 'tif',
+            'pdf', 'zip', 'tar', 'gz', 'bz2', '7z', 'rar', 'xz', 'iso', 'dmg',
+            'exe', 'bin', 'dll', 'so', 'dylib', 'o', 'a',
+            'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wav', 'ogg', 'flac', 'aac', 'webm',
+            'woff', 'woff2', 'ttf', 'eot', 'otf',
+            'pyc', 'pyo', 'class', 'jar', 'war',
+            'db', 'sqlite', 'sqlite3', 'phar'
+        ];
+        if (in_array($extension, $binaryExtensions)) {
+            return false;
+        }
+
+        // 2. Comprehensive text & code extensions
+        $textExtensions = [
+            'txt', 'php', 'html', 'htm', 'css', 'js', 'json', 'xml', 'md', 'markdown',
+            'yml', 'yaml', 'ini', 'conf', 'config', 'sh', 'bash', 'zsh', 'env',
+            'example', 'sample', 'template', 'dist', 'stub', 'local', 'prod', 'production', 'dev', 'development', 'test', 'testing', 'staging', 'backup', 'bak',
+            'log', 'sql', 'py', 'java', 'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh', 'hxx',
+            'vue', 'jsx', 'tsx', 'ts', 'sass', 'scss', 'less', 'styl',
+            'blade.php', 'htaccess', 'gitignore', 'gitattributes', 'gitmodules',
+            'editorconfig', 'eslintrc', 'prettierrc', 'dockerignore', 'npmignore', 'npmrc',
+            'svg', 'toml', 'lock', 'csv', 'tsv', 'properties', 'rst', 'asciidoc',
+            'service', 'socket', 'timer', 'cron', 'pub', 'key', 'crt', 'pem', 'csr',
+            'svelte', 'astro', 'proto', 'graphql', 'gql', 'tf', 'tfvars', 'go', 'rs', 'rb', 'pl', 'lua'
+        ];
+        if (in_array($extension, $textExtensions)) {
+            return true;
+        }
+
+        // 3. Dotfiles support (.env*, .htaccess, .gitignore, etc.)
+        if (str_starts_with($basenameLower, '.')) {
+            // Any file starting with .env (.env, .env.example, .env.local, .env.production, etc.)
+            if (str_starts_with($basenameLower, '.env')) {
+                return true;
+            }
+
+            $knownTextDotFiles = [
+                '.htaccess', '.gitignore', '.gitattributes', '.gitmodules',
+                '.editorconfig', '.eslintrc', '.prettierrc', '.babelrc',
+                '.dockerignore', '.npmignore', '.npmrc', '.nvmrc',
+                '.bashrc', '.bash_profile', '.zshrc', '.profile',
+                '.stylelintrc', '.browserslistrc'
             ];
-            if (in_array($basename, $textDotFiles)) {
+            if (in_array($basenameLower, $knownTextDotFiles)) {
                 return true;
             }
         }
 
-        return in_array($extension, $textExtensions);
+        // 4. Exact text filenames without extensions
+        $exactTextFilenames = [
+            'dockerfile', 'makefile', 'procfile', 'artisan', 'license', 'licence',
+            'readme', 'changelog', 'authors', 'contributing', 'gemfile', 'vagrantfile',
+            'caddyfile', 'hosts', 'robots.txt'
+        ];
+        if (in_array($basenameLower, $exactTextFilenames)) {
+            return true;
+        }
+
+        // 5. Dynamic text detection for existing files on disk
+        if (file_exists($file) && is_file($file)) {
+            $mime = @mime_content_type($file);
+            if ($mime) {
+                if (str_starts_with($mime, 'text/') || in_array($mime, [
+                    'application/json', 'application/javascript', 'application/xml',
+                    'application/x-sh', 'application/x-httpd-php', 'application/x-yaml',
+                    'application/xhtml+xml', 'image/svg+xml'
+                ])) {
+                    return true;
+                }
+            }
+
+            // Universal null-byte check: text files never contain null bytes \0 in the first 4KB
+            $f = @fopen($file, 'r');
+            if ($f) {
+                $chunk = fread($f, 4096);
+                fclose($f);
+                if ($chunk !== false && strpos($chunk, "\0") === false) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function formatBytes($bytes, $precision = 2)

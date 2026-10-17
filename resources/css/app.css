@@ -3080,6 +3080,118 @@ body.dark-version .suggestion-item .item-icon-wrapper {
   color: #34d399 !important;
 }
 
+/* K. Domains Page - Subdomain Grouped View Dark Mode */
+body.dark-version .domain-row.parent-row {
+  background-color: transparent !important;
+}
+
+body.dark-version .domain-row:hover {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+body.dark-version .group-parent-expanded {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+body.dark-version .subdomain-row {
+  background-color: rgba(8, 18, 14, 0.85) !important;
+  border-top: 1px dashed rgba(16, 185, 129, 0.2) !important;
+}
+
+body.dark-version .subdomain-row:hover {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+body.dark-version .last-subdomain-row {
+  border-bottom: 2px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+body.dark-version .domain-row h6.text-dark,
+body.dark-version .domain-row span.text-dark {
+  color: #f8fafc !important;
+}
+
+body.dark-version .domain-row p.text-secondary,
+body.dark-version .domain-row span.text-secondary {
+  color: #94a3b8 !important;
+}
+
+body.dark-version .tree-guide-branch {
+  border-left: 2px dashed rgba(16, 185, 129, 0.5) !important;
+  border-bottom: 2px dashed rgba(16, 185, 129, 0.5) !important;
+}
+
+body.dark-version .subdomain-badge-tag {
+  background-color: rgba(16, 185, 129, 0.22) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-version .subdomain-pill-btn {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+body.dark-version .subdomain-pill-btn:hover,
+body.dark-version .subdomain-pill-active {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-version .domain-view-toggle {
+  background-color: rgba(8, 16, 13, 0.8) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+}
+
+body.dark-version .domain-view-toggle .active-view-btn {
+  background-color: rgba(16, 185, 129, 0.25) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+/* L. File Manager - Fullscreen Code Editor & Sidebar Stacking Context Fix */
+.fullscreen-editor-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 100050 !important;
+  background: #141b18 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.fullscreen-editor-overlay .editor-header {
+  background: #0c1814 !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.25) !important;
+  min-height: 56px !important;
+  padding: 10px 20px !important;
+  flex-shrink: 0 !important;
+}
+
+#ace-editor-container {
+  width: 100% !important;
+  height: calc(100vh - 56px) !important;
+  flex-grow: 1 !important;
+}
+
+/* Hide background navigation when code editor is open */
+body.editor-open .sidenav,
+body.editor-open #sidenav-main,
+body.editor-open .glass-navbar,
+body.editor-open #navbarBlur {
+  display: none !important;
+  pointer-events: none !important;
+}
+
 
 
 
