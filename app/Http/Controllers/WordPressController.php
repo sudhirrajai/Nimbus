@@ -586,8 +586,10 @@ PHP;
         $request->validate([
             'site_title' => 'nullable|string|max:255',
             'admin_user' => 'nullable|string|max:50',
-            'admin_password' => 'required|string|min:8',
+            'admin_password' => 'nullable|string|min:8',
             'admin_email' => 'nullable|email',
+            'reinstall_core' => 'nullable|boolean',
+            'clean_uploads' => 'nullable|boolean',
         ]);
 
         $site = WordPressSite::findOrFail($id);
@@ -597,9 +599,15 @@ PHP;
             $siteTitle = $request->input('site_title') ?: ($site->site_title ?: 'My WordPress Site');
             $adminUser = $request->input('admin_user') ?: ($site->admin_user ?: 'admin');
             $adminEmail = $request->input('admin_email') ?: ($site->admin_email ?: 'admin@' . $site->domain);
+            $adminPassword = $request->input('admin_password') ?: Str::random(16);
 
-            // 1. Reset Database tables as isolated site user
-            $this->runWpCmd($site->domain, $site->path, "db reset --yes", $output);
+            // 0. Optional: Reinstall core files if requested
+            if ($request->boolean('reinstall_core')) {
+                $this->runWpCmd($site->domain, $site->path, "core download --force --skip-content", $output);
+            }
+
+            // 1. Reset Database tables as isolated site user (skip plugins/themes in case site crashed)
+            $this->runWpCmd($site->domain, $site->path, "db reset --yes --skip-plugins --skip-themes", $output);
 
             // 2. Re-install default tables as isolated site user
             $url = ($site->ssl_enabled ? 'https://' : 'http://') . $site->domain;
@@ -609,27 +617,42 @@ PHP;
                 "core install --url=" . escapeshellarg($url) .
                 " --title=" . escapeshellarg($siteTitle) .
                 " --admin_user=" . escapeshellarg($adminUser) .
-                " --admin_password=" . escapeshellarg($request->admin_password) .
-                " --admin_email=" . escapeshellarg($adminEmail),
+                " --admin_password=" . escapeshellarg($adminPassword) .
+                " --admin_email=" . escapeshellarg($adminEmail) .
+                " --skip-plugins --skip-themes",
                 $output
             );
+
+            // 3. Deactivate all existing plugins safely (all plugins remain inactive in DB)
+            $this->runWpCmd($site->domain, $site->path, "plugin deactivate --all --skip-plugins --skip-themes", $output);
+
+            // 4. Optionally clear uploads if user explicitly requested it
+            if ($request->boolean('clean_uploads')) {
+                $uploadsPath = rtrim($site->path, '/') . '/wp-content/uploads';
+                if (file_exists($uploadsPath)) {
+                    $this->execCmd("sudo rm -rf " . escapeshellarg($uploadsPath) . "/* 2>/dev/null || true", $output);
+                }
+            }
 
             // Re-enforce permissions
             SiteIsolationService::securePath($site->path, $site->domain);
             $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
-            // 3. Update local site info
+            // 5. Update local site info
             $site->update([
                 'site_title' => $siteTitle,
                 'admin_user' => $adminUser,
                 'admin_email' => $adminEmail,
+                'status' => 'active',
                 'last_checked_at' => now(),
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'WordPress database reset and reinstalled successfully (themes and plugins preserved and deactivated).',
+                'message' => 'WordPress reset successfully! All database content reset, and plugins/themes remain safely deactivated.',
                 'output' => $output,
+                'admin_user' => $adminUser,
+                'admin_password' => $adminPassword,
                 'site' => $site->fresh()
             ]);
         } catch (\Exception $e) {

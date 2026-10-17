@@ -133,6 +133,9 @@
                       <button class="action-btn btn-update" title="Update Core" @click="updateCore(site)">
                         <i class="material-symbols-rounded">system_update</i>
                       </button>
+                      <button class="action-btn btn-reset" title="Reset / Reinstall WordPress" @click="openResetModal(site)">
+                        <i class="material-symbols-rounded">restart_alt</i>
+                      </button>
                       <a :href="'/file-manager/' + site.domain" class="action-btn btn-folder" title="File Manager">
                         <i class="material-symbols-rounded">folder</i>
                       </a>
@@ -370,51 +373,137 @@
 
   <!-- Reset Modal -->
   <div v-if="showResetModal">
-    <div class="modal-backdrop fade show" @click="showResetModal = false"></div>
+    <div class="modal-backdrop fade show" @click="closeResetModal"></div>
     <div class="modal fade show" style="display:block">
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
           <div class="modal-header bg-gradient-danger border-0">
-            <h5 class="modal-title text-white"><i class="material-symbols-rounded me-2">restart_alt</i>Reset WordPress Site</h5>
-            <button class="btn-close btn-close-white" @click="showResetModal = false"></button>
+            <h5 class="modal-title text-white d-flex align-items-center">
+              <i class="material-symbols-rounded me-2">restart_alt</i>
+              <span>Reset WordPress — <strong class="text-white">{{ selectedSite?.domain }}</strong></span>
+            </h5>
+            <button class="btn-close btn-close-white" @click="closeResetModal"></button>
           </div>
-          <div class="modal-body">
-            <div class="alert alert-danger text-white py-2 mb-3 d-flex align-items-center">
-              <i class="material-symbols-rounded text-sm me-2">warning</i>
-              <span>
-                <strong>Warning:</strong> This will delete all database tables, posts, pages, comments, and settings. 
-                Your theme and plugin files will remain on disk but will be deactivated.
-              </span>
+
+          <!-- SUCCESS STATE AFTER RESET -->
+          <div v-if="resetResult" class="modal-body p-4 text-center">
+            <div class="mb-3">
+              <i class="material-symbols-rounded text-success" style="font-size: 56px;">check_circle</i>
             </div>
-            
+            <h4 class="font-weight-bold mb-2">WordPress Reset Successfully!</h4>
+            <p class="text-secondary text-sm mb-4">
+              All database tables, posts, pages, and settings have been cleanly reset.
+              Existing plugin & theme files were kept safe on disk, and are now <strong>deactivated</strong> so any crash or error is resolved!
+            </p>
+
+            <div class="card bg-gray-100 border-0 p-3 mb-4 text-start">
+              <h6 class="text-xs text-uppercase font-weight-bolder text-secondary mb-3">New Admin Credentials</h6>
+              <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <span class="text-xs text-secondary">Username:</span>
+                <span class="text-sm font-weight-bold font-monospace">{{ resetResult.admin_user }}</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <span class="text-xs text-secondary">Password:</span>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="text-sm font-weight-bold font-monospace">{{ resetResult.admin_password }}</span>
+                  <button class="btn btn-xs btn-outline-secondary mb-0 py-1 px-2" @click="copyText(resetResult.admin_password, 'Password copied!')" title="Copy Password">
+                    <i class="material-symbols-rounded text-xs">content_copy</i>
+                  </button>
+                </div>
+              </div>
+              <div class="d-flex justify-content-between align-items-center pt-2">
+                <span class="text-xs text-secondary">Login URL:</span>
+                <a :href="(selectedSite?.ssl_enabled ? 'https://' : 'http://') + selectedSite?.domain + '/wp-login.php'" target="_blank" class="text-xs text-primary font-weight-bold">
+                  {{ (selectedSite?.ssl_enabled ? 'https://' : 'http://') + selectedSite?.domain + '/wp-login.php' }}
+                </a>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-center gap-2">
+              <button class="btn btn-outline-secondary mb-0" @click="closeResetModal">Done</button>
+              <button class="btn bg-gradient-success mb-0 d-flex align-items-center" @click="adminLogin(selectedSite)" :disabled="selectedSite?._logging">
+                <span v-if="selectedSite?._logging" class="spinner-border spinner-border-sm me-1"></span>
+                <i v-else class="material-symbols-rounded text-sm me-1">login</i>
+                Auto-Login to WP Admin
+              </button>
+            </div>
+          </div>
+
+          <!-- RESET FORM -->
+          <div v-else class="modal-body p-4">
+            <div class="alert alert-warning py-3 px-3 mb-3 border-0 shadow-sm d-flex align-items-start" style="background-color: #fffbeb; border-left: 4px solid #f59e0b !important;">
+              <i class="material-symbols-rounded text-warning me-2 mt-1" style="font-size: 22px;">build_circle</i>
+              <div>
+                <strong class="text-dark d-block mb-1">Instant Crash Recovery & Database Reset</strong>
+                <span class="text-xs text-secondary d-block">
+                  If your site crashed due to a broken plugin, corrupt theme, or bad setup:
+                </span>
+                <ul class="text-xs text-secondary mb-0 ps-3 mt-1">
+                  <li><strong>Database Clean Reset:</strong> Clears posts, pages, blogs, comments, and options.</li>
+                  <li><strong>Files Preserved:</strong> Plugin & theme files in <code>wp-content</code> are kept, but <strong>safely deactivated</strong>.</li>
+                  <li><strong>Fresh Start:</strong> Restores default clean WordPress so you can log back in immediately.</li>
+                </ul>
+              </div>
+            </div>
+
             <div class="row">
               <div class="col-md-6 mb-3">
-                <label class="form-label">Site Title *</label>
+                <label class="form-label text-xs font-weight-bold">Site Title</label>
                 <input type="text" class="form-control" v-model="resetForm.site_title" placeholder="My Website">
               </div>
               <div class="col-md-6 mb-3">
-                <label class="form-label">Admin Username *</label>
+                <label class="form-label text-xs font-weight-bold">Admin Username *</label>
                 <input type="text" class="form-control" v-model="resetForm.admin_user" placeholder="admin">
               </div>
               <div class="col-md-6 mb-3">
-                <label class="form-label">Admin Password *</label>
-                <input type="password" class="form-control" v-model="resetForm.admin_password" placeholder="Min 8 chars">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label text-xs font-weight-bold mb-0">Admin Password</label>
+                  <button type="button" class="btn btn-link btn-xs p-0 text-primary" @click="generateResetPassword">
+                    <i class="material-symbols-rounded text-xs me-1">autorenew</i>Generate
+                  </button>
+                </div>
+                <div class="input-group">
+                  <input :type="showResetPass ? 'text' : 'password'" class="form-control" v-model="resetForm.admin_password" placeholder="Leave blank to auto-generate">
+                  <button class="btn btn-outline-secondary mb-0 px-2" type="button" @click="showResetPass = !showResetPass">
+                    <i class="material-symbols-rounded text-xs">{{ showResetPass ? 'visibility_off' : 'visibility' }}</i>
+                  </button>
+                </div>
               </div>
               <div class="col-md-6 mb-3">
-                <label class="form-label">Admin Email *</label>
+                <label class="form-label text-xs font-weight-bold">Admin Email *</label>
                 <input type="email" class="form-control" v-model="resetForm.admin_email" placeholder="admin@example.com">
               </div>
+
               <div class="col-12 mb-3">
-                <label class="form-label text-danger font-weight-bold">Type "RESET" to confirm: *</label>
-                <input type="text" class="form-control border-danger" v-model="resetForm.confirm_text" placeholder="RESET">
+                <div class="card bg-gray-100 border-0 p-3">
+                  <h6 class="text-xs font-weight-bold mb-2 text-dark">Advanced Recovery Options</h6>
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="resetReinstallCore" v-model="resetForm.reinstall_core">
+                    <label class="form-check-label text-xs text-dark" for="resetReinstallCore">
+                      <strong>Reinstall Core Files:</strong> Download fresh official WordPress core files (replaces wp-admin, wp-includes in case core files were corrupted).
+                    </label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="resetCleanUploads" v-model="resetForm.clean_uploads">
+                    <label class="form-check-label text-xs text-danger" for="resetCleanUploads">
+                      <strong>Purge Media Uploads:</strong> Delete files in <code>wp-content/uploads/</code> (unchecked by default).
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-12 mb-2">
+                <label class="form-label text-danger font-weight-bold text-xs">Type "RESET" to confirm: *</label>
+                <input type="text" class="form-control border-danger font-weight-bold" v-model="resetForm.confirm_text" placeholder="Type RESET in capital letters">
               </div>
             </div>
           </div>
-          <div class="modal-footer border-0">
-            <button class="btn btn-outline-secondary" @click="showResetModal = false">Cancel</button>
-            <button class="btn bg-gradient-danger" @click="resetWordPress" :disabled="resettingWp || resetForm.confirm_text !== 'RESET' || !resetForm.admin_password">
+          <div v-if="!resetResult" class="modal-footer border-0">
+            <button class="btn btn-outline-secondary" @click="closeResetModal">Cancel</button>
+            <button class="btn bg-gradient-danger d-flex align-items-center" @click="resetWordPress" :disabled="resettingWp || resetForm.confirm_text !== 'RESET'">
               <span v-if="resettingWp" class="spinner-border spinner-border-sm me-1"></span>
-              Reset WordPress
+              <i v-else class="material-symbols-rounded text-sm me-1">restart_alt</i>
+              {{ resettingWp ? 'Resetting WordPress...' : 'Reset WordPress' }}
             </button>
           </div>
         </div>
@@ -506,7 +595,9 @@ const toastType = ref('success')
 const installForm = ref({ domain: '', site_title: '', admin_user: 'admin', admin_password: '', admin_email: '' })
 const passwordForm = ref({ username: '', new_password: '' })
 const deleteOptions = ref({ delete_files: false, delete_database: false })
-const resetForm = ref({ site_title: '', admin_user: '', admin_password: '', admin_email: '', confirm_text: '' })
+const resetForm = ref({ site_title: '', admin_user: '', admin_password: '', admin_email: '', reinstall_core: false, clean_uploads: false, confirm_text: '' })
+const resetResult = ref(null)
+const showResetPass = ref(false)
 const reinstallForm = ref({ confirm_text: '' })
 
 const statsCards = computed(() => [
@@ -517,6 +608,28 @@ const statsCards = computed(() => [
 ])
 
 const notify = (msg, type = 'success') => { toastMessage.value = msg; toastType.value = type; showToast.value = true; setTimeout(() => showToast.value = false, 4000) }
+
+const generateRandomPassword = () => {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*'
+  let pass = ''
+  for (let i = 0; i < 16; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return pass
+}
+
+const generateResetPassword = () => {
+  resetForm.value.admin_password = generateRandomPassword()
+  showResetPass.value = true
+  notify('Generated new password')
+}
+
+const copyText = (text, msg = 'Copied to clipboard!') => {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+    notify(msg)
+  }
+}
 
 onMounted(async () => {
   await loadSites()
@@ -578,19 +691,38 @@ const deleteSite = async () => {
   try { await axios.delete(`/wordpress/${selectedSite.value.id}`, { data: deleteOptions.value }); notify('Site removed'); showDeleteModal.value = false; await loadSites() } catch (e) { notify('Failed', 'error') } finally { deleting.value = false }
 }
 
-const openResetModal = () => {
+const openResetModal = (site = null) => {
+  if (site) {
+    selectedSite.value = site
+  }
+  if (!selectedSite.value) return
+
+  resetResult.value = null
+  showResetPass.value = false
   resetForm.value = {
     site_title: selectedSite.value.site_title || '',
     admin_user: selectedSite.value.admin_user || 'admin',
-    admin_password: '',
-    admin_email: selectedSite.value.admin_email || '',
+    admin_password: generateRandomPassword(),
+    admin_email: selectedSite.value.admin_email || ('admin@' + selectedSite.value.domain),
+    reinstall_core: false,
+    clean_uploads: false,
     confirm_text: ''
   }
   showDetailsModal.value = false
   showResetModal.value = true
 }
 
-const openReinstallModal = () => {
+const closeResetModal = () => {
+  showResetModal.value = false
+  resetResult.value = null
+}
+
+const openReinstallModal = (site = null) => {
+  if (site) {
+    selectedSite.value = site
+  }
+  if (!selectedSite.value) return
+
   reinstallForm.value = {
     confirm_text: ''
   }
@@ -600,14 +732,18 @@ const openReinstallModal = () => {
 
 const resetWordPress = async () => {
   if (resetForm.value.confirm_text !== 'RESET') {
-    notify('Please type RESET to confirm', 'error')
+    notify('Please type RESET in capital letters to confirm', 'error')
     return
   }
   resettingWp.value = true
   try {
     const r = await axios.post(`/wordpress/${selectedSite.value.id}/reset`, resetForm.value)
-    notify(r.data.message)
-    showResetModal.value = false
+    notify(r.data.message || 'WordPress reset successfully!')
+    resetResult.value = {
+      admin_user: r.data.admin_user || resetForm.value.admin_user,
+      admin_password: r.data.admin_password || resetForm.value.admin_password,
+      site: r.data.site || selectedSite.value
+    }
     await loadSites()
   } catch (e) {
     notify(e.response?.data?.error || 'Reset failed', 'error')
@@ -751,6 +887,7 @@ const adminLogin = async (site) => {
 .btn-info:hover { background: #1171ef; color: #fff; }
 .btn-password:hover { background: #fb6340; color: #fff; }
 .btn-update:hover { background: #2dce89; color: #fff; }
+.btn-reset:hover { background: #ea580c; color: #fff; }
 .btn-folder:hover { background: #5e72e4; color: #fff; }
 .btn-delete:hover { background: #f5365c; color: #fff; }
 
@@ -758,5 +895,87 @@ const adminLogin = async (site) => {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Dark Mode Overrides for WordPress Manager */
+:global(body.dark-version) .card {
+  background-color: #1e293b;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(body.dark-version) .table {
+  color: #e2e8f0;
+}
+
+:global(body.dark-version) .domain-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+:global(body.dark-version) .badge-version {
+  background: #0f172a;
+  color: #cbd5e1;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:global(body.dark-version) .action-btn {
+  background: #334155;
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+:global(body.dark-version) .action-btn:hover {
+  color: #fff;
+}
+
+:global(body.dark-version) .modal-content {
+  background-color: #1e293b;
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:global(body.dark-version) .modal-content .form-control {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+:global(body.dark-version) .modal-content .form-label {
+  color: #cbd5e1;
+}
+
+:global(body.dark-version) .modal-content .card.bg-gray-100 {
+  background-color: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+:global(body.dark-version) .modal-content .card.bg-gray-100 h6,
+:global(body.dark-version) .modal-content .card.bg-gray-100 p,
+:global(body.dark-version) .modal-content .card.bg-gray-100 label,
+:global(body.dark-version) .modal-content .card.bg-gray-100 span {
+  color: #e2e8f0 !important;
+}
+
+:global(body.dark-version) .modal-content .table {
+  color: #e2e8f0;
+}
+
+:global(body.dark-version) .modal-content .table thead th {
+  color: #94a3b8;
+}
+
+:global(body.dark-version) .alert-warning {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fde68a !important;
+}
+
+:global(body.dark-version) .alert-warning strong,
+:global(body.dark-version) .alert-warning ul,
+:global(body.dark-version) .alert-warning li,
+:global(body.dark-version) .alert-warning span {
+  color: #fde68a !important;
+}
+
+:global(body.dark-version) .modal-content .border-bottom {
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 </style>
