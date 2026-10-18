@@ -329,7 +329,7 @@ class ShieldController extends Controller
                     $wpDomain = basename($wpDir);
                     $wpSiteUser = 'www-data';
                     if (class_exists(\App\Services\SiteIsolationService::class)) {
-                        $wpSiteUser = \App\Services\SiteIsolationService::getSiteUser($wpDomain) ?: 'www-data';
+                        $wpSiteUser = \App\Services\SiteIsolationService::siteUser($wpDomain) ?: 'www-data';
                     }
 
                     $wpOutput = [];
