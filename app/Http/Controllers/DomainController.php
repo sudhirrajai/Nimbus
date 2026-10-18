@@ -1256,6 +1256,19 @@ server {
         fastcgi_busy_buffers_size 256k;
     }
     
+    # WordPress Security Hardening (Auto-applied by Nimbus)
+    location = /wp-config.php {
+        deny all;
+    }
+    
+    location = /xmlrpc.php {
+        deny all;
+    }
+
+    location ~* ^/wp-content/uploads/.*\.php$ {
+        deny all;
+    }
+    
     # Deny access to hidden files
     location ~ /\. {
         deny all;

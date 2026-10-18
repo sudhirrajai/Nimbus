@@ -107,6 +107,10 @@ class WordPressController extends Controller
                         'last_checked_at' => now(),
                     ]
                 );
+
+                // Auto-apply security hardening (points 3 & 4: DISALLOW_FILE_EDIT + Nginx hardening)
+                $this->applySecurityHardening($domain, $checkPath);
+
                 $sites[] = $site;
             }
 
@@ -259,7 +263,10 @@ class WordPressController extends Controller
             SiteIsolationService::securePath($domainPath, $domain);
             $this->execCmd("sudo chmod 600 " . escapeshellarg($domainPath . '/wp-config.php') . " 2>/dev/null || true", $output);
 
-            // 6. Ensure isolated PHP-FPM pool is created and running for this domain
+            // 6. Automated WordPress Security Hardening (points 3 & 4: DISALLOW_FILE_EDIT + Nginx block wp-config/xmlrpc/uploads php)
+            $this->applySecurityHardening($domain, $domainPath);
+
+            // 7. Ensure isolated PHP-FPM pool is created and running for this domain
             SiteIsolationService::createOrUpdatePool($domain, $domainPath);
 
             // Check WP version
@@ -638,6 +645,9 @@ PHP;
             SiteIsolationService::securePath($site->path, $site->domain);
             $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
+            // Re-apply security hardening (points 3 & 4)
+            $this->applySecurityHardening($site->domain, $site->path);
+
             // 5. Update local site info
             $site->update([
                 'site_title' => $siteTitle,
@@ -677,6 +687,9 @@ PHP;
             SiteIsolationService::securePath($site->path, $site->domain);
             $this->execCmd("sudo chmod 600 " . escapeshellarg($site->path . '/wp-config.php') . " 2>/dev/null || true", $output);
 
+            // Re-apply security hardening (points 3 & 4)
+            $this->applySecurityHardening($site->domain, $site->path);
+
             // Re-check version in case it changed/was upgraded
             $versionFile = $site->path . '/wp-includes/version.php';
             if (file_exists($versionFile)) {
@@ -708,6 +721,114 @@ PHP;
         $cmd = "cd " . escapeshellarg($domainPath) . " && sudo -u " . escapeshellarg($siteUser) . " env HOME=/tmp wp " . $wpSubcommand . " --allow-root 2>&1";
         $res = $this->execCmd($cmd, $output);
         return $res ?? '';
+    }
+
+    /**
+     * Apply automated security hardening for WordPress sites:
+     * 1. Disable Theme & Plugin Editor in wp-config.php (DISALLOW_FILE_EDIT)
+     * 2. Harden Nginx config (block wp-config.php, xmlrpc.php, and PHP execution in /wp-content/uploads/)
+     */
+    public function applySecurityHardening(string $domain, string $domainPath): void
+    {
+        $dummy = '';
+        try {
+            // 1. In wp-config.php: define('DISALLOW_FILE_EDIT', true);
+            $siteUser = SiteIsolationService::ensureIsolatedUser($domain, $domainPath);
+            $this->runWpCmd($domain, $domainPath, "config set DISALLOW_FILE_EDIT true --raw", $dummy);
+
+            // Also double check wp-config.php directly as fallback
+            $wpConfigFile = $domainPath . '/wp-config.php';
+            if (file_exists($wpConfigFile)) {
+                $content = SiteIsolationService::readFile($wpConfigFile);
+                if ($content && !str_contains($content, 'DISALLOW_FILE_EDIT')) {
+                    $insert = "\n/* Disable in-dashboard file editing for security */\ndefine('DISALLOW_FILE_EDIT', true);\n";
+                    if (str_contains($content, "/* That's all, stop editing!")) {
+                        $content = str_replace("/* That's all, stop editing!", $insert . "/* That's all, stop editing!", $content);
+                    } else {
+                        $content .= $insert;
+                    }
+                    SiteIsolationService::writeFile($wpConfigFile, $content, $domain);
+                }
+            }
+
+            // 2. Harden Nginx virtual host
+            $this->hardenNginxConfig($domain);
+        } catch (\Exception $e) {
+            Log::warning("WordPress security hardening notice on {$domain}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Injects WordPress security rules into the Nginx configuration for the domain
+     */
+    private function hardenNginxConfig(string $domain): void
+    {
+        $domainLower = strtolower($domain);
+        $candidates = [
+            "/etc/nginx/sites-available/{$domain}",
+            "/etc/nginx/sites-available/{$domain}.conf",
+            "/etc/nginx/sites-available/{$domainLower}",
+            "/etc/nginx/sites-available/{$domainLower}.conf",
+        ];
+
+        $targetConfig = null;
+        foreach ($candidates as $cand) {
+            $check = shell_exec("sudo test -f " . escapeshellarg($cand) . " && echo 'exists'");
+            if (trim($check) === 'exists') {
+                $targetConfig = $cand;
+                break;
+            }
+        }
+
+        if (!$targetConfig) return;
+
+        $content = shell_exec("sudo cat " . escapeshellarg($targetConfig));
+        if (!$content) return;
+
+        $modified = false;
+
+        // Check if hardening already exists
+        if (!str_contains($content, 'location = /wp-config.php') || !str_contains($content, 'location ~* ^/wp-content/uploads/.*\.php$')) {
+            $securityBlock = <<<NGINX
+
+    # WordPress Security Hardening (Auto-applied by Nimbus)
+    location = /wp-config.php {
+        deny all;
+    }
+    location = /xmlrpc.php {
+        deny all;
+    }
+    location ~* ^/wp-content/uploads/.*\.php$ {
+        deny all;
+    }
+
+NGINX;
+
+            if (str_contains($content, 'location ~ /\. {')) {
+                $content = str_replace('location ~ /\. {', $securityBlock . '    location ~ /\. {', $content);
+                $modified = true;
+            } elseif (str_contains($content, 'location / {')) {
+                $content = str_replace('location / {', $securityBlock . '    location / {', $content);
+                $modified = true;
+            }
+        }
+
+        if ($modified) {
+            $tempPath = storage_path('app/temp_nginx_' . md5($domain) . '.conf');
+            file_put_contents($tempPath, $content);
+            shell_exec("sudo mv " . escapeshellarg($tempPath) . " " . escapeshellarg($targetConfig));
+            shell_exec("sudo chmod 644 " . escapeshellarg($targetConfig));
+            
+            $testOutput = [];
+            $testReturn = 0;
+            exec("sudo nginx -t 2>&1", $testOutput, $testReturn);
+            if ($testReturn === 0) {
+                shell_exec("sudo systemctl reload nginx");
+                Log::info("Nginx hardened and reloaded for WordPress domain: {$domain}");
+            } else {
+                Log::error("Nginx test failed after WordPress hardening on {$domain}: " . implode("\n", $testOutput));
+            }
+        }
     }
 
     /**

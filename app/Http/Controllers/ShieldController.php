@@ -262,28 +262,34 @@ class ShieldController extends Controller
             $excludeArgs .= ' --exclude="composer.phar" --exclude="*.lock" --exclude="*.json" --exclude="*.md" --exclude="*.txt"';
             $includeArgs = ' --include="*.php" --include="*.phtml" --include="*.php5" --include="*.php7" --include="*.phps" --include="*.inc"';
 
-            // 2. Scan for common PHP shell patterns (Only check executable PHP scripts, exclude JSON/AST/caches)
-            $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
-            $safePatternsForShellFunctions = [
-                '/wp-includes/Text/Diff/Engine/shell.php',
-                '/wp-includes/ID3/',
-                '/wp-includes/update.php',
-                '/wp-admin/includes/class-wp-site-health',
-                '/wp-admin/includes/class-wp-filesystem',
-                '/wp-admin/includes/class-wp-upgrader.php',
-                '/wp-admin/includes/class-wp-debug-data.php',
-                '/wp-admin/includes/file.php',
-                '/wp-admin/includes/ajax-actions.php',
-                '/wp-admin/includes/plugin.php',
-                '/wp-admin/includes/theme.php',
-                '/wp-admin/update-core.php',
-                '/tgm-plugin-activation.php',
-                '/class-tgm-plugin-activation.php',
-                '/forminator/admin/abstracts/class-admin-module-edit-page.php',
-                '/Services/NseAllotmentService.php',
+            // 2. Scan for genuine web shell patterns & backdoors (dynamic execution from request inputs, obfuscation, known kits)
+            $shellPatterns = [
+                // Remote command execution via user request inputs (The true signature of a web shell)
+                'shell_exec($_' => 'Remote command execution via request variable (shell_exec)',
+                'system($_' => 'Remote command execution via request variable (system)',
+                'passthru($_' => 'Remote command execution via request variable (passthru)',
+                'exec($_' => 'Remote command execution via request variable (exec)',
+                'eval($_' => 'Arbitrary code evaluation via request variable (eval)',
+                'assert($_' => 'Arbitrary code evaluation via request variable (assert)',
+                'popen($_' => 'Process execution via request variable (popen)',
+                'proc_open($_' => 'Process execution via request variable (proc_open)',
+                // Obfuscated code execution backdoors
+                'eval(base64_decode' => 'Obfuscated base64 payload evaluation (eval + base64_decode)',
+                'eval(gzinflate' => 'Obfuscated compressed payload evaluation (eval + gzinflate)',
+                'eval(gzuncompress' => 'Obfuscated compressed payload evaluation (eval + gzuncompress)',
+                'eval(str_rot13' => 'Obfuscated rot13 payload evaluation (eval + str_rot13)',
+                'assert(base64_decode' => 'Obfuscated base64 evaluation (assert + base64_decode)',
+                'preg_replace(\'/.*/e\'' => 'Deprecated PHP code execution exploit (preg_replace /e)',
+                'preg_replace("/.*/e"' => 'Deprecated PHP code execution exploit (preg_replace /e)',
+                // Known web shell kit fingerprints
+                'b374k' => 'Known b374k web shell signature',
+                'c99shell' => 'Known c99 web shell signature',
+                'r57shell' => 'Known r57 web shell signature',
+                'WSOsetcookie' => 'Known WSO web shell signature',
+                'FilesMan' => 'Known FilesMan web shell signature',
             ];
 
-            foreach ($shellPatterns as $pattern) {
+            foreach ($shellPatterns as $pattern => $description) {
                 $grepFiles = [];
                 $grepReturn = 0;
                 $cmd = "sudo grep -rl " . escapeshellarg($pattern) . " " . escapeshellarg($path) . " {$includeArgs} {$excludeArgs} 2>/dev/null";
@@ -295,25 +301,72 @@ class ShieldController extends Controller
                         
                         if (str_contains($filePath, '/usr/local/nimbus')) continue;
 
-                        // Whitelist legitimate WordPress core & framework files for common shell functions
-                        if (in_array($pattern, ['shell_exec(', 'passthru(', 'system('])) {
-                            $isSafeWp = false;
-                            foreach ($safePatternsForShellFunctions as $sp) {
-                                if (str_contains($filePath, $sp)) {
-                                    $isSafeWp = true;
-                                    break;
-                                }
-                            }
-                            if ($isSafeWp) continue;
-                        }
-
                         $findings[$filePath] = [
                             'file_path' => $filePath,
                             'type' => 'Potential Web Shell',
-                            'details' => "Contains suspicious function: $pattern"
+                            'details' => $description
                         ];
                     }
                 }
+            }
+
+            // 3. WordPress Core Integrity Verification (Cryptographic checksum check)
+            // Catches any attacker who modifies official core files (e.g., shell.php, file.php) or drops rogue files in wp-includes/wp-admin
+            try {
+                $wpSitesToVerify = [];
+                if (file_exists($path . '/wp-config.php')) {
+                    $wpSitesToVerify[] = $path;
+                } else {
+                    $candidateConfigs = glob(rtrim($path, '/') . '/*/wp-config.php');
+                    if (!empty($candidateConfigs)) {
+                        foreach ($candidateConfigs as $cfg) {
+                            $wpSitesToVerify[] = dirname($cfg);
+                        }
+                    }
+                }
+
+                foreach ($wpSitesToVerify as $wpDir) {
+                    $wpDomain = basename($wpDir);
+                    $wpSiteUser = 'www-data';
+                    if (class_exists(\App\Services\SiteIsolationService::class)) {
+                        $wpSiteUser = \App\Services\SiteIsolationService::getSiteUser($wpDomain) ?: 'www-data';
+                    }
+
+                    $wpOutput = [];
+                    $wpReturn = 0;
+                    $wpVerifyCmd = "sudo -u " . escapeshellarg($wpSiteUser) . " env HOME=/tmp wp core verify-checksums --path=" . escapeshellarg($wpDir) . " --skip-plugins --skip-themes 2>&1";
+                    exec($wpVerifyCmd, $wpOutput, $wpReturn);
+
+                    if ($wpReturn !== 0 && !empty($wpOutput)) {
+                        foreach ($wpOutput as $wpLine) {
+                            $wpLine = trim($wpLine);
+                            // Detect modified/tampered core file
+                            if (preg_match("/File doesn't verify against checksums:\s*(.+)$/i", $wpLine, $m)) {
+                                $relFile = trim($m[1]);
+                                $tamperedFile = rtrim($wpDir, '/') . '/' . ltrim($relFile, '/');
+                                $findings[$tamperedFile] = [
+                                    'file_path' => $tamperedFile,
+                                    'type' => 'WordPress Core Tampered',
+                                    'details' => "Official WordPress cryptographic checksum mismatch! File has been altered or modified by an external script."
+                                ];
+                            }
+                            // Detect unauthorized injected file inside wp-includes or wp-admin
+                            if (preg_match("/File should not exist:\s*(.+)$/i", $wpLine, $m)) {
+                                $relFile = trim($m[1]);
+                                // Skip truncated .p files from incomplete archive unpacks
+                                if (str_ends_with($relFile, '.p') || str_ends_with($relFile, '.ph')) continue;
+                                $rogueFile = rtrim($wpDir, '/') . '/' . ltrim($relFile, '/');
+                                $findings[$rogueFile] = [
+                                    'file_path' => $rogueFile,
+                                    'type' => 'Unauthorized Core File',
+                                    'details' => "Unauthorized foreign file injected into official WordPress core directory. Likely an uploaded backdoor."
+                                ];
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning("WordPress core checksum verification error: " . $e->getMessage());
             }
 
             // 3. Scan with ClamAV if installed (with strict timeouts and folder exclusions)
