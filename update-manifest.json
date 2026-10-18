@@ -1,13 +1,16 @@
 {
-  "version": "1.1.3",
-  "release_date": "2026-10-16",
-  "sha256": "5cdeac4f790ec12ce45a64bce8757113652faeac12e01a6d08d4f4c84ca56d70",
+  "version": "1.1.4",
+  "release_date": "2026-10-18",
+  "sha256": "7a3d07fb37a41254e80803e8807c0f99c74247a36a46688c6057ed6358f23596",
   "changelog": [
-    "Modern Nimbus Emerald Glass UI with dual dark & light mode support",
-    "Fixed dark mode rendering and contrast across all management modules",
-    "Automated Cloudflare DNS A-record creation for subdomains when root domain is connected",
-    "Polished global animations for search bars, modals, page transitions, and emerald glass dropdown menus",
-    "Resolved Node.js installation issue by bundling 'n' runtime manager and adding failure detection"
+    "WordPress Crash Recovery & Reset: Clean database reset with automatic plugin deactivation and default theme fallback to recover instantly from fatal errors",
+    "WordPress Core Reinstallation: Repair corrupted WordPress core files without modifying database or custom content",
+    "Built-in WordPress admin credentials generator and post-reset 1-click Auto-Login",
+    "Modernized SearchableSelect dropdowns and search inputs with full Emerald Glass dark mode styling",
+    "Recommended and auto-selected PHP 8.4 as default across domain and subdomain creation",
+    "Enhanced in-browser Code Editor with full support for dotfiles (.env.example, .htaccess) and body teleportation",
+    "Eliminated dark mode modal stacking context traps and dimmed backdrop issues across all pages",
+    "Refined subdomain tree guide hierarchy and contrast styling in dark mode"
   ],
   "commands": [
     "php artisan migrate --force",
