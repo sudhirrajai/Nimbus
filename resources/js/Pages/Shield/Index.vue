@@ -205,21 +205,39 @@
                 <div class="card-body p-0 pt-3">
                     <!-- Threats Tab -->
                     <div v-if="activeTab === 'threats'">
-                        <!-- Threat Filter Chips -->
-                        <div class="px-3 pb-3 d-flex align-items-center gap-2 flex-wrap border-bottom">
-                            <span class="text-xs text-secondary font-weight-bold me-1">Filter:</span>
-                            <button @click="setStatusFilter('all')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'all' ? 'btn-dark' : 'btn-outline-secondary'">
-                                All ({{ threats.length }})
-                            </button>
-                            <button @click="setStatusFilter('detected')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'detected' ? 'btn-danger' : 'btn-outline-danger'">
-                                <i class="material-symbols-rounded text-xxs me-1">warning</i> Active Detected ({{ activeCount }})
-                            </button>
-                            <button @click="setStatusFilter('quarantined')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'quarantined' ? 'btn-warning text-white' : 'btn-outline-warning'">
-                                <i class="material-symbols-rounded text-xxs me-1">inventory_2</i> Quarantined ({{ quarantinedCount }})
-                            </button>
-                            <button @click="setStatusFilter('ignored')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'ignored' ? 'btn-success text-white' : 'btn-outline-success'">
-                                <i class="material-symbols-rounded text-xxs me-1">verified</i> Ignored / Safe ({{ ignoredCount }})
-                            </button>
+                        <!-- Threat Filter Chips & View Mode Toggle -->
+                        <div class="px-3 pb-3 d-flex align-items-center justify-content-between gap-2 flex-wrap border-bottom">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="text-xs text-secondary font-weight-bold me-1">Filter:</span>
+                                <button @click="setStatusFilter('all')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'all' ? 'btn-dark' : 'btn-outline-secondary'">
+                                    All ({{ threats.length }})
+                                </button>
+                                <button @click="setStatusFilter('detected')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'detected' ? 'btn-danger' : 'btn-outline-danger'">
+                                    <i class="material-symbols-rounded text-xxs me-1">warning</i> Active Detected ({{ activeCount }})
+                                </button>
+                                <button @click="setStatusFilter('quarantined')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'quarantined' ? 'btn-warning text-white' : 'btn-outline-warning'">
+                                    <i class="material-symbols-rounded text-xxs me-1">inventory_2</i> Quarantined ({{ quarantinedCount }})
+                                </button>
+                                <button @click="setStatusFilter('ignored')" class="btn btn-xs mb-0 border-radius-lg" :class="statusFilter === 'ignored' ? 'btn-success text-white' : 'btn-outline-success'">
+                                    <i class="material-symbols-rounded text-xxs me-1">verified</i> Ignored / Safe ({{ ignoredCount }})
+                                </button>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="text-xs text-secondary font-weight-bold d-none d-sm-inline">View:</span>
+                                <div class="btn-group btn-group-sm p-1 bg-gray-100 border-radius-md" role="group">
+                                    <button type="button" @click="threatViewMode = 'grouped'" class="btn btn-xs mb-0 border-radius-sm px-3" :class="threatViewMode === 'grouped' ? 'bg-white text-dark shadow-sm font-weight-bold' : 'btn-link text-secondary'">
+                                        <i class="material-symbols-rounded text-xs me-1">domain</i> Group by Domain
+                                    </button>
+                                    <button type="button" @click="threatViewMode = 'flat'" class="btn btn-xs mb-0 border-radius-sm px-3" :class="threatViewMode === 'flat' ? 'bg-white text-dark shadow-sm font-weight-bold' : 'btn-link text-secondary'">
+                                        <i class="material-symbols-rounded text-xs me-1">table_rows</i> Flat List
+                                    </button>
+                                </div>
+                                <button v-if="threatViewMode === 'grouped' && domainGroups.length > 0" @click="toggleExpandAllDomains" class="btn btn-outline-secondary btn-xs mb-0 border-radius-md d-flex align-items-center">
+                                    <i class="material-symbols-rounded text-xs me-1">{{ allDomainsExpanded ? 'unfold_less' : 'unfold_more' }}</i>
+                                    {{ allDomainsExpanded ? 'Collapse All' : 'Expand All' }}
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Bulk Actions Toolbar when items are selected -->
@@ -261,140 +279,390 @@
                             </button>
                         </div>
                         <div v-else>
-                            <div class="table-responsive p-0">
-                                <table class="table align-items-center mb-0">
-                                    <thead class="bg-gray-100">
-                                        <tr>
-                                            <th class="ps-3 text-center" style="width: 45px;">
-                                                <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        class="form-check-input cursor-pointer m-0" 
-                                                        :checked="isAllPageSelected" 
-                                                        :indeterminate.prop="isSomePageSelected"
-                                                        @change="toggleSelectAllPage" 
-                                                        title="Select all on this page"
-                                                    >
-                                                </div>
-                                            </th>
-                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Security Threat & File Path</th>
-                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Detection Type</th>
-                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Time</th>
-                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
-                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 pe-4">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="threat in paginatedThreats" :key="threat.id" class="hover-bg-gray" :class="{ 'bg-light': selectedThreatIds.includes(threat.id) }">
-                                            <td class="ps-3 text-center" style="width: 45px;">
-                                                <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        :value="threat.id" 
-                                                        v-model="selectedThreatIds" 
-                                                        class="form-check-input cursor-pointer m-0"
-                                                    >
-                                                </div>
-                                            </td>
-                                            <td class="ps-2">
-                                                <div class="d-flex flex-column py-1">
-                                                    <div class="d-flex align-items-center flex-wrap gap-1">
-                                                        <span class="text-sm font-weight-bold text-dark font-monospace">{{ getFileName(threat.file_path) }}</span>
-                                                        <span class="text-xxs text-secondary font-monospace bg-gray-100 px-2 py-0 border-radius-sm">{{ getDirName(threat.file_path) }}</span>
-                                                        <button @click.stop="copyPath(threat.file_path)" class="btn btn-link text-secondary p-0 mb-0 ms-1" title="Copy Full Path">
-                                                            <i class="material-symbols-rounded text-xs">content_copy</i>
-                                                        </button>
+                            <!-- 1. GROUPED BY DOMAIN VIEW -->
+                            <div v-if="threatViewMode === 'grouped'">
+                                <div class="table-responsive p-0">
+                                    <table class="table align-items-center mb-0">
+                                        <thead class="bg-gray-100">
+                                            <tr>
+                                                <th class="ps-3 text-center" style="width: 45px;">
+                                                    <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            class="form-check-input cursor-pointer m-0" 
+                                                            :checked="isAllVisibleSelected" 
+                                                            :indeterminate.prop="isSomeVisibleSelected"
+                                                            @change="toggleSelectAllVisible" 
+                                                            title="Select all visible files"
+                                                        >
                                                     </div>
-                                                    <p class="text-xs text-secondary mb-0 text-wrap max-width-500 mt-1">
-                                                        {{ threat.details }}
-                                                    </p>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div class="d-flex align-items-center">
-                                                    <i class="material-symbols-rounded text-sm me-1" :class="threat.type.includes('ClamAV') ? 'text-primary' : 'text-danger'">{{ threat.type.includes('ClamAV') ? 'coronavirus' : 'code' }}</i>
-                                                    <span class="text-xs font-weight-bold">{{ threat.type }}</span>
-                                                </div>
-                                            </td>
-                                            <td class="align-middle text-center">
-                                                <span class="text-secondary text-xs">{{ formatDate(threat.detected_at) }}</span>
-                                            </td>
-                                            <td class="align-middle text-center text-sm">
-                                                <span class="badge badge-sm rounded-pill border" :class="getStatusBadgeClass(threat.status)">
-                                                    {{ threat.status }}
-                                                </span>
-                                            </td>
-                                            <td class="align-middle text-center px-4">
-                                                <div class="d-flex gap-2 justify-content-center align-items-center">
-                                                    <!-- View File Preview -->
-                                                    <button @click="openFilePreview(threat)" class="btn btn-link text-info text-gradient p-0 mb-0" title="View / Inspect File">
-                                                        <i class="material-symbols-rounded">visibility</i>
-                                                    </button>
-                                                    <!-- Open in File Editor -->
-                                                    <button @click="openInFileEditor(threat)" class="btn btn-link text-primary text-gradient p-0 mb-0" title="Open in File Editor">
-                                                        <i class="material-symbols-rounded">edit_document</i>
-                                                    </button>
-                                                    <!-- Restore File (if quarantined) -->
-                                                    <button v-if="threat.status === 'quarantined'" @click="confirmRestoreThreat(threat)" class="btn btn-link text-success text-gradient p-0 mb-0" title="Restore File to Website">
-                                                        <i class="material-symbols-rounded">restore_page</i>
-                                                    </button>
-                                                    <!-- Quarantine File (if detected) -->
-                                                    <button v-if="threat.status === 'detected'" @click="confirmQuarantineThreat(threat)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine File">
-                                                        <i class="material-symbols-rounded">inventory_2</i>
-                                                    </button>
-                                                    <!-- Ignore / Whitelist (if not ignored) -->
-                                                    <button v-if="threat.status !== 'ignored'" @click="confirmIgnoreThreat(threat)" class="btn btn-link text-dark text-gradient p-0 mb-0" title="Mark as Safe / Ignore (Never quarantine)">
-                                                        <i class="material-symbols-rounded">verified</i>
-                                                    </button>
-                                                    <!-- Unignore -->
-                                                    <button v-if="threat.status === 'ignored'" @click="unignoreThreat(threat)" class="btn btn-link text-secondary text-gradient p-0 mb-0" title="Reset to Detected">
-                                                        <i class="material-symbols-rounded">restart_alt</i>
-                                                    </button>
-                                                    <!-- Delete File Permanently -->
-                                                    <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient p-0 mb-0" title="Delete Permanently">
-                                                        <i class="material-symbols-rounded">delete</i>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                                                </th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Domain / Website</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Affected Files</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Threat Breakdown</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Latest Detection</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 pe-4">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template v-for="group in domainGroups" :key="group.domain">
+                                                <!-- Main Domain Row -->
+                                                <tr class="domain-group-header cursor-pointer hover-bg-gray" 
+                                                    :class="{ 'expanded-domain-row': expandedDomains[group.domain] }"
+                                                    @click="toggleDomainExpand(group.domain)">
+                                                    
+                                                    <td class="ps-3 text-center" style="width: 45px;" @click.stop>
+                                                        <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                class="form-check-input cursor-pointer m-0" 
+                                                                :checked="isDomainAllSelected(group)" 
+                                                                :indeterminate.prop="isDomainSomeSelected(group)"
+                                                                @change="toggleSelectDomain(group)"
+                                                                :title="'Select all files in ' + group.domain"
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    
+                                                    <td class="ps-2">
+                                                        <div class="d-flex align-items-center py-2">
+                                                            <div class="domain-icon-box me-3 d-flex align-items-center justify-content-center border-radius-md"
+                                                                 :class="group.activeCount > 0 ? 'bg-danger-subtle text-danger' : (group.quarantinedCount > 0 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success')">
+                                                                <i class="material-symbols-rounded text-lg">{{ group.isSystem ? 'dns' : 'language' }}</i>
+                                                            </div>
+                                                            <div class="d-flex flex-column">
+                                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                    <h6 class="mb-0 text-sm font-weight-bold text-dark">{{ group.domain }}</h6>
+                                                                    <span v-if="group.isSubdomain" class="badge badge-xs bg-light text-secondary border">Subdomain</span>
+                                                                </div>
+                                                                <div class="d-flex align-items-center gap-1 mt-1">
+                                                                    <span class="text-xxs text-secondary font-monospace bg-gray-100 px-2 py-0 border-radius-sm">
+                                                                        {{ group.pathPrefix }}
+                                                                    </span>
+                                                                    <button @click.stop="copyPath(group.pathPrefix)" class="btn btn-link text-secondary p-0 mb-0 ms-1" title="Copy Root Path">
+                                                                        <i class="material-symbols-rounded text-xxs">content_copy</i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    
+                                                    <!-- Affected Files Count (Requested by user) -->
+                                                    <td class="align-middle text-center">
+                                                        <span class="badge px-3 py-2 rounded-pill font-monospace shadow-xs text-xs" 
+                                                              :class="group.activeCount > 0 ? 'bg-danger text-white' : (group.quarantinedCount > 0 ? 'bg-warning text-dark' : 'bg-success text-white')">
+                                                            {{ group.threats.length }} {{ group.threats.length === 1 ? 'file affected' : 'files affected' }}
+                                                        </span>
+                                                    </td>
+                                                    
+                                                    <!-- Threat Breakdown -->
+                                                    <td class="align-middle text-center">
+                                                        <div class="d-flex align-items-center justify-content-center gap-1 flex-wrap">
+                                                            <span v-if="group.activeCount > 0" class="badge badge-sm rounded-pill border border-danger text-danger bg-danger-subtle px-2 py-1">
+                                                                <i class="material-symbols-rounded text-xxs me-1">warning</i>{{ group.activeCount }} Active
+                                                            </span>
+                                                            <span v-if="group.quarantinedCount > 0" class="badge badge-sm rounded-pill border border-warning text-warning bg-warning-subtle px-2 py-1">
+                                                                <i class="material-symbols-rounded text-xxs me-1">inventory_2</i>{{ group.quarantinedCount }} Quarantined
+                                                            </span>
+                                                            <span v-if="group.ignoredCount > 0" class="badge badge-sm rounded-pill border border-success text-success bg-success-subtle px-2 py-1">
+                                                                <i class="material-symbols-rounded text-xxs me-1">verified</i>{{ group.ignoredCount }} Safe
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    
+                                                    <!-- Latest Detection Time -->
+                                                    <td class="align-middle text-center">
+                                                        <span class="text-secondary text-xs">{{ formatDate(group.latestDetectedAt) }}</span>
+                                                    </td>
+                                                    
+                                                    <!-- Actions -->
+                                                    <td class="align-middle text-center px-4" @click.stop>
+                                                        <div class="d-flex gap-2 justify-content-center align-items-center">
+                                                            <!-- Quick Recover domain quarantined files -->
+                                                            <button v-if="group.quarantinedCount > 0" 
+                                                                    @click="recoverDomainQuarantined(group)" 
+                                                                    class="btn btn-xs btn-outline-success mb-0 d-flex align-items-center" 
+                                                                    :title="'Recover all ' + group.quarantinedCount + ' quarantined files in ' + group.domain">
+                                                                <i class="material-symbols-rounded text-xs me-1">restore_page</i> Recover ({{ group.quarantinedCount }})
+                                                            </button>
+                                                            
+                                                            <!-- Open in File Manager -->
+                                                            <button v-if="!group.isSystem" 
+                                                                    @click="openDomainInFileManager(group.domain)" 
+                                                                    class="btn btn-link text-primary p-0 mb-0" 
+                                                                    title="Open Domain in File Manager">
+                                                                <i class="material-symbols-rounded text-sm">folder_open</i>
+                                                            </button>
+                                                            
+                                                            <!-- Expand / Collapse chevron button -->
+                                                            <button @click="toggleDomainExpand(group.domain)" 
+                                                                    class="btn btn-xs btn-link text-dark p-0 mb-0 d-flex align-items-center font-weight-bold"
+                                                                    :title="expandedDomains[group.domain] ? 'Collapse files' : 'View affected files'">
+                                                                <span class="text-xs me-1">{{ expandedDomains[group.domain] ? 'Hide Files' : 'View Files' }}</span>
+                                                                <i class="material-symbols-rounded text-sm transition-transform" 
+                                                                   :class="{ 'rotate-180': expandedDomains[group.domain] }">
+                                                                    expand_more
+                                                                </i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                
+                                                <!-- Expanded Affected Files Table for this domain -->
+                                                <tr v-if="expandedDomains[group.domain]" class="domain-subtable-row">
+                                                    <td colspan="6" class="p-0 border-0">
+                                                        <div class="domain-subtable-container bg-gray-50 border-start border-3 border-success p-3 mx-2 my-1 border-radius-lg shadow-inner">
+                                                            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom border-light">
+                                                                <div class="d-flex align-items-center gap-2">
+                                                                    <i class="material-symbols-rounded text-success text-sm">folder_open</i>
+                                                                    <span class="text-xs font-weight-bold text-dark font-monospace">{{ group.domain }} &bull; Affected Files ({{ group.threats.length }})</span>
+                                                                </div>
+                                                                <div class="d-flex align-items-center gap-2">
+                                                                    <button @click="toggleSelectDomain(group)" class="btn btn-link text-primary p-0 mb-0 text-xxs">
+                                                                        {{ isDomainAllSelected(group) ? 'Deselect All in Domain' : 'Select All in Domain' }}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div class="table-responsive">
+                                                                <table class="table table-sm align-items-center mb-0 bg-white border-radius-md overflow-hidden">
+                                                                    <thead>
+                                                                        <tr class="bg-light">
+                                                                            <th class="ps-3 text-center" style="width: 35px;"></th>
+                                                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">File Path & Threat Details</th>
+                                                                            <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Detection Type</th>
+                                                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Time</th>
+                                                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
+                                                                            <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 pe-3">Actions</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        <tr v-for="threat in group.threats" :key="threat.id" class="hover-bg-gray" :class="{ 'bg-light-success': selectedThreatIds.includes(threat.id) }">
+                                                                            <td class="ps-3 text-center" style="width: 35px;">
+                                                                                <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
+                                                                                    <input 
+                                                                                        type="checkbox" 
+                                                                                        :value="threat.id" 
+                                                                                        v-model="selectedThreatIds" 
+                                                                                        class="form-check-input cursor-pointer m-0"
+                                                                                    >
+                                                                                </div>
+                                                                            </td>
+                                                                            <td class="ps-2">
+                                                                                <div class="d-flex flex-column py-1">
+                                                                                    <div class="d-flex align-items-center flex-wrap gap-1">
+                                                                                        <span class="text-xs font-weight-bold text-dark font-monospace">{{ getRelativePath(threat.file_path, group.domain) }}</span>
+                                                                                        <button @click.stop="copyPath(threat.file_path)" class="btn btn-link text-secondary p-0 mb-0 ms-1" title="Copy Full Path">
+                                                                                            <i class="material-symbols-rounded text-xxs">content_copy</i>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    <p class="text-xxs text-secondary mb-0 text-wrap max-width-600 mt-1">
+                                                                                        {{ threat.details }}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </td>
+                                                                            <td>
+                                                                                <div class="d-flex align-items-center">
+                                                                                    <i class="material-symbols-rounded text-xs me-1" :class="threat.type.includes('ClamAV') ? 'text-primary' : 'text-danger'">{{ threat.type.includes('ClamAV') ? 'coronavirus' : 'code' }}</i>
+                                                                                    <span class="text-xxs font-weight-bold">{{ threat.type }}</span>
+                                                                                </div>
+                                                                            </td>
+                                                                            <td class="align-middle text-center">
+                                                                                <span class="text-secondary text-xxs">{{ formatDate(threat.detected_at) }}</span>
+                                                                            </td>
+                                                                            <td class="align-middle text-center">
+                                                                                <span class="badge badge-xs rounded-pill border" :class="getStatusBadgeClass(threat.status)">
+                                                                                    {{ threat.status }}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td class="align-middle text-center pe-3">
+                                                                                <div class="d-flex gap-2 justify-content-center align-items-center">
+                                                                                    <button @click="openFilePreview(threat)" class="btn btn-link text-info text-gradient p-0 mb-0" title="Inspect / View File">
+                                                                                        <i class="material-symbols-rounded text-sm">visibility</i>
+                                                                                    </button>
+                                                                                    <button @click="openInFileEditor(threat)" class="btn btn-link text-primary text-gradient p-0 mb-0" title="Open in File Editor">
+                                                                                        <i class="material-symbols-rounded text-sm">edit_document</i>
+                                                                                    </button>
+                                                                                    <button v-if="threat.status === 'quarantined'" @click="confirmRestoreThreat(threat)" class="btn btn-link text-success text-gradient p-0 mb-0" title="Restore File">
+                                                                                        <i class="material-symbols-rounded text-sm">restore_page</i>
+                                                                                    </button>
+                                                                                    <button v-if="threat.status === 'detected'" @click="confirmQuarantineThreat(threat)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine File">
+                                                                                        <i class="material-symbols-rounded text-sm">inventory_2</i>
+                                                                                    </button>
+                                                                                    <button v-if="threat.status !== 'ignored'" @click="confirmIgnoreThreat(threat)" class="btn btn-link text-dark text-gradient p-0 mb-0" title="Whitelist / Mark as Safe">
+                                                                                        <i class="material-symbols-rounded text-sm">verified</i>
+                                                                                    </button>
+                                                                                    <button v-if="threat.status === 'ignored'" @click="unignoreThreat(threat)" class="btn btn-link text-secondary text-gradient p-0 mb-0" title="Reset to Detected">
+                                                                                        <i class="material-symbols-rounded text-sm">restart_alt</i>
+                                                                                    </button>
+                                                                                    <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient p-0 mb-0" title="Delete Permanently">
+                                                                                        <i class="material-symbols-rounded text-sm">delete</i>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
 
-                            <!-- Pagination Controls -->
-                            <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top gap-2">
-                                <div class="d-flex align-items-center gap-2">
+                                <!-- Grouped View Summary Footer -->
+                                <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top gap-2 bg-gray-50">
                                     <span class="text-xs text-secondary">
-                                        Showing <b class="text-dark">{{ (currentPage - 1) * perPage + 1 }}</b> to <b class="text-dark">{{ Math.min(currentPage * perPage, filteredThreats.length) }}</b> of <b class="text-dark">{{ filteredThreats.length }}</b> entries
+                                        Showing <b class="text-dark">{{ domainGroups.length }}</b> affected {{ domainGroups.length === 1 ? 'domain' : 'domains' }} (<b class="text-dark">{{ filteredThreats.length }}</b> total files)
                                     </span>
-                                    <div class="d-flex align-items-center gap-1 ms-3">
-                                        <span class="text-xs text-secondary">Per page:</span>
-                                        <select v-model="perPage" @change="currentPage = 1" class="form-select form-select-sm py-1 px-2 border border-radius-md text-xs w-auto">
-                                            <option v-for="opt in perPageOptions" :key="opt" :value="opt">{{ opt }}</option>
-                                        </select>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button @click="toggleExpandAllDomains" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md">
+                                            <i class="material-symbols-rounded text-xs me-1">{{ allDomainsExpanded ? 'unfold_less' : 'unfold_more' }}</i>
+                                            {{ allDomainsExpanded ? 'Collapse All Domains' : 'Expand All Domains' }}
+                                        </button>
                                     </div>
                                 </div>
-                                <div v-if="totalPages > 1" class="pagination-wrapper d-flex align-items-center gap-1">
-                                    <button @click="goToPage(1)" :disabled="currentPage === 1" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="First Page">
-                                        <i class="material-symbols-rounded text-xxs">first_page</i>
-                                    </button>
-                                    <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="Previous Page">
-                                        <i class="material-symbols-rounded text-xxs">chevron_left</i>
-                                    </button>
-                                    
-                                    <template v-for="p in visiblePages" :key="p">
-                                        <button v-if="p !== '...'" @click="goToPage(p)" class="btn btn-xs mb-0 border-radius-md px-2" :class="currentPage === p ? 'btn-dark' : 'btn-outline-secondary'">
-                                            {{ p }}
-                                        </button>
-                                        <span v-else class="text-xs text-secondary px-1">...</span>
-                                    </template>
+                            </div>
 
-                                    <button @click="goToPage(currentPage + 1)" :disabled="currentPage === totalPages" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="Next Page">
-                                        <i class="material-symbols-rounded text-xxs">chevron_right</i>
-                                    </button>
-                                    <button @click="goToPage(totalPages)" :disabled="currentPage === totalPages" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="Last Page">
-                                        <i class="material-symbols-rounded text-xxs">last_page</i>
-                                    </button>
+                            <!-- 2. FLAT LIST VIEW (Original Table with Pagination) -->
+                            <div v-else>
+                                <div class="table-responsive p-0">
+                                    <table class="table align-items-center mb-0">
+                                        <thead class="bg-gray-100">
+                                            <tr>
+                                                <th class="ps-3 text-center" style="width: 45px;">
+                                                    <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            class="form-check-input cursor-pointer m-0" 
+                                                            :checked="isAllPageSelected" 
+                                                            :indeterminate.prop="isSomePageSelected"
+                                                            @change="toggleSelectAllPage" 
+                                                            title="Select all on this page"
+                                                        >
+                                                    </div>
+                                                </th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Security Threat & File Path</th>
+                                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Detection Type</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Time</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
+                                                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 pe-4">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="threat in paginatedThreats" :key="threat.id" class="hover-bg-gray" :class="{ 'bg-light': selectedThreatIds.includes(threat.id) }">
+                                                <td class="ps-3 text-center" style="width: 45px;">
+                                                    <div class="form-check p-0 m-0 d-flex justify-content-center align-items-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            :value="threat.id" 
+                                                            v-model="selectedThreatIds" 
+                                                            class="form-check-input cursor-pointer m-0"
+                                                        >
+                                                    </div>
+                                                </td>
+                                                <td class="ps-2">
+                                                    <div class="d-flex flex-column py-1">
+                                                        <div class="d-flex align-items-center flex-wrap gap-1">
+                                                            <span class="text-sm font-weight-bold text-dark font-monospace">{{ getFileName(threat.file_path) }}</span>
+                                                            <span class="text-xxs text-secondary font-monospace bg-gray-100 px-2 py-0 border-radius-sm">{{ getDirName(threat.file_path) }}</span>
+                                                            <button @click.stop="copyPath(threat.file_path)" class="btn btn-link text-secondary p-0 mb-0 ms-1" title="Copy Full Path">
+                                                                <i class="material-symbols-rounded text-xs">content_copy</i>
+                                                            </button>
+                                                        </div>
+                                                        <p class="text-xs text-secondary mb-0 text-wrap max-width-500 mt-1">
+                                                            {{ threat.details }}
+                                                        </p>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="material-symbols-rounded text-sm me-1" :class="threat.type.includes('ClamAV') ? 'text-primary' : 'text-danger'">{{ threat.type.includes('ClamAV') ? 'coronavirus' : 'code' }}</i>
+                                                        <span class="text-xs font-weight-bold">{{ threat.type }}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <span class="text-secondary text-xs">{{ formatDate(threat.detected_at) }}</span>
+                                                </td>
+                                                <td class="align-middle text-center text-sm">
+                                                    <span class="badge badge-sm rounded-pill border" :class="getStatusBadgeClass(threat.status)">
+                                                        {{ threat.status }}
+                                                    </span>
+                                                </td>
+                                                <td class="align-middle text-center px-4">
+                                                    <div class="d-flex gap-2 justify-content-center align-items-center">
+                                                        <!-- View File Preview -->
+                                                        <button @click="openFilePreview(threat)" class="btn btn-link text-info text-gradient p-0 mb-0" title="View / Inspect File">
+                                                            <i class="material-symbols-rounded">visibility</i>
+                                                        </button>
+                                                        <!-- Open in File Editor -->
+                                                        <button @click="openInFileEditor(threat)" class="btn btn-link text-primary text-gradient p-0 mb-0" title="Open in File Editor">
+                                                            <i class="material-symbols-rounded">edit_document</i>
+                                                        </button>
+                                                        <!-- Restore File (if quarantined) -->
+                                                        <button v-if="threat.status === 'quarantined'" @click="confirmRestoreThreat(threat)" class="btn btn-link text-success text-gradient p-0 mb-0" title="Restore File to Website">
+                                                            <i class="material-symbols-rounded">restore_page</i>
+                                                        </button>
+                                                        <!-- Quarantine File (if detected) -->
+                                                        <button v-if="threat.status === 'detected'" @click="confirmQuarantineThreat(threat)" class="btn btn-link text-warning text-gradient p-0 mb-0" title="Quarantine File">
+                                                            <i class="material-symbols-rounded">inventory_2</i>
+                                                        </button>
+                                                        <!-- Ignore / Whitelist (if not ignored) -->
+                                                        <button v-if="threat.status !== 'ignored'" @click="confirmIgnoreThreat(threat)" class="btn btn-link text-dark text-gradient p-0 mb-0" title="Mark as Safe / Ignore (Never quarantine)">
+                                                            <i class="material-symbols-rounded">verified</i>
+                                                        </button>
+                                                        <!-- Unignore -->
+                                                        <button v-if="threat.status === 'ignored'" @click="unignoreThreat(threat)" class="btn btn-link text-secondary text-gradient p-0 mb-0" title="Reset to Detected">
+                                                            <i class="material-symbols-rounded">restart_alt</i>
+                                                        </button>
+                                                        <!-- Delete File Permanently -->
+                                                        <button @click="confirmDeleteThreat(threat)" class="btn btn-link text-danger text-gradient p-0 mb-0" title="Delete Permanently">
+                                                            <i class="material-symbols-rounded">delete</i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Pagination Controls -->
+                                <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top gap-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="text-xs text-secondary">
+                                            Showing <b class="text-dark">{{ (currentPage - 1) * perPage + 1 }}</b> to <b class="text-dark">{{ Math.min(currentPage * perPage, filteredThreats.length) }}</b> of <b class="text-dark">{{ filteredThreats.length }}</b> entries
+                                        </span>
+                                        <div class="d-flex align-items-center gap-1 ms-3">
+                                            <span class="text-xs text-secondary">Per page:</span>
+                                            <select v-model="perPage" @change="currentPage = 1" class="form-select form-select-sm py-1 px-2 border border-radius-md text-xs w-auto">
+                                                <option v-for="opt in perPageOptions" :key="opt" :value="opt">{{ opt }}</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div v-if="totalPages > 1" class="pagination-wrapper d-flex align-items-center gap-1">
+                                        <button @click="goToPage(1)" :disabled="currentPage === 1" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="First Page">
+                                            <i class="material-symbols-rounded text-xxs">first_page</i>
+                                        </button>
+                                        <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="Previous Page">
+                                            <i class="material-symbols-rounded text-xxs">chevron_left</i>
+                                        </button>
+                                        
+                                        <template v-for="p in visiblePages" :key="p">
+                                            <button v-if="p !== '...'" @click="goToPage(p)" class="btn btn-xs mb-0 border-radius-md px-2" :class="currentPage === p ? 'btn-dark' : 'btn-outline-secondary'">
+                                                {{ p }}
+                                            </button>
+                                            <span v-else class="text-xs text-secondary px-1">...</span>
+                                        </template>
+
+                                        <button @click="goToPage(currentPage + 1)" :disabled="currentPage === totalPages" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="Next Page">
+                                            <i class="material-symbols-rounded text-xxs">chevron_right</i>
+                                        </button>
+                                        <button @click="goToPage(totalPages)" :disabled="currentPage === totalPages" class="btn btn-xs btn-outline-secondary mb-0 border-radius-md px-2" title="Last Page">
+                                            <i class="material-symbols-rounded text-xxs">last_page</i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1114,7 +1382,7 @@
 
 <script setup>
 import MainLayout from '@/Layouts/MainLayout.vue';
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import axios from 'axios';
 import { formatDate, formatTime } from '@/utils/date';
 
@@ -1308,7 +1576,6 @@ const removeRule = async (index) => {
 }
 
 // Watch activeTab to load rules
-import { watch } from 'vue';
 watch(activeTab, (newTab) => {
     if (newTab === 'firewall') {
         loadFirewallRules()
@@ -1834,11 +2101,159 @@ const showNotification = (message, type = 'success') => {
     setTimeout(() => { showToast.value = false }, 4000)
 }
 
+const threatViewMode = ref('grouped') // 'grouped' or 'flat'
+const expandedDomains = ref({})
+
+const getDomainName = (filePath) => {
+    if (!filePath) return 'System / Other'
+    const match = filePath.match(/^\/var\/www\/([^\/]+)/)
+    if (match) {
+        return match[1]
+    }
+    return 'System / Other'
+}
+
+const getRelativePath = (filePath, domain) => {
+    if (!filePath) return ''
+    if (domain && domain !== 'System / Other') {
+        const prefix = `/var/www/${domain}/`
+        if (filePath.startsWith(prefix)) {
+            return filePath.substring(prefix.length)
+        }
+    }
+    return filePath
+}
+
+const domainGroups = computed(() => {
+    const map = {}
+    for (const threat of filteredThreats.value) {
+        const domain = getDomainName(threat.file_path)
+        if (!map[domain]) {
+            const isSystem = domain === 'System / Other'
+            map[domain] = {
+                domain,
+                threats: [],
+                activeCount: 0,
+                quarantinedCount: 0,
+                ignoredCount: 0,
+                isSystem,
+                isSubdomain: !isSystem && domain.split('.').length > 2,
+                pathPrefix: isSystem ? '/' : `/var/www/${domain}`,
+                latestDetectedAt: threat.detected_at
+            }
+        }
+        map[domain].threats.push(threat)
+        if (threat.status === 'detected') map[domain].activeCount++
+        else if (threat.status === 'quarantined') map[domain].quarantinedCount++
+        else if (threat.status === 'ignored') map[domain].ignoredCount++
+
+        if (threat.detected_at && (!map[domain].latestDetectedAt || new Date(threat.detected_at) > new Date(map[domain].latestDetectedAt))) {
+            map[domain].latestDetectedAt = threat.detected_at
+        }
+    }
+
+    return Object.values(map).sort((a, b) => {
+        if (a.activeCount !== b.activeCount) return b.activeCount - a.activeCount
+        if (a.quarantinedCount !== b.quarantinedCount) return b.quarantinedCount - a.quarantinedCount
+        return b.threats.length - a.threats.length
+    })
+})
+
+const isDomainAllSelected = (group) => {
+    return group.threats.length > 0 && group.threats.every(t => selectedThreatIds.value.includes(t.id))
+}
+
+const isDomainSomeSelected = (group) => {
+    return group.threats.some(t => selectedThreatIds.value.includes(t.id)) && !isDomainAllSelected(group)
+}
+
+const toggleSelectDomain = (group) => {
+    const ids = group.threats.map(t => t.id)
+    if (isDomainAllSelected(group)) {
+        selectedThreatIds.value = selectedThreatIds.value.filter(id => !ids.includes(id))
+    } else {
+        selectedThreatIds.value = Array.from(new Set([...selectedThreatIds.value, ...ids]))
+    }
+}
+
+const isAllVisibleSelected = computed(() => {
+    if (threatViewMode.value === 'grouped') {
+        const allVisibleIds = filteredThreats.value.map(t => t.id)
+        return allVisibleIds.length > 0 && allVisibleIds.every(id => selectedThreatIds.value.includes(id))
+    }
+    return isAllPageSelected.value
+})
+
+const isSomeVisibleSelected = computed(() => {
+    if (threatViewMode.value === 'grouped') {
+        const allVisibleIds = filteredThreats.value.map(t => t.id)
+        return allVisibleIds.some(id => selectedThreatIds.value.includes(id)) && !isAllVisibleSelected.value
+    }
+    return isSomePageSelected.value
+})
+
+const toggleSelectAllVisible = () => {
+    if (threatViewMode.value === 'grouped') {
+        const allVisibleIds = filteredThreats.value.map(t => t.id)
+        if (isAllVisibleSelected.value) {
+            selectedThreatIds.value = selectedThreatIds.value.filter(id => !allVisibleIds.includes(id))
+        } else {
+            selectedThreatIds.value = Array.from(new Set([...selectedThreatIds.value, ...allVisibleIds]))
+        }
+    } else {
+        toggleSelectAllPage()
+    }
+}
+
+const toggleDomainExpand = (domain) => {
+    expandedDomains.value[domain] = !expandedDomains.value[domain]
+}
+
+const allDomainsExpanded = computed(() => {
+    return domainGroups.value.length > 0 && domainGroups.value.every(g => expandedDomains.value[g.domain])
+})
+
+const toggleExpandAllDomains = () => {
+    const willExpand = !allDomainsExpanded.value
+    for (const g of domainGroups.value) {
+        expandedDomains.value[g.domain] = willExpand
+    }
+}
+
+const openDomainInFileManager = (domain) => {
+    if (!domain || domain === 'System / Other') return
+    window.open(`/file-manager/${encodeURIComponent(domain)}`, '_blank')
+}
+
+const recoverDomainQuarantined = (group) => {
+    const qIds = group.threats.filter(t => t.status === 'quarantined').map(t => t.id)
+    if (qIds.length === 0) return
+    selectedThreatIds.value = Array.from(new Set([...selectedThreatIds.value, ...qIds]))
+    openBulkSelectedRestoreModal()
+}
+
+watch(searchQuery, (newQuery) => {
+    if (newQuery && newQuery.trim()) {
+        domainGroups.value.forEach(g => {
+            expandedDomains.value[g.domain] = true
+        })
+    }
+})
+
+watch(domainGroups, (groups) => {
+    if (groups.length <= 3) {
+        groups.forEach(g => {
+            if (expandedDomains.value[g.domain] === undefined) {
+                expandedDomains.value[g.domain] = true
+            }
+        })
+    }
+}, { immediate: true })
+
 onMounted(() => {
     loadStatus()
 })
 
-import { onUnmounted } from 'vue';
 onUnmounted(() => {
     stopPolling()
 })
@@ -1855,12 +2270,18 @@ onUnmounted(() => {
 .max-width-300 {
     max-width: 300px;
 }
+.max-width-600 {
+    max-width: 600px;
+}
 .avatar-xxs {
     width: 24px;
     height: 24px;
 }
 .bg-gray-100 {
     background-color: #f8f9fa !important;
+}
+.bg-gray-50 {
+    background-color: #fcfcfc !important;
 }
 .badge {
     text-transform: uppercase;
@@ -1872,5 +2293,67 @@ onUnmounted(() => {
 .py-6 {
     padding-top: 4rem !important;
     padding-bottom: 4rem !important;
+}
+.transition-transform {
+    transition: transform 0.2s ease;
+}
+.rotate-180 {
+    transform: rotate(180deg);
+}
+.domain-icon-box {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+}
+.shadow-inner {
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+}
+.shadow-xs {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark Mode Overrides */
+:global(body.dark-version) .domain-group-header {
+    background-color: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+:global(body.dark-version) .domain-group-header:hover {
+    background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+:global(body.dark-version) .expanded-domain-row {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    border-bottom: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+:global(body.dark-version) .domain-subtable-container {
+    background-color: rgba(6, 15, 11, 0.95) !important;
+    border-color: #10b981 !important;
+}
+
+:global(body.dark-version) .domain-subtable-container table {
+    background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+:global(body.dark-version) .domain-subtable-container table thead tr {
+    background-color: rgba(30, 41, 59, 0.8) !important;
+}
+
+:global(body.dark-version) .domain-icon-box {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+:global(body.dark-version) .domain-subtable-container .text-dark,
+:global(body.dark-version) .domain-group-header h6.text-dark {
+    color: #f8fafc !important;
+}
+
+:global(body.dark-version) .bg-light-success {
+    background-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+:global(body.dark-version) .bg-gray-50 {
+    background-color: rgba(15, 23, 42, 0.5) !important;
 }
 </style>

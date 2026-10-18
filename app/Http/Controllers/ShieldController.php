@@ -264,6 +264,25 @@ class ShieldController extends Controller
 
             // 2. Scan for common PHP shell patterns (Only check executable PHP scripts, exclude JSON/AST/caches)
             $shellPatterns = ['eval(base64_decode', 'shell_exec(', 'passthru(', 'system(', 'gzuncompress(base64_decode'];
+            $safePatternsForShellFunctions = [
+                '/wp-includes/Text/Diff/Engine/shell.php',
+                '/wp-includes/ID3/',
+                '/wp-includes/update.php',
+                '/wp-admin/includes/class-wp-site-health',
+                '/wp-admin/includes/class-wp-filesystem',
+                '/wp-admin/includes/class-wp-upgrader.php',
+                '/wp-admin/includes/class-wp-debug-data.php',
+                '/wp-admin/includes/file.php',
+                '/wp-admin/includes/ajax-actions.php',
+                '/wp-admin/includes/plugin.php',
+                '/wp-admin/includes/theme.php',
+                '/wp-admin/update-core.php',
+                '/tgm-plugin-activation.php',
+                '/class-tgm-plugin-activation.php',
+                '/forminator/admin/abstracts/class-admin-module-edit-page.php',
+                '/Services/NseAllotmentService.php',
+            ];
+
             foreach ($shellPatterns as $pattern) {
                 $grepFiles = [];
                 $grepReturn = 0;
@@ -275,6 +294,18 @@ class ShieldController extends Controller
                         $filePath = trim($file);
                         
                         if (str_contains($filePath, '/usr/local/nimbus')) continue;
+
+                        // Whitelist legitimate WordPress core & framework files for common shell functions
+                        if (in_array($pattern, ['shell_exec(', 'passthru(', 'system('])) {
+                            $isSafeWp = false;
+                            foreach ($safePatternsForShellFunctions as $sp) {
+                                if (str_contains($filePath, $sp)) {
+                                    $isSafeWp = true;
+                                    break;
+                                }
+                            }
+                            if ($isSafeWp) continue;
+                        }
 
                         $findings[$filePath] = [
                             'file_path' => $filePath,
