@@ -199,7 +199,7 @@ EOF
 
 sudo tee /etc/postfix/sqlite-virtual-alias-maps.cf > /dev/null << 'EOF'
 dbpath = {$sqlitePath}
-query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1
+query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1 UNION SELECT email FROM virtual_users WHERE email='%s' AND active=1 AND EXISTS (SELECT 1 FROM virtual_aliases WHERE source='%s' AND active=1)
 EOF
 
 sudo chmod 644 /etc/postfix/sqlite-virtual-*.cf
@@ -244,7 +244,7 @@ user = {$dbUser}
 password = {$dbPass}
 hosts = {$dbHost}
 dbname = {$dbName}
-query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1
+query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1 UNION SELECT email FROM virtual_users WHERE email='%s' AND active=1 AND EXISTS (SELECT 1 FROM virtual_aliases WHERE source='%s' AND active=1)
 EOF
 
 sudo chmod 644 /etc/postfix/mysql-virtual-*.cf
