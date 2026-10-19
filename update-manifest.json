@@ -1,7 +1,7 @@
 {
   "version": "1.1.6",
   "release_date": "2026-10-19",
-  "sha256": "e8cd283ad91c81920cf000c2ad21bd8405d5345f8057efc55aa0677cb7ef6c02",
+  "sha256": "a8f7c98b78a0504512f24e38d014df37d9ddaa02bca7c89981a6cab6d83a9d82",
   "changelog": [
     "Fixed SMTP mail server delivery failure caused by Postfix rejecting numeric IP hostnames",
     "Added strict FQDN hostname validation and real-time warnings preventing numeric IP configurations",

@@ -1062,8 +1062,13 @@ class WebmailService
             $trimmed = trim($line);
             if (empty($trimmed)) continue;
 
-            // Skip boundary lines (e.g. --1m-tEDKI or --===============...)
+            // Boundary lines (e.g. --1m-tEDKI or --===============...)
             if (str_starts_with($trimmed, '--')) {
+                // If we already captured text from the first MIME part, stop before parsing
+                // subsequent alternative parts (which contain duplicate text/html body)
+                if (!empty($cleanedLines)) {
+                    break;
+                }
                 $skippingHeaders = true;
                 continue;
             }
@@ -1087,12 +1092,19 @@ class WebmailService
                 $trimmed = quoted_printable_decode($trimmed);
             }
 
-            $cleanedLines[] = $trimmed;
+            $cleaned = strip_tags($trimmed);
+            $cleaned = html_entity_decode($cleaned, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $cleaned = trim(preg_replace('/\s+/', ' ', $cleaned));
+
+            if (!empty($cleaned)) {
+                $cleanedLines[] = $cleaned;
+                if (strlen(implode(' ', $cleanedLines)) >= 140) {
+                    break;
+                }
+            }
         }
 
         $snippet = implode(' ', $cleanedLines);
-        $snippet = strip_tags($snippet);
-        $snippet = html_entity_decode($snippet, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $snippet = preg_replace('/\s+/', ' ', $snippet);
         return mb_substr(trim($snippet), 0, 140);
     }
