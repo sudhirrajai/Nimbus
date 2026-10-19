@@ -1,8 +1,10 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "release_date": "2026-10-19",
-  "sha256": "a8f7c98b78a0504512f24e38d014df37d9ddaa02bca7c89981a6cab6d83a9d82",
+  "sha256": "e993be1b353deadd78206ade1b215da9542aaa0465ec227c7297defedb131f28",
   "changelog": [
+    "Fixed Webmail message list preview duplicating message body text on multipart/alternative emails",
+    "Enhanced Postfix virtual alias mapping to preserve local mailbox delivery alongside forwarders",
     "Fixed SMTP mail server delivery failure caused by Postfix rejecting numeric IP hostnames",
     "Added strict FQDN hostname validation and real-time warnings preventing numeric IP configurations",
     "Added automatic SQLite database driver detection and configuration for Postfix and Dovecot",
