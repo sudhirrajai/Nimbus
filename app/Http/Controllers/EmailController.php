@@ -129,7 +129,20 @@ class EmailController extends Controller
     {
         try {
             $request->validate([
-                'hostname' => 'required|string|regex:/^[a-zA-Z0-9.-]+$/|max:255'
+                'hostname' => [
+                    'required',
+                    'string',
+                    'regex:/^[a-zA-Z0-9.-]+$/',
+                    'max:255',
+                    function ($attribute, $value, $fail) {
+                        if (filter_var($value, FILTER_VALIDATE_IP)) {
+                            $fail('The hostname must be a fully qualified domain name (FQDN), not an IP address (e.g. mail.yourdomain.com).');
+                        }
+                        if (!str_contains($value, '.') || str_starts_with($value, '.') || str_ends_with($value, '.')) {
+                            $fail('The hostname must be a valid fully qualified domain name (e.g. mail.yourdomain.com).');
+                        }
+                    }
+                ]
             ]);
             
             $hostname = $request->input('hostname', gethostname());
@@ -146,11 +159,16 @@ class EmailController extends Controller
             // Create lock file
             file_put_contents($lockFile, 'Mail Server installation');
             
+            // Detect database driver (SQLite vs MySQL)
+            $dbDriver = config('database.default', 'sqlite');
+            $isSqlite = ($dbDriver === 'sqlite');
+            $sqlitePath = $isSqlite ? config('database.connections.sqlite.database', database_path('database.sqlite')) : '';
+
             // Get MySQL credentials
-            $dbHost = config('database.connections.mysql.host');
-            $dbName = config('database.connections.mysql.database');
-            $dbUser = config('database.connections.mysql.username');
-            $dbPass = config('database.connections.mysql.password');
+            $dbHost = config('database.connections.mysql.host', '127.0.0.1');
+            $dbName = config('database.connections.mysql.database', 'nimbus');
+            $dbUser = config('database.connections.mysql.username', 'root');
+            $dbPass = config('database.connections.mysql.password', '');
 
             // Log file path
             $logFile = storage_path('logs/mailserver_install.log');
@@ -165,6 +183,86 @@ class EmailController extends Controller
             // Detect PHP version for roundcube extensions
             $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
 
+            $mailDbPackages = $isSqlite ? 'postfix-sqlite dovecot-sqlite sqlite3' : 'postfix-mysql dovecot-mysql';
+
+            if ($isSqlite) {
+                $postfixDbConfig = <<<BASH
+sudo tee /etc/postfix/sqlite-virtual-mailbox-domains.cf > /dev/null << 'EOF'
+dbpath = {$sqlitePath}
+query = SELECT 1 FROM virtual_domains WHERE name='%s' AND active=1
+EOF
+
+sudo tee /etc/postfix/sqlite-virtual-mailbox-maps.cf > /dev/null << 'EOF'
+dbpath = {$sqlitePath}
+query = SELECT maildir FROM virtual_users WHERE email='%s' AND active=1
+EOF
+
+sudo tee /etc/postfix/sqlite-virtual-alias-maps.cf > /dev/null << 'EOF'
+dbpath = {$sqlitePath}
+query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1
+EOF
+
+sudo chmod 644 /etc/postfix/sqlite-virtual-*.cf
+sudo postconf -e "virtual_mailbox_domains = sqlite:/etc/postfix/sqlite-virtual-mailbox-domains.cf"
+sudo postconf -e "virtual_mailbox_maps = sqlite:/etc/postfix/sqlite-virtual-mailbox-maps.cf"
+sudo postconf -e "virtual_alias_maps = sqlite:/etc/postfix/sqlite-virtual-alias-maps.cf"
+BASH;
+
+                $dovecotSqlConfig = <<<BASH
+sudo tee /etc/dovecot/dovecot-sql.conf.ext > /dev/null << 'EOF'
+driver = sqlite
+connect = {$sqlitePath}
+default_pass_scheme = SHA512-CRYPT
+password_query = SELECT email as user, password FROM virtual_users WHERE email='%u' AND active=1
+user_query = SELECT '/var/mail/vhosts/%d/%n' as home, 5000 as uid, 5000 as gid WHERE (SELECT 1 FROM virtual_users WHERE email='%u' AND active=1)
+EOF
+
+# Ensure SQLite database file is readable by mail workers
+sudo chmod 664 "{$sqlitePath}" 2>/dev/null || true
+sudo chmod 775 "$(dirname "{$sqlitePath}")" 2>/dev/null || true
+BASH;
+            } else {
+                $postfixDbConfig = <<<BASH
+sudo tee /etc/postfix/mysql-virtual-mailbox-domains.cf > /dev/null << 'EOF'
+user = {$dbUser}
+password = {$dbPass}
+hosts = {$dbHost}
+dbname = {$dbName}
+query = SELECT 1 FROM virtual_domains WHERE name='%s' AND active=1
+EOF
+
+sudo tee /etc/postfix/mysql-virtual-mailbox-maps.cf > /dev/null << 'EOF'
+user = {$dbUser}
+password = {$dbPass}
+hosts = {$dbHost}
+dbname = {$dbName}
+query = SELECT maildir FROM virtual_users WHERE email='%s' AND active=1
+EOF
+
+sudo tee /etc/postfix/mysql-virtual-alias-maps.cf > /dev/null << 'EOF'
+user = {$dbUser}
+password = {$dbPass}
+hosts = {$dbHost}
+dbname = {$dbName}
+query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1
+EOF
+
+sudo chmod 644 /etc/postfix/mysql-virtual-*.cf
+sudo postconf -e "virtual_mailbox_domains = mysql:/etc/postfix/mysql-virtual-mailbox-domains.cf"
+sudo postconf -e "virtual_mailbox_maps = mysql:/etc/postfix/mysql-virtual-mailbox-maps.cf"
+sudo postconf -e "virtual_alias_maps = mysql:/etc/postfix/mysql-virtual-alias-maps.cf"
+BASH;
+
+                $dovecotSqlConfig = <<<BASH
+sudo tee /etc/dovecot/dovecot-sql.conf.ext > /dev/null << 'EOF'
+driver = mysql
+connect = host={$dbHost} dbname={$dbName} user={$dbUser} password={$dbPass}
+default_pass_scheme = SHA512-CRYPT
+password_query = SELECT email as user, password FROM virtual_users WHERE email='%u' AND active=1
+EOF
+BASH;
+            }
+
             // Installation script
             $script = <<<BASH
 #!/bin/bash
@@ -175,7 +273,7 @@ export NEEDRESTART_MODE=a
 export NEEDRESTART_SUSPEND=1
 
 # Prevent any services from restarting automatically during apt-get
-echo -e '#!/bin/sh\nexit 101' | sudo tee /usr/sbin/policy-rc.d > /dev/null
+echo -e '#!/bin/sh\\nexit 101' | sudo tee /usr/sbin/policy-rc.d > /dev/null
 sudo chmod +x /usr/sbin/policy-rc.d
 
 # Disable needrestart temporarily for this installation
@@ -209,16 +307,11 @@ wait_for_apt
 sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get update 2>&1
 
 echo ""
-echo "[2/8] Installing Postfix..."
+echo "[2/8] Installing Postfix and Dovecot packages..."
 wait_for_apt
 echo "postfix postfix/mailname string {$hostname}" | sudo debconf-set-selections
 echo "postfix postfix/main_mailer_type string 'Internet Site'" | sudo debconf-set-selections
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix postfix-mysql 2>&1
-
-echo ""
-echo "[3/8] Installing Dovecot..."
-wait_for_apt
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" postfix dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd {$mailDbPackages} 2>&1
 
 echo ""
 echo "[4/8] Installing Roundcube (without Apache)..."
@@ -277,35 +370,11 @@ echo "Mail directories created and webmail linked"
 
 echo ""
 echo "[6/8] Configuring Postfix..."
-sudo tee /etc/postfix/mysql-virtual-mailbox-domains.cf > /dev/null << 'EOF'
-user = {$dbUser}
-password = {$dbPass}
-hosts = {$dbHost}
-dbname = {$dbName}
-query = SELECT 1 FROM virtual_domains WHERE name='%s' AND active=1
-EOF
-
-sudo tee /etc/postfix/mysql-virtual-mailbox-maps.cf > /dev/null << 'EOF'
-user = {$dbUser}
-password = {$dbPass}
-hosts = {$dbHost}
-dbname = {$dbName}
-query = SELECT maildir FROM virtual_users WHERE email='%s' AND active=1
-EOF
-
-sudo tee /etc/postfix/mysql-virtual-alias-maps.cf > /dev/null << 'EOF'
-user = {$dbUser}
-password = {$dbPass}
-hosts = {$dbHost}
-dbname = {$dbName}
-query = SELECT destination FROM virtual_aliases WHERE source='%s' AND active=1
-EOF
-
+echo "{$hostname}" | sudo tee /etc/mailname > /dev/null
 sudo postconf -e "myhostname = {$hostname}"
+sudo postconf -e "mydestination = localhost.\\\$mydomain, localhost"
 sudo postconf -e "virtual_transport = lmtp:unix:private/dovecot-lmtp"
-sudo postconf -e "virtual_mailbox_domains = mysql:/etc/postfix/mysql-virtual-mailbox-domains.cf"
-sudo postconf -e "virtual_mailbox_maps = mysql:/etc/postfix/mysql-virtual-mailbox-maps.cf"
-sudo postconf -e "virtual_alias_maps = mysql:/etc/postfix/mysql-virtual-alias-maps.cf"
+{$postfixDbConfig}
 echo "Postfix configured"
 
 echo ""
@@ -355,12 +424,7 @@ userdb {
 }
 EOF
 
-sudo tee /etc/dovecot/dovecot-sql.conf.ext > /dev/null << 'EOF'
-driver = mysql
-connect = host={$dbHost} dbname={$dbName} user={$dbUser} password={$dbPass}
-default_pass_scheme = SHA512-CRYPT
-password_query = SELECT email as user, password FROM virtual_users WHERE email='%u' AND active=1
-EOF
+{$dovecotSqlConfig}
 
 sudo tee /etc/dovecot/conf.d/10-master.conf > /dev/null << 'EOF'
 service lmtp {
@@ -499,7 +563,7 @@ sudo systemctl disable postfix dovecot 2>&1
 
 echo ""
 echo "[2/7] Purging Postfix and Dovecot packages..."
-sudo apt-get purge -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql 2>&1
+sudo apt-get purge -y postfix postfix-mysql postfix-sqlite dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql dovecot-sqlite 2>&1
 
 echo ""
 echo "[3/7] Purging Roundcube package..."

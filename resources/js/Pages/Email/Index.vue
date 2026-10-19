@@ -82,6 +82,9 @@
                       :disabled="installing"
                     >
                   </div>
+                  <small class="text-danger text-xs mt-1 d-block" v-if="hostnameInput && (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostnameInput.trim()) || hostnameInput.includes(':'))">
+                    Hostname cannot be an IP address. Postfix requires a fully qualified domain name (e.g. mail.yourdomain.com).
+                  </small>
                   <small class="text-muted text-xs mt-1 d-block">
                     Ensure DNS MX and A records are pointed to this server IP address before you begin.
                   </small>
@@ -90,7 +93,7 @@
                 <button 
                   class="btn bg-gradient-dark btn-lg w-100 mb-0 d-flex align-items-center justify-content-center"
                   @click="triggerInstallation"
-                  :disabled="!hostnameInput.trim()"
+                  :disabled="!hostnameInput.trim() || /^(\d{1,3}\.){3}\d{1,3}$/.test(hostnameInput.trim())"
                 >
                   <i class="material-symbols-rounded me-2">construction</i>
                   Begin Installation
@@ -1385,7 +1388,16 @@ const status = ref({
 })
 
 // Installation Wizard state
-const hostnameInput = ref(window.location.hostname || '')
+const getInitialHostname = () => {
+  const currentHost = window.location.hostname || ''
+  const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(currentHost) || currentHost === 'localhost' || currentHost.includes(':')
+  if (isIp) {
+    return ''
+  }
+  return currentHost.startsWith('mail.') ? currentHost : `mail.${currentHost}`
+}
+
+const hostnameInput = ref(getInitialHostname())
 const installing = ref(false)
 const uninstalling = ref(false)
 const installLog = ref('')
@@ -1672,14 +1684,25 @@ const resetSetup = async () => {
 }
 
 const triggerInstallation = async () => {
-  if (!hostnameInput.value.trim()) {
+  const trimmedHost = hostnameInput.value.trim()
+  if (!trimmedHost) {
     showAlert('danger', 'Please provide a valid hostname.')
     return
   }
   
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(trimmedHost) || trimmedHost.includes(':')) {
+    showAlert('danger', 'The hostname cannot be an IP address. Postfix requires a fully qualified domain name (e.g. mail.yourdomain.com).')
+    return
+  }
+
+  if (!trimmedHost.includes('.') || trimmedHost.startsWith('.') || trimmedHost.endsWith('.')) {
+    showAlert('danger', 'The hostname must be a valid fully qualified domain name (e.g. mail.yourdomain.com).')
+    return
+  }
+
   // Enforce strict regex validation locally as well
   const hostnameRegex = /^[a-zA-Z0-9.-]+$/
-  if (!hostnameRegex.test(hostnameInput.value.trim())) {
+  if (!hostnameRegex.test(trimmedHost)) {
     showAlert('danger', 'Hostname contains invalid characters. Only alphanumeric characters, dots, and hyphens are allowed.')
     return
   }

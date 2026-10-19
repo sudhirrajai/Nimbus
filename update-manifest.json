@@ -1,13 +1,12 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "release_date": "2026-10-19",
-  "sha256": "226515db2c98ca2cb8bc30b042580a8496764eeb31941bf0669bdf1e16e27a38",
+  "sha256": "4faee1871a86fc9aed2be013be11e6471c9d1b569ff2d55440bf6b655a8d8cde",
   "changelog": [
-    "Fixed Web Terminal execution and working directory resolution when opened from File Manager in project directories",
-    "Enhanced TerminalController with automatic isolated user detection and seamless cd directory navigation in Web Projects and Server Root scopes",
-    "Auto-apply WordPress security hardening on install and remove hardcoded scanner whitelist in favor of checksums and genuine web shell signatures",
-    "Enhanced Shield scan UI with domain-wise grouping and false-positive filtering",
-    "Fixed siteUser helper call in ShieldController"
+    "Fixed SMTP mail server delivery failure caused by Postfix rejecting numeric IP hostnames",
+    "Added strict FQDN hostname validation and real-time warnings preventing numeric IP configurations",
+    "Added automatic SQLite database driver detection and configuration for Postfix and Dovecot",
+    "Included postfix-sqlite, dovecot-sqlite, and sqlite3 in mail stack installation and base packages"
   ],
   "commands": [
     "php artisan migrate --force",

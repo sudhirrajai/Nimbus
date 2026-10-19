@@ -231,7 +231,7 @@ ESSENTIAL_PACKAGES=(
     apt-transport-https
     ca-certificates
     gnupg lsb-release
-    acl sudo fail2ban
+    acl sudo fail2ban sqlite3
     redis-server
     certbot python3-certbot-nginx
 )
