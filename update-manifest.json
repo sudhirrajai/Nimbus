@@ -1,16 +1,13 @@
 {
-  "version": "1.1.4",
-  "release_date": "2026-10-18",
-  "sha256": "7a3d07fb37a41254e80803e8807c0f99c74247a36a46688c6057ed6358f23596",
+  "version": "1.1.5",
+  "release_date": "2026-10-19",
+  "sha256": "226515db2c98ca2cb8bc30b042580a8496764eeb31941bf0669bdf1e16e27a38",
   "changelog": [
-    "WordPress Crash Recovery & Reset: Clean database reset with automatic plugin deactivation and default theme fallback to recover instantly from fatal errors",
-    "WordPress Core Reinstallation: Repair corrupted WordPress core files without modifying database or custom content",
-    "Built-in WordPress admin credentials generator and post-reset 1-click Auto-Login",
-    "Modernized SearchableSelect dropdowns and search inputs with full Emerald Glass dark mode styling",
-    "Recommended and auto-selected PHP 8.4 as default across domain and subdomain creation",
-    "Enhanced in-browser Code Editor with full support for dotfiles (.env.example, .htaccess) and body teleportation",
-    "Eliminated dark mode modal stacking context traps and dimmed backdrop issues across all pages",
-    "Refined subdomain tree guide hierarchy and contrast styling in dark mode"
+    "Fixed Web Terminal execution and working directory resolution when opened from File Manager in project directories",
+    "Enhanced TerminalController with automatic isolated user detection and seamless cd directory navigation in Web Projects and Server Root scopes",
+    "Auto-apply WordPress security hardening on install and remove hardcoded scanner whitelist in favor of checksums and genuine web shell signatures",
+    "Enhanced Shield scan UI with domain-wise grouping and false-positive filtering",
+    "Fixed siteUser helper call in ShieldController"
   ],
   "commands": [
     "php artisan migrate --force",

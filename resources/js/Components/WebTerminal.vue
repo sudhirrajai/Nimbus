@@ -58,7 +58,7 @@
         <!-- Output Lines -->
         <div v-for="(line, index) in outputLines" :key="index" class="terminal-line">
           <template v-if="line.type === 'prompt'">
-            <span class="prompt-user">{{ line.user || terminalUser }}</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ line.cwd ? '~/' + line.cwd : '~' }}</span><span class="prompt-dollar">$</span>
+            <span class="prompt-user">{{ line.user || terminalUser }}</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ formatPromptPath(line.cwd) }}</span><span class="prompt-dollar">$</span>
             <span class="prompt-command">{{ line.command }}</span>
           </template>
           <template v-else-if="line.type === 'output'">
@@ -76,7 +76,7 @@
 
         <!-- Active Input Line -->
         <div class="terminal-input-line" v-if="!isExecuting">
-          <span class="prompt-user">{{ terminalUser }}</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ terminalCwd ? '~/' + terminalCwd : '~' }}</span><span class="prompt-dollar">$</span>
+          <span class="prompt-user">{{ terminalUser }}</span><span class="prompt-at">@</span><span class="prompt-host">nimbus</span><span class="prompt-colon">:</span><span class="prompt-path">{{ formatPromptPath(terminalCwd) }}</span><span class="prompt-dollar">$</span>
           <input
             ref="terminalInput"
             v-model="currentCommand"
@@ -121,10 +121,25 @@ const displayTerminalPath = computed(() => {
 
 const emit = defineEmits(['refresh-files'])
 
+const formatPromptPath = (cwd) => {
+  if (props.domain === 'root') {
+    return cwd ? '/' + cwd : '/'
+  }
+  return cwd ? '~/' + cwd : '~'
+}
+
 // Terminal state
 const getInitialUser = () => {
-  if (props.domain && props.domain !== 'projects' && props.domain !== 'root') {
-    let clean = props.domain.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  let target = props.domain
+  if (props.domain === 'projects') {
+    const cwd = (terminalCwd && terminalCwd.value) ? terminalCwd.value : (props.currentPath || '')
+    const parts = cwd.split('/').filter(Boolean)
+    if (parts.length > 0) {
+      target = parts[0]
+    }
+  }
+  if (target && target !== 'projects' && target !== 'root') {
+    let clean = target.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
     if (clean.length > 20) {
       clean = clean.substring(0, 18).replace(/_+$/, '')
     }
@@ -165,6 +180,7 @@ watch(() => isMaximized.value, (val) => {
 watch(() => props.currentPath, (newPath) => {
   if (!isOpen.value) {
     terminalCwd.value = newPath || ''
+    terminalUser.value = getInitialUser()
   }
 })
 
@@ -172,6 +188,7 @@ watch(() => props.currentPath, (newPath) => {
 const openTerminal = () => {
   isOpen.value = true
   terminalCwd.value = props.currentPath || ''
+  terminalUser.value = getInitialUser()
   panelStyle.value = { height: panelHeight.value + 'px' }
 
   if (outputLines.value.length === 0) {
@@ -256,7 +273,7 @@ const handleHeaderCopy = () => {
     // Copy all output lines
     const allText = outputLines.value.map(l => {
       if (l.type === 'prompt') {
-        return `${l.user || terminalUser.value}@nimbus:${l.cwd ? '~/' + l.cwd : '~'}$ ${l.command}`
+        return `${l.user || terminalUser.value}@nimbus:${formatPromptPath(l.cwd)}$ ${l.command}`
       }
       return l.text || (l.html ? l.html.replace(/<[^>]+>/g, '') : '')
     }).join('\n')

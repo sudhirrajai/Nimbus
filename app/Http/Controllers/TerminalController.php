@@ -37,7 +37,7 @@ class TerminalController extends Controller
     ];
 
     /**
-     * Execute a command in the domain's directory
+     * Execute a command in the domain's or scope's directory
      */
     public function execute(Request $request, $domain)
     {
@@ -49,29 +49,81 @@ class TerminalController extends Controller
         $command = trim($request->input('command'));
         $path = $request->input('path', '');
 
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'output' => "Error: Unauthorized.\n",
+                'exit_code' => 1,
+                'cwd' => $path,
+            ], 401);
+        }
+        $isRoot = $user->isRoot();
+
+        // Resolve scope and base directory
+        $normalized = strtolower(trim((string)$domain));
+        $isServerRoot = in_array($normalized, ['root', '__root__', 'server']);
+        $isProjectsRoot = empty($normalized) || in_array($normalized, ['projects', '__projects__', 'all', 'var_www']);
+
+        if ($isServerRoot) {
+            if (!$user->hasFileManagerRootAccess()) {
+                return response()->json([
+                    'success' => false,
+                    'output' => "Error: Access denied. Server root terminal is restricted.\n",
+                    'exit_code' => 1,
+                    'cwd' => $path,
+                ], 403);
+            }
+            $scopeBasePath = '/';
+        } elseif ($isProjectsRoot) {
+            if (!$user->hasFileManagerProjectsAccess()) {
+                return response()->json([
+                    'success' => false,
+                    'output' => "Error: Access denied. Web projects terminal is restricted.\n",
+                    'exit_code' => 1,
+                    'cwd' => $path,
+                ], 403);
+            }
+            $scopeBasePath = '/var/www';
+        } else {
+            if (!$user->canAccessDomain($domain) && !$user->hasFileManagerProjectsAccess()) {
+                return response()->json([
+                    'success' => false,
+                    'output' => "Error: Access denied to website {$domain}.\n",
+                    'exit_code' => 1,
+                    'cwd' => $path,
+                ], 403);
+            }
+            $scopeBasePath = '/var/www/' . $domain;
+        }
+
         // Build the working directory
-        $workingDir = rtrim($this->basePath . $domain, '/');
-        if (!empty($path)) {
-            $workingDir .= '/' . ltrim($path, '/');
+        $cleanPath = ltrim(str_replace(['../', '..\\', './', '.\\'], '', (string)$path), '/');
+        $workingDir = rtrim($scopeBasePath, '/');
+        if (!empty($cleanPath)) {
+            $workingDir .= '/' . $cleanPath;
+        }
+        if (empty($workingDir)) {
+            $workingDir = '/';
         }
 
         // Validate working directory
-        $realBase = realpath($this->basePath);
+        $realBase = realpath($scopeBasePath) ?: $scopeBasePath;
         $realWorkDir = realpath($workingDir);
 
-        if (!$realBase || !$realWorkDir || !str_starts_with($realWorkDir, $realBase)) {
+        if (!$realWorkDir || !is_dir($realWorkDir)) {
             return response()->json([
                 'success' => false,
-                'output' => "Error: Invalid working directory.\n",
+                'output' => "Error: Directory does not exist.\n",
                 'exit_code' => 1,
                 'cwd' => $path,
             ]);
         }
 
-        if (!is_dir($realWorkDir)) {
+        if (!$isServerRoot && $realWorkDir !== $realBase && !str_starts_with($realWorkDir, rtrim($realBase, '/') . '/')) {
             return response()->json([
                 'success' => false,
-                'output' => "Error: Directory does not exist.\n",
+                'output' => "Error: Invalid working directory.\n",
                 'exit_code' => 1,
                 'cwd' => $path,
             ]);
@@ -91,16 +143,12 @@ class TerminalController extends Controller
         }
 
         // Security check: Jail paths for non-root users
-        $user = auth()->user();
-        $isRoot = $user && $user->role === 'root';
-
         if (!$isRoot) {
-            // We allow '..' in 'cd' commands because we validate the final target path later
-            $isCd = preg_match('/^cd\s+/', $command);
-            if (!$this->isCommandSafe($command, $domain, $isCd)) {
+            $isCd = (bool)preg_match('/^cd(?:\s|$)/', $command);
+            if (!$this->isCommandSafe($command, $scopeBasePath, $isCd)) {
                 return response()->json([
                     'success' => false,
-                    'output' => "Error: Access denied. Paths outside your domain or dangerous commands are restricted.\n",
+                    'output' => "Error: Access denied. Paths outside your assigned scope or dangerous commands are restricted.\n",
                     'exit_code' => 1,
                     'cwd' => $path,
                 ]);
@@ -108,42 +156,49 @@ class TerminalController extends Controller
         }
 
         // Handle 'cd' command specially — parse and update working directory
-        if (preg_match('/^cd\s+(.+)$/', $command, $matches)) {
-            $targetDir = trim($matches[1]);
+        if (preg_match('/^cd(?:\s+(.*))?$/', $command, $matches)) {
+            $targetDir = isset($matches[1]) ? trim($matches[1]) : '~';
+            if ($targetDir === '') {
+                $targetDir = '~';
+            }
 
             // Resolve the target directory
             if ($targetDir === '~') {
-                $targetDir = $this->basePath . $domain;
+                $targetDir = $scopeBasePath;
             } elseif (!str_starts_with($targetDir, '/')) {
                 $targetDir = $realWorkDir . '/' . $targetDir;
             }
 
             $realTarget = realpath($targetDir);
 
-            // Must stay within domain root for non-root
-            $domainRoot = realpath($this->basePath . $domain);
-            if (!$realTarget || !is_dir($realTarget) || (!$isRoot && !str_starts_with($realTarget, $domainRoot))) {
+            // Must stay within domain/scope root for non-root
+            $domainRoot = realpath($scopeBasePath) ?: $scopeBasePath;
+            $isWithinRoot = $isServerRoot || ($realTarget && ($realTarget === $domainRoot || str_starts_with($realTarget, rtrim($domainRoot, '/') . '/')));
+
+            if (!$realTarget || !is_dir($realTarget) || (!$isRoot && !$isWithinRoot)) {
                 return response()->json([
                     'success' => false,
-                    'output' => "bash: cd: {$matches[1]}: No such file or directory (or access denied)\n",
+                    'output' => "bash: cd: {$targetDir}: No such file or directory (or access denied)\n",
                     'exit_code' => 1,
                     'cwd' => $path,
                 ]);
             }
 
-            // Compute new relative path from domain root
-            $domainRoot = realpath($this->basePath . $domain);
+            // Compute new relative path from scope root
             if ($realTarget === $domainRoot) {
                 $newPath = '';
             } else {
                 $newPath = ltrim(substr($realTarget, strlen($domainRoot)), '/');
             }
 
+            $newUser = $this->determineRunUser($realTarget, $domain, $scopeBasePath, $isServerRoot, $isProjectsRoot, $isRoot);
+
             return response()->json([
                 'success' => true,
                 'output' => '',
                 'exit_code' => 0,
                 'cwd' => $newPath,
+                'user' => $newUser,
             ]);
         }
 
@@ -157,11 +212,15 @@ class TerminalController extends Controller
             ]);
         }
 
+        // Determine isolated system user (e.g. site_maharaj_sr or www-data)
+        $runUser = $this->determineRunUser($realWorkDir, $domain, $scopeBasePath, $isServerRoot, $isProjectsRoot, $isRoot);
+
         try {
             Log::info("Terminal command executed", [
                 'domain' => $domain,
                 'command' => $command,
                 'cwd' => $realWorkDir,
+                'user' => $runUser,
                 'ip' => $request->ip(),
             ]);
 
@@ -181,11 +240,6 @@ class TerminalController extends Controller
                     $command .= ' --no-interaction';
                 }
             }
-
-            // Determine domain's isolated system user (e.g. site_maharaj_sr)
-            $siteUser = \App\Services\SiteIsolationService::siteUser($domain);
-            $userCheck = exec("id -u " . escapeshellarg($siteUser) . " 2>/dev/null");
-            $runUser = (!empty($userCheck) && is_numeric($userCheck)) ? $siteUser : 'www-data';
 
             // Ensure all binaries in bin/ directories and scripts are executable before build/package commands
             if (preg_match('/\b(npm|yarn|pnpm|npx|vite|composer)\b/i', $command)) {
@@ -266,11 +320,45 @@ class TerminalController extends Controller
     }
 
     /**
+     * Determine isolated system user for directory execution
+     */
+    private function determineRunUser($realWorkDir, $domain, $scopeBasePath, $isServerRoot, $isProjectsRoot, $isRoot): string
+    {
+        if ($isServerRoot && $isRoot) {
+            return 'root';
+        }
+
+        $targetDomain = null;
+        if (!$isServerRoot) {
+            if (!$isProjectsRoot) {
+                $targetDomain = $domain;
+            } else {
+                // In projects scope: if workdir is within /var/www/{siteDomain}, extract {siteDomain}
+                $rel = ltrim(substr($realWorkDir, strlen($scopeBasePath)), '/');
+                if (!empty($rel)) {
+                    $parts = explode('/', $rel);
+                    $targetDomain = $parts[0];
+                }
+            }
+        }
+
+        if ($targetDomain) {
+            $siteUser = \App\Services\SiteIsolationService::siteUser($targetDomain);
+            $userCheck = @exec("id -u " . escapeshellarg($siteUser) . " 2>/dev/null");
+            if (!empty($userCheck) && is_numeric($userCheck)) {
+                return $siteUser;
+            }
+        }
+
+        return 'www-data';
+    }
+
+    /**
      * Check if the command is safe to execute based on paths and patterns
      */
-    private function isCommandSafe($command, $domain, $allowDots = false)
+    private function isCommandSafe($command, $scopeRoot, $allowDots = false)
     {
-        $domainRoot = realpath($this->basePath . $domain);
+        $domainRoot = realpath($scopeRoot) ?: $scopeRoot;
         if (!$domainRoot) return false;
 
         // Block dangerous commands for non-root users
@@ -287,8 +375,8 @@ class TerminalController extends Controller
             // Block directory traversal unless it's a 'cd' command (handled specially)
             if (!$allowDots && str_contains($token, '..')) return false;
             
-            // Block absolute paths that don't start with the domain root
-            if (str_starts_with($token, '/') && !str_starts_with($token, $domainRoot)) {
+            // Block absolute paths that don't start with the allowed root
+            if (str_starts_with($token, '/') && !str_starts_with($token, rtrim($domainRoot, '/'))) {
                 return false;
             }
         }
