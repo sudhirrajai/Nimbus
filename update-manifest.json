@@ -1,14 +1,14 @@
 {
-  "version": "1.1.7",
-  "release_date": "2026-10-19",
-  "sha256": "e993be1b353deadd78206ade1b215da9542aaa0465ec227c7297defedb131f28",
+  "version": "1.1.8",
+  "release_date": "2026-10-22",
+  "sha256": "220e1b55d7f641eceaa0db145ea99149888e856c7ac1ec64c1505cda4d6fd680",
   "changelog": [
-    "Fixed Webmail message list preview duplicating message body text on multipart/alternative emails",
-    "Enhanced Postfix virtual alias mapping to preserve local mailbox delivery alongside forwarders",
-    "Fixed SMTP mail server delivery failure caused by Postfix rejecting numeric IP hostnames",
-    "Added strict FQDN hostname validation and real-time warnings preventing numeric IP configurations",
-    "Added automatic SQLite database driver detection and configuration for Postfix and Dovecot",
-    "Included postfix-sqlite, dovecot-sqlite, and sqlite3 in mail stack installation and base packages"
+    "Added full PHP 8.4 and PHP 8.5 runtime and isolated pool support",
+    "Updated domain creation and switcher UI with PHP 8.4 and PHP 8.5 options",
+    "Fixed Database Manager SQL export to export both schema and full data rows",
+    "Added batched chunked INSERT statements in SQL export to prevent packet overflow",
+    "Enhanced installer with --php and --php-version CLI flags and resilient extension packages",
+    "Removed legacy PHP 8.5 package purging routine during webmail setup"
   ],
   "commands": [
     "php artisan migrate --force",

@@ -653,6 +653,7 @@
               <div class="form-group mb-3">
                 <label class="form-control-label">PHP Version</label>
                 <select v-model="createPhpVersion" class="form-select" :disabled="submitting">
+                  <option value="8.5">PHP 8.5</option>
                   <option value="8.4">PHP 8.4 (Recommended)</option>
                   <option value="8.3">PHP 8.3</option>
                   <option value="8.2">PHP 8.2</option>
@@ -1407,7 +1408,8 @@ const openPhpVersionModal = async (domain) => {
       { version: '8.1', installed: false },
       { version: '8.2', installed: true },
       { version: '8.3', installed: true },
-      { version: '8.4', installed: false }
+      { version: '8.4', installed: false },
+      { version: '8.5', installed: false }
     ]
   } finally {
     loadingPhpVersions.value = false

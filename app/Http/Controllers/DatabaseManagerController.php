@@ -1482,21 +1482,26 @@ class DatabaseManagerController extends Controller
 
             $format = strtolower($request->input('format', 'sql'));
             $table = $request->input('table');
+            $engine = $request->input('engine', 'mysql');
             $safeDb = $this->sanitizeIdentifier($db);
+            $safeTable = !empty($table) ? $this->sanitizeIdentifier($table) : null;
+            $pdo = $this->getPdoConnection($db, $engine);
 
-            if ($format === 'csv' && !empty($table)) {
-                $safeTable = $this->sanitizeIdentifier($table);
-                $pdo = $this->getPdoConnection($db);
+            if ($format === 'csv' && !empty($safeTable)) {
                 $stmt = $pdo->query("SELECT * FROM `{$safeDb}`.`{$safeTable}`");
-                $rows = $stmt->fetchAll();
-
                 $output = fopen('php://temp', 'w+');
-                if (!empty($rows)) {
-                    fputcsv($output, array_keys($rows[0]));
-                    foreach ($rows as $r) {
-                        fputcsv($output, $r);
-                    }
+
+                // Get column names
+                $colStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$safeTable}`");
+                $cols = $colStmt ? array_column($colStmt->fetchAll(\PDO::FETCH_ASSOC), 'Field') : [];
+                if (!empty($cols)) {
+                    fputcsv($output, $cols);
                 }
+
+                while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                    fputcsv($output, $row);
+                }
+
                 rewind($output);
                 $csvData = stream_get_contents($output);
                 fclose($output);
@@ -1504,40 +1509,151 @@ class DatabaseManagerController extends Controller
                 return response($csvData)
                     ->header('Content-Type', 'text/csv')
                     ->header('Content-Disposition', "attachment; filename=\"{$safeTable}.csv\"");
-            } else {
-                // SQL Dump via mysqldump command
-                $host = config('database.connections.mysql.host', '127.0.0.1');
-                $user = config('database.connections.mysql.username', 'root');
-                $pass = config('database.connections.mysql.password', '');
+            }
 
-                $passArg = !empty($pass) ? "-p" . escapeshellarg($pass) : "";
-                $tableArg = !empty($table) ? escapeshellarg($this->sanitizeIdentifier($table)) : "";
+            // SQL Export (Full Database or Single Table with complete Schema AND Data)
+            $safeDbArg = escapeshellarg($safeDb);
+            $tableArg = !empty($safeTable) ? escapeshellarg($safeTable) : "";
+            $tempSqlFile = tempnam(sys_get_temp_dir(), 'nimbus_dump_') . '.sql';
+            $dumpSuccess = false;
 
-                $cmd = "mysqldump -h " . escapeshellarg($host) . " -u " . escapeshellarg($user) . " {$passArg} " . escapeshellarg($safeDb) . " {$tableArg} 2>/dev/null";
-                exec($cmd, $dumpOutput, $code);
+            // Method 1: Try mysqldump using valid provisioned credentials (nimbus_admin / debian.cnf)
+            if ($engine === 'mysql') {
+                $creds = $this->getValidMysqlCredentials();
+                $user = $creds['username'] ?? 'root';
+                $pass = $creds['password'] ?? '';
+                $host = $creds['host'] ?? '127.0.0.1';
+                $port = $creds['port'] ?? '3306';
 
-                if ($code !== 0 || empty($dumpOutput)) {
-                    // Fallback to PHP query generation if mysqldump is missing/restricted
-                    $dumpOutput = ["-- Nimbus DB Dump for {$safeDb}", "SET FOREIGN_KEY_CHECKS=0;"];
-                    $pdo = $this->getPdoConnection($db);
-                    $tablesStmt = $pdo->query("SHOW TABLES FROM `{$safeDb}`");
-                    $tbls = $tablesStmt->fetchAll(PDO::FETCH_COLUMN);
-
-                    foreach ($tbls as $t) {
-                        if (!empty($table) && $t !== $table) continue;
-                        $createStmt = $pdo->query("SHOW CREATE TABLE `{$safeDb}`.`{$t}`")->fetch();
-                        $dumpOutput[] = "\n-- Table structure for `{$t}`\nDROP TABLE IF EXISTS `{$t}`;";
-                        $dumpOutput[] = ($createStmt['Create Table'] ?? $createStmt['create table'] ?? '') . ";";
+                if (!empty($user) && !empty($pass)) {
+                    $cmd = "mysqldump -h " . escapeshellarg($host) . " -P " . escapeshellarg($port) . " -u " . escapeshellarg($user) . " -p" . escapeshellarg($pass) . " --single-transaction --quick --routines --triggers {$safeDbArg} {$tableArg} > " . escapeshellarg($tempSqlFile) . " 2>/dev/null";
+                    @exec($cmd, $ignored, $code);
+                    if ($code === 0 && file_exists($tempSqlFile) && filesize($tempSqlFile) > 0) {
+                        $dumpSuccess = true;
                     }
                 }
 
-                $sqlContent = is_array($dumpOutput) ? implode("\n", $dumpOutput) : $dumpOutput;
-                $filename = !empty($table) ? "{$safeTable}.sql" : "{$safeDb}_dump.sql";
-
-                return response($sqlContent)
-                    ->header('Content-Type', 'application/sql')
-                    ->header('Content-Disposition', "attachment; filename=\"{$filename}\"");
+                // Method 2: Try sudo mysqldump via local socket (standard for Ubuntu/Debian root auth_socket)
+                if (!$dumpSuccess) {
+                    $cmd = "sudo mysqldump --single-transaction --quick --routines --triggers {$safeDbArg} {$tableArg} > " . escapeshellarg($tempSqlFile) . " 2>/dev/null";
+                    @exec($cmd, $ignored, $code);
+                    if ($code === 0 && file_exists($tempSqlFile) && filesize($tempSqlFile) > 0) {
+                        $dumpSuccess = true;
+                    }
+                }
             }
+
+            // Method 3: Comprehensive PHP/PDO fallback that exports BOTH Schema AND full Data rows
+            if (!$dumpSuccess) {
+                if ($engine === 'postgres') {
+                    $tablesStmt = $pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'");
+                    $tbls = $tablesStmt->fetchAll(\PDO::FETCH_COLUMN);
+                } else {
+                    $tablesStmt = $pdo->query("SHOW TABLES FROM `{$safeDb}`");
+                    $tbls = $tablesStmt->fetchAll(\PDO::FETCH_COLUMN);
+                }
+
+                $fp = fopen($tempSqlFile, 'w');
+                fwrite($fp, "-- ============================================================\n");
+                fwrite($fp, "-- Nimbus Database Manager SQL Dump\n");
+                fwrite($fp, "-- Database: `{$safeDb}`\n");
+                if (!empty($safeTable)) {
+                    fwrite($fp, "-- Table: `{$safeTable}`\n");
+                }
+                fwrite($fp, "-- Exported at: " . date('Y-m-d H:i:s') . "\n");
+                fwrite($fp, "-- ============================================================\n\n");
+                fwrite($fp, "SET FOREIGN_KEY_CHECKS=0;\n");
+                fwrite($fp, "SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\n");
+                fwrite($fp, "SET NAMES utf8mb4;\n");
+                fwrite($fp, "SET time_zone = '+00:00';\n\n");
+
+                foreach ($tbls as $t) {
+                    if (!empty($safeTable) && $t !== $safeTable) {
+                        continue;
+                    }
+                    $curSafeTbl = $this->sanitizeIdentifier($t);
+
+                    // 1. Structure
+                    fwrite($fp, "-- ------------------------------------------------------------\n");
+                    fwrite($fp, "-- Table structure for `{$curSafeTbl}`\n");
+                    fwrite($fp, "-- ------------------------------------------------------------\n");
+                    fwrite($fp, "DROP TABLE IF EXISTS `{$curSafeTbl}`;\n");
+
+                    $createStmt = $pdo->query("SHOW CREATE TABLE `{$safeDb}`.`{$curSafeTbl}`");
+                    $createRow = $createStmt ? $createStmt->fetch(\PDO::FETCH_ASSOC) : null;
+                    if ($createRow) {
+                        $createSql = $createRow['Create Table'] ?? $createRow['create table'] ?? '';
+                        fwrite($fp, $createSql . ";\n\n");
+                    }
+
+                    // 2. Data
+                    fwrite($fp, "-- ------------------------------------------------------------\n");
+                    fwrite($fp, "-- Dumping data for table `{$curSafeTbl}`\n");
+                    fwrite($fp, "-- ------------------------------------------------------------\n");
+
+                    $colStmt = $pdo->query("SHOW FULL COLUMNS FROM `{$safeDb}`.`{$curSafeTbl}`");
+                    $cols = $colStmt ? array_column($colStmt->fetchAll(\PDO::FETCH_ASSOC), 'Field') : [];
+
+                    if (!empty($cols)) {
+                        $escapedCols = array_map(fn($c) => "`" . $this->sanitizeIdentifier($c) . "`", $cols);
+                        $colList = implode(', ', $escapedCols);
+
+                        $rowsStmt = $pdo->query("SELECT * FROM `{$safeDb}`.`{$curSafeTbl}`");
+                        if ($rowsStmt) {
+                            $batchSize = 250;
+                            $batch = [];
+                            $hasData = false;
+
+                            while ($row = $rowsStmt->fetch(\PDO::FETCH_NUM)) {
+                                if (!$hasData) {
+                                    fwrite($fp, "LOCK TABLES `{$curSafeTbl}` WRITE;\n");
+                                    fwrite($fp, "/*!40000 ALTER TABLE `{$curSafeTbl}` DISABLE KEYS */;\n");
+                                    $hasData = true;
+                                }
+
+                                $vals = [];
+                                foreach ($row as $v) {
+                                    if ($v === null) {
+                                        $vals[] = 'NULL';
+                                    } elseif (is_int($v) || is_float($v)) {
+                                        $vals[] = $v;
+                                    } else {
+                                        $vals[] = $pdo->quote($v);
+                                    }
+                                }
+                                $batch[] = "(" . implode(', ', $vals) . ")";
+
+                                if (count($batch) >= $batchSize) {
+                                    fwrite($fp, "INSERT INTO `{$curSafeTbl}` ({$colList}) VALUES\n" . implode(",\n", $batch) . ";\n");
+                                    $batch = [];
+                                }
+                            }
+
+                            if (!empty($batch)) {
+                                fwrite($fp, "INSERT INTO `{$curSafeTbl}` ({$colList}) VALUES\n" . implode(",\n", $batch) . ";\n");
+                            }
+
+                            if ($hasData) {
+                                fwrite($fp, "/*!40000 ALTER TABLE `{$curSafeTbl}` ENABLE KEYS */;\n");
+                                fwrite($fp, "UNLOCK TABLES;\n");
+                            }
+                        }
+                    }
+                    fwrite($fp, "\n");
+                }
+
+                fwrite($fp, "SET FOREIGN_KEY_CHECKS=1;\n");
+                fclose($fp);
+                $dumpSuccess = true;
+            }
+
+            $filename = !empty($safeTable) ? "{$safeTable}.sql" : "{$safeDb}_dump.sql";
+
+            return response()->download($tempSqlFile, $filename, [
+                'Content-Type' => 'application/sql',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\""
+            ])->deleteFileAfterSend(true);
+
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -2484,7 +2600,7 @@ class DatabaseManagerController extends Controller
                         $escapedCols = array_map(fn($c) => "`" . $this->sanitizeIdentifier($c) . "`", $cols);
                         $colList = implode(', ', $escapedCols);
 
-                        $output .= "INSERT INTO `{$safeTbl}` ({$colList}) VALUES\n";
+                        $batchSize = 250;
                         $valueRows = [];
 
                         foreach ($rows as $r) {
@@ -2492,14 +2608,24 @@ class DatabaseManagerController extends Controller
                             foreach ($r as $v) {
                                 if ($v === null) {
                                     $vals[] = 'NULL';
+                                } elseif (is_int($v) || is_float($v)) {
+                                    $vals[] = $v;
                                 } else {
                                     $vals[] = $pdo->quote($v);
                                 }
                             }
                             $valueRows[] = "(" . implode(', ', $vals) . ")";
+
+                            if (count($valueRows) >= $batchSize) {
+                                $output .= "INSERT INTO `{$safeTbl}` ({$colList}) VALUES\n" . implode(",\n", $valueRows) . ";\n";
+                                $valueRows = [];
+                            }
                         }
 
-                        $output .= implode(",\n", $valueRows) . ";\n\n";
+                        if (!empty($valueRows)) {
+                            $output .= "INSERT INTO `{$safeTbl}` ({$colList}) VALUES\n" . implode(",\n", $valueRows) . ";\n";
+                        }
+                        $output .= "\n";
                     }
                 }
             }

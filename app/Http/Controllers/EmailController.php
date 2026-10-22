@@ -331,14 +331,6 @@ sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1
 # Install roundcube PHP package for current version only (using noninteractive mode)
 sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y --no-install-recommends php{$phpVersion}-intl php{$phpVersion}-zip php{$phpVersion}-ldap 2>&1 || true
 
-# ====== PHP 8.5 CLEANUP ======
-# If PHP 8.5 got installed by accident, remove it and stick with intended version
-if dpkg -l | grep -q "php8.5"; then
-    echo ""
-    echo "WARNING: PHP 8.5 was installed. Removing it to keep PHP {$phpVersion}..."
-    sudo apt-get remove -y --purge php8.5* 2>&1 || true
-    sudo apt-get autoremove -y 2>&1 || true
-fi
 
 # Make sure we're still using the correct PHP version
 sudo update-alternatives --set php /usr/bin/php{$phpVersion} 2>&1 || true

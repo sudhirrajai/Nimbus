@@ -228,7 +228,7 @@ CONF;
     public static function deletePool(string $domain): void
     {
         $slug = self::slug($domain);
-        foreach (['8.2', '8.3'] as $version) {
+        foreach (['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'] as $version) {
             $poolFile = "/etc/php/{$version}/fpm/pool.d/{$slug}.conf";
             if (file_exists($poolFile)) {
                 self::executeSudo("rm -f " . escapeshellarg($poolFile));

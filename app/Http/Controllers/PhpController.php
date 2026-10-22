@@ -105,6 +105,10 @@ class PhpController extends Controller
             '/etc/php/8.1/cli/php.ini' => 'CLI 8.1',
             '/etc/php/8.3/fpm/php.ini' => 'PHP-FPM 8.3 (Web)',
             '/etc/php/8.3/cli/php.ini' => 'CLI 8.3',
+            '/etc/php/8.4/fpm/php.ini' => 'PHP-FPM 8.4 (Web)',
+            '/etc/php/8.4/cli/php.ini' => 'CLI 8.4',
+            '/etc/php/8.5/fpm/php.ini' => 'PHP-FPM 8.5 (Web)',
+            '/etc/php/8.5/cli/php.ini' => 'CLI 8.5',
         ];
 
         foreach ($possiblePaths as $path => $label) {
@@ -632,7 +636,7 @@ BASH;
     public function getPhpVersions()
     {
         try {
-            $supportedVersions = ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4'];
+            $supportedVersions = ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'];
             $versions = [];
             
             foreach ($supportedVersions as $v) {
@@ -685,7 +689,7 @@ BASH;
             $version = $request->input('version');
 
             // Validate that version is one of supported
-            if (!in_array($version, ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4'])) {
+            if (!in_array($version, ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])) {
                 return response()->json(['error' => 'Unsupported PHP version'], 400);
             }
 
@@ -750,7 +754,8 @@ echo "Updating package lists..."
 sudo apt-get update 2>&1
 
 echo "Installing PHP {$version}..."
-sudo apt-get install -y php{$version}-fpm php{$version}-cli php{$version}-mysql php{$version}-curl php{$version}-gd php{$version}-mbstring php{$version}-zip php{$version}-xml php{$version}-intl php{$version}-opcache php{$version}-sqlite3 2>&1
+sudo apt-get install -y php{$version}-fpm php{$version}-cli php{$version}-mysql php{$version}-curl php{$version}-gd php{$version}-mbstring php{$version}-zip php{$version}-xml php{$version}-intl php{$version}-sqlite3 2>&1
+sudo apt-get install -y php{$version}-opcache php{$version}-bcmath 2>/dev/null || true
 
 echo "Configuring systemd override for PHP-FPM {$version}..."
 sudo mkdir -p "/etc/systemd/system/php{$version}-fpm.service.d"

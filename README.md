@@ -53,7 +53,7 @@
 <td width="50%">
 
 ### 🐘 Multi-PHP Engine & Extensions
-- **Multi-Version Runtime:** Run PHP **8.1, 8.2, 8.3, and 8.4** concurrently without cross-version interference.
+- **Multi-Version Runtime:** Run PHP **8.1, 8.2, 8.3, 8.4, and 8.5** concurrently without cross-version interference.
 - **Dedicated FPM Pools:** Every domain runs under an isolated pool (`/etc/php/{version}/fpm/pool.d/{domain}.conf`) with custom user permissions.
 - **1-Click Extension Switcher:** Toggle `redis`, `imagick`, `curl`, `mbstring`, `intl`, `bcmath`, `gd`, `pdo_mysql`, `zip`, and `opcache`.
 - **PHP.ini Tuner:** Tune memory limits, timeouts, and file upload limits with automated Nginx `client_max_body_size` syncing.
@@ -345,7 +345,7 @@ curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh |
 | Component | Version / Engine | Role |
 |-----------|------------------|------|
 | **Nginx** | Latest Mainline/Stable | High-performance Reverse Proxy & Virtual Hosts |
-| **PHP** | 8.3 (Default), 8.1, 8.2, 8.4 available | Multi-PHP Runtime & Isolated FastCGI Process Pools |
+| **PHP** | 8.3 (Default), 8.1, 8.2, 8.4, 8.5 available | Multi-PHP Runtime & Isolated FastCGI Process Pools |
 | **MariaDB** | 10.11+ / Latest LTS | Primary Relational Database Engine |
 | **Redis** | Latest Stable | In-Memory Cache, Session & Key-Value Store |
 | **Certbot** | Latest + Nginx Plugin | Automated Let's Encrypt SSL Issuance & Renewals |

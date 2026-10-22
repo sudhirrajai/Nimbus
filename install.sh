@@ -55,6 +55,18 @@ while [ $# -gt 0 ]; do
             NIMBUS_PORT="$2"
             shift 2
             ;;
+        --php=*)
+            PHP_VERSION="${1#*=}"
+            shift
+            ;;
+        --php|--php-version)
+            PHP_VERSION="$2"
+            shift 2
+            ;;
+        --php-version=*)
+            PHP_VERSION="${1#*=}"
+            shift
+            ;;
         --uninstall|uninstall)
             IS_UNINSTALL=true
             shift
@@ -261,7 +273,7 @@ rm -f /etc/systemd/system/php*-fpm.service.d/nimbus.conf
 systemctl daemon-reload
 
 echo -e "${GREEN}[4/12]${NC} Installing PHP ${PHP_VERSION}..."
-PHP_PACKAGES=(
+PHP_CORE_PACKAGES=(
     php${PHP_VERSION}
     php${PHP_VERSION}-fpm
     php${PHP_VERSION}-cli
@@ -273,14 +285,10 @@ PHP_PACKAGES=(
     php${PHP_VERSION}-zip
     php${PHP_VERSION}-mbstring
     php${PHP_VERSION}-xml
-    php${PHP_VERSION}-dom
     php${PHP_VERSION}-bcmath
     php${PHP_VERSION}-intl
-    php${PHP_VERSION}-opcache
-    php${PHP_VERSION}-redis
-    php${PHP_VERSION}-imagick
 )
-if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${PHP_PACKAGES[@]}"; then
+if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${PHP_CORE_PACKAGES[@]}"; then
     echo -e "${YELLOW}PHP ${PHP_VERSION} stack already installed. Skipping package install.${NC}"
 else
     add-apt-repository ppa:ondrej/php -y
@@ -296,7 +304,8 @@ else
         done
     fi
     apt-get update -y
-    apt-get install -y "${PHP_PACKAGES[@]}"
+    apt-get install -y "${PHP_CORE_PACKAGES[@]}"
+    apt-get install -y php${PHP_VERSION}-opcache php${PHP_VERSION}-redis php${PHP_VERSION}-imagick php${PHP_VERSION}-dom 2>/dev/null || true
 fi
 
 
