@@ -1533,11 +1533,27 @@ class FileManagerController extends Controller
         ];
     }
 
+    private function sanitizePathSegment(string $path): string
+    {
+        $path = str_replace("\0", '', $path);
+        $path = str_replace('\\', '/', $path);
+        $parts = explode('/', $path);
+        $safeParts = [];
+        foreach ($parts as $part) {
+            $part = trim($part);
+            if ($part === '' || $part === '.' || $part === '..') {
+                continue;
+            }
+            $safeParts[] = $part;
+        }
+        return implode('/', $safeParts);
+    }
+
     private function getFullPath($domain, $path = '')
     {
         $scopeInfo = $this->resolveScopeInfo(request(), $domain);
         $base = rtrim($scopeInfo['basePath'], '/');
-        $cleanPath = ltrim(str_replace(['../', '..\\', './', '.\\'], '', (string)$path), '/');
+        $cleanPath = $this->sanitizePathSegment((string)$path);
 
         if (empty($cleanPath)) {
             return empty($base) ? '/' : $base;
@@ -1548,8 +1564,6 @@ class FileManagerController extends Controller
 
     private function isValidPath($domain, $path)
     {
-        // Sanitize path by removing any '..' or './' sequences manually first
-        $cleanPath = str_replace(['../', '..\\', './', '.\\'], '', (string)$path);
         $scopeInfo = $this->resolveScopeInfo(request(), $domain);
 
         // If Server Root (/): Any clean path is permitted
@@ -1557,17 +1571,24 @@ class FileManagerController extends Controller
             return true;
         }
 
-        $allowedBase = realpath($scopeInfo['basePath']) ?: $scopeInfo['basePath'];
-        $realPath = realpath($cleanPath);
-
-        // If realpath failed (file doesn't exist yet), check parent directory
-        if (!$realPath) {
-            $parentDir = realpath(dirname($cleanPath));
-            if (!$parentDir) return false;
-            return strpos($parentDir, $allowedBase) === 0;
+        $allowedBase = realpath($scopeInfo['basePath']) ?: rtrim($scopeInfo['basePath'], '/');
+        if (empty($allowedBase)) {
+            return false;
         }
 
-        return strpos($realPath, $allowedBase) === 0;
+        $fullPath = $this->getFullPath($domain, $path);
+        $realPath = realpath($fullPath);
+
+        // If realpath failed (e.g. creating new file that doesn't exist yet), check parent directory
+        if (!$realPath) {
+            $parentDir = realpath(dirname($fullPath));
+            if (!$parentDir) {
+                return false;
+            }
+            return $parentDir === $allowedBase || str_starts_with($parentDir, $allowedBase . '/');
+        }
+
+        return $realPath === $allowedBase || str_starts_with($realPath, $allowedBase . '/');
     }
 
     private function isTextFile($file)

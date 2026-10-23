@@ -1131,24 +1131,22 @@ PHP;
     private function createMySQLUser($username, $password, $isAdmin = false)
     {
         try {
-            // Use direct MySQL connection via exec instead of Laravel DB
-            // This avoids issues when Laravel is configured for SQLite
-            $escapedUser = escapeshellarg($username);
-            $escapedPass = escapeshellarg($password);
-            
-            // Create user using mysql command
-            exec("sudo mysql -e \"CREATE USER IF NOT EXISTS '{$username}'@'localhost' IDENTIFIED BY '{$password}';\" 2>&1", $output, $code);
-            
+            // Escape values for MySQL string literals
+            $safeUser = str_replace(["\\", "'"], ["\\\\", "\\'"], $username);
+            $safePass = str_replace(["\\", "'"], ["\\\\", "\\'"], $password);
+
+            $sql = "CREATE USER IF NOT EXISTS '{$safeUser}'@'localhost' IDENTIFIED BY '{$safePass}';";
+            if ($isAdmin) {
+                $sql .= " GRANT ALL PRIVILEGES ON *.* TO '{$safeUser}'@'localhost' WITH GRANT OPTION;";
+            }
+            $sql .= " FLUSH PRIVILEGES;";
+
+            $escapedSql = escapeshellarg($sql);
+            exec("sudo mysql -e {$escapedSql} 2>&1", $output, $code);
+
             if ($code !== 0) {
                 throw new \Exception("Failed to create user: " . implode("\n", $output));
             }
-            
-            if ($isAdmin) {
-                exec("sudo mysql -e \"GRANT ALL PRIVILEGES ON *.* TO '{$username}'@'localhost' WITH GRANT OPTION;\" 2>&1", $output, $code);
-            }
-            
-            exec("sudo mysql -e \"FLUSH PRIVILEGES;\" 2>&1", $output, $code);
-            
         } catch (\Exception $e) {
             throw new \Exception("Failed to create MySQL user: " . $e->getMessage());
         }

@@ -373,9 +373,9 @@ class PhpController extends Controller
 
             $version = $request->input('version', '8.2');
             
-            // Validate version format
-            if (!preg_match('/^[0-9]+\.[0-9]+$/', $version)) {
-                return response()->json(['error' => 'Invalid PHP version format'], 400);
+            // Validate version format against supported versions
+            if (!in_array($version, $this->supportedVersions)) {
+                return response()->json(['error' => 'Unsupported PHP version'], 400);
             }
 
             // Find the actual PHP-FPM service name

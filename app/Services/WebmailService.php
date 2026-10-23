@@ -1281,15 +1281,18 @@ class WebmailService
     {
         if (empty($html)) return '';
 
-        // Remove dangerous script, iframe, object, embed tags
-        $html = preg_replace('#<script(.*?)>(.*?)</script>#is', '', $html);
-        $html = preg_replace('#<iframe(.*?)>(.*?)</iframe>#is', '', $html);
-        $html = preg_replace('#<object(.*?)>(.*?)</object>#is', '', $html);
-        $html = preg_replace('#<embed(.*?)>(.*?)</embed>#is', '', $html);
+        // 1. Remove dangerous executable, framing, and redirect tags
+        $dangerousTags = ['script', 'iframe', 'object', 'embed', 'applet', 'meta', 'base', 'form', 'svg'];
+        foreach ($dangerousTags as $tag) {
+            $html = preg_replace('#<' . $tag . '\b[^>]*>(.*?)</' . $tag . '>#is', '', $html);
+            $html = preg_replace('#<' . $tag . '\b[^>]*\/?>#is', '', $html);
+        }
 
-        // Remove inline on* javascript event handlers (onclick, onload, etc.)
-        $html = preg_replace('/(\son[a-zA-Z]+)=(["\'])(.*?)\2/i', '', $html);
-        $html = preg_replace('/javascript:/i', 'blocked-js:', $html);
+        // 2. Remove all inline on* event handlers (both quoted and unquoted)
+        $html = preg_replace('/\s+on[a-zA-Z0-9_\-]+\s*=\s*(?:["\'][^"\']*["\']|[^\s>]+)/i', '', $html);
+
+        // 3. Neutralize javascript:, vbscript:, and data: HTML URIs
+        $html = preg_replace('/\b(?:javascript|vbscript|data\s*:\s*text\/html)\s*:/i', 'blocked-uri:', $html);
 
         return $html;
     }

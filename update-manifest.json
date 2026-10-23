@@ -1,14 +1,13 @@
 {
-  "version": "1.1.8",
-  "release_date": "2026-10-22",
-  "sha256": "220e1b55d7f641eceaa0db145ea99149888e856c7ac1ec64c1505cda4d6fd680",
+  "version": "1.1.9",
+  "release_date": "2026-10-23",
+  "sha256": "279608793a43d3889d104eae2cf4a64b946e38b1230cd396edd28263b2093bf8",
   "changelog": [
-    "Added full PHP 8.4 and PHP 8.5 runtime and isolated pool support",
-    "Updated domain creation and switcher UI with PHP 8.4 and PHP 8.5 options",
-    "Fixed Database Manager SQL export to export both schema and full data rows",
-    "Added batched chunked INSERT statements in SQL export to prevent packet overflow",
-    "Enhanced installer with --php and --php-version CLI flags and resilient extension packages",
-    "Removed legacy PHP 8.5 package purging routine during webmail setup"
+    "Security: Fixed shell argument injection in DatabaseController createMySQLUser",
+    "Security: Hardened FileManagerController against multi-dot recursive path traversal",
+    "Security: Hardened Webmail HTML body sanitizer against unquoted and URI XSS evasion",
+    "Security: Added strict supported version allowlist validation in PhpController service management",
+    "Security: Hardened default .env permissions and enabled Nginx TLS 1.2+ minimum protocols"
   ],
   "commands": [
     "php artisan migrate --force",
