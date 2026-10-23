@@ -20,7 +20,7 @@ NIMBUS_DIR="/usr/local/nimbus"
 NIMBUS_USER="www-data"
 NIMBUS_PORT="2095"
 PHP_VERSION="8.3"
-NODE_VERSION="20"
+NODE_VERSION="22"
 GITHUB_REPO="https://github.com/sudhirrajai/Nimbus.git"
 INSTALL_MODE="git"
 VMCORE_URL="https://roook.vmcore.in"
@@ -268,6 +268,11 @@ fi
 systemctl enable nginx
 systemctl start nginx
 
+# Security: Enforce TLS 1.2/1.3 minimums and hide Nginx version tokens
+sed -i 's/ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf 2>/dev/null || true
+sed -i 's/# server_tokens off;/server_tokens off;/' /etc/nginx/nginx.conf 2>/dev/null || true
+systemctl reload nginx 2>/dev/null || true
+
 # Clean up any stale or broken systemd overrides from previous runs to prevent apt-get install from crashing
 rm -f /etc/systemd/system/php*-fpm.service.d/nimbus.conf
 systemctl daemon-reload
@@ -311,6 +316,10 @@ fi
 
 systemctl enable php${PHP_VERSION}-fpm
 systemctl start php${PHP_VERSION}-fpm
+
+# Security: Disable PHP version fingerprinting (expose_php = Off)
+sed -i 's/^expose_php = On/expose_php = Off/' /etc/php/*/fpm/php.ini /etc/php/*/cli/php.ini 2>/dev/null || true
+systemctl reload php${PHP_VERSION}-fpm 2>/dev/null || true
 
 echo -e "${GREEN}[5/12]${NC} Installing MariaDB..."
 if [ "$SKIP_EXISTING" = true ] && { all_packages_installed mariadb-server mariadb-client || all_packages_installed mysql-server mysql-client; }; then
@@ -581,6 +590,9 @@ http {
     sendfile on;
     keepalive_timeout 65;
 
+    # Security: Hide Nginx server version
+    server_tokens off;
+
     # Rate limiting zone for authentication endpoints (10 requests/minute per IP)
     limit_req_zone $binary_remote_addr zone=nimbus_login:10m rate=10r/m;
     limit_req_status 429;
@@ -724,6 +736,9 @@ find ${NIMBUS_DIR} -path "${NIMBUS_DIR}/node_modules" -prune -o -type d -exec ch
 
 # Set file permissions (644 for files)
 find ${NIMBUS_DIR} -path "${NIMBUS_DIR}/node_modules" -prune -o -type f -exec chmod 644 {} \;
+
+# Security: Protect panel secrets, encryption keys, and database passwords from world-readability
+chmod 600 ${NIMBUS_DIR}/.env 2>/dev/null || true
 
 # Storage and cache need to be fully writable (775)
 chmod -R 775 ${NIMBUS_DIR}/storage
@@ -901,6 +916,17 @@ else
     ufw allow ${NIMBUS_PORT}/tcp
     ufw --force enable
 fi
+
+# Security: Pre-configure Fail2ban with valid capture regexes and activate service
+mkdir -p /etc/fail2ban/filter.d
+cat << 'EOF' > /etc/fail2ban/filter.d/nimbus.conf
+[Definition]
+failregex = ^<HOST> -.*"POST .*/login.*" 422.*$
+            ^<HOST> -.*"POST .*/login.*" 401.*$
+ignoreregex =
+EOF
+systemctl enable fail2ban 2>/dev/null || true
+systemctl restart fail2ban 2>/dev/null || true
 
 # Link global CLI commands
 chmod +x "${NIMBUS_DIR}/bin/nimbus" 2>/dev/null || true
