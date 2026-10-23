@@ -1,7 +1,7 @@
 {
   "version": "1.1.9",
   "release_date": "2026-10-23",
-  "sha256": "c02b7bba9dc03e737ca6baf2a77b46f51b62e4ef99ab7196b429e0900f56dab0",
+  "sha256": "5a6864d3f3d1d20ba90159a183618662f071cb008ea8a922fe1a1aaefbc0ccc9",
   "changelog": [
     "Security: Fixed shell argument injection in DatabaseController createMySQLUser",
     "Security: Hardened FileManagerController against multi-dot recursive path traversal",
@@ -11,7 +11,8 @@
     "Security: Updated installer to Node.js 22 LTS, Fail2ban pre-configuration, and PHP version masking",
     "Security: Hardened Nginx site templates with server_tokens off, X-Powered-By hiding, and database/backup file blocking",
     "Fix: Switched nimbus-nginx.conf to universal local SSL certificates and added port 2095 HTTP to HTTPS redirect",
-    "Fix: Resolved 403 Access Denied when opening domain File Manager from WordPress or Domains"
+    "Fix: Resolved 403 Access Denied when opening domain File Manager from WordPress or Domains",
+    "Fix: Declared missing supportedVersions property in PhpController for PHP-FPM restart"
   ],
   "commands": [
     "php artisan migrate --force",

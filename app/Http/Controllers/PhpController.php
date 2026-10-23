@@ -8,6 +8,8 @@ use Inertia\Inertia;
 
 class PhpController extends Controller
 {
+    protected array $supportedVersions = ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'];
+
     /**
      * PHP version and SAPI type detection
      */
@@ -636,10 +638,9 @@ BASH;
     public function getPhpVersions()
     {
         try {
-            $supportedVersions = ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'];
             $versions = [];
             
-            foreach ($supportedVersions as $v) {
+            foreach ($this->supportedVersions as $v) {
                 $installed = File::exists("/etc/php/{$v}/fpm");
                 $active = false;
                 if ($installed) {
