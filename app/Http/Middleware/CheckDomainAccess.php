@@ -20,8 +20,8 @@ class CheckDomainAccess
             return redirect()->route('auth.login');
         }
 
-        // Root users bypass all domain checks
-        if ($user->isRoot()) {
+        // Root and Admin users bypass all domain checks
+        if ($user->isRootOrAdmin()) {
             return $next($request);
         }
 

@@ -1553,7 +1553,14 @@ class FileManagerController extends Controller
     {
         $scopeInfo = $this->resolveScopeInfo(request(), $domain);
         $base = rtrim($scopeInfo['basePath'], '/');
-        $cleanPath = $this->sanitizePathSegment((string)$path);
+        $pathStr = trim((string)$path);
+
+        // If path is already an absolute path that matches or is inside base, return it directly
+        if (!empty($base) && ($pathStr === $base || str_starts_with($pathStr, $base . '/'))) {
+            return $pathStr;
+        }
+
+        $cleanPath = $this->sanitizePathSegment($pathStr);
 
         if (empty($cleanPath)) {
             return empty($base) ? '/' : $base;
@@ -1576,19 +1583,38 @@ class FileManagerController extends Controller
             return false;
         }
 
-        $fullPath = $this->getFullPath($domain, $path);
-        $realPath = realpath($fullPath);
+        $pathStr = trim((string)$path);
+        if (str_starts_with($pathStr, '/')) {
+            $candidate = $pathStr;
+        } else {
+            $candidate = $this->getFullPath($domain, $pathStr);
+        }
+
+        $realPath = realpath($candidate);
+
+        // If realpath succeeded, check that it is within $allowedBase
+        if ($realPath !== false) {
+            return $realPath === $allowedBase || str_starts_with($realPath, $allowedBase . '/');
+        }
 
         // If realpath failed (e.g. creating new file that doesn't exist yet), check parent directory
-        if (!$realPath) {
-            $parentDir = realpath(dirname($fullPath));
-            if (!$parentDir) {
-                return false;
-            }
+        $parentDir = realpath(dirname($candidate));
+        if ($parentDir !== false) {
             return $parentDir === $allowedBase || str_starts_with($parentDir, $allowedBase . '/');
         }
 
-        return $realPath === $allowedBase || str_starts_with($realPath, $allowedBase . '/');
+        // Check normalized path string to prevent path traversal
+        $normCandidate = str_replace('\\', '/', $candidate);
+        $normAllowedBase = str_replace('\\', '/', $allowedBase);
+
+        $parts = explode('/', $normCandidate);
+        foreach ($parts as $part) {
+            if ($part === '..') {
+                return false;
+            }
+        }
+
+        return $normCandidate === $normAllowedBase || str_starts_with($normCandidate, $normAllowedBase . '/');
     }
 
     private function isTextFile($file)
