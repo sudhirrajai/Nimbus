@@ -1045,6 +1045,7 @@ location /phpmyadmin {
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$request_filename;
+        fastcgi_hide_header X-Powered-By;
     }
 
     location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {

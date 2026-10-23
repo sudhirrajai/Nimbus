@@ -1044,6 +1044,7 @@ class GitDeploymentService
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
+        proxy_hide_header X-Powered-By;
         proxy_read_timeout 300;
         proxy_connect_timeout 300;
     }
@@ -1058,6 +1059,7 @@ PROXY;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         fastcgi_param PATH_INFO \$fastcgi_path_info;
+        fastcgi_hide_header X-Powered-By;
         fastcgi_read_timeout 600;
         fastcgi_send_timeout 600;
         fastcgi_connect_timeout 600;
@@ -1083,6 +1085,9 @@ server {
     
     index index.php index.html index.htm;
     
+    # Server tokens & information disclosure
+    server_tokens off;
+
     # Logs
     access_log /var/log/nginx/{$domain}.access.log;
     error_log /var/log/nginx/{$domain}.error.log;
@@ -1094,6 +1099,11 @@ server {
 
     # Upload limit
     client_max_body_size 2048M;
+
+    # Deny access to sensitive backups, logs, and database dumps
+    location ~* \.(bak|config|sql|ini|log|sh|inc|swp|dist)\$ {
+        deny all;
+    }
 
     # Deny access to hidden files
     location ~ /\. {

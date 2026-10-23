@@ -76,7 +76,15 @@ server {
     server_name " . $domain . ";
     root " . $panelPath . ";
 
+    # Server tokens & information disclosure
+    server_tokens off;
+
     index index.php index.html;
+
+    # Security headers
+    add_header X-Frame-Options \"SAMEORIGIN\" always;
+    add_header X-Content-Type-Options \"nosniff\" always;
+    add_header X-XSS-Protection \"1; mode=block\" always;
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
@@ -85,9 +93,16 @@ server {
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php{$phpVersion}-fpm-nimbus.sock;
+        fastcgi_hide_header X-Powered-By;
     }
 
-    location ~ /\.ht {
+    # Deny access to sensitive backups, logs, and database dumps
+    location ~* \.(bak|config|sql|ini|log|sh|inc|swp|dist)$ {
+        deny all;
+    }
+
+    # Deny access to hidden files
+    location ~ /\. {
         deny all;
     }
 }";

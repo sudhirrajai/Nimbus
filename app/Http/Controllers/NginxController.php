@@ -590,6 +590,7 @@ BASH;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
+        proxy_hide_header X-Powered-By;
         proxy_buffering {$buffering};
         proxy_read_timeout {$timeout}s;
         proxy_connect_timeout 60s;

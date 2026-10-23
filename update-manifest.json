@@ -1,14 +1,15 @@
 {
   "version": "1.1.9",
   "release_date": "2026-10-23",
-  "sha256": "f1b0098f32c1a37408f482e76e9222fbb71cf19a8fd05ce982e60eea7cc5e9d4",
+  "sha256": "5ab6d98daae96e35556a8b203c54afd525cbff50f5adefe3b70544080b4368b9",
   "changelog": [
     "Security: Fixed shell argument injection in DatabaseController createMySQLUser",
     "Security: Hardened FileManagerController against multi-dot recursive path traversal",
     "Security: Hardened Webmail HTML body sanitizer against unquoted and URI XSS evasion",
     "Security: Added strict supported version allowlist validation in PhpController service management",
     "Security: Hardened default .env permissions and enabled Nginx TLS 1.2+ minimum protocols",
-    "Security: Updated installer to Node.js 22 LTS, Fail2ban pre-configuration, and PHP version masking"
+    "Security: Updated installer to Node.js 22 LTS, Fail2ban pre-configuration, and PHP version masking",
+    "Security: Hardened Nginx site templates with server_tokens off, X-Powered-By hiding, and database/backup file blocking"
   ],
   "commands": [
     "php artisan migrate --force",
