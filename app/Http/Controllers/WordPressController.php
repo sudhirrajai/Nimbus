@@ -531,7 +531,6 @@ if (!isset(\$_GET['token']) || \$_GET['token'] !== '{$token}') {
 // Security: expire after 60 seconds
 \$created = filemtime(__FILE__);
 if (time() - \$created > 60) {
-    @unlink(__FILE__);
     die('Login link expired. Please generate a new one from the panel.');
 }
 
@@ -547,7 +546,6 @@ if (!\$user) {
 }
 
 if (!\$user) {
-    @unlink(__FILE__);
     wp_die('Admin user not found.');
 }
 
@@ -556,9 +554,6 @@ wp_clear_auth_cookie();
 wp_set_current_user(\$user->ID);
 wp_set_auth_cookie(\$user->ID, true);
 do_action('wp_login', \$user->user_login, \$user);
-
-// Self-destruct immediately on use
-@unlink(__FILE__);
 
 // Redirect safely
 wp_safe_redirect(admin_url());
@@ -575,7 +570,15 @@ PHP;
             $deleteCmd = "nohup bash -c 'sleep 60; sudo rm -f " . escapeshellarg($loginFile) . "' >/dev/null 2>&1 &";
             shell_exec($deleteCmd);
 
-            $protocol = $site->ssl_enabled ? 'https' : 'http';
+            // Check SSL certificate on disk if database flag is false
+            $isSsl = $site->ssl_enabled
+                || file_exists("/etc/letsencrypt/live/{$site->domain}/fullchain.pem")
+                || file_exists("/etc/nginx/ssl/{$site->domain}/fullchain.pem");
+            if ($isSsl && !$site->ssl_enabled) {
+                $site->update(['ssl_enabled' => true]);
+            }
+
+            $protocol = $isSsl ? 'https' : 'http';
             $relativePath = basename($loginFile);
             $url = $protocol . '://' . $site->domain . '/' . $relativePath . '?token=' . $token;
 
