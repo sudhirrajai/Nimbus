@@ -2,7 +2,7 @@
 
 # Nimbus Control Panel - Uninstaller Script
 # Interactive uninstallation with multiple removal modes
-# Usage: curl -sSL https://nimbus-host.vmcore.in/uninstall | sudo bash
+# Usage: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | sudo bash
 
 set -e
 
@@ -18,7 +18,8 @@ NC='\033[0m' # No Color
 # Configuration (must match install.sh)
 NIMBUS_DIR="/usr/local/nimbus"
 PHP_VERSION="8.3"
-VMCORE_URL="https://roook.vmcore.in"
+ROOOK_URL=""
+VMCORE_URL=""
 
 # ─────────────────────────────────────────────────────────────────
 # Helper functions
@@ -419,7 +420,7 @@ echo -e "${GREEN}${BOLD}✓ Nimbus uninstall completed successfully!${NC}"
 echo ""
 echo -e "${YELLOW}Notes:${NC}"
 echo -e "  • Standard system packages (curl, git, wget, etc.) were not removed."
-REINSTALL_URL="https://nimbus-host.vmcore.in/install"
+REINSTALL_URL="https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh"
 if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
     REINSTALL_URL="${VMCORE_URL}/install"
 fi

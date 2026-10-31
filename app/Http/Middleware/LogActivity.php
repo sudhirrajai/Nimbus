@@ -222,7 +222,7 @@ class LogActivity
 
         if (str_starts_with($path, 'settings')) {
             if ($path === 'settings/update') return "Updated panel system settings";
-            if ($path === 'settings/license/sync') return "Synced panel license with VMCoreCentral";
+            if ($path === 'settings/license/sync') return "Synced panel license";
             if ($path === 'settings/license/deactivate') return "Deactivated panel license";
         }
 

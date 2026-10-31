@@ -2,9 +2,9 @@
 
 # Nimbus Control Panel - Installer Script
 # One-command installation for Ubuntu/Debian servers
-# Usage:   curl -sSL https://nimbus-host.vmcore.in/install | sudo bash
-# Smart:   curl -sSL https://nimbus-host.vmcore.in/install | sudo bash -s -- --skip-existing
-# Uninstall: curl -sSL https://nimbus-host.vmcore.in/uninstall | sudo bash
+# Usage:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash
+# Smart:   curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash -s -- --skip-existing
+# Uninstall: curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh | sudo bash
 
 set -e
 
@@ -23,7 +23,8 @@ PHP_VERSION="8.3"
 NODE_VERSION="22"
 GITHUB_REPO="https://github.com/sudhirrajai/Nimbus.git"
 INSTALL_MODE="git"
-VMCORE_URL="https://roook.vmcore.in"
+ROOOK_URL=""
+VMCORE_URL=""
 SKIP_EXISTING=false
 LICENSE_KEY=""
 PANEL_SYSTEM_USER=""
@@ -209,7 +210,7 @@ if [ "$IS_UNINSTALL" = true ]; then
     if [ -f "${NIMBUS_DIR}/uninstall.sh" ]; then
         bash "${NIMBUS_DIR}/uninstall.sh"
     else
-        REINSTALL_UNINSTALL="https://nimbus-host.vmcore.in/uninstall"
+        REINSTALL_UNINSTALL="https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/uninstall.sh"
         if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
             REINSTALL_UNINSTALL="${VMCORE_URL}/uninstall"
         fi
@@ -495,7 +496,7 @@ if [ -d "$NIMBUS_DIR" ]; then
     mv $NIMBUS_DIR ${NIMBUS_DIR}_backup_$(date +%Y%m%d_%H%M%S)
 fi
 
-if [ "$INSTALL_MODE" = "zip" ]; then
+if [ "$INSTALL_MODE" = "zip" ] && [ -n "$VMCORE_URL" ]; then
     echo -e "Downloading zip package from ${VMCORE_URL}..."
     mkdir -p "$NIMBUS_DIR"
     wget -O /tmp/nimbus.zip "${VMCORE_URL}/nimbus.zip"
@@ -536,8 +537,10 @@ sed -i "s|^DB_PORT=.*|#DB_PORT=3306|" .env
 sed -i "s|^DB_USERNAME=.*|#DB_USERNAME=root|" .env
 sed -i "s|^DB_PASSWORD=.*|#DB_PASSWORD=|" .env
 upsert_env "NIMBUS_GIT_USER" "${PANEL_SYSTEM_USER}" .env
-if [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
-    upsert_env "VMCORE_API_URL" "${VMCORE_URL}" .env
+if [ -n "$ROOOK_URL" ]; then
+    upsert_env "ROOOK_API_URL" "${ROOOK_URL}" .env
+elif [ -n "$VMCORE_URL" ] && [ "$VMCORE_URL" != "{{VMCORE_URL}}" ]; then
+    upsert_env "ROOOK_API_URL" "${VMCORE_URL}" .env
 fi
 
 # Generate key and run migrations

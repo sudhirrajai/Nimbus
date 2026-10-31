@@ -1,16 +1,13 @@
 {
-  "version": "1.2.1",
-  "release_date": "2026-10-27",
-  "sha256": "5a6864d3f3d1d20ba90159a183618662f071cb008ea8a922fe1a1aaefbc0ccc9",
+  "version": "1.2.2",
+  "release_date": "2026-10-31",
+  "sha256": "2d2222653640754e6a6169bb74606d3c7429e76844196458fde56da1d1efeead",
   "changelog": [
-    "Fix: WordPress one-click login race condition on HTTP to HTTPS 301 redirect and browser reload",
-    "Fix: Improved auto-login SSL detection from Let's Encrypt certificates on disk",
-    "Fix: WordPress one-click login auto-destructs safely via scheduled background task",
-    "Fix: Declared missing supportedVersions property in PhpController for PHP-FPM service reload",
-    "Fix: Resolved 403 Access Denied when opening domain File Manager from WordPress or Domains",
-    "Fix: Switched nimbus-nginx.conf to universal local SSL certificates and added port 2095 HTTP to HTTPS redirect",
-    "Security: Hardened Nginx site templates with server_tokens off, X-Powered-By hiding, and database/backup file blocking",
-    "Security: Updated installer with Node.js 22 LTS, Fail2ban pre-configuration, TLS 1.2+ minimum, and PHP version masking"
+    "Branding: Updated portal branding, footer, sidebar, and auth screens to Sudhir Rajai (sudhirrajai.com)",
+    "Installer: Switched raw installer and uninstaller download endpoints to sudhirrajai/Nimbus on GitHub",
+    "Config: Renamed VMCORE_API_URL to ROOOK_API_URL across environment configurations, services, and installers",
+    "Updates: Added direct GitHub Releases fallback for automated update downloads",
+    "Security: Decoupled notifications service with secure local Postfix / mailer fallback"
   ],
   "commands": [
     "php artisan migrate --force",

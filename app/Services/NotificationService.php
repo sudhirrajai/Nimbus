@@ -12,7 +12,7 @@ class NotificationService
 {
     /**
      * Send an email notification to the global alert recipients or Super Admins.
-     * Uses the secure VMcore API first, with local Postfix / mail() fallback.
+     * Uses notification API if configured, with local Postfix / mail() fallback.
      *
      * @param string $subject
      * @param string $htmlContent
@@ -28,12 +28,13 @@ class NotificationService
             return false;
         }
 
-        $apiUrl = 'https://vmcore.in/api/send-encrypted-email';
-        $apiKey = 'vmk_ZZALOAMF78GByDGlGe3buSlly2Z32s9r7ey8KJf3w7VojizG';
-        $encKey = 'UOFE3D52L3fjfCvew0rd2ed/GgwCzN521vlgJ7hmlm0=';
-        $rawKey = base64_decode($encKey);
+        $apiUrl = env('NOTIFICATION_API_URL', '');
+        $apiKey = env('NOTIFICATION_API_KEY', '');
+        $encKey = env('NOTIFICATION_ENC_KEY', '');
+        $rawKey = $encKey ? base64_decode($encKey) : null;
         
         $encryptValue = function($value) use ($rawKey) {
+            if (!$rawKey) return $value;
             $iv = random_bytes(16);
             $encrypted = openssl_encrypt($value, 'AES-256-CBC', $rawKey, 0, $iv);
             $mac = hash_hmac('sha256', base64_encode($iv) . $encrypted, $rawKey);
@@ -55,40 +56,42 @@ class NotificationService
 
             $sentViaApi = false;
 
-            // Attempt 1: VMcore Encrypted Mail API
-            try {
-                $payload = [
-                    'to_email'          => $to,
-                    'encrypted_subject' => $encryptValue($subject),
-                    'encrypted_content' => $encryptValue($htmlContent),
-                ];
+            // Attempt 1: External Notification API (if configured)
+            if (!empty($apiUrl) && !empty($apiKey)) {
+                try {
+                    $payload = [
+                        'to_email'          => $to,
+                        'encrypted_subject' => $encryptValue($subject),
+                        'encrypted_content' => $encryptValue($htmlContent),
+                    ];
 
-                $ch = curl_init($apiUrl);
-                curl_setopt_array($ch, [
-                    CURLOPT_POST           => true,
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_HTTPHEADER     => [
-                        "X-Api-Key: $apiKey",
-                        "Accept: application/json",
-                        "Content-Type: application/json"
-                    ],
-                    CURLOPT_POSTFIELDS     => json_encode($payload),
-                    CURLOPT_TIMEOUT        => 8
-                ]);
+                    $ch = curl_init($apiUrl);
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST           => true,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_HTTPHEADER     => [
+                            "X-Api-Key: $apiKey",
+                            "Accept: application/json",
+                            "Content-Type: application/json"
+                        ],
+                        CURLOPT_POSTFIELDS     => json_encode($payload),
+                        CURLOPT_TIMEOUT        => 8
+                    ]);
 
-                $response = curl_exec($ch);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                $curlErr = curl_error($ch);
-                curl_close($ch);
+                    $response = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $curlErr = curl_error($ch);
+                    curl_close($ch);
 
-                if (!$curlErr && $httpCode >= 200 && $httpCode < 300) {
-                    $sentViaApi = true;
-                    Log::info("NotificationService: Dispatched alert '{$subject}' to {$to} via VMcore API.");
-                } else {
-                    Log::warning("NotificationService: VMcore API returned HTTP {$httpCode} ({$curlErr}) for {$to}. Falling back to local mailer.");
+                    if (!$curlErr && $httpCode >= 200 && $httpCode < 300) {
+                        $sentViaApi = true;
+                        Log::info("NotificationService: Dispatched alert '{$subject}' to {$to} via Notification API.");
+                    } else {
+                        Log::warning("NotificationService: Notification API returned HTTP {$httpCode} ({$curlErr}) for {$to}. Falling back to local mailer.");
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("NotificationService: Notification API exception for {$to}: " . $e->getMessage());
                 }
-            } catch (\Exception $e) {
-                Log::warning("NotificationService: VMcore API exception for {$to}: " . $e->getMessage());
             }
 
             // Attempt 2: Fallback to local mail / Postfix

@@ -1093,7 +1093,7 @@ Examples:
     sudo $0 -d example.com -t "My Amazing Site" -u admin -e admin@example.com \
             --with-ssl --with-redis --with-fail2ban --unattended
 
-For more information, visit: https://github.com/your-repo/wordpress-installer
+For more information, visit: https://github.com/sudhirrajai/Nimbus
 EOF
     exit 0
 }

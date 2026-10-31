@@ -14,13 +14,13 @@ class ReportTest extends TestCase
 
     /**
      * Test that Nimbus can receive a local bug report submission
-     * and correctly forward it to VmCoreCentral.
+     * and correctly forward it to central server.
      */
-    public function test_can_submit_bug_report_to_vmcorecentral()
+    public function test_can_submit_bug_report_to_central_server()
     {
         $user = User::factory()->create();
 
-        // Fake connection to VmCoreCentral bug-reports endpoint
+        // Fake connection to bug-reports endpoint
         Http::fake([
             '*/api/v1/bug-reports' => Http::response([
                 'status' => true,

@@ -23,7 +23,7 @@ use App\Http\Controllers\Pm2Controller;
 use App\Http\Controllers\PostgresController;
 use App\Http\Controllers\NodeController;
 
-// 1-Click Single Sign-On (SSO) from VmCoreCentral
+// 1-Click Single Sign-On (SSO)
 Route::get('/sso/login', [SsoController::class, 'login'])->name('sso.login');
 
 // Auth routes (public)

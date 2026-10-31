@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 class ReportController extends Controller
 {
     /**
-     * Handle incoming bug report, bundle licensing context, and forward to VmCoreCentral.
+     * Handle incoming bug report, bundle licensing context, and forward to licensing server.
      */
     public function store(Request $request)
     {
@@ -26,7 +26,7 @@ class ReportController extends Controller
         
         $user = auth()->user();
 
-        $apiUrl = rtrim(config('services.vmcore.api_url', 'http://localhost:8001'), '/') . '/api/v1/bug-reports';
+        $apiUrl = rtrim(config('services.roook.api_url', config('services.vmcore.api_url', 'http://localhost:8001')), '/') . '/api/v1/bug-reports';
 
         // Prepare multipart HTTP client request
         $http = Http::timeout(25)->asMultipart();
@@ -71,7 +71,7 @@ class ReportController extends Controller
                 ]);
             }
 
-            Log::error('VmCoreCentral rejected bug report: ' . $response->body());
+            Log::error('Central server rejected bug report: ' . $response->body());
             $errorMsg = $response->json('message') ?? 'Unknown server error.';
             return response()->json([
                 'status' => false,

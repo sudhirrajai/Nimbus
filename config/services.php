@@ -35,8 +35,12 @@ return [
         ],
     ],
 
+    'roook' => [
+        'api_url' => env('ROOOK_API_URL', env('VMCORE_API_URL', '')),
+    ],
+
     'vmcore' => [
-        'api_url' => env('VMCORE_API_URL', 'https://roook.vmcore.in'),
+        'api_url' => env('ROOOK_API_URL', env('VMCORE_API_URL', '')),
     ],
 
     'nimbus' => [

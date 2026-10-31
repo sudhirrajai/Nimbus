@@ -13,7 +13,7 @@
                                         <i class="material-symbols-rounded me-2">settings</i>
                                         Panel Settings
                                     </h4>
-                                    <p class="text-white text-sm mb-0 opacity-8">Configure your nimbus by VMCore panel</p>
+                                    <p class="text-white text-sm mb-0 opacity-8">Configure your nimbus by Sudhir Rajai panel</p>
                                 </div>
                             </div>
                         </div>
@@ -391,10 +391,10 @@
                                     <i class="material-symbols-rounded text-sm me-1">monitoring</i>
                                     Server Resources
                                 </a>
-                                <a href="https://nimbus-docs.vmcore.in/" target="_blank"
+                                <a href="https://sudhirrajai.com/blog" target="_blank"
                                     class="btn btn-outline-dark btn-sm">
-                                    <i class="material-symbols-rounded text-sm me-1">menu_book</i>
-                                    Documentation
+                                    <i class="material-symbols-rounded text-sm me-1">article</i>
+                                    Blog & Updates
                                 </a>
                             </div>
                         </div>

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 class LicenseCheck extends Command
 {
     protected $signature = 'license:check';
-    protected $description = 'Verify the license key with VmCoreCentral and send a heartbeat';
+    protected $description = 'Verify the license key with central licensing server and send a heartbeat';
 
     public function handle(LicenseService $licenseService)
     {

@@ -51,7 +51,7 @@ class ActivationController extends Controller
 
         $this->licenseService->setLicenseKey($request->license_key);
 
-        // Force a fresh check against VmCoreCentral
+        // Force a fresh check against licensing server
         $license = $this->licenseService->checkLicense(force: true);
 
         if ($license['status']) {

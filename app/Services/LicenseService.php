@@ -12,9 +12,9 @@ class LicenseService
     protected $apiBaseUrl;
 
     /**
-     * RSA Public Key for verifying signed license tokens from VmCoreCentral.
+     * RSA Public Key for verifying signed license tokens from licensing server.
      * This key is the ONLY way to verify tokens — users cannot forge valid signatures
-     * without VmCoreCentral's private key.
+     * without the licensing server's private key.
      */
     private const PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1Wi2SNgaaOkh6i6YaRjn
@@ -31,7 +31,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
 
     public function __construct()
     {
-        $url = config('services.vmcore.api_url', 'http://localhost:8001');
+        $url = config('services.roook.api_url', config('services.vmcore.api_url', 'http://localhost:8001'));
 
         // Upgrade http:// to https:// for external domains to avoid POST->GET redirect issues
         if (str_starts_with($url, 'http://') && !str_contains($url, 'localhost') && !str_contains($url, '127.0.0.1')) {
@@ -70,7 +70,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
             // Token expired/missing — fall through to network call
         }
 
-        // 3. Make network call to VmCoreCentral
+        // 3. Make network call to licensing server
         return $this->verifyWithServer($licenseKey);
     }
 
@@ -143,7 +143,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
     }
 
     /**
-     * Contact VmCoreCentral to verify the license and get a signed token.
+     * Contact licensing server to verify the license and get a signed token.
      */
     private function verifyWithServer(string $licenseKey): array
     {
@@ -168,9 +168,9 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
                     // Cryptographically verify the token before storing it to avoid redirect loops if keys mismatch
                     $decoded = $this->verifySignedToken($data['signed_token']);
                     if (!$decoded) {
-                        Log::error('Signature verification failed for the license token received from VmCoreCentral.');
+                        Log::error('Signature verification failed for the license token received from licensing server.');
                         $this->triggerDegradation('License token signature verification failed (key mismatch).');
-                        return ['status' => false, 'message' => 'License verification failed (signature verification mismatch). Please ensure the Nimbus public key matches VmCoreCentral\'s private key.'];
+                        return ['status' => false, 'message' => 'License verification failed (signature verification mismatch). Please ensure the Nimbus public key matches the licensing server\'s private key.'];
                     }
 
                     $this->setSetting('license_token', $data['signed_token']);
@@ -218,14 +218,14 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
             return $this->handleOffline('Server returned status ' . $response->status());
 
         } catch (\Exception $e) {
-            // Network error — VmCoreCentral unreachable. Apply grace period.
+            // Network error — licensing server unreachable. Apply grace period.
             Log::warning('License verification failed: ' . $e->getMessage());
             return $this->handleOffline($e->getMessage());
         }
     }
 
     /**
-     * Handle the case when VmCoreCentral is unreachable.
+     * Handle the case when licensing server is unreachable.
      * Applies grace period logic — panel continues working for GRACE_PERIOD_HOURS
      * ONLY if there is an authentic RSA-signed token for this machine that has not expired.
      */
@@ -327,7 +327,7 @@ kk0EZPCR8eYcYRXXPQrBdvYxxpfm5LzZr4s+NfwpeFezkZZCPUttDUjX9LfOpy5w
     }
 
     /**
-     * Send a lightweight heartbeat ping to VmCoreCentral.
+     * Send a lightweight heartbeat ping to licensing server.
      */
     public function sendHeartbeat(): bool
     {

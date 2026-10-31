@@ -17,7 +17,7 @@
         <img :src="'/assets/img/nimbus_logo.png?v=2'" class="navbar-brand-img" alt="main_logo" style="width: 36px; height: 36px; border-radius: 6px;">
         <div style="display: flex; flex-direction: column; align-items: flex-start;">
           <span class="text-sm sidebar-brand-title font-weight-bold" style="letter-spacing: -0.03em;">nimbus</span>
-          <span class="text-xxs sidebar-brand-sub opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by VMCore</span>
+          <span class="text-xxs sidebar-brand-sub opacity-8" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">by Sudhir</span>
         </div>
       </Link>
     </div>
@@ -278,9 +278,9 @@
 
     <div class="sidenav-footer position-absolute w-100 bottom-0 glass-sidebar-footer" style="z-index: 10; padding-top: 8px; padding-bottom: 8px;">
       <div class="mx-3">
-        <a class="btn btn-outline-sidebar w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://nimbus-docs.vmcore.in/" target="_blank" @click="handleNavClick">
-          <i class="material-symbols-rounded text-sm">menu_book</i>
-          <span>Documentation</span>
+        <a class="btn btn-outline-sidebar w-100 mb-0 d-flex align-items-center justify-content-center gap-1" href="https://sudhirrajai.com/blog" target="_blank" @click="handleNavClick">
+          <i class="material-symbols-rounded text-sm">article</i>
+          <span>Blog & Updates</span>
         </a>
       </div>
     </div>

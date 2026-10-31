@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 class SsoController extends Controller
 {
     /**
-     * Handle single sign-on from VmCoreCentral dashboard.
+     * Handle single sign-on from dashboard.
      */
     public function login(Request $request)
     {
@@ -56,13 +56,13 @@ class SsoController extends Controller
 
         // Check timestamp freshness (allow max 2 minutes skew)
         if (abs(time() - $payload['timestamp']) > 120) {
-            return redirect()->route('auth.login')->withErrors(['error' => 'SSO session token has expired. Please launch again from VmCoreCentral.']);
+            return redirect()->route('auth.login')->withErrors(['error' => 'SSO session token has expired. Please launch again from the dashboard.']);
         }
 
         // Check nonce to prevent replay attacks
         $nonceKey = 'sso_nonce:' . $payload['nonce'];
         if (Cache::has($nonceKey)) {
-            return redirect()->route('auth.login')->withErrors(['error' => 'This SSO token has already been used. Please launch again from VmCoreCentral.']);
+            return redirect()->route('auth.login')->withErrors(['error' => 'This SSO token has already been used. Please launch again from the dashboard.']);
         }
         Cache::put($nonceKey, 1, 300); // 5 minutes retention
 
@@ -82,7 +82,7 @@ class SsoController extends Controller
             Auth::login($adminUser, true);
             $request->session()->regenerate();
 
-            Log::info("SSO: Admin user '{$adminUser->email}' logged in via VmCoreCentral SSO.");
+            Log::info("SSO: Admin user '{$adminUser->email}' logged in via Central SSO.");
             return redirect()->route('dashboard');
         }
 
@@ -125,7 +125,7 @@ class SsoController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
 
-        Log::info("SSO: Managed client user '{$user->email}' logged in via VmCoreCentral SSO.");
+        Log::info("SSO: Managed client user '{$user->email}' logged in via Central SSO.");
 
         return redirect()->route('dashboard');
     }

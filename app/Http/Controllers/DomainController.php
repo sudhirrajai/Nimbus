@@ -784,7 +784,7 @@ class DomainController extends Controller
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>$domain is Ready | nimbus by VMCore</title>
+    <title>$domain is Ready | nimbus by Sudhir Rajai</title>
     
     <!-- Fonts & Icons -->
     <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700,900" />
@@ -1080,10 +1080,10 @@ class DomainController extends Controller
         
         <!-- Branding Header -->
         <div class="brand-header">
-            <a href="https://vmcore.in" target="_blank" class="brand-logo">
+            <a href="https://sudhirrajai.com/" target="_blank" class="brand-logo">
                 <span>nimbus</span>
             </a>
-            <div class="brand-sub">by <a href="https://vmcore.in" target="_blank">VMCore</a></div>
+            <div class="brand-sub">by <a href="https://sudhirrajai.com/" target="_blank">Sudhir Rajai</a></div>
         </div>
 
         <!-- Main Card -->
@@ -1128,15 +1128,15 @@ class DomainController extends Controller
             </div>
 
             <!-- Get Started Button -->
-            <a href="https://nimbus-docs.vmcore.in/" target="_blank" class="btn-action">
-                <i class="material-symbols-rounded">menu_book</i>
-                Read Documentation
+            <a href="https://sudhirrajai.com/blog" target="_blank" class="btn-action">
+                <i class="material-symbols-rounded">article</i>
+                Read Blog & Updates
             </a>
         </div>
 
         <!-- Footer -->
         <div class="footer">
-            Powered by <a href="https://vmcore.in" target="_blank">nimbus by VMCore</a> &bull; Premium Server Control Panel
+            Powered by <a href="https://sudhirrajai.com/" target="_blank">nimbus by Sudhir Rajai</a> &bull; Premium Server Control Panel
         </div>
     </div>
 </body>

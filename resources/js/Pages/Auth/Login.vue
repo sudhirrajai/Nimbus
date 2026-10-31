@@ -9,7 +9,7 @@
             <img :src="'/assets/img/nimbus_logo.png?v=2'" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">
           </div>
           <h1 class="brand-title">nimbus</h1>
-          <p class="brand-subtitle">by <a href="https://vmcore.in" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: 700;">VMCore</a></p>
+          <p class="brand-subtitle">by <a href="https://sudhirrajai.com/" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: 700;">Sudhir</a></p>
           <div class="features-list">
             <div class="feature-item">
               <i class="material-symbols-rounded">dns</i>
@@ -118,7 +118,7 @@
           </form>
 
           <div class="form-footer">
-            <p>&copy; {{ new Date().getFullYear() }} <a href="https://vmcore.in" target="_blank" style="color: inherit; text-decoration: none;">nimbus by VMCore</a></p>
+            <p>&copy; {{ new Date().getFullYear() }} <a href="https://sudhirrajai.com/" target="_blank" style="color: inherit; text-decoration: none;">nimbus by Sudhir Rajai</a></p>
           </div>
         </div>
       </div>

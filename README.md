@@ -292,7 +292,7 @@ Protect your mission-critical applications with scheduled, redundant backup pipe
 
 Nimbus includes a safe, zero-downtime updates engine accessible from `/updates`:
 
-* **Release Monitoring:** Panel periodically checks for new releases against GitHub repository releases or the VmCoreCentral API.
+* **Release Monitoring:** Panel periodically checks for new releases against GitHub repository releases.
 * **Changelog Inspector:** View formatted release notes, new feature highlights, and patch notes before initiating an upgrade.
 * **Pre-Flight Snapshot:** Creates an automated backup of the panel files and SQLite database before touching any code.
 * **Safe Migration & Cache Rebuild:** Runs database migrations (`php artisan migrate --force`), clears old caches, and compiles optimized configuration, route, and view caches.
@@ -314,7 +314,7 @@ curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh |
 
 ### Install with Instant License Activation
 
-If you have your Nimbus license key ready from **VmCoreCentral**, pass it directly during installation:
+If you have your Nimbus license key ready, pass it directly during installation:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/sudhirrajai/Nimbus/main/install.sh | sudo bash -s -- --license=YOUR_LICENSE_KEY
@@ -410,4 +410,4 @@ php artisan serve --port=2095
 
 ## 📄 License
 
-Nimbus Control Panel is proprietary software. All rights reserved. Distributed and managed through **VMCORE**.
+Nimbus Control Panel is created and maintained by **Sudhir Rajai** ([sudhirrajai.com](https://sudhirrajai.com/)). All rights reserved.

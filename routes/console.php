@@ -62,7 +62,7 @@ Schedule::command('nimbus:backups-run')->everyMinute();
 Schedule::command('nimbus:purge-trash')->dailyAt('02:00');
 
 // ─── License Security Checks ─────────────────────────────────────────────
-// Hourly full verification (forces network call to VmCoreCentral)
+// Hourly full verification (forces network call to licensing server)
 Schedule::command('license:check')->hourly();
 
 // Lightweight heartbeat every 5 minutes

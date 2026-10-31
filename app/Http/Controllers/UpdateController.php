@@ -35,7 +35,7 @@ class UpdateController extends Controller
     }
 
     /**
-     * Check for updates from VMCore Central
+     * Check for updates
      */
     public function checkForUpdates()
     {
@@ -54,7 +54,7 @@ class UpdateController extends Controller
                 if (!Cache::has($cacheKey)) {
                     \App\Services\NotificationService::send(
                         "Nimbus Update Available: v{$latestVersion}",
-                        "<p>Hello,</p><p>A new version of the Nimbus control panel is available on VMCore Central.</p><p><strong>Current Version:</strong> v{$currentVersion}<br><strong>Latest Version:</strong> v{$latestVersion}<br><strong>Release URL:</strong> <a href=\"" . e($updateInfo['releaseUrl'] ?? '') . "\">" . e($updateInfo['releaseUrl'] ?? 'Download Package') . "</a></p><p>You can upgrade your installation safely via the System Updates panel in Nimbus.</p>"
+                        "<p>Hello,</p><p>A new version of the Nimbus control panel is available.</p><p><strong>Current Version:</strong> v{$currentVersion}<br><strong>Latest Version:</strong> v{$latestVersion}<br><strong>Release URL:</strong> <a href=\"" . e($updateInfo['releaseUrl'] ?? '') . "\">" . e($updateInfo['releaseUrl'] ?? 'Download Package') . "</a></p><p>You can upgrade your installation safely via the System Updates panel in Nimbus.</p>"
                     );
                     Cache::put($cacheKey, true, now()->addDays(1));
                 }
@@ -71,7 +71,7 @@ class UpdateController extends Controller
                 'downloadUrl' => $updateInfo['downloadUrl'] ?? null,
                 'releaseDate' => $updateInfo['releaseDate'] ?? null,
                 'releaseUrl' => $updateInfo['releaseUrl'] ?? null,
-                'source' => $updateInfo['source'] ?? 'Roook'
+                'source' => $updateInfo['source'] ?? 'GitHub (sudhirrajai/Nimbus)'
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -83,38 +83,40 @@ class UpdateController extends Controller
     }
 
     /**
-     * Fetch update info from VMCore Central
+     * Fetch update info
      */
     private function fetchUpdateInfo()
     {
-        $apiUrl = rtrim(config('services.vmcore.api_url', 'https://roook.vmcore.in'), '/');
+        $apiUrl = rtrim(config('services.roook.api_url', config('services.vmcore.api_url', '')), '/');
 
-        // Attempt 1: Standard API endpoint
-        $endpoints = [
-            "{$apiUrl}/api/v1/nimbus/updates/check",
-            "{$apiUrl}/v1/nimbus/updates/check"
-        ];
+        // Attempt 1: Standard API endpoint if configured
+        if (!empty($apiUrl)) {
+            $endpoints = [
+                "{$apiUrl}/api/v1/nimbus/updates/check",
+                "{$apiUrl}/v1/nimbus/updates/check"
+            ];
 
-        foreach ($endpoints as $endpoint) {
-            try {
-                $response = Http::timeout(10)->withoutVerifying()->get($endpoint);
-                if ($response->successful()) {
-                    $data = $response->json();
-                    if (!empty($data['version'])) {
-                        return [
-                            'source' => 'Roook (' . parse_url($apiUrl, PHP_URL_HOST) . ')',
-                            'version' => trim($data['version']),
-                            'downloadUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
-                            'sha256' => $data['sha256'] ?? null,
-                            'changelog' => $data['changelog'] ?? [],
-                            'commands' => $data['commands'] ?? [],
-                            'releaseDate' => $data['release_date'] ?? null,
-                            'releaseUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
-                        ];
+            foreach ($endpoints as $endpoint) {
+                try {
+                    $response = Http::timeout(10)->withoutVerifying()->get($endpoint);
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if (!empty($data['version'])) {
+                            return [
+                                'source' => parse_url($apiUrl, PHP_URL_HOST) ?: 'API',
+                                'version' => trim($data['version']),
+                                'downloadUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
+                                'sha256' => $data['sha256'] ?? null,
+                                'changelog' => $data['changelog'] ?? [],
+                                'commands' => $data['commands'] ?? [],
+                                'releaseDate' => $data['release_date'] ?? null,
+                                'releaseUrl' => $data['download_url'] ?? "{$apiUrl}/nimbus.zip",
+                            ];
+                        }
                     }
+                } catch (\Exception $e) {
+                    // Try next endpoint
                 }
-            } catch (\Exception $e) {
-                // Try next endpoint
             }
         }
 
@@ -125,14 +127,14 @@ class UpdateController extends Controller
         }
 
         return [
-            'source' => 'Roook (roook.vmcore.in)',
+            'source' => 'GitHub (sudhirrajai/Nimbus)',
             'version' => $localManifest['version'] ?? $this->getCurrentVersion(),
             'downloadUrl' => null,
             'sha256' => $localManifest['sha256'] ?? null,
             'changelog' => $localManifest['changelog'] ?? ['Panel is running the latest installed version.'],
             'commands' => $localManifest['commands'] ?? [],
             'releaseDate' => $localManifest['release_date'] ?? date('Y-m-d'),
-            'releaseUrl' => null
+            'releaseUrl' => 'https://github.com/' . self::GITHUB_REPO . '/releases'
         ];
     }
 
@@ -180,7 +182,8 @@ class UpdateController extends Controller
             // Fetch latest metadata
             $updateInfo = $this->fetchUpdateInfo();
             $targetVersion = $updateInfo['version'] ?? $this->getCurrentVersion();
-            $downloadUrl = $updateInfo['downloadUrl'] ?? (rtrim(config('services.vmcore.api_url', 'https://roook.vmcore.in'), '/') . '/nimbus.zip');
+            $roookUrl = config('services.roook.api_url', config('services.vmcore.api_url', ''));
+            $downloadUrl = $updateInfo['downloadUrl'] ?? (!empty($roookUrl) ? rtrim($roookUrl, '/') . '/nimbus.zip' : "https://github.com/" . self::GITHUB_REPO . "/archive/refs/tags/v{$targetVersion}.zip");
             $expectedSha256 = $updateInfo['sha256'] ?? '';
             $manifestCommands = $updateInfo['commands'] ?? [];
 
