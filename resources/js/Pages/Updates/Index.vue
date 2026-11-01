@@ -1208,6 +1208,12 @@ const getCategory = (text) => {
     box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(16, 185, 129, 0.08);
 }
 
+body.dark-version .update-ready-banner {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: none;
+}
+
 .update-icon-circle {
     width: 40px;
     height: 40px;
@@ -1228,11 +1234,21 @@ const getCategory = (text) => {
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.02), inset 0 1px 0 #fff;
 }
 
+body.dark-version .changelog-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none;
+}
+
 .changelog-card:hover {
     transform: translateX(6px) translateY(-1px);
     background: rgba(255, 255, 255, 0.96);
     border-color: rgba(99, 102, 241, 0.35) !important;
     box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.09), inset 0 1px 0 #fff;
+}
+
+body.dark-version .changelog-card:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .category-icon-box {
@@ -1389,14 +1405,29 @@ const getCategory = (text) => {
     -webkit-backdrop-filter: blur(8px) !important;
 }
 
-.confirm-modal-wrapper .modal-content {
+body:not(.dark-version) .confirm-modal-wrapper .modal-content {
     background: rgba(255, 255, 255, 0.94) !important;
     backdrop-filter: blur(24px) saturate(190%) !important;
     -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
     border: 1px solid rgba(255, 255, 255, 0.8) !important;
     box-shadow: 0 30px 70px -15px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.5) !important;
+}
+
+.confirm-modal-wrapper .modal-content {
     border-radius: 1.5rem !important;
     animation: modalScaleIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.dark-version .confirm-modal-wrapper .version-transition-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+}
+
+body.dark-version .confirm-modal-wrapper .confirm-icon-box {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: none;
 }
 
 .confirm-icon-box {
