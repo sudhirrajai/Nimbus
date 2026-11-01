@@ -1,7 +1,7 @@
 {
   "version": "1.2.2",
   "release_date": "2026-10-31",
-  "sha256": "2d2222653640754e6a6169bb74606d3c7429e76844196458fde56da1d1efeead",
+  "sha256": "db382ca7aebff9d6ef2713302bf8890794abc268cd86dc999a96f192bc499595",
   "changelog": [
     "Branding: Updated portal branding, footer, sidebar, and auth screens to Sudhir Rajai (sudhirrajai.com)",
     "Installer: Switched raw installer and uninstaller download endpoints to sudhirrajai/Nimbus on GitHub",

@@ -1430,4 +1430,174 @@ const getCategory = (text) => {
         transform: scale(1) translateY(0);
     }
 }
+
+/* ==========================================================================
+   Dark Mode Visibility Enhancements
+   ========================================================================== */
+:global(body.dark-version) .modern-panel-card {
+    background: #111c24 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.4) !important;
+}
+
+:global(body.dark-version) .modern-panel-card .card-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+:global(body.dark-version) .modern-panel-card .card-header h6.text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .changelog-card {
+    background: rgba(15, 23, 42, 0.65) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+:global(body.dark-version) .changelog-card:hover {
+    background: rgba(30, 41, 59, 0.8) !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.4) !important;
+}
+
+:global(body.dark-version) .changelog-card p.text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .changelog-card .text-muted {
+    color: #94a3b8 !important;
+}
+
+:global(body.dark-version) .current-stat-card,
+:global(body.dark-version) .latest-stat-card-normal {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .current-stat-card h3,
+:global(body.dark-version) .current-stat-card span.text-dark,
+:global(body.dark-version) .latest-stat-card-normal h3,
+:global(body.dark-version) .latest-stat-card-normal .text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .latest-stat-card-update {
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.45) 0%, rgba(6, 95, 70, 0.3) 100%) !important;
+    border: 1px solid rgba(16, 185, 129, 0.4) !important;
+    box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.35) !important;
+}
+
+:global(body.dark-version) .latest-stat-card-update h3 {
+    color: #34d399 !important;
+}
+
+:global(body.dark-version) .spec-mini-card {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .spec-mini-card:hover {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+:global(body.dark-version) .spec-mini-card span.text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .update-ready-banner {
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.45) 0%, rgba(6, 95, 70, 0.3) 100%) !important;
+    border: 1px solid rgba(16, 185, 129, 0.35) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .update-ready-banner h6.text-dark {
+    color: #ecfdf5 !important;
+}
+
+:global(body.dark-version) .update-ready-banner p.text-secondary {
+    color: #a7f3d0 !important;
+}
+
+:global(body.dark-version) .up-to-date-card {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .up-to-date-card h6.text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .pipeline-progress-bar {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .pipeline-progress-bar .text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .step-pending {
+    background: rgba(15, 23, 42, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #64748b !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .modal-content {
+    background: #111c24 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.7) !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .modal-title,
+:global(body.dark-version) .confirm-modal-wrapper h5 {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .text-muted,
+:global(body.dark-version) .confirm-modal-wrapper .text-secondary {
+    color: #94a3b8 !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .safety-checklist span {
+    color: #cbd5e1 !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .safety-checklist span strong {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .version-transition-card {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .version-transition-card span.text-dark {
+    color: #f1f5f9 !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .confirm-icon-box {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
+    box-shadow: none !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .btn-light {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #e2e8f0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .btn-light:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+:global(body.dark-version) .confirm-modal-wrapper .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
 </style>

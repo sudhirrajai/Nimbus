@@ -187,7 +187,7 @@
                   <i class="material-symbols-rounded text-sm" :class="{ 'spin': loading }">refresh</i>
                   Refresh
                 </button>
-                <button class="btn btn-sm btn-outline-primary mb-0 d-flex align-items-center gap-1" @click="reloadAll" :disabled="actionRunning || !processes.length">
+                <button v-if="props.isRootOrAdmin" class="btn btn-sm btn-outline-primary mb-0 d-flex align-items-center gap-1" @click="reloadAll" :disabled="actionRunning || !processes.length">
                   <i class="material-symbols-rounded text-sm">sync</i>
                   Zero-Downtime Reload All
                 </button>
@@ -624,6 +624,11 @@ import MainLayout from '@/Layouts/MainLayout.vue'
 import { Head } from '@inertiajs/vue3'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+
+const props = defineProps({
+  isRootOrAdmin: { type: Boolean, default: true },
+  accessibleDomains: { type: Array, default: () => [] }
+})
 
 const loading = ref(true)
 const installing = ref(false)

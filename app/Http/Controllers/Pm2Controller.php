@@ -17,7 +17,11 @@ class Pm2Controller extends Controller
      */
     public function index()
     {
-        return Inertia::render('PM2/Index');
+        $user = auth()->user();
+        return Inertia::render('PM2/Index', [
+            'isRootOrAdmin' => $user->isRootOrAdmin(),
+            'accessibleDomains' => $user->isRootOrAdmin() ? [] : $user->accessibleDomains(),
+        ]);
     }
 
     /**
@@ -135,6 +139,10 @@ class Pm2Controller extends Controller
             $totalCpu = 0;
             $onlineCount = 0;
 
+            $user = auth()->user();
+            $isRootOrAdmin = $user->isRootOrAdmin();
+            $allowedDomains = $isRootOrAdmin ? [] : array_map('strtolower', $user->accessibleDomains());
+
             foreach ($rawList as $proc) {
                 $pmId = $proc['pm_id'] ?? null;
                 $name = $proc['name'] ?? 'unknown';
@@ -152,6 +160,22 @@ class Pm2Controller extends Controller
                 $script = $proc['pm2_env']['pm_exec_path'] ?? '';
                 $nodeVersion = $proc['pm2_env']['node_version'] ?? '';
                 $unstableRestarts = $proc['pm2_env']['unstable_restarts'] ?? 0;
+
+                // Scope to accessible domains for non-admin users
+                if (!$isRootOrAdmin) {
+                    $normCwd = str_replace('\\', '/', rtrim($cwd, '/'));
+                    $canAccess = false;
+                    foreach ($allowedDomains as $d) {
+                        $domainDir = "/var/www/{$d}";
+                        if ($normCwd === $domainDir || str_starts_with($normCwd, "{$domainDir}/") || strtolower($name) === $d || str_starts_with(strtolower($name), $d . '_') || str_starts_with(strtolower($name), $d . '-')) {
+                            $canAccess = true;
+                            break;
+                        }
+                    }
+                    if (!$canAccess) {
+                        continue;
+                    }
+                }
 
                 if ($status === 'online') {
                     $onlineCount++;
@@ -181,11 +205,14 @@ class Pm2Controller extends Controller
             }
 
             // Get available domains in /var/www for easy app linking
-            $user = auth()->user();
-            $domains = collect(File::directories($this->basePath))
+            $rawDomains = collect(File::directories($this->basePath))
                 ->map(fn($p) => basename($p))
                 ->filter(fn($n) => !in_array(strtolower($n), ['html', 'default', 'public', 'cgi-bin', 'nimbus']))
                 ->values();
+
+            $domains = $isRootOrAdmin 
+                ? $rawDomains 
+                : $rawDomains->filter(fn($d) => in_array(strtolower($d), $allowedDomains))->values();
 
             return response()->json([
                 'installed' => true,
@@ -211,6 +238,11 @@ class Pm2Controller extends Controller
     public function startProcess(Request $request)
     {
         $request->validate(['id' => 'required']);
+        $user = auth()->user();
+        if (!$this->canUserManageProcess($user, $request->input('id'))) {
+            return response()->json(['error' => 'Permission denied: You do not have access to this PM2 process.'], 403);
+        }
+
         $id = escapeshellarg($request->input('id'));
 
         try {
@@ -236,6 +268,11 @@ class Pm2Controller extends Controller
     public function stopProcess(Request $request)
     {
         $request->validate(['id' => 'required']);
+        $user = auth()->user();
+        if (!$this->canUserManageProcess($user, $request->input('id'))) {
+            return response()->json(['error' => 'Permission denied: You do not have access to this PM2 process.'], 403);
+        }
+
         $id = escapeshellarg($request->input('id'));
 
         try {
@@ -261,6 +298,11 @@ class Pm2Controller extends Controller
     public function restartProcess(Request $request)
     {
         $request->validate(['id' => 'required']);
+        $user = auth()->user();
+        if (!$this->canUserManageProcess($user, $request->input('id'))) {
+            return response()->json(['error' => 'Permission denied: You do not have access to this PM2 process.'], 403);
+        }
+
         $id = escapeshellarg($request->input('id'));
 
         try {
@@ -286,6 +328,11 @@ class Pm2Controller extends Controller
     public function deleteProcess(Request $request)
     {
         $request->validate(['id' => 'required']);
+        $user = auth()->user();
+        if (!$this->canUserManageProcess($user, $request->input('id'))) {
+            return response()->json(['error' => 'Permission denied: You do not have access to this PM2 process.'], 403);
+        }
+
         $id = escapeshellarg($request->input('id'));
 
         try {
@@ -322,10 +369,29 @@ class Pm2Controller extends Controller
             'env_vars' => 'nullable|array',
         ]);
 
+        $user = auth()->user();
+        $cwd = $request->input('cwd');
+
+        // Verify that non-admin user has access to create process in target domain CWD
+        if (!$user->isRootOrAdmin()) {
+            $allowedDomains = array_map('strtolower', $user->accessibleDomains());
+            $normCwd = str_replace('\\', '/', rtrim($cwd, '/'));
+            $canAccess = false;
+            foreach ($allowedDomains as $d) {
+                $domainDir = "/var/www/{$d}";
+                if ($normCwd === $domainDir || str_starts_with($normCwd, "{$domainDir}/")) {
+                    $canAccess = true;
+                    break;
+                }
+            }
+            if (!$canAccess) {
+                return response()->json(['error' => 'Permission denied: You can only create PM2 processes for your assigned domains.'], 403);
+            }
+        }
+
         try {
             $name = $request->input('name');
             $script = $request->input('script');
-            $cwd = $request->input('cwd');
             $instances = $request->input('instances', '1');
             $execMode = $request->input('exec_mode', 'fork');
             $port = $request->input('port');
@@ -397,6 +463,11 @@ class Pm2Controller extends Controller
     public function getLogs(Request $request)
     {
         $request->validate(['id' => 'required']);
+        $user = auth()->user();
+        if (!$this->canUserManageProcess($user, $request->input('id'))) {
+            return response()->json(['error' => 'Permission denied: You do not have access to view logs for this PM2 process.'], 403);
+        }
+
         $id = escapeshellarg($request->input('id'));
         $lines = min((int)$request->input('lines', 100), 500);
 
@@ -419,6 +490,11 @@ class Pm2Controller extends Controller
      */
     public function reloadAll()
     {
+        $user = auth()->user();
+        if (!$user->isRootOrAdmin()) {
+            return response()->json(['error' => 'Permission denied: Only administrators can reload all system processes.'], 403);
+        }
+
         try {
             $output = [];
             $code = 0;
@@ -434,6 +510,55 @@ class Pm2Controller extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Check if a user has permission to manage or view a PM2 process
+     */
+    private function canUserManageProcess($user, $procIdOrName): bool
+    {
+        if ($user->isRootOrAdmin()) {
+            return true;
+        }
+
+        $allowedDomains = array_map('strtolower', $user->accessibleDomains());
+        if (empty($allowedDomains)) {
+            return false;
+        }
+
+        $output = [];
+        $code = 0;
+        exec("sudo env PM2_HOME={$this->pm2Home} pm2 jlist 2>&1", $output, $code);
+        if ($code !== 0) {
+            return false;
+        }
+
+        $jsonStr = implode("\n", $output);
+        $start = strpos($jsonStr, '[');
+        $end = strrpos($jsonStr, ']');
+        if ($start === false || $end === false) {
+            return false;
+        }
+
+        $rawList = json_decode(substr($jsonStr, $start, $end - $start + 1), true) ?: [];
+
+        foreach ($rawList as $p) {
+            $pmId = (string)($p['pm_id'] ?? '');
+            $name = (string)($p['name'] ?? '');
+
+            if ($pmId === (string)$procIdOrName || $name === (string)$procIdOrName) {
+                $cwd = str_replace('\\', '/', rtrim($p['pm2_env']['pm_cwd'] ?? '', '/'));
+                foreach ($allowedDomains as $domain) {
+                    $domainDir = "/var/www/{$domain}";
+                    if ($cwd === $domainDir || str_starts_with($cwd, "{$domainDir}/") || strtolower($name) === $domain || str_starts_with(strtolower($name), $domain . '_') || str_starts_with(strtolower($name), $domain . '-')) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        return false;
     }
 
     /**
