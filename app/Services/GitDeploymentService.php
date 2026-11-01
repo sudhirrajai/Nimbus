@@ -1215,10 +1215,11 @@ NGINX;
         $unsets = "unset DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD APP_KEY APP_ENV APP_DEBUG APP_URL MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_ENCRYPTION MAIL_FROM_ADDRESS LOG_CHANNEL SESSION_DRIVER CACHE_STORE QUEUE_CONNECTION";
 
         $gitEnv = $this->getGitEnv();
+        $npmCacheEnv = "export npm_config_cache=/var/www/.npm";
 
-        $fullCommand = "{$unsets} && {$gitEnv} && export HOME=/tmp && " . $command;
+        $fullCommand = "{$unsets} && {$gitEnv} && export HOME=/tmp && {$npmCacheEnv} && " . $command;
         if ($cwd) {
-            $fullCommand = "{$unsets} && {$gitEnv} && export HOME=/tmp && cd {$cwd} && {$command}";
+            $fullCommand = "{$unsets} && {$gitEnv} && export HOME=/tmp && {$npmCacheEnv} && cd {$cwd} && {$command}";
         }
 
         Log::debug("Deployment command: {$fullCommand}");
