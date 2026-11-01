@@ -433,7 +433,7 @@
                      style="background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(6px); z-index: 1060;"></div>
                 <div class="modal fade show d-block" tabindex="-1" style="z-index: 1070;" @keydown.esc="showConfirmModal = false">
                     <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
-                        <div class="modal-content border-0 shadow-2xl rounded-4 overflow-hidden">
+                        <div class="modal-content border-0 shadow-2xl rounded-4 overflow-hidden bg-white">
                             
                             <!-- Modal Header / Visual Banner -->
                             <div class="modal-header border-0 pb-0 pt-4 px-4 d-flex align-items-start justify-content-between">
@@ -885,15 +885,15 @@ const getCategory = (text) => {
     -webkit-backdrop-filter: blur(24px);
 }
 
-.header-hero-card.hero-normal {
-    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.94) 50%, rgba(15, 23, 42, 0.98) 100%) !important;
+.hero-normal {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.92) 50%, rgba(15, 23, 42, 0.97) 100%);
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
-.header-hero-card.hero-update {
-    background: linear-gradient(135deg, rgba(6, 78, 59, 0.96) 0%, rgba(4, 120, 87, 0.9) 45%, rgba(15, 23, 42, 0.96) 100%) !important;
+.hero-update {
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.95) 0%, rgba(4, 120, 87, 0.88) 45%, rgba(15, 23, 42, 0.95) 100%);
     border: 1px solid rgba(52, 211, 153, 0.35) !important;
-    box-shadow: 0 25px 50px -12px rgba(6, 78, 59, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 25px 50px -12px rgba(6, 78, 59, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.3);
 }
 
 .hero-glow-orb {
@@ -1208,6 +1208,12 @@ const getCategory = (text) => {
     box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(16, 185, 129, 0.08);
 }
 
+body.dark-version .update-ready-banner {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: none;
+}
+
 .update-icon-circle {
     width: 40px;
     height: 40px;
@@ -1228,11 +1234,21 @@ const getCategory = (text) => {
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.02), inset 0 1px 0 #fff;
 }
 
+body.dark-version .changelog-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none;
+}
+
 .changelog-card:hover {
     transform: translateX(6px) translateY(-1px);
     background: rgba(255, 255, 255, 0.96);
     border-color: rgba(99, 102, 241, 0.35) !important;
     box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.09), inset 0 1px 0 #fff;
+}
+
+body.dark-version .changelog-card:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .category-icon-box {
@@ -1389,14 +1405,29 @@ const getCategory = (text) => {
     -webkit-backdrop-filter: blur(8px) !important;
 }
 
-.confirm-modal-wrapper .modal-content {
-    background: rgba(255, 255, 255, 0.96) !important;
+body:not(.dark-version) .confirm-modal-wrapper .modal-content {
+    background: rgba(255, 255, 255, 0.94) !important;
     backdrop-filter: blur(24px) saturate(190%) !important;
     -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
-    border: 1px solid rgba(226, 232, 240, 0.8) !important;
-    border-radius: 1.5rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
     box-shadow: 0 30px 70px -15px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.5) !important;
+}
+
+.confirm-modal-wrapper .modal-content {
+    border-radius: 1.5rem !important;
     animation: modalScaleIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.dark-version .confirm-modal-wrapper .version-transition-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+}
+
+body.dark-version .confirm-modal-wrapper .confirm-icon-box {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: none;
 }
 
 .confirm-icon-box {
@@ -1418,240 +1449,6 @@ const getCategory = (text) => {
     border: 1px solid rgba(226, 232, 240, 0.9);
     border-radius: 1rem;
     box-shadow: inset 0 1px 0 #fff;
-}
-
-/* =========================================================================
-   Scoped Dark Mode Adaptations for Updates Module
-   (Strictly scoped to .updates-page-wrapper and .confirm-modal-wrapper)
-   ========================================================================= */
-
-/* Safe Banner Card in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .safe-banner-card {
-    background: rgba(16, 185, 129, 0.08) !important;
-    border: 1px solid rgba(16, 185, 129, 0.22) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .safe-banner-card h6.text-dark {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .safe-banner-card p.text-secondary {
-    color: #94a3b8 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .safe-banner-card .shield-badge {
-    background: rgba(16, 185, 129, 0.2) !important;
-    border-color: rgba(16, 185, 129, 0.35) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .safe-banner-card .safety-chip {
-    background: rgba(255, 255, 255, 0.06) !important;
-    border-color: rgba(16, 185, 129, 0.3) !important;
-    color: #a7f3d0 !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .safe-banner-card .safety-chip:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
-}
-
-/* Stat Cards in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .current-stat-card,
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-normal {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border: 1px solid rgba(255, 255, 255, 0.09) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .current-stat-card h3,
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-normal h3 {
-    color: #f8fafc !important;
-}
-:global(body.dark-version) .updates-page-wrapper .current-stat-card .text-secondary,
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-normal .text-secondary,
-:global(body.dark-version) .updates-page-wrapper .current-stat-card .text-muted,
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-normal .text-muted {
-    color: #94a3b8 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .current-stat-card .badge.bg-white,
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-normal .badge.bg-white {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #cbd5e1 !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-update {
-    background: rgba(16, 185, 129, 0.12) !important;
-    border: 1px solid rgba(52, 211, 153, 0.35) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-update h3 {
-    color: #34d399 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .latest-stat-card-update .text-success {
-    color: #6ee7b7 !important;
-}
-
-/* Spec Mini Cards in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .spec-mini-card {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border-color: rgba(255, 255, 255, 0.08) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .spec-mini-card:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border-color: rgba(255, 255, 255, 0.16) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .spec-mini-card span.text-dark {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .spec-mini-card .text-muted {
-    color: #94a3b8 !important;
-}
-
-/* Checksum Container in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .hash-code-block {
-    background: rgba(15, 23, 42, 0.85) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .checksum-container .text-secondary {
-    color: #94a3b8 !important;
-}
-
-/* Up-to-Date Card in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .up-to-date-card {
-    background: rgba(16, 185, 129, 0.08) !important;
-    border: 1px solid rgba(16, 185, 129, 0.25) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .up-to-date-card .check-icon-circle {
-    background: rgba(16, 185, 129, 0.2) !important;
-    color: #34d399 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .up-to-date-card h6.text-dark {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .up-to-date-card p.text-secondary {
-    color: #94a3b8 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .up-to-date-card .btn-outline-dark {
-    color: #e2e8f0 !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
-    background: rgba(255, 255, 255, 0.05) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .up-to-date-card .btn-outline-dark:hover {
-    background: rgba(255, 255, 255, 0.15) !important;
-    color: #fff !important;
-}
-
-/* Update Ready Banner in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .update-ready-banner {
-    background: rgba(16, 185, 129, 0.12) !important;
-    border: 1px solid rgba(16, 185, 129, 0.3) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .update-ready-banner h6.text-dark {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .update-ready-banner p.text-secondary {
-    color: #a7f3d0 !important;
-}
-
-/* Changelog Stream in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .changelog-card {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .changelog-card:hover {
-    background: rgba(255, 255, 255, 0.07) !important;
-    border-color: rgba(99, 102, 241, 0.4) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .changelog-card p.text-dark {
-    color: #e2e8f0 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .changelog-card .text-muted {
-    color: #94a3b8 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .badge.bg-gray-200 {
-    background-color: rgba(255, 255, 255, 0.12) !important;
-    color: #e2e8f0 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .category-icon-box.cat-primary {
-    background: rgba(59, 130, 246, 0.15) !important;
-    color: #60a5fa !important;
-    border: 1px solid rgba(59, 130, 246, 0.3) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .category-icon-box.cat-success {
-    background: rgba(16, 185, 129, 0.15) !important;
-    color: #34d399 !important;
-    border: 1px solid rgba(16, 185, 129, 0.3) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .category-icon-box.cat-warning {
-    background: rgba(245, 158, 11, 0.15) !important;
-    color: #fbbf24 !important;
-    border: 1px solid rgba(245, 158, 11, 0.3) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .category-icon-box.cat-danger {
-    background: rgba(239, 68, 68, 0.15) !important;
-    color: #f87171 !important;
-    border: 1px solid rgba(239, 68, 68, 0.3) !important;
-}
-:global(body.dark-version) .updates-page-wrapper .modern-panel-card .card-header .header-icon-pill {
-    box-shadow: none !important;
-}
-
-/* Pipeline Progress Stepper in Dark Mode */
-:global(body.dark-version) .updates-page-wrapper .pipeline-progress-bar {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border-color: rgba(255, 255, 255, 0.08) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .updates-page-wrapper .pipeline-progress-bar .text-dark {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .updates-page-wrapper .step-pending {
-    background: rgba(255, 255, 255, 0.03) !important;
-    border-color: rgba(255, 255, 255, 0.08) !important;
-    color: #64748b !important;
-}
-
-/* Confirmation Modal in Dark Mode */
-:global(body.dark-version) .confirm-modal-wrapper .modal-content {
-    background: rgba(18, 33, 27, 0.98) !important;
-    border: 1px solid rgba(16, 185, 129, 0.35) !important;
-    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.8), 0 0 40px rgba(16, 185, 129, 0.15) !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .modal-title {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .btn-close {
-    filter: invert(1) grayscale(100%) brightness(200%);
-}
-:global(body.dark-version) .confirm-modal-wrapper .confirm-icon-box {
-    background: rgba(16, 185, 129, 0.15) !important;
-    border: 1px solid rgba(16, 185, 129, 0.3) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .version-transition-card {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: none !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .version-transition-card .text-dark {
-    color: #f1f5f9 !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .safety-checklist .text-secondary {
-    color: #cbd5e1 !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .bg-warning-subtle {
-    background: rgba(245, 158, 11, 0.15) !important;
-    border-color: rgba(245, 158, 11, 0.3) !important;
-    color: #fcd34d !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .btn-light {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #e2e8f0 !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-:global(body.dark-version) .confirm-modal-wrapper .btn-light:hover {
-    background: rgba(255, 255, 255, 0.16) !important;
-    color: #fff !important;
 }
 
 @keyframes modalScaleIn {
