@@ -1,7 +1,7 @@
 {
   "version": "1.2.3",
   "release_date": "2026-11-14",
-  "sha256": "108aa243f4034f0f9255532ab734fd43c62479879c19a1403593ce3b2c400b51",
+  "sha256": "3b936078392483bc706222cd2bfd9e0f4b8fe85f7991ed4121fa6b118c121d8e",
   "changelog": [
     "OS Support: Added full Debian 11 (Bullseye) and Debian 12 (Bookworm) OS compatibility",
     "Installer: Added Debian OS auto-detection, Sury PHP repository with secure keyrings, and essential daemons",
