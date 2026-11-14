@@ -745,10 +745,25 @@ done
 sudo dpkg --configure -a 2>&1
 sudo apt-get install -f -y 2>&1
 
-echo "Checking ondrej/php repository..."
-if ! grep -q "^deb .*ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-    echo "Adding ondrej/php repository..."
-    sudo add-apt-repository -y ppa:ondrej/php 2>&1
+echo "Checking PHP repository..."
+if ! grep -q "ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null && ! grep -q "sury.org" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+    IS_DEBIAN=""
+    CODENAME=""
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        IS_DEBIAN="\$ID"
+        CODENAME="\${VERSION_CODENAME:-}"
+    fi
+
+    if [ "\$IS_DEBIAN" = "debian" ]; then
+        echo "Adding Ondřej Surý PHP repository for Debian (\$CODENAME)..."
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/sury-php.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ \${CODENAME} main" | sudo tee /etc/apt/sources.list.d/sury-php.list > /dev/null
+    else
+        echo "Adding ondrej/php repository..."
+        sudo add-apt-repository -y ppa:ondrej/php 2>&1
+    fi
 fi
 
 echo "Updating package lists..."

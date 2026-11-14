@@ -220,8 +220,21 @@ if [ "$IS_UNINSTALL" = true ]; then
 fi
 
 # Check OS
-if [ ! -f /etc/debian_version ]; then
-    echo -e "${RED}Error: This script only supports Ubuntu/Debian${NC}"
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_ID="${ID:-}"
+    OS_CODENAME="${VERSION_CODENAME:-}"
+else
+    OS_ID=""
+    OS_CODENAME=""
+fi
+
+if [ -z "$OS_ID" ] && [ -f /etc/debian_version ]; then
+    OS_ID="debian"
+fi
+
+if [[ "$OS_ID" != "ubuntu" && "$OS_ID" != "debian" ]]; then
+    echo -e "${RED}Error: This script only supports Ubuntu and Debian (detected: ${OS_ID:-unknown})${NC}"
     exit 1
 fi
 
@@ -245,6 +258,7 @@ ESSENTIAL_PACKAGES=(
     ca-certificates
     gnupg lsb-release
     acl sudo fail2ban sqlite3
+    ufw cron
     redis-server
     certbot python3-certbot-nginx
 )
@@ -297,17 +311,24 @@ PHP_CORE_PACKAGES=(
 if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${PHP_CORE_PACKAGES[@]}"; then
     echo -e "${YELLOW}PHP ${PHP_VERSION} stack already installed. Skipping package install.${NC}"
 else
-    add-apt-repository ppa:ondrej/php -y
-    # Fallback to previous LTS (noble) if the current Ubuntu codename is not supported by the PPA yet
-    CODENAME=$(lsb_release -sc)
-    if [ "$CODENAME" = "resolute" ] || ! curl -fsIL "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${CODENAME}/Release" >/dev/null 2>&1; then
-        echo -e "${YELLOW}Warning: PPA ppa:ondrej/php may not support '${CODENAME}'. Falling back to 'noble'...${NC}"
-        for f in /etc/apt/sources.list.d/*ondrej*php*.sources; do
-            [ -f "$f" ] && sed -i "s/Suites: ${CODENAME}/Suites: noble/g" "$f"
-        done
-        for f in /etc/apt/sources.list.d/*ondrej*php*.list; do
-            [ -f "$f" ] && sed -i "s/${CODENAME}/noble/g" "$f"
-        done
+    if [ "$OS_ID" = "debian" ]; then
+        echo -e "${YELLOW}Configuring Ondřej Surý PHP repository for Debian (${OS_CODENAME})...${NC}"
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor --yes -o /etc/apt/keyrings/sury-php.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ ${OS_CODENAME} main" > /etc/apt/sources.list.d/sury-php.list
+    else
+        add-apt-repository ppa:ondrej/php -y
+        # Fallback to previous LTS (noble) if the current Ubuntu codename is not supported by the PPA yet
+        CODENAME=$(lsb_release -sc)
+        if [ "$CODENAME" = "resolute" ] || ! curl -fsIL "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${CODENAME}/Release" >/dev/null 2>&1; then
+            echo -e "${YELLOW}Warning: PPA ppa:ondrej/php may not support '${CODENAME}'. Falling back to 'noble'...${NC}"
+            for f in /etc/apt/sources.list.d/*ondrej*php*.sources; do
+                [ -f "$f" ] && sed -i "s/Suites: ${CODENAME}/Suites: noble/g" "$f"
+            done
+            for f in /etc/apt/sources.list.d/*ondrej*php*.list; do
+                [ -f "$f" ] && sed -i "s/${CODENAME}/noble/g" "$f"
+            done
+        fi
     fi
     apt-get update -y
     apt-get install -y "${PHP_CORE_PACKAGES[@]}"

@@ -1,13 +1,11 @@
 {
-  "version": "1.2.2",
-  "release_date": "2026-10-31",
-  "sha256": "1518121812ee7efe4e78dc30b17ca2275cfe0c00e1ebd772495a5c9f6f9d0ead",
+  "version": "1.2.3",
+  "release_date": "2026-11-14",
+  "sha256": "108aa243f4034f0f9255532ab734fd43c62479879c19a1403593ce3b2c400b51",
   "changelog": [
-    "Branding: Updated portal branding, footer, sidebar, and auth screens to Sudhir Rajai (sudhirrajai.com)",
-    "Installer: Switched raw installer and uninstaller download endpoints to sudhirrajai/Nimbus on GitHub",
-    "Config: Renamed VMCORE_API_URL to ROOOK_API_URL across environment configurations, services, and installers",
-    "Updates: Added direct GitHub Releases fallback for automated update downloads",
-    "Security: Decoupled notifications service with secure local Postfix / mailer fallback"
+    "OS Support: Added full Debian 11 (Bullseye) and Debian 12 (Bookworm) OS compatibility",
+    "Installer: Added Debian OS auto-detection, Sury PHP repository with secure keyrings, and essential daemons",
+    "PHP Manager: Added automated Debian Sury repository setup when installing or changing PHP versions via UI"
   ],
   "commands": [
     "php artisan migrate --force",
