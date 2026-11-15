@@ -1,11 +1,11 @@
 {
-  "version": "1.2.3",
-  "release_date": "2026-11-14",
-  "sha256": "3b936078392483bc706222cd2bfd9e0f4b8fe85f7991ed4121fa6b118c121d8e",
+  "version": "1.2.4",
+  "release_date": "2026-11-15",
+  "sha256": "16f85ee8b0a9001a2e883b54c0593f6f3aaba2621d009817c33d8369c0b0493b",
   "changelog": [
-    "OS Support: Added full Debian 11 (Bullseye) and Debian 12 (Bookworm) OS compatibility",
-    "Installer: Added Debian OS auto-detection, Sury PHP repository with secure keyrings, and essential daemons",
-    "PHP Manager: Added automated Debian Sury repository setup when installing or changing PHP versions via UI"
+    "Debian Compatibility: Fixed package installation on Debian 13 (Trixie) by conditionally resolving software-properties-common only on supported platforms",
+    "Installer: Updated installer banner to v1.2.4 and added intelligent Sury PHP repository fallback for emerging Debian codenames",
+    "PHP Manager: Added robust repository verification fallback in automated PHP version provisioning"
   ],
   "commands": [
     "php artisan migrate --force",

@@ -756,10 +756,14 @@ if ! grep -q "ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev
     fi
 
     if [ "\$IS_DEBIAN" = "debian" ]; then
-        echo "Adding Ondřej Surý PHP repository for Debian (\$CODENAME)..."
+        DEBIAN_DIST="\${CODENAME}"
+        if [ -z "\$DEBIAN_DIST" ] || ! curl -fsIL "https://packages.sury.org/php/dists/\${DEBIAN_DIST}/Release" >/dev/null 2>&1; then
+            DEBIAN_DIST="bookworm"
+        fi
+        echo "Adding Ondřej Surý PHP repository for Debian (\$DEBIAN_DIST)..."
         sudo mkdir -p /etc/apt/keyrings
         curl -fsSL https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/sury-php.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ \${CODENAME} main" | sudo tee /etc/apt/sources.list.d/sury-php.list > /dev/null
+        echo "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ \${DEBIAN_DIST} main" | sudo tee /etc/apt/sources.list.d/sury-php.list > /dev/null
     else
         echo "Adding ondrej/php repository..."
         sudo add-apt-repository -y ppa:ondrej/php 2>&1

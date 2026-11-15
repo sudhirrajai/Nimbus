@@ -15,6 +15,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+INSTALLER_VERSION="1.2.4"
+
 # Configuration
 NIMBUS_DIR="/usr/local/nimbus"
 NIMBUS_USER="www-data"
@@ -189,7 +191,7 @@ echo "║     ██║╚██╗██║██║██║╚██╔╝█
 echo "║     ██║ ╚████║██║██║ ╚═╝ ██║██████╔╝╚██████╔╝███████║        ║"
 echo "║     ╚═╝  ╚═══╝╚═╝╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚══════╝        ║"
 echo "║                                                              ║"
-echo "║              Control Panel Installer v1.0.0                  ║"
+echo "║              Control Panel Installer v1.2.4                  ║"
 echo "║                                                              ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -253,7 +255,6 @@ fi
 echo -e "${GREEN}[2/12]${NC} Installing essential packages..."
 ESSENTIAL_PACKAGES=(
     curl wget git unzip zip
-    software-properties-common
     apt-transport-https
     ca-certificates
     gnupg lsb-release
@@ -262,6 +263,9 @@ ESSENTIAL_PACKAGES=(
     redis-server
     certbot python3-certbot-nginx
 )
+if [ "$OS_ID" = "ubuntu" ] || apt-cache show software-properties-common >/dev/null 2>&1; then
+    ESSENTIAL_PACKAGES+=(software-properties-common)
+fi
 if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${ESSENTIAL_PACKAGES[@]}"; then
     echo -e "${YELLOW}Essential packages already installed. Skipping.${NC}"
 else
@@ -312,10 +316,15 @@ if [ "$SKIP_EXISTING" = true ] && all_packages_installed "${PHP_CORE_PACKAGES[@]
     echo -e "${YELLOW}PHP ${PHP_VERSION} stack already installed. Skipping package install.${NC}"
 else
     if [ "$OS_ID" = "debian" ]; then
-        echo -e "${YELLOW}Configuring Ondřej Surý PHP repository for Debian (${OS_CODENAME})...${NC}"
+        DEBIAN_DIST="${OS_CODENAME}"
+        if [ -z "$DEBIAN_DIST" ] || ! curl -fsIL "https://packages.sury.org/php/dists/${DEBIAN_DIST}/Release" >/dev/null 2>&1; then
+            echo -e "${YELLOW}Notice: Sury PHP repo does not have dist '${DEBIAN_DIST}'. Falling back to 'bookworm'...${NC}"
+            DEBIAN_DIST="bookworm"
+        fi
+        echo -e "${YELLOW}Configuring Ondřej Surý PHP repository for Debian (${DEBIAN_DIST})...${NC}"
         mkdir -p /etc/apt/keyrings
         curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor --yes -o /etc/apt/keyrings/sury-php.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ ${OS_CODENAME} main" > /etc/apt/sources.list.d/sury-php.list
+        echo "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ ${DEBIAN_DIST} main" > /etc/apt/sources.list.d/sury-php.list
     else
         add-apt-repository ppa:ondrej/php -y
         # Fallback to previous LTS (noble) if the current Ubuntu codename is not supported by the PPA yet

@@ -180,16 +180,24 @@ update_system() {
 install_dependencies() {
     log INFO "Installing required dependencies..."
     
-    apt-get install -y -qq \
-        curl \
-        wget \
-        git \
-        unzip \
-        software-properties-common \
-        apt-transport-https \
-        ca-certificates \
-        gnupg \
+    local deps=(
+        curl
+        wget
+        git
+        unzip
+        apt-transport-https
+        ca-certificates
+        gnupg
         lsb-release
+    )
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [ "${ID:-}" = "ubuntu" ] || apt-cache show software-properties-common >/dev/null 2>&1; then
+            deps+=(software-properties-common)
+        fi
+    fi
+    
+    apt-get install -y -qq "${deps[@]}"
     
     log INFO "Dependencies installed successfully"
 }
